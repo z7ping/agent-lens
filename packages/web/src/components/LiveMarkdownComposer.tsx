@@ -611,6 +611,51 @@ function ImagePastePlugin({
 }
 
 
+/** Shared keyboard ownership for / and @ suggestions, keeping Lexical's
+ * Enter/IME composition semantics identical for both runtime-backed menus.
+ * TypeaheadMenuPlugin remains an option, but the runtime's async @ search and
+ * slash-only-at-document-start are preserved here without a parallel editor. */
+function useComposerSuggestionKeyboard(
+  editor: LexicalEditor,
+  active: boolean,
+  count: number,
+  activeIndex: number,
+  choose: (index: number) => void,
+  dismiss: () => void,
+  move: (delta: 1 | -1) => void,
+) {
+  useEffect(() => {
+    if (!active || count === 0) return
+    const allowed = (event: KeyboardEvent) => !event.isComposing && event.keyCode !== 229
+      && !event.shiftKey && !event.altKey && !event.ctrlKey && !event.metaKey
+    const up = editor.registerCommand(KEY_ARROW_UP_COMMAND, event => {
+      if (!allowed(event)) return false
+      event.preventDefault()
+      move(-1)
+      return true
+    }, COMMAND_PRIORITY_CRITICAL)
+    const down = editor.registerCommand(KEY_ARROW_DOWN_COMMAND, event => {
+      if (!allowed(event)) return false
+      event.preventDefault()
+      move(1)
+      return true
+    }, COMMAND_PRIORITY_CRITICAL)
+    const enter = editor.registerCommand(KEY_ENTER_COMMAND, event => {
+      if (!event || !allowed(event)) return false
+      event.preventDefault()
+      choose(activeIndex)
+      return true
+    }, COMMAND_PRIORITY_CRITICAL)
+    const escape = editor.registerCommand(KEY_ESCAPE_COMMAND, event => {
+      if (!allowed(event)) return false
+      event.preventDefault()
+      dismiss()
+      return true
+    }, COMMAND_PRIORITY_CRITICAL)
+    return () => { up(); down(); enter(); escape() }
+  }, [editor, active, count, activeIndex, choose, dismiss, move])
+}
+
 function WorkspaceReferenceMenuPlugin({
   search,
 }: {
@@ -690,69 +735,19 @@ function WorkspaceReferenceMenuPlugin({
     }
   }, [editor, matches.length, query])
 
-  useEffect(() => {
-    if (!query || !matches.length) return
-    const eventAllowed = (event: KeyboardEvent) => !event.isComposing && event.keyCode !== 229
-    const choose = (index: number) => {
-      const reference = matches[index]
-      if (!reference) return
-      insertWorkspaceReference(editor, query, reference)
-      setQuery(null)
-      setMatches([])
-      requestAnimationFrame(() => editor.getRootElement()?.focus({ preventScroll: true }))
-    }
-    const move = (delta: 1 | -1) => {
-      setActiveIndex(index => (index + delta + matches.length) % matches.length)
-    }
-
-    const unregisterUp = editor.registerCommand(
-      KEY_ARROW_UP_COMMAND,
-      event => {
-        if (!eventAllowed(event)) return false
-        event.preventDefault()
-        move(-1)
-        return true
-      },
-      COMMAND_PRIORITY_CRITICAL,
-    )
-    const unregisterDown = editor.registerCommand(
-      KEY_ARROW_DOWN_COMMAND,
-      event => {
-        if (!eventAllowed(event)) return false
-        event.preventDefault()
-        move(1)
-        return true
-      },
-      COMMAND_PRIORITY_CRITICAL,
-    )
-    const unregisterEnter = editor.registerCommand(
-      KEY_ENTER_COMMAND,
-      event => {
-        if (!event || !eventAllowed(event)) return false
-        event.preventDefault()
-        choose(activeIndex)
-        return true
-      },
-      COMMAND_PRIORITY_CRITICAL,
-    )
-    const unregisterEscape = editor.registerCommand(
-      KEY_ESCAPE_COMMAND,
-      event => {
-        if (!eventAllowed(event)) return false
-        event.preventDefault()
-        setQuery(null)
-        setMatches([])
-        return true
-      },
-      COMMAND_PRIORITY_CRITICAL,
-    )
-    return () => {
-      unregisterUp()
-      unregisterDown()
-      unregisterEnter()
-      unregisterEscape()
-    }
-  }, [activeIndex, editor, matches, query])
+  const chooseReference = (index: number) => {
+    const reference = matches[index]
+    if (!query || !reference) return
+    insertWorkspaceReference(editor, query, reference)
+    setQuery(null)
+    setMatches([])
+    requestAnimationFrame(() => editor.getRootElement()?.focus({ preventScroll: true }))
+  }
+  useComposerSuggestionKeyboard(
+    editor, Boolean(query), matches.length, activeIndex, chooseReference,
+    () => { setQuery(null); setMatches([]) },
+    delta => setActiveIndex(index => (index + delta + matches.length) % matches.length),
+  )
 
   if (!query || !matches.length || !position) return null
 
@@ -774,10 +769,7 @@ function WorkspaceReferenceMenuPlugin({
           className={`select-menu-option ${index === activeIndex ? 'is-active' : ''}`.trim()}
           onMouseEnter={() => setActiveIndex(index)}
           onClick={() => {
-            insertWorkspaceReference(editor, query, reference)
-            setQuery(null)
-            setMatches([])
-            requestAnimationFrame(() => editor.getRootElement()?.focus({ preventScroll: true }))
+            chooseReference(index)
           }}
         >
           <span>
@@ -852,68 +844,18 @@ function CommandMenuPlugin({ commands = [] }: { commands?: readonly LiveCommandD
     }
   }, [editor, matches.length, query])
 
-  useEffect(() => {
-    if (query === null || !matches.length) return
-
-    const choose = (index: number) => {
-      const command = matches[index]
-      if (!command) return
-      replacePlainTextDocument(editor, `${command.value} `)
-      setQuery(null)
-      requestAnimationFrame(() => editor.getRootElement()?.focus({ preventScroll: true }))
-    }
-    const move = (delta: 1 | -1) => {
-      setActiveIndex(index => (index + delta + matches.length) % matches.length)
-    }
-    const eventAllowed = (event: KeyboardEvent) => !event.isComposing && event.keyCode !== 229
-
-    const unregisterUp = editor.registerCommand(
-      KEY_ARROW_UP_COMMAND,
-      event => {
-        if (!eventAllowed(event)) return false
-        event.preventDefault()
-        move(-1)
-        return true
-      },
-      COMMAND_PRIORITY_CRITICAL,
-    )
-    const unregisterDown = editor.registerCommand(
-      KEY_ARROW_DOWN_COMMAND,
-      event => {
-        if (!eventAllowed(event)) return false
-        event.preventDefault()
-        move(1)
-        return true
-      },
-      COMMAND_PRIORITY_CRITICAL,
-    )
-    const unregisterEnter = editor.registerCommand(
-      KEY_ENTER_COMMAND,
-      event => {
-        if (!event || !eventAllowed(event)) return false
-        event.preventDefault()
-        choose(activeIndex)
-        return true
-      },
-      COMMAND_PRIORITY_CRITICAL,
-    )
-    const unregisterEscape = editor.registerCommand(
-      KEY_ESCAPE_COMMAND,
-      event => {
-        if (!eventAllowed(event)) return false
-        event.preventDefault()
-        setQuery(null)
-        return true
-      },
-      COMMAND_PRIORITY_CRITICAL,
-    )
-    return () => {
-      unregisterUp()
-      unregisterDown()
-      unregisterEnter()
-      unregisterEscape()
-    }
-  }, [activeIndex, editor, matches, query])
+  const chooseCommand = (index: number) => {
+    const command = matches[index]
+    if (!command) return
+    replacePlainTextDocument(editor, `${command.value} `)
+    setQuery(null)
+    requestAnimationFrame(() => editor.getRootElement()?.focus({ preventScroll: true }))
+  }
+  useComposerSuggestionKeyboard(
+    editor, query !== null, matches.length, activeIndex, chooseCommand,
+    () => setQuery(null),
+    delta => setActiveIndex(index => (index + delta + matches.length) % matches.length),
+  )
 
   if (query === null || !matches.length || !position) return null
 
@@ -935,9 +877,7 @@ function CommandMenuPlugin({ commands = [] }: { commands?: readonly LiveCommandD
           className={`select-menu-option ${index === activeIndex ? 'is-active' : ''}`.trim()}
           onMouseEnter={() => setActiveIndex(index)}
           onClick={() => {
-            replacePlainTextDocument(editor, `${command.value} `)
-            setQuery(null)
-            requestAnimationFrame(() => editor.getRootElement()?.focus({ preventScroll: true }))
+            chooseCommand(index)
           }}
         >
           <span>
