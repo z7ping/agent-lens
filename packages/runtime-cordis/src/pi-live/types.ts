@@ -140,6 +140,7 @@ export interface PiLiveRuntimeState extends LiveRuntimeState {
   gitBranch?: string | undefined
   model?: unknown
   contextUsage?: { tokens: number | null; contextWindow: number; percent: number | null } | undefined
+  cacheMetrics?: import('./cache-status').PiLiveCacheMetrics | undefined
   thinkingLevel?: string | undefined
   isStreaming: boolean
   isCompacting: boolean
