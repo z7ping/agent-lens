@@ -2,7 +2,7 @@ import type { useTranslation } from 'react-i18next'
 import type { useNavigate } from 'react-router-dom'
 import type { TaskLiveRuntimeLocation } from './task-live-runtime'
 import type { LiveTaskState } from './live-task-state'
-import { useCallback, useEffect } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import type { LiveMessageActionContributionDto, LiveMessageDto, LiveRuntimeActionContributionDto } from '@agent-lens/protocol'
 import { liveApi } from '../client/live'
 import { liveComposerDraftKey, writeLiveComposerDraft } from '../components/live-composer-session-state'
@@ -70,6 +70,16 @@ export function useLiveTaskActions({
     liveTurnRevisionRef,
     queueRevisionRef
   } = session
+  const sendInFlightRef = useRef(false)
+  const [sendFeedback, setSendFeedback] = useState<'idle' | 'sending' | 'accepted' | 'queued' | 'failed'>('idle')
+  // Acknowledgement is not task completion. Keep this small status ephemeral;
+  // the Runtime/SSE and actual queue remain the authoritative ongoing state.
+  useEffect(() => {
+    if (sendFeedback === 'idle' || sendFeedback === 'sending') return
+    const timer = window.setTimeout(() => setSendFeedback('idle'), sendFeedback === 'failed' ? 4000 : 1800)
+    return () => window.clearTimeout(timer)
+  }, [sendFeedback, current?.runtimeSessionId])
+
   const canQueueWhileStreaming = Boolean(
     product?.capabilities.includes('steer') || product?.capabilities.includes('queue'),
   )
@@ -106,7 +116,7 @@ export function useLiveTaskActions({
   )
 
   const send = useCallback(async (message: LiveMessageDto, requestedBehavior?: LiveQueueMode) => {
-    if (!current || !product || !state || !canSubmit) return
+    if (!current || !product || !state || !canSubmit || sendInFlightRef.current) return
     const unsupported = unsupportedInput(message, product.inputCapabilities)
     if (unsupported) {
       setError(t('live.unsupportedInput', { type: t(`live.input.${unsupported}`) }))
@@ -118,6 +128,7 @@ export function useLiveTaskActions({
         return
       }
       onSendAccepted?.()
+      setSendFeedback('queued')
       setStartupQueued(message)
       clearComposer()
       composerRef.current?.focus({ preventScroll: true })
@@ -136,7 +147,9 @@ export function useLiveTaskActions({
       ? { id: `${behavior}-${Date.now()}-${Math.random().toString(36).slice(2)}`, mode: behavior, text: optimisticText }
       : null
 
+    sendInFlightRef.current = true
     onSendAccepted?.()
+    setSendFeedback('sending')
     setBusy(true)
     setError('')
     const optimisticAttachments = behavior === 'normal'
@@ -159,8 +172,10 @@ export function useLiveTaskActions({
     }
     if (pending) setPendingQueue(previous => [...previous, pending])
     clearComposer()
+    window.requestAnimationFrame(() => composerRef.current?.focus({ preventScroll: true }))
     try {
       await liveApi.send(current.liveId, current.runtimeSessionId, message, behavior)
+      setSendFeedback(behavior === 'normal' ? 'accepted' : 'queued')
       onSendDelivered?.()
       if (optimisticText) setInputHistory(previous => appendLiveInputHistory(previous, optimisticText))
       if (behavior === 'normal') {
@@ -175,8 +190,11 @@ export function useLiveTaskActions({
         }))
       }
       composerRef.current?.restoreMessage(message)
+      composerRef.current?.focus({ preventScroll: true })
+      setSendFeedback('failed')
       setError(reason instanceof Error ? reason.message : String(reason))
     } finally {
+      sendInFlightRef.current = false
       if (pending) setPendingQueue(previous => previous.filter(item => item.id !== pending.id))
       setBusy(false)
     }
@@ -191,6 +209,7 @@ export function useLiveTaskActions({
       : null
 
     startupSendingRef.current = true
+    setSendFeedback('sending')
     liveTurnRevisionRef.current += 1
     setBusy(true)
     setError('')
@@ -203,6 +222,7 @@ export function useLiveTaskActions({
     }
 
     void liveApi.send(current.liveId, current.runtimeSessionId, message, 'normal').then(() => {
+      setSendFeedback('accepted')
       if (optimisticText) setInputHistory(previous => appendLiveInputHistory(previous, optimisticText))
       setState(previous => previous ? { ...previous, isStreaming: true } : previous)
       composerRef.current?.focus({ preventScroll: true })
@@ -214,6 +234,8 @@ export function useLiveTaskActions({
         }))
       }
       composerRef.current?.restoreMessage(message)
+      composerRef.current?.focus({ preventScroll: true })
+      setSendFeedback('failed')
       setError(reason instanceof Error ? reason.message : String(reason))
     }).finally(() => {
       startupSendingRef.current = false
@@ -477,5 +499,5 @@ export function useLiveTaskActions({
   }, [busy, current, thinking, t])
 
 
-  return { canSubmit, canInterrupt, send, editStartupQueued, interrupt, removeQueued, editQueued, clearQueued, editRestoredQueue, removeRestoredQueue, terminate, changeModel, answerExtension, searchWorkspaceReferences, runMessageAction, runRuntimeAction, changeThinking }
+  return { canSubmit, canInterrupt, sendFeedback, send, editStartupQueued, interrupt, removeQueued, editQueued, clearQueued, editRestoredQueue, removeRestoredQueue, terminate, changeModel, answerExtension, searchWorkspaceReferences, runMessageAction, runRuntimeAction, changeThinking }
 }

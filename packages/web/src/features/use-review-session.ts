@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next'
 import type { HubReviewSessionSummaryDto, LiveMessageDto, ReviewNodeDto } from '@agent-lens/protocol'
 import { fetchHubReviewSessions } from '../client/hub-review'
 import { liveApi, LiveRequestError, type LiveProductMetadata } from '../client/live'
+import { settleReaderAtLatest } from './session-reader-positioning'
 import { clearLiveComposerDraft, liveComposerDraftKey } from '../components/live-composer-session-state'
 import { useClientSnapshot } from '../client/use-client-snapshot'
 import { agentLabel } from '../components/AgentScope'
@@ -42,6 +43,7 @@ export function useReviewSession(model: AgentLensClientModel, embedded: boolean)
   const detailLoadSentinelRef = useRef<HTMLDivElement>(null)
   const readerPaneRef = useRef<HTMLDivElement>(null)
   const readerPositionsRef = useRef(new Map<string, ReviewReaderPosition>())
+  const entryPositionedSessionRef = useRef('')
   const pendingReaderAnchorRef = useRef<{ position: ReviewReaderPosition; userRevision: number } | null>(null)
   const readerUserRevisionRef = useRef(0)
   const detailAutoLoadBaselineRef = useRef(0)
@@ -170,19 +172,24 @@ export function useReviewSession(model: AgentLensClientModel, embedded: boolean)
 
   useLayoutEffect(() => {
     if (!detail || review.detailLoading || detail.page.filter !== 'all' || detail.page.direction !== 'backward') return
-    const frame = window.requestAnimationFrame(() => {
-      const pane = readerPaneRef.current
-      if (!pane) return
-      pane.scrollTop = pane.scrollHeight
-      followingTailRef.current = true
-      model.acknowledgeReviewNewData()
-    })
-    return () => window.cancelAnimationFrame(frame)
+    const id = detail.id
+    if (entryPositionedSessionRef.current === id) return
+    entryPositionedSessionRef.current = id
+    const userRevision = readerUserRevisionRef.current
+    followingTailRef.current = true
+    model.acknowledgeReviewNewData()
+    return settleReaderAtLatest(
+      () => readerPaneRef.current,
+      () => model.getSnapshot().review.selectedId === id
+        && readerUserRevisionRef.current === userRevision,
+    )
   }, [detail?.id, detail?.page.direction, detail?.page.filter, review.detailLoading, model])
 
   useEffect(() => {
     const id = detail?.id
-    if (!id || review.detailLoading) return
+    // Latest-page navigation always wins over a stale captured reader position.
+    // Preserve anchors only while browsing earlier/forward paginated history.
+    if (!id || review.detailLoading || detail?.page.direction === 'backward') return
     const saved = readerPositionsRef.current.get(id)
     if (!saved || saved.scrollTop <= 0) return
     let cancelled = false

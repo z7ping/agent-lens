@@ -17,6 +17,7 @@ import { useLiveTaskHistory } from './use-live-task-history'
 import { useLiveTaskActions } from './use-live-task-actions'
 import { type LiveQueueListItem } from './live-task-queue'
 import { messageText, resolveLiveSlash } from './live-task-input'
+import { scrollReaderToLastUserTurn } from './session-reader-positioning'
 import { LIVE_TASK_SNAPSHOT_PAGE_LIMIT, historyPageBlock, aggregateHistoryPage, splitLiveProjectionItems } from './live-task-history-window'
 import { GenericLiveRound, StableLiveRounds, liveRoundOwnsAnswerActions } from './LiveTaskTimeline'
 import { UiIcon } from '../components/UiIcon'
@@ -176,18 +177,37 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
       if (!reader || !controller.isFollowing) return
       controller.beginProgrammaticScroll()
       controller.recordScrollWrite()
-      reader.scrollTop = Math.max(0, reader.scrollHeight - reader.clientHeight)
+      // After an ordinary send, prefer the newly mounted user turn to a blind
+      // scrollHeight write. Streaming continues through LiveFollowController.
+      if (!state?.isStreaming && !scrollReaderToLastUserTurn(reader)) {
+        reader.scrollTop = Math.max(0, reader.scrollHeight - reader.clientHeight)
+      } else if (state?.isStreaming) {
+        reader.scrollTop = Math.max(0, reader.scrollHeight - reader.clientHeight)
+      }
       window.requestAnimationFrame(() => controller.endProgrammaticScroll())
     })
-  }, [followControllerRef, historyAtLatestRef, readerRef, setNewRecords])
+  }, [followControllerRef, historyAtLatestRef, readerRef, setNewRecords, state?.isStreaming])
 
   // If the reader is looking at an older history window, reload latest *after* the send commits.
   // Doing so earlier could replace the optimistic user message with a stale snapshot.
   const onSendDelivered = useCallback(() => {
-    if (!historyAtLatestRef.current && followControllerRef.current.isFollowing) void jumpLatest()
-  }, [followControllerRef, historyAtLatestRef, jumpLatest])
+    if (!historyAtLatestRef.current && followControllerRef.current.isFollowing) {
+      void jumpLatest()
+      return
+    }
+    if (!state?.isStreaming) {
+      window.requestAnimationFrame(() => {
+        const reader = readerRef.current
+        const controller = followControllerRef.current
+        if (!reader || !controller.isFollowing) return
+        controller.beginProgrammaticScroll()
+        if (scrollReaderToLastUserTurn(reader)) controller.recordScrollWrite()
+        window.requestAnimationFrame(() => controller.endProgrammaticScroll())
+      })
+    }
+  }, [followControllerRef, historyAtLatestRef, jumpLatest, readerRef, state?.isStreaming])
 
-  const { canSubmit, canInterrupt, send, editStartupQueued, interrupt, removeQueued, editQueued, clearQueued, editRestoredQueue, removeRestoredQueue, terminate, changeModel, answerExtension, searchWorkspaceReferences, runMessageAction, runRuntimeAction, changeThinking } = useLiveTaskActions({ current, t, navigate, setComposerValue, clearComposer, session, onSendAccepted, onSendDelivered })
+  const { canSubmit, canInterrupt, sendFeedback, send, editStartupQueued, interrupt, removeQueued, editQueued, clearQueued, editRestoredQueue, removeRestoredQueue, terminate, changeModel, answerExtension, searchWorkspaceReferences, runMessageAction, runRuntimeAction, changeThinking } = useLiveTaskActions({ current, t, navigate, setComposerValue, clearComposer, session, onSendAccepted, onSendDelivered })
 
   useEffect(() => {
     if (!canInterrupt) return
@@ -677,6 +697,7 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
           interruptBusy={interruptBusy}
           onInterrupt={() => { void interrupt() }}
           responseActivity={responseActivity}
+          sendFeedback={sendFeedback}
           runtimeMetrics={{ contextUsage: state?.contextUsage }}
           onSubmit={(message, mode) => submitLiveMessage(message, mode === 'followUp' ? 'follow-up' : undefined)}
           onEscape={canInterrupt ? () => { void interrupt() } : undefined}

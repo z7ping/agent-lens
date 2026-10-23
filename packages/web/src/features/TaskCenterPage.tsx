@@ -217,18 +217,12 @@ export function TaskCenterPage({ model, mode, sidebarHost }: { model: AgentLensC
   const [launchablePage, setLaunchablePage] = useState<LaunchableProjectsResponseDto['meta'] | null>(() => cachedLaunchableProjects()?.meta ?? null)
   const [projectSearch, setProjectSearch] = useState('')
   const [advancedFiltersOpen, setAdvancedFiltersOpen] = useState(false)
+  const [historyLatestRequest, setHistoryLatestRequest] = useState(0)
   const advancedFiltersAnchorRef = useRef<HTMLButtonElement>(null)
   const [projectLoading, setProjectLoading] = useState(mode === 'new')
   const [projectLoadingMore, setProjectLoadingMore] = useState(false)
   const [projectDiscoveryError, setProjectDiscoveryError] = useState('')
   const projectRequestGenerationRef = useRef(0)
-  const historyScrollRevisionRef = useRef(0)
-  const historyScrollFrameRef = useRef<number | null>(null)
-  useEffect(() => () => {
-    historyScrollRevisionRef.current += 1
-    if (historyScrollFrameRef.current !== null) window.cancelAnimationFrame(historyScrollFrameRef.current)
-    document.querySelector<HTMLElement>('.review-reader-pane')?.style.removeProperty('overflow-anchor')
-  }, [])
   const agents = useOrderedAgents(facets?.agents ?? [])
   const agentSelectionSummary = review.filters.sourceIds === null
     ? t('center.history.allAgents')
@@ -390,44 +384,13 @@ export function TaskCenterPage({ model, mode, sidebarHost }: { model: AgentLensC
   }
 
   const openHistoryTask = useCallback((id: string) => {
-    // Repeated A-B-A switches may reuse the same session ID before an older RAF finishes.
-    // Generation identity and explicit cancellation prevent stale scroll ownership.
-    const revision = ++historyScrollRevisionRef.current
-    if (historyScrollFrameRef.current !== null) window.cancelAnimationFrame(historyScrollFrameRef.current)
-    document.querySelector<HTMLElement>('.review-reader-pane')?.style.removeProperty('overflow-anchor')
-    navigate(`/review/${encodeURIComponent(id)}`)
-
-    let remainingFrames = 90
-    let stableFrames = 0
-    let previousHeight = -1
-    const schedule = () => { historyScrollFrameRef.current = window.requestAnimationFrame(settle) }
-    const settle = () => {
-      if (historyScrollRevisionRef.current !== revision) return
-
-      const current = model.getSnapshot().review
-      const pane = document.querySelector<HTMLElement>('.review-reader-pane')
-      if (current.selectedId !== id || current.detailLoading || current.detail?.id !== id || !pane) {
-        remainingFrames -= 1
-        if (remainingFrames > 0) schedule()
-        else historyScrollFrameRef.current = null
-        return
-      }
-
-      pane.style.setProperty('overflow-anchor', 'none')
-      pane.scrollTop = pane.scrollHeight
-      const height = pane.scrollHeight
-      stableFrames = height === previousHeight ? stableFrames + 1 : 0
-      previousHeight = height
-      remainingFrames -= 1
-      if (stableFrames >= 3 || remainingFrames <= 0) {
-        pane.style.removeProperty('overflow-anchor')
-        historyScrollFrameRef.current = null
-        return
-      }
-      schedule()
+    // One scroll owner in ReviewPage; clicking the selected row requests the latest page.
+    if (model.getSnapshot().review.selectedId === id && location.pathname === `/review/${encodeURIComponent(id)}`) {
+      setHistoryLatestRequest(value => value + 1)
+      return
     }
-    schedule()
-  }, [model, navigate])
+    navigate(`/review/${encodeURIComponent(id)}`)
+  }, [model, navigate, location.pathname])
 
   const historyCount = localSessions.length + visibleHub.length
   const projectFilterOptions = useMemo(() => [
@@ -611,7 +574,7 @@ export function TaskCenterPage({ model, mode, sidebarHost }: { model: AgentLensC
       <section className="task-center-main">
         <TaskNotificationBanner/>
         <Suspense fallback={<ReviewDetailSkeleton/>}>
-          {mode === 'history' && <ReviewPage model={model} embedded/>}
+          {mode === 'history' && <ReviewPage model={model} embedded latestRequest={historyLatestRequest}/>}
           {mode === 'live' && <LiveTaskPage embedded/>}
           {mode === 'hub' && <HubReviewPage embedded/>}
           {mode === 'new' && <LiveNewTaskPanel

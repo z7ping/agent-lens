@@ -34,6 +34,7 @@ export interface TaskSessionComposerProps extends LiveMarkdownComposerProps {
   interruptBusy?: boolean
   onInterrupt?(): void
   responseActivity?: 'waiting' | 'thinking' | 'tools' | 'responding' | 'processing' | null
+  sendFeedback?: 'idle' | 'sending' | 'accepted' | 'queued' | 'failed'
   /** Optional Live-only metrics; Review omits this rather than implying a running native session. */
   runtimeMetrics?: { contextUsage?: LiveContextUsage | undefined } | undefined
   sessionActions?: readonly ComposerSessionAction[] | undefined
@@ -71,6 +72,7 @@ export function TaskSessionComposer({
   interruptBusy = false,
   onInterrupt,
   responseActivity = null,
+  sendFeedback = 'idle',
   runtimeMetrics,
   sessionActions = [],
   modelControl,
@@ -121,7 +123,7 @@ export function TaskSessionComposer({
   return <div className="task-composer-shell">
     <div className={`task-composer ${expanded ? 'is-expanded' : ''}`}>
     {queueContent && <div className="task-composer-queue-slot">{queueContent}</div>}
-    <div className={`task-composer-editor${responseActivity ? ' has-response-activity' : ''}`}>
+    <div className={`task-composer-editor${responseActivity || sendFeedback !== 'idle' ? ' has-response-activity' : ''}`}>
       <div className="task-composer-editor-toolbar" aria-label={t('live.composerToolbarAria')}>
         <IconButton
           className="task-composer-editor-action"
@@ -133,10 +135,10 @@ export function TaskSessionComposer({
         </IconButton>
       </div>
       <LiveMarkdownComposer {...editorProps} ref={editorRef} inputClassName="task-composer-input"/>
-      {responseActivity && <div className="task-composer-response-hint" role="status" aria-live="polite">
-        <UiIcon name="loading" size={12}/>
-        <span>{t(`live.responseActivity.${responseActivity}`)}</span>
-        {interruptAvailable && <span className="task-composer-escape-hint">{t('live.escapeToInterrupt')}</span>}
+      {(responseActivity || sendFeedback !== 'idle') && <div className="task-composer-response-hint" role="status" aria-live="polite">
+        {sendFeedback === 'sending' || (sendFeedback === 'idle' && responseActivity) ? <UiIcon name="loading" size={12}/> : null}
+        <span>{sendFeedback !== 'idle' ? t(`live.sendFeedback.${sendFeedback}`) : t(`live.responseActivity.${responseActivity}`)}</span>
+        {sendFeedback === 'idle' && interruptAvailable && <span className="task-composer-escape-hint">{t('live.escapeToInterrupt')}</span>}
       </div>}
     </div>
     <div className="task-composer-bar">
