@@ -625,12 +625,19 @@ export class PiLiveAdapter implements LiveAdapter {
     behavior: 'normal' | 'steer' | 'follow-up',
   ): Promise<void> {
     const resolved = await this.resolveMessage(message)
-    if (behavior === 'steer') {
+    const firstToken = resolved.text.trim().split(/\s+/)[0] ?? ''
+    const isNativeSlash = firstToken.startsWith('/')
+      && (await this.service.commands(runtimeSessionId)).some(command => `/${command.name}` === firstToken)
+    // AgentSession.prompt expands extension/skill/template commands; direct
+    // steer()/followUp() would instead queue their literal text for the LLM.
+    if (isNativeSlash || behavior === 'normal') {
+      await this.service.prompt(runtimeSessionId, resolved.text,
+        behavior === 'steer' ? 'steer' : behavior === 'follow-up' ? 'followUp' : undefined,
+        resolved.images)
+    } else if (behavior === 'steer') {
       await this.service.steer(runtimeSessionId, resolved.text, resolved.images)
-    } else if (behavior === 'follow-up') {
-      await this.service.followUp(runtimeSessionId, resolved.text, resolved.images)
     } else {
-      await this.service.prompt(runtimeSessionId, resolved.text, undefined, resolved.images)
+      await this.service.followUp(runtimeSessionId, resolved.text, resolved.images)
     }
     await Promise.all(resolved.attachmentIds.map(
       attachmentId => this.attachments.remove(attachmentId).catch(() => undefined),
