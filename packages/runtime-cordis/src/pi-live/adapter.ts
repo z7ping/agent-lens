@@ -475,9 +475,10 @@ export class PiLiveAdapter implements LiveAdapter {
   }
 
   async modelControl(runtimeSessionId: string): Promise<LiveModelControl | null> {
-    const [controls, state] = await Promise.all([
+    const [controls, state, globalDefault] = await Promise.all([
       this.service.controls(runtimeSessionId),
       this.service.state(runtimeSessionId),
+      this.service.defaultModel(runtimeSessionId).catch(() => null),
     ])
     if (!controls.models.length) return null
     const current = liveRecord(state.model)
@@ -495,6 +496,7 @@ export class PiLiveAdapter implements LiveAdapter {
       capability: 'model-switching',
       label: 'Model',
       ...(currentValue && options.some(option => option.value === currentValue) ? { value: currentValue } : {}),
+      ...(globalDefault ? { defaultValue: JSON.stringify([globalDefault.provider, globalDefault.modelId]) } : {}),
       options,
     }
     return isLiveModelControl(control) ? control : null
@@ -515,6 +517,16 @@ export class PiLiveAdapter implements LiveAdapter {
     return this.service.setModel(runtimeSessionId, parsed[0], parsed[1])
   }
 
+  async setDefaultModelControl(runtimeSessionId: string, value: string): Promise<LiveModelControl | null> {
+    const control = await this.modelControl(runtimeSessionId)
+    if (!control?.options.some(option => option.value === value)) throw new Error('Pi default model must be an available model option')
+    let parsed: unknown
+    try { parsed = JSON.parse(value) } catch { parsed = null }
+    if (!Array.isArray(parsed) || parsed.length !== 2 || typeof parsed[0] !== 'string' || typeof parsed[1] !== 'string') throw new Error('Invalid Pi default model value')
+    await this.service.setDefaultModel(runtimeSessionId, parsed[0], parsed[1])
+    return this.modelControl(runtimeSessionId)
+  }
+
   async thinkingControl(runtimeSessionId: string) {
     const control = (await this.service.controls(runtimeSessionId)).thinking
     return isLiveThinkingControl(control) ? control : null
@@ -533,12 +545,20 @@ export class PiLiveAdapter implements LiveAdapter {
   }
 
   async commands(runtimeSessionId: string): Promise<readonly LiveCommand[]> {
-    return (await this.service.commands(runtimeSessionId)).map(command => ({
+    const native = (await this.service.commands(runtimeSessionId)).map(command => ({
       value: `/${command.name}`,
       label: `/${command.name}`,
       ...(command.description ? { description: command.description } : {}),
       group: command.source,
     }))
+    const builtins: LiveCommand[] = [
+      { value: '/new', label: '/new', description: '新建任务', group: 'builtin', action: 'new-task' },
+      { value: '/resume', label: '/resume', description: '查找历史会话', group: 'builtin', action: 'resume-task' },
+      { value: '/model', label: '/model', description: '切换模型', group: 'builtin', action: 'open-model' },
+      { value: '/compact', label: '/compact', description: '原生压缩上下文', group: 'builtin', action: 'compact-context' },
+    ]
+    const taken = new Set(native.map(command => command.value))
+    return [...builtins.filter(command => !taken.has(command.value)), ...native]
   }
   messageActions(runtimeSessionId: string) {
     return this.service.messageActions(runtimeSessionId)
