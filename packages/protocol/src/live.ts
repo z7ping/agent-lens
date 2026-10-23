@@ -492,6 +492,7 @@ export interface LiveThinkingControlDto extends LiveControlDisplayInfoDto {
 export interface LiveModelControlDto extends LiveControlDisplayInfoDto {
   capability: 'model-switching'
   value?: string | undefined
+  defaultValue?: string | undefined
   options: LiveControlOptionDto[]
 }
 
@@ -802,6 +803,7 @@ export function parseLiveModelControlDto(value: unknown): LiveModelControlDto | 
   const control = record(value)
   if (!control || control.capability !== 'model-switching') return null
   if (control.value !== undefined && (typeof control.value !== 'string' || !control.value)) return null
+  if (control.defaultValue !== undefined && typeof control.defaultValue !== 'string') return null
   if (!Array.isArray(control.options) || control.options.length === 0) return null
 
   const label = optionalText(control.label)
@@ -828,6 +830,7 @@ export function parseLiveModelControlDto(value: unknown): LiveModelControlDto | 
   return {
     capability: 'model-switching',
     ...(typeof control.value === 'string' ? { value: control.value } : {}),
+    ...(typeof control.defaultValue === 'string' ? { defaultValue: control.defaultValue } : {}),
     options,
     ...(label !== undefined ? { label } : {}),
     ...(description !== undefined ? { description } : {}),
