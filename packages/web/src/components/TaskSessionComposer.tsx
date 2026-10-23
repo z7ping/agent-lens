@@ -140,7 +140,10 @@ export function TaskSessionComposer({
           disabled={controlsBusy || !controlsReady || !modelControl}
           options={modelControl?.options.map(option => ({
             value: option.value, label: option.label || option.value,
-            ...(option.description ? { description: option.description } : {}),
+            ...((option.description || option.value === modelControl.defaultValue) ? {
+              description: [option.description, option.value === modelControl.defaultValue ? '全局默认' : '']
+                .filter(Boolean).join(' · '),
+            } : {}),
           })) ?? []}
           onChange={value => onModelChange?.(value)}
           openRequest={modelMenuOpenRequest}
