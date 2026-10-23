@@ -36,7 +36,17 @@
 .task-notification-banner.is-warning > svg, .task-notification-banner.is-action > svg { color: var(--al-warning); }
 .task-notification-banner-copy { display: grid; min-width: 0; flex: 1; gap: 3px; }
 .task-notification-banner-copy strong { font-size: var(--text-secondary); }
-.task-notification-banner-copy span { font-size: var(--text-secondary); color: var(--al-ink-2); overflow-wrap: anywhere; }
+.task-notification-banner-copy span {
+  display: -webkit-box;
+  max-width: 100%;
+  overflow: hidden;
+  color: var(--al-ink-2);
+  font-size: var(--text-secondary);
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+}
 .task-notification-banner > .btn, .task-notification-banner > .ui-icon-button { flex: 0 0 auto; }
 @media (max-width: 767.98px) {
   .task-notification-popover.ui-popover { width: min(360px, calc(100vw - 24px)); }

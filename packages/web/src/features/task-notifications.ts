@@ -4,6 +4,18 @@ import { translateProduct } from '../i18n/runtime'
 
 /** Lightweight notification metadata only: never replicate native conversation payloads. */
 export type TaskNotificationLevel = 'info' | 'success' | 'warning' | 'error' | 'action'
+
+/** Transient banners dismiss themselves, while action requests remain visible.
+ * Notification records are retained in the bell until the user explicitly reads them. */
+export function taskNotificationBannerTimeoutMs(level: TaskNotificationLevel): number | null {
+  switch (level) {
+    case 'success': return 5_000
+    case 'warning': return 8_000
+    case 'error': return 10_000
+    case 'info':
+    case 'action': return null
+  }
+}
 export interface TaskNotification {
   id: string
   liveId: string
