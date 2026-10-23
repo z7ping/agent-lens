@@ -479,7 +479,7 @@ export class PiLiveAdapter implements LiveAdapter {
     const [controls, state, globalDefault] = await Promise.all([
       this.service.controls(runtimeSessionId),
       this.service.state(runtimeSessionId),
-      this.service.defaultModel(runtimeSessionId).catch(() => null),
+      this.service.defaultModel?.(runtimeSessionId).catch(() => null) ?? Promise.resolve(null),
     ])
     if (!controls.models.length) return null
     const current = liveRecord(state.model)
