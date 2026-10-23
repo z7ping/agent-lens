@@ -2255,6 +2255,10 @@ export class DefaultPiLiveService implements PiLiveService {
       }
     }
 
+    if (type === 'model_changed') {
+      runtime.cacheMetrics = undefined
+      if (runtime.cachedState) runtime.cachedState = { ...runtime.cachedState, cacheMetrics: undefined }
+    }
     if (type === 'agent_start') runtime.isStreaming = true
     if (type === 'compaction_start') runtime.isCompacting = true
     if (type === 'compaction_end') runtime.isCompacting = false
@@ -2278,7 +2282,9 @@ export class DefaultPiLiveService implements PiLiveService {
         : typeof event.requestId === 'string'
           ? event.requestId
           : ''
-      if (requestId) runtime.pendingExtensionRequestIds.add(requestId)
+      if (requestId && ['select', 'confirm', 'input', 'editor'].includes(String(event.method))) {
+        runtime.pendingExtensionRequestIds.add(requestId)
+      }
     }
 
     const publishedEvent = (type === 'message_start' || type === 'message_end')
