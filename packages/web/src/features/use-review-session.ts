@@ -184,7 +184,9 @@ export function useReviewSession(model: AgentLensClientModel, embedded: boolean)
 
   useEffect(() => {
     const id = detail?.id
-    if (!id || review.detailLoading) return
+    // Latest-page navigation always wins over a stale captured reader position.
+    // Preserve anchors only while browsing earlier/forward paginated history.
+    if (!id || review.detailLoading || detail?.page.direction === 'backward') return
     const saved = readerPositionsRef.current.get(id)
     if (!saved || saved.scrollTop <= 0) return
     let cancelled = false
