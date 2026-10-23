@@ -426,12 +426,15 @@ export function preserveOptimisticImagePreviews(
   previous: readonly LiveTaskProjectionItem[],
   incoming: readonly LiveTaskProjectionItem[],
 ): LiveTaskProjectionItem[] {
-  const pending = previous.filter(item =>
-    item.kind === 'message' && item.role === 'user' && item.id.startsWith('user:')
+  const sourceMessages = previous.filter(item =>
+    item.kind === 'message' && item.role === 'user'
     && item.attachments?.some(attachment => attachment.type === 'image' && attachment.dataUrl),
   )
-  if (!pending.length) return incoming as LiveTaskProjectionItem[]
+  if (!sourceMessages.length) return incoming as LiveTaskProjectionItem[]
 
+  const persistedById = new Map(sourceMessages.filter(item => !item.id.startsWith('user:'))
+    .map(item => [item.id, item]))
+  const pending = sourceMessages.filter(item => item.id.startsWith('user:'))
   const used = new Set<number>()
   const result = [...incoming]
   // Match from the tail: identical prompts in older history cannot steal a
@@ -442,21 +445,28 @@ export function preserveOptimisticImagePreviews(
     const nativeImages = item.attachments?.filter(attachment => attachment.type === 'image') ?? []
     if (!nativeImages.length) continue
 
-    for (let oldIndex = pending.length - 1; oldIndex >= 0; oldIndex -= 1) {
-      const old = pending[oldIndex]
-      if (used.has(oldIndex) || old?.kind !== 'message' || old.text !== item.text) continue
-      const outgoingImages = old.attachments?.filter(attachment => attachment.type === 'image') ?? []
-      if (outgoingImages.length !== nativeImages.length || outgoingImages.some(image => !image.dataUrl)) continue
-      used.add(oldIndex)
-      let imageIndex = 0
-      result[index] = {
-        ...item,
-        attachments: item.attachments!.map(attachment =>
-          attachment.type === 'image'
-            ? { ...attachment, dataUrl: outgoingImages[imageIndex++]!.dataUrl }
-            : attachment),
+    const sameId = persistedById.get(item.id)
+    let source = sameId?.kind === 'message' ? sameId : undefined
+    if (!source) {
+      for (let oldIndex = pending.length - 1; oldIndex >= 0; oldIndex -= 1) {
+        const old = pending[oldIndex]
+        if (used.has(oldIndex) || old?.kind !== 'message' || old.text !== item.text) continue
+        const outgoing = old.attachments?.filter(attachment => attachment.type === 'image') ?? []
+        if (outgoing.length !== nativeImages.length || outgoing.some(image => !image.dataUrl)) continue
+        used.add(oldIndex)
+        source = old
+        break
       }
-      break
+    }
+    const outgoingImages = source?.attachments?.filter(attachment => attachment.type === 'image') ?? []
+    if (outgoingImages.length !== nativeImages.length || outgoingImages.some(image => !image.dataUrl)) continue
+    let imageIndex = 0
+    result[index] = {
+      ...item,
+      attachments: item.attachments!.map(attachment =>
+        attachment.type === 'image'
+          ? { ...attachment, dataUrl: outgoingImages[imageIndex++]!.dataUrl }
+          : attachment),
     }
   }
   return result
