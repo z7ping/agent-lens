@@ -13,6 +13,7 @@ export type LiveCapabilityName =
   | 'queue-mutation'
   | 'steer'
   | 'model-switching'
+  | 'model-default'
   | 'thinking-control'
   | 'extension-ui'
   | 'command-discovery'
@@ -486,7 +487,8 @@ export interface LiveCommand extends LiveControlDisplayInfo {
   /** Optional runtime-owned grouping key such as extension / prompt / skill. */
   group?: string | undefined
   /** Explicit Product action declared by the Adapter; never submit as model input. */
-  action?: 'new-task' | 'resume-task' | 'open-model' | 'compact-context' | undefined
+  action?: 'new-task' | 'resume-task' | 'open-model' | 'runtime-action' | undefined
+  runtimeActionId?: string | undefined
 }
 
 export interface LiveWorkspaceFileReference {
