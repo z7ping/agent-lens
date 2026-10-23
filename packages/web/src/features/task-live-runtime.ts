@@ -40,6 +40,13 @@ export function sameLiveRuntimeState(previous: LiveRuntimeStateDto | null, next:
     && previous.contextUsage?.tokens === next.contextUsage?.tokens
     && previous.contextUsage?.contextWindow === next.contextUsage?.contextWindow
     && previous.contextUsage?.percent === next.contextUsage?.percent
+    && previous.cacheMetrics?.hitRequests === next.cacheMetrics?.hitRequests
+    && previous.cacheMetrics?.totalRequests === next.cacheMetrics?.totalRequests
+    && previous.cacheMetrics?.cachedInput === next.cacheMetrics?.cachedInput
+    && previous.cacheMetrics?.totalInput === next.cacheMetrics?.totalInput
+    && previous.cacheMetrics?.tokenHitRate === next.cacheMetrics?.tokenHitRate
+    && previous.cacheMetrics?.compatibility === next.cacheMetrics?.compatibility
+    && previous.cacheMetrics?.integrityWarning === next.cacheMetrics?.integrityWarning
 }
 
 /** 将 SSE 标准事件映射到运行时快照，不依赖 React 或具体 Agent。 */
@@ -49,6 +56,9 @@ export function runtimeStateFromEvent(
 ): LiveRuntimeStateDto | null {
   if (!current || !envelope.normalizedEvent) return current
   const event = envelope.normalizedEvent
+  if (event.type === 'runtime.metrics.changed') {
+    return { ...current, cacheMetrics: event.cacheMetrics ?? undefined }
+  }
   if (event.type === 'title.update') {
     return current.title === event.title ? current : { ...current, title: event.title }
   }
