@@ -615,6 +615,8 @@ export interface LiveModelControl extends LiveControlDisplayInfo {
   capability: 'model-switching'
   /** Current Runtime-owned opaque value when known. */
   value?: string | undefined
+  /** Persisted global default when supported by the native runtime. */
+  defaultValue?: string | undefined
   /** Runtime-provided model options in Runtime order. */
   options: readonly LiveControlOption[]
 }
@@ -650,6 +652,7 @@ export function isLiveModelControl(value: unknown): value is LiveModelControl {
   const control = liveControlRecord(value)
   if (!control || control.capability !== 'model-switching') return false
   if (control.value !== undefined && (typeof control.value !== 'string' || !control.value)) return false
+  if (control.defaultValue !== undefined && typeof control.defaultValue !== 'string') return false
   if (control.label !== undefined && typeof control.label !== 'string') return false
   if (control.description !== undefined && typeof control.description !== 'string') return false
   if (!validLiveControlOptions(control.options)) return false
