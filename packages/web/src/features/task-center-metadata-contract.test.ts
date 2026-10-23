@@ -74,7 +74,7 @@ test('历史会话保留无外框分隔线列表和选中/悬停状态', () => {
 test('快速 A → B → A 切换使用 Review 自身的滚动所有权，而不是侧栏 RAF', () => {
   const review = readFileSync(new URL('./use-review-session.ts', import.meta.url), 'utf8')
   const helper = readFileSync(new URL('./session-reader-positioning.ts', import.meta.url), 'utf8')
-  assert.match(page, /void model\.jumpToLatestReviewDetail\(\)/)
+  assert.match(page, /setHistoryLatestRequest\(value => value \+ 1\)/)
   assert.doesNotMatch(page, /historyScrollFrameRef|historyScrollRevisionRef/)
   assert.match(review, /settleReaderAtLatest\(/)
   assert.match(helper, /isCurrent\(\)/)
