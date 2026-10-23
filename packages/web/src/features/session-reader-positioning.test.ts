@@ -20,7 +20,7 @@ test('entry settles at the tail and cancels as soon as the reader interacts', ()
     scrollHeight: 1400,
     clientHeight: 300,
     addEventListener(event: string, listener: EventListenerOrEventListenerObject) {
-      const values = listeners.get(event) ?? new Set()
+      const values = listeners.get(event) ?? new Set<EventListenerOrEventListenerObject>()
       values.add(listener)
       listeners.set(event, values)
     },
