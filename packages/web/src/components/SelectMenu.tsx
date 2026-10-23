@@ -65,6 +65,7 @@ export function SelectMenu({
   searchable = false,
   searchPlaceholder,
   onSearchChange,
+  onOpen,
   loading = false,
   hasMore = false,
   onLoadMore,
@@ -82,6 +83,7 @@ export function SelectMenu({
   searchable?: boolean
   searchPlaceholder?: string
   onSearchChange?: (value: string) => void
+  onOpen?: () => void
   loading?: boolean
   hasMore?: boolean
   onLoadMore?: () => void
@@ -239,10 +241,11 @@ export function SelectMenu({
       aria-expanded={open}
       aria-controls={open ? listboxId : undefined}
       title={selectedTooltip}
-      onClick={() => setOpen(current => !current)}
+      onClick={() => { if (!open) onOpen?.(); setOpen(current => !current) }}
       onKeyDown={event => {
         if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
           event.preventDefault()
+          if (!open) onOpen?.()
           setOpen(true)
         }
       }}
