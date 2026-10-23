@@ -156,7 +156,7 @@ export const englishTaskMessages: LocaleMessagesDto = {
         cacheTokens: 'Cached input tokens / total input tokens',
         cacheNativeSource: 'Source: pi-cache-optimizer · {{adapter}}. Scope follows the extension’s session/process/total setting.',
         compatWarning: 'Needs fix',
-        compatOk: 'OK',
+        compatOk: 'No fix warnings',
         compatDisabled: 'Disabled',
         integrityWarning: 'Cache statistics integrity warning',
         compatNativeSource: 'Compatibility diagnosed by pi-cache-optimizer; not the Pi SDK runtime mode.',
