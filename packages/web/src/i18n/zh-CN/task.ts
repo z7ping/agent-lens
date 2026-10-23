@@ -153,6 +153,12 @@ export const chineseTaskMessages: LocaleMessagesDto = {
         cacheUnknown: '缓存命中率、读写量与兼容状态暂不可用。',
         cacheSource: '扩展未提供结构化统计；不将累计 Token 或运行模式误作 DS Cache 数据。',
       },
+      sendFeedback: {
+        sending: '发送中…',
+        accepted: '已接收',
+        queued: '已排队',
+        failed: '发送失败，已恢复输入',
+      },
       responseActivity: {
         waiting: '正在等待模型响应',
         thinking: '正在思考',
