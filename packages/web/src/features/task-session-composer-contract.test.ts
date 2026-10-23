@@ -121,6 +121,17 @@ test('发送后恢复跟随使用的 setNewRecords 必须来自 LiveTaskState，
   assert.match(liveTask, /followControllerRef\.current\.restore\(\)[\s\S]*?setNewRecords\(false\)/)
 })
 
+test('Live 首次定位必须从共享状态解构 historyPage，避免打开页面时 ReferenceError', () => {
+  const hook = readFileSync(new URL('./use-live-task-runtime.ts', import.meta.url), 'utf8')
+  const bindingStart = hook.indexOf('  const {')
+  const bindingEnd = hook.indexOf('  } = session', bindingStart)
+  assert.ok(bindingStart >= 0 && bindingEnd > bindingStart, 'LiveTaskState bindings exist')
+  const bindings = hook.slice(bindingStart, bindingEnd)
+  assert.match(bindings, /\bhistoryPage\s*,/)
+  assert.match(hook, /!historyPage/)
+  assert.match(hook, /\[current\?\.runtimeSessionId, historyPage,/)
+})
+
 test('Live Enter and send share slash routing, acknowledgement, and reader intent', () => {
   assert.match(liveActions, /onSendAccepted\?\.\(\)/)
   assert.match(liveActions, /onSendDelivered\?\.\(\)/)
