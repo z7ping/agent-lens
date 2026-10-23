@@ -742,3 +742,29 @@ test('Pi native extension notify is normalized while status widgets remain trans
     statusKey: 'sync', statusText: '42%',
   }), undefined)
 })
+
+test('Pi model default persists through the native Runtime without changing the current session', async () => {
+  let globalDefault = { provider: 'anthropic', modelId: 'sonnet' }
+  const calls: string[] = []
+  const service = {
+    controls: async () => ({ models: [
+      { provider: 'anthropic', id: 'sonnet', name: 'Sonnet' },
+      { provider: 'openai', id: 'gpt', name: 'GPT' },
+    ] }),
+    state: async () => ({ model: { provider: 'openai', id: 'gpt' } }),
+    defaultModel: async () => globalDefault,
+    setDefaultModel: async (_runtimeId: string, provider: string, modelId: string) => {
+      calls.push(provider + '/' + modelId)
+      globalDefault = { provider, modelId }
+    },
+  } as unknown as PiLiveService
+  const adapter = new PiLiveAdapter(service, attachmentService())
+  const currentValue = JSON.stringify(['openai', 'gpt'])
+  assert.equal((await adapter.modelControl('runtime-1'))?.value, currentValue)
+  assert.equal((await adapter.modelControl('runtime-1'))?.defaultValue, JSON.stringify(['anthropic', 'sonnet']))
+  const updated = await adapter.setDefaultModelControl('runtime-1', currentValue)
+  assert.deepEqual(calls, ['openai/gpt'])
+  assert.equal(updated?.value, currentValue)
+  assert.equal(updated?.defaultValue, currentValue)
+  await assert.rejects(adapter.setDefaultModelControl('runtime-1', JSON.stringify(['fake', 'unknown'])))
+})
