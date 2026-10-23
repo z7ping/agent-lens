@@ -76,6 +76,16 @@ test('Live native handoff reuses decoded outgoing images without duplicating the
   const stable = reconciled.stable[0]
   assert.ok(stable?.kind === 'message')
   assert.equal(stable.attachments?.[0]?.dataUrl, 'data:image/png;base64,bG9jYWw=')
+
+  // A later native refresh must not replace the decoded source a second time.
+  const refreshed = reconcileLiveSnapshotProjection(
+    { stable: reconciled.stable, active: [] },
+    { stable: native, active: [] },
+    false,
+  )
+  const retained = refreshed.stable[0]
+  assert.ok(retained?.kind === 'message')
+  assert.equal(retained.attachments?.[0]?.dataUrl, 'data:image/png;base64,bG9jYWw=')
 })
 
 test('settled Live recovery preserves only matching outgoing native images', () => {
