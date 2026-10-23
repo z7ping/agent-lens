@@ -5,7 +5,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef } from 'react'
 import { liveApi } from '../client/live'
 import { emptyLiveQueue, firstUserEntryCursor } from './live-task-queue'
 import { LIVE_TASK_SNAPSHOT_PAGE_LIMIT, historyPageBlock, aggregateHistoryPage, splitLiveProjectionItems, loadBoundedRecoverySnapshot, captureLiveReaderAnchor, restoreLiveReaderAnchor, appendUniqueLiveProjectionItems } from './live-task-history-window'
-import { projectLiveInputHistory, projectLiveSnapshotEntries, liveEventChangesTaskTranscript, mergeLiveActiveProjectionItems, reconcileLiveSnapshotProjection, reduceLiveTaskEvent } from './live-task-projection'
+import { projectLiveInputHistory, projectLiveSnapshotEntries, liveEventChangesTaskTranscript, mergeLiveActiveProjectionItems, reconcileLiveSnapshotProjection, preserveOptimisticImagePreviews, reduceLiveTaskEvent } from './live-task-projection'
 import { LiveFollowController, liveFollowTextRevision } from './live-follow-controller'
 import { settleReaderAtLatest } from './session-reader-positioning'
 import { shouldRecoverLiveOnVisible, sameLiveRuntimeState, runtimeStateFromEvent } from './task-live-runtime'
@@ -351,7 +351,7 @@ export function useLiveTaskRuntime({
           setProjection(previous => {
             const reconciledActive = [
               ...previous.active.slice(0, snapshotBaseActiveCount),
-              ...recovered,
+              ...preserveOptimisticImagePreviews(previous.active, recovered),
             ]
             return {
               stable: appendUniqueLiveProjectionItems(previous.stable, reconciledActive),
