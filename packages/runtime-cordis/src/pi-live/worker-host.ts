@@ -76,8 +76,8 @@ export interface PiRuntimeHandle {
   regenerateTitle?(): Promise<void>
   controls(): Promise<PiLiveControls>
   setModel(provider: string, modelId: string): Promise<PiLiveRuntimeState>
-  defaultModel(): Promise<{ provider: string; modelId: string } | null>
-  setDefaultModel(provider: string, modelId: string): Promise<void>
+  defaultModel?(): Promise<{ provider: string; modelId: string } | null>
+  setDefaultModel?(provider: string, modelId: string): Promise<void>
   setThinkingLevel(level: string): Promise<PiLiveRuntimeState>
   prompt(message: string, behavior?: PiLiveStreamingBehavior, images?: readonly PiLiveImageInput[]): Promise<void>
   steer(message: string, images?: readonly PiLiveImageInput[]): Promise<void>
