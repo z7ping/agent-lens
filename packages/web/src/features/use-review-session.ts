@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next'
 import type { HubReviewSessionSummaryDto, LiveMessageDto, ReviewNodeDto } from '@agent-lens/protocol'
 import { fetchHubReviewSessions } from '../client/hub-review'
 import { liveApi, LiveRequestError, type LiveProductMetadata } from '../client/live'
+import { settleReaderAtLatest } from './session-reader-positioning'
 import { clearLiveComposerDraft, liveComposerDraftKey } from '../components/live-composer-session-state'
 import { useClientSnapshot } from '../client/use-client-snapshot'
 import { agentLabel } from '../components/AgentScope'
@@ -170,14 +171,15 @@ export function useReviewSession(model: AgentLensClientModel, embedded: boolean)
 
   useLayoutEffect(() => {
     if (!detail || review.detailLoading || detail.page.filter !== 'all' || detail.page.direction !== 'backward') return
-    const frame = window.requestAnimationFrame(() => {
-      const pane = readerPaneRef.current
-      if (!pane) return
-      pane.scrollTop = pane.scrollHeight
-      followingTailRef.current = true
-      model.acknowledgeReviewNewData()
-    })
-    return () => window.cancelAnimationFrame(frame)
+    const id = detail.id
+    const userRevision = readerUserRevisionRef.current
+    followingTailRef.current = true
+    model.acknowledgeReviewNewData()
+    return settleReaderAtLatest(
+      () => readerPaneRef.current,
+      () => model.getSnapshot().review.selectedId === id
+        && readerUserRevisionRef.current === userRevision,
+    )
   }, [detail?.id, detail?.page.direction, detail?.page.filter, review.detailLoading, model])
 
   useEffect(() => {
