@@ -51,7 +51,7 @@ export function settleReaderAtLatest(
     previousHeight = next.scrollHeight
     previousTarget = target
     // Allow virtualized rounds to mount and update their estimates.
-    if (stable >= 6) { stop(); return }
+    if (stable >= 10) { stop(); return }
     frame = window.requestAnimationFrame(tick)
   }
   frame = window.requestAnimationFrame(tick)
