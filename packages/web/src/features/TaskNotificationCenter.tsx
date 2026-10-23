@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { Button, IconButton, Popover, UiIcon } from '../components/ui'
-import { taskNotifications, useTaskNotifications, type TaskNotification, type TaskNotificationLevel } from './task-notifications'
+import { taskNotificationBannerTimeoutMs, taskNotifications, useTaskNotifications, type TaskNotification, type TaskNotificationLevel } from './task-notifications'
 
 function notificationIcon(level: TaskNotificationLevel) {
   if (level === 'success') return 'status-success' as const
@@ -88,8 +88,10 @@ export function TaskNotificationBanner() {
   const navigate = useNavigate()
   const item = items.find(item => item.id === bannerId)
   useEffect(() => {
-    if (!item || item.level !== 'success') return
-    const timer = window.setTimeout(() => taskNotifications.dismissBanner(item.id), 5_000)
+    if (!item) return
+    const timeoutMs = taskNotificationBannerTimeoutMs(item.level)
+    if (timeoutMs === null) return
+    const timer = window.setTimeout(() => taskNotifications.dismissBanner(item.id), timeoutMs)
     return () => window.clearTimeout(timer)
   }, [item?.id, item?.level])
   if (!item) return null
