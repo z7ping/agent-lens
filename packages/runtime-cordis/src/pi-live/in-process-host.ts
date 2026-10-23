@@ -395,6 +395,8 @@ class InProcessHandle implements PiRuntimeHandle {
     if (!models.some(model => model.provider === provider && model.id === modelId)) throw new Error('Pi default model is not available')
     settings.setDefaultModelAndProvider(provider, modelId)
     await settings.flush()
+    const persistenceError = settings.drainErrors?.().find(item => item.scope === 'global')
+    if (persistenceError) throw persistenceError.error
   }
   async setModel(provider: string, modelId: string): Promise<PiLiveRuntimeState> { const model = (await this.modelsForSelection(provider)).find(item => item.provider === provider && item.id === modelId); if (!model) throw new Error(`Pi model is not available: ${provider}/${modelId}`); await this.session.setModel(model); return this.state() }
   async setThinkingLevel(level: string): Promise<PiLiveRuntimeState> {
