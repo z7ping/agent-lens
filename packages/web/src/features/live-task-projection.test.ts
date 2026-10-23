@@ -9,6 +9,7 @@ import {
   liveTaskStableRoundPrefixLength,
   liveTaskResponseActivity,
   mergeLiveActiveProjectionItems,
+  preserveOptimisticImagePreviews,
   reconcileLiveSnapshotProjection,
   projectLiveInputHistory,
   projectLiveSnapshotEntries,
@@ -42,6 +43,86 @@ test('optimistic projection keeps image-only user messages', () => {
   assert.ok(item?.kind === 'message')
   assert.equal(item.text, '')
   assert.equal(item.attachments?.[0]?.previewUrl, 'blob:agent-lens-preview')
+})
+
+test('Live native handoff reuses decoded outgoing images without duplicating the user message', () => {
+  const outgoing = appendOptimisticLiveUserMessage([], '看图', 'user:pending-1', [{
+    type: 'image', mimeType: 'image/png', dataUrl: 'data:image/png;base64,bG9jYWw=',
+  }])
+  const native = projectLiveSnapshotEntries([{
+    type: 'message',
+    id: 'native-1',
+    message: {
+      role: 'user',
+      content: [
+        { type: 'text', text: '看图' },
+        { type: 'image', mimeType: 'image/png', data: 'bmF0aXZl' },
+      ],
+    },
+  }])
+  const merged = mergeLiveActiveProjectionItems(outgoing, native)
+  assert.equal(merged.length, 1)
+  const message = merged[0]
+  assert.ok(message?.kind === 'message')
+  assert.equal(message.id, 'native-1')
+  assert.equal(message.entryId, 'native-1')
+  assert.equal(message.attachments?.[0]?.dataUrl, 'data:image/png;base64,bG9jYWw=')
+
+  const reconciled = reconcileLiveSnapshotProjection(
+    { stable: [], active: outgoing },
+    { stable: native, active: [] },
+    false,
+  )
+  const stable = reconciled.stable[0]
+  assert.ok(stable?.kind === 'message')
+  assert.equal(stable.attachments?.[0]?.dataUrl, 'data:image/png;base64,bG9jYWw=')
+})
+
+test('settled Live recovery preserves only matching outgoing native images', () => {
+  const outgoing = appendOptimisticLiveUserMessage([], '', 'user:image-only', [{
+    type: 'image', mimeType: 'image/png', dataUrl: 'data:image/png;base64,cHJldmlldw==',
+  }])
+  const native = projectLiveSnapshotEntries([{
+    type: 'message', id: 'native-image', message: {
+      role: 'user', content: [{ type: 'image', mimeType: 'image/png', data: 'bmF0aXZl' }],
+    },
+  }])
+  const [kept] = preserveOptimisticImagePreviews(outgoing, native)
+  assert.ok(kept?.kind === 'message')
+  assert.equal(kept.attachments?.[0]?.dataUrl, 'data:image/png;base64,cHJldmlldw==')
+
+  const withoutImage = projectLiveSnapshotEntries([{
+    type: 'message', id: 'native-text', message: {
+      role: 'user', content: '看图',
+    },
+  }])
+  const [unchanged] = preserveOptimisticImagePreviews(outgoing, withoutImage)
+  assert.ok(unchanged?.kind === 'message')
+  assert.equal(unchanged.attachments, undefined)
+})
+
+test('repeated Live prompts give the most recent native image its own preview', () => {
+  const outgoing = [
+    ...appendOptimisticLiveUserMessage([], '相同问题', 'user:first', [{
+      type: 'image', dataUrl: 'data:image/png;base64,Zmlyc3Q=',
+    }]),
+    ...appendOptimisticLiveUserMessage([], '相同问题', 'user:second', [{
+      type: 'image', dataUrl: 'data:image/png;base64,c2Vjb25k',
+    }]),
+  ]
+  const native = projectLiveSnapshotEntries([
+    { type: 'message', id: 'native:first', message: { role: 'user', content: [
+      { type: 'text', text: '相同问题' },
+      { type: 'image', mimeType: 'image/png', data: 'bmF0aXZlMQ==' },
+    ] } },
+    { type: 'message', id: 'native:second', message: { role: 'user', content: [
+      { type: 'text', text: '相同问题' },
+      { type: 'image', mimeType: 'image/png', data: 'bmF0aXZlMg==' },
+    ] } },
+  ])
+  const kept = preserveOptimisticImagePreviews(outgoing, native)
+  assert.equal(kept[0]?.kind === 'message' ? kept[0].attachments?.[0]?.dataUrl : undefined, 'data:image/png;base64,Zmlyc3Q=')
+  assert.equal(kept[1]?.kind === 'message' ? kept[1].attachments?.[0]?.dataUrl : undefined, 'data:image/png;base64,c2Vjb25k')
 })
 
 test('optimistic projection keeps file-only user messages', () => {
