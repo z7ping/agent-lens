@@ -207,7 +207,7 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
     }
   }, [followControllerRef, historyAtLatestRef, jumpLatest, readerRef, state?.isStreaming])
 
-  const { canSubmit, canInterrupt, send, editStartupQueued, interrupt, removeQueued, editQueued, clearQueued, editRestoredQueue, removeRestoredQueue, terminate, changeModel, answerExtension, searchWorkspaceReferences, runMessageAction, runRuntimeAction, changeThinking } = useLiveTaskActions({ current, t, navigate, setComposerValue, clearComposer, session, onSendAccepted, onSendDelivered })
+  const { canSubmit, canInterrupt, sendFeedback, send, editStartupQueued, interrupt, removeQueued, editQueued, clearQueued, editRestoredQueue, removeRestoredQueue, terminate, changeModel, answerExtension, searchWorkspaceReferences, runMessageAction, runRuntimeAction, changeThinking } = useLiveTaskActions({ current, t, navigate, setComposerValue, clearComposer, session, onSendAccepted, onSendDelivered })
 
   useEffect(() => {
     if (!canInterrupt) return
@@ -697,6 +697,7 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
           interruptBusy={interruptBusy}
           onInterrupt={() => { void interrupt() }}
           responseActivity={responseActivity}
+          sendFeedback={sendFeedback}
           runtimeMetrics={{ contextUsage: state?.contextUsage }}
           onSubmit={(message, mode) => submitLiveMessage(message, mode === 'followUp' ? 'follow-up' : undefined)}
           onEscape={canInterrupt ? () => { void interrupt() } : undefined}
