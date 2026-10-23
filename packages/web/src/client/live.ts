@@ -502,6 +502,10 @@ export const liveApi = {
     )
   },
 
+  setDefaultModelControl(liveId: string, runtimeSessionId: string, value: string): Promise<LiveModelControlDto | null> {
+    return requestJson(livePath(liveId, runtimeSuffix(runtimeSessionId, '/model-default')), jsonRequest('POST', { value }))
+  },
+
   thinkingControl(liveId: string, runtimeSessionId: string): Promise<LiveThinkingControlDto | null> {
     return requestJson(livePath(liveId, runtimeSuffix(runtimeSessionId, '/thinking-control')))
   },
