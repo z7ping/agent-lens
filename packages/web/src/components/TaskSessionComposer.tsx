@@ -97,12 +97,13 @@ export function TaskSessionComposer({
   const actionAnchorRef = useRef<HTMLSpanElement>(null)
   const [actionMenuOpen, setActionMenuOpen] = useState(false)
   const canManageConnection = Boolean(onSyncSession || onReconnectSession)
-  const [metricOpen, setMetricOpen] = useState<'context' | 'cache' | null>(null)
+  const [metricOpen, setMetricOpen] = useState<'context' | 'cache' | 'compat' | null>(null)
   const contextMetricRef = useRef<HTMLSpanElement>(null)
   const cacheMetricRef = useRef<HTMLSpanElement>(null)
+  const compatMetricRef = useRef<HTMLSpanElement>(null)
   const metricCloseTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
   useEffect(() => () => clearTimeout(metricCloseTimer.current), [])
-  const showMetric = (key: 'context' | 'cache') => {
+  const showMetric = (key: 'context' | 'cache' | 'compat') => {
     clearTimeout(metricCloseTimer.current)
     setMetricOpen(key)
   }
@@ -254,7 +255,7 @@ export function TaskSessionComposer({
     {runtimeMetrics && <div className="task-composer-runtime-metrics" aria-label={t('live.metrics.aria')}>
       <span className="task-composer-metric-anchor" ref={contextMetricRef}
         onMouseEnter={() => showMetric('context')} onMouseLeave={hideMetricSoon}>
-        <Button size="small" variant="quiet" aria-haspopup="dialog" aria-expanded={metricOpen === 'context'}
+        <Button size="small" variant="quiet" aria-expanded={metricOpen === 'context'}
           onClick={() => metricOpen === 'context' ? setMetricOpen(null) : showMetric('context')}>
           <UiIcon name="activity" size={12}/>
           <span>{t('live.metrics.context')} {contextLabel}</span>
@@ -272,7 +273,7 @@ export function TaskSessionComposer({
       <span className="task-composer-metric-separator" aria-hidden="true">·</span>
       <span className="task-composer-metric-anchor" ref={cacheMetricRef}
         onMouseEnter={() => showMetric('cache')} onMouseLeave={hideMetricSoon}>
-        <Button size="small" variant="quiet" aria-haspopup="dialog" aria-expanded={metricOpen === 'cache'}
+        <Button size="small" variant="quiet" aria-expanded={metricOpen === 'cache'}
           onClick={() => metricOpen === 'cache' ? setMetricOpen(null) : showMetric('cache')}>
           <UiIcon name="database" size={12}/>
           <span>{t('live.metrics.cache')} —</span>
@@ -284,6 +285,23 @@ export function TaskSessionComposer({
           <b>{t('live.metrics.cacheDetails')}</b>
           <div>{t('live.metrics.cacheUnknown')}</div>
           <small>{t('live.metrics.cacheSource')}</small>
+        </div>
+      </Popover>
+      <span className="task-composer-metric-separator" aria-hidden="true">·</span>
+      <span className="task-composer-metric-anchor" ref={compatMetricRef}
+        onMouseEnter={() => showMetric('compat')} onMouseLeave={hideMetricSoon}>
+        <Button size="small" variant="quiet" aria-expanded={metricOpen === 'compat'}
+          onClick={() => metricOpen === 'compat' ? setMetricOpen(null) : showMetric('compat')}>
+          <UiIcon name="info" size={12}/>
+          <span>{t('live.metrics.compat')} —</span>
+        </Button>
+      </span>
+      <Popover open={metricOpen === 'compat'} anchorRef={compatMetricRef} placement="bottom-end"
+        className="task-composer-menu-popover task-composer-metric-popover" onClose={() => setMetricOpen(null)}>
+        <div onMouseEnter={() => showMetric('compat')} onMouseLeave={hideMetricSoon}>
+          <b>{t('live.metrics.compatDetails')}</b>
+          <div>{t('live.metrics.compatUnknown')}</div>
+          <small>{t('live.metrics.compatSource')}</small>
         </div>
       </Popover>
     </div>}

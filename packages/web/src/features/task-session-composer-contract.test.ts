@@ -228,3 +228,10 @@ test('Live-only 指标常驻输入区下方，悬浮与点击共用 Popover，Re
   assert.match(composerCss, /\.task-composer-runtime-metrics \{/)
   assert.doesNotMatch(taskComposer, /DS Cache 0%|0% \/ 1M/)
 })
+
+test('兼容指标不冒充运行时兼容状态，只有可信来源才能显示警告', () => {
+  assert.match(taskComposer, /\{t\('live.metrics.compat'\)\} —/)
+  assert.match(taskComposer, /onMouseEnter=\{\(\) => showMetric\('compat'\)\}/)
+  assert.match(taskComposer, /<Popover open=\{metricOpen === 'compat'\}/)
+  assert.doesNotMatch(taskComposer, /runtimeMode === 'compatibility'/)
+})
