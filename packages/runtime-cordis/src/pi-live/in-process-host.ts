@@ -383,6 +383,19 @@ class InProcessHandle implements PiRuntimeHandle {
       ...(thinking ? { thinking } : {}),
     }
   }
+  async defaultModel(): Promise<{ provider: string; modelId: string } | null> {
+    const settings = this.session.settingsManager?.getGlobalSettings()
+    return settings?.defaultProvider && settings.defaultModel
+      ? { provider: settings.defaultProvider, modelId: settings.defaultModel } : null
+  }
+  async setDefaultModel(provider: string, modelId: string): Promise<void> {
+    const settings = this.session.settingsManager
+    if (!settings?.setDefaultModelAndProvider || !settings.flush) throw new Error('Installed Pi SDK does not support default-model persistence')
+    const models = await this.modelsForSelection(provider)
+    if (!models.some(model => model.provider === provider && model.id === modelId)) throw new Error('Pi default model is not available')
+    settings.setDefaultModelAndProvider(provider, modelId)
+    await settings.flush()
+  }
   async setModel(provider: string, modelId: string): Promise<PiLiveRuntimeState> { const model = (await this.modelsForSelection(provider)).find(item => item.provider === provider && item.id === modelId); if (!model) throw new Error(`Pi model is not available: ${provider}/${modelId}`); await this.session.setModel(model); return this.state() }
   async setThinkingLevel(level: string): Promise<PiLiveRuntimeState> {
     const available = this.session.getAvailableThinkingLevels()
