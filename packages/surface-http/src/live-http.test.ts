@@ -22,6 +22,39 @@ import { SqliteStorageService } from '@agent-lens/storage-sqlite'
 import { DefaultIdentityService } from '@agent-lens/core-services'
 import { startHttpSurface } from './server'
 
+test('设为全局默认的 HTTP 路由可达，保留模型选项与能力校验', async () => {
+  const storage = new SqliteStorageService({ path: ':memory:' })
+  await storage.migrate()
+  const adapter = new class extends FakeLiveAdapter {
+    override readonly capabilities = new Set<LiveCapabilityName>(['model-switching', 'model-default'])
+    defaultValue: string | undefined
+    writes = 0
+    override async modelControl(id: string): Promise<LiveModelControl> {
+      return { ...await super.modelControl(id), defaultValue: this.defaultValue }
+    }
+    async setDefaultModelControl(id: string, value: string): Promise<LiveModelControl> {
+      this.defaultValue = value
+      this.writes += 1
+      return this.modelControl(id)
+    }
+  }()
+  const state = await adapter.start({})
+  const surface = await startHttpSurface(storage, { port: 0, lives: new FakeLiveService(adapter) })
+  const endpoint = `http://${surface.host}:${surface.port}/api/v1/live/test/runtimes/${state.runtimeSessionId}/model-default`
+  const post = (value: string) => fetch(endpoint, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ value }) })
+  try {
+    const response = await post('model-b')
+    assert.equal(response.status, 200)
+    const control = await response.json() as LiveModelControl
+    assert.equal(control.defaultValue, 'model-b')
+    assert.equal(control.value, 'model-a', '设置全局默认不切换当前会话模型')
+    assert.equal((await post('unknown-model')).status, 409)
+    adapter.capabilities.delete('model-default')
+    assert.equal((await post('model-a')).status, 409)
+    assert.equal(adapter.writes, 1)
+  } finally { await surface.dispose(); storage.close() }
+})
+
 test('统一 Live 索引返回经过产品身份验证的历史关联，不暴露原生路径', async () => {
   const storage = new SqliteStorageService({ path: ':memory:' })
   await storage.migrate()
