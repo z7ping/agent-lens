@@ -1405,6 +1405,12 @@ export class DefaultPiLiveService implements PiLiveService {
       : { total: 0, items: [] }
   }
 
+  async defaultModel(id: string): Promise<{ provider: string; modelId: string } | null> {
+    return (await this.readyRuntime(id)).handle!.defaultModel()
+  }
+  async setDefaultModel(id: string, provider: string, modelId: string): Promise<void> {
+    await (await this.readyRuntime(id)).handle!.setDefaultModel(provider, modelId)
+  }
   async commands(id: string): Promise<PiLiveCommand[]> {
     const runtime = await this.readyRuntime(id)
     return runtime.handle!.commands ? runtime.handle!.commands() : []
