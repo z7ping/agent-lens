@@ -171,6 +171,15 @@ export function createSqliteRepositories(executor: SqliteExecutor): RepositorySe
     },
     async putWorkspace(workspace) {
       await executor.run(() => {
+        // Workspace project fallback/propagation triggers can change persisted
+        // logical-session identities without another putLogicalSession call.
+        const prior = db.prepare(`
+          SELECT project_id, path FROM workspaces WHERE id = ?
+        `).get(workspace.id) as { project_id: string | null; path: string } | undefined
+        const previousProjects = prior
+          ? db.prepare('SELECT DISTINCT project_id FROM logical_sessions WHERE workspace_id = ?')
+            .all(workspace.id) as Array<{ project_id: string | null }>
+          : []
         db.prepare(`
           INSERT INTO workspaces(id, host_id, project_id, path, repository_id, worktree_id)
           VALUES (?, ?, ?, ?, ?, ?)
@@ -194,6 +203,19 @@ export function createSqliteRepositories(executor: SqliteExecutor): RepositorySe
           workspace.worktreeId ?? null,
         )
         refreshLaunchableWorkspaceDefinition(db, workspace.id)
+        const saved = db.prepare('SELECT project_id, path FROM workspaces WHERE id = ?')
+          .get(workspace.id) as { project_id: string | null; path: string } | undefined
+        if (prior?.project_id !== saved?.project_id || prior?.path !== saved?.path) {
+          const nextProjects = db.prepare('SELECT DISTINCT project_id FROM logical_sessions WHERE workspace_id = ?')
+            .all(workspace.id) as Array<{ project_id: string | null }>
+          const affectedProjects = new Set([...previousProjects, ...nextProjects].map(item => item.project_id))
+          for (const projectId of affectedProjects) {
+            refreshLaunchableSessionIndex(db, undefined, {
+              ...(projectId ? { projectId } : {}),
+              workspaceId: workspace.id,
+            })
+          }
+        }
       })
     },
     async getLogicalSession(id) {
@@ -237,6 +259,11 @@ export function createSqliteRepositories(executor: SqliteExecutor): RepositorySe
           session.startedAt ?? null,
           session.endedAt ?? null,
         )
+        // Query the canonical row AFTER triggers resolved the workspace fallback.
+        // Using session.projectId here can silently omit recently used projects.
+        const saved = db.prepare(`
+          SELECT project_id, workspace_id FROM logical_sessions WHERE id = ?
+        `).get(session.id) as { project_id: string | null; workspace_id: string | null } | undefined
         refreshLaunchableSessionIndex(
           db,
           previous
@@ -246,8 +273,8 @@ export function createSqliteRepositories(executor: SqliteExecutor): RepositorySe
               }
             : undefined,
           {
-            ...(session.projectId ? { projectId: session.projectId } : {}),
-            ...(session.workspaceId ? { workspaceId: session.workspaceId } : {}),
+            ...(saved?.project_id ? { projectId: saved.project_id } : {}),
+            ...(saved?.workspace_id ? { workspaceId: saved.workspace_id } : {}),
           },
         )
       })
