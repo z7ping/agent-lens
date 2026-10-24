@@ -35,8 +35,8 @@ export function ComposerPillSelect({
       title={title}
       ariaLabel={ariaLabel}
       onChange={onChange}
-      footer={footer}
-      openRequest={openRequest}
+      {...(footer !== undefined ? { footer } : {})}
+      {...(openRequest !== undefined ? { openRequest } : {})}
     />
   </span>
 }

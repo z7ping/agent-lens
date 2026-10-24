@@ -85,7 +85,7 @@ test('Live 服务端搜索期间保留已有项目的选中值，不在客户端
     readFile(fileURLToPath(new URL('../components/SelectMenu.tsx', import.meta.url)), 'utf8'),
   ])
   assert.match(panel, /cachedSelectedProject\?\.key === selectedKey/)
-  assert.match(panel, /selectedOption=\{selectedProject \? \{/)
+  assert.match(panel, /\.\.\.\(selectedProject \? \{ selectedOption: \{/)
   assert.match(select, /selectedOption\?\.value === value/)
   assert.match(select, /if \(onSearchChange\) return needle && loading \? \[\] : options/)
 })

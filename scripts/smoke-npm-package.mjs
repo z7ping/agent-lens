@@ -3,7 +3,7 @@ import { mkdtemp, mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promis
 import { createServer } from 'node:net'
 import { tmpdir } from 'node:os'
 import { dirname, isAbsolute, join, resolve } from 'node:path'
-import { fileURLToPath } from 'node:url'
+import { fileURLToPath, pathToFileURL } from 'node:url'
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const npmCommand = process.platform === 'win32' ? 'npm.cmd' : 'npm'
@@ -20,6 +20,7 @@ function run(command, args, options = {}) {
         ...process.env,
         HOME: smokeHome,
         USERPROFILE: smokeHome,
+        NPM_CONFIG_REPLACE_REGISTRY_HOST: 'never',
         AGENT_LENS_DISABLE_UPDATE_CHECK: '1',
         ...(options.env ?? {}),
       },
@@ -82,7 +83,7 @@ try {
     private: true,
   }, null, 2)}\n`)
 
-  await run(npmCommand, ['install', '--no-audit', '--no-fund', tarball], {
+  await run(npmCommand, ['install', '--no-audit', '--no-fund', pathToFileURL(tarball).href], {
     cwd: consumer,
     shell: process.platform === 'win32',
   })

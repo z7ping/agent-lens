@@ -301,6 +301,7 @@ export const chineseReviewMessages: LocaleMessagesDto = {
         selectSession: '选择一个会话开始复盘',
       },
       fileChanges: {
+        pathTransition: '{{oldPath}} → {{path}}',
         roundTitle: '本轮变更 {{count}} 个文件',
         titleCount: '本次会话修改 {{count}} 个文件',
         viewDiff: '查看差异',

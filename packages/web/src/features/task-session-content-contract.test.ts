@@ -104,7 +104,7 @@ test('失败模型请求复用共享 TaskMessage，以错误语义呈现，不�
     role: 'assistant', text: '完成', presentation: { author: 'Pi' },
   }))
   assert.doesNotMatch(normal, /data-error="true"/)
-  assert.match(read('../task-detail.css'), /task-message-row\[data-error='true'\]/)
+  assert.match(read('../task-detail.css'), /\.task-message-error-status \{[^}]*color: var\(--al-danger\)/)
 })
 
 test('Live 和 Review 的消息辅助信息共用一套字段模型，不因缺少 modelLabel 隐藏时间与证据', () => {
@@ -200,7 +200,7 @@ test('Task Surface 字号只有 typography.css 一处语义源，Live/Review 不
   // Changing a single role must reach the real Task owner, not a later page override.
   for (const selector of [
     '.task-message-content .markdown { font-size: var(--text-task-body); }',
-    '.task-thinking-content .markdown { font-size: var(--text-task-thinking-markdown); }',
+    '.task-thinking-content .markdown { font-size: var(--text-task-thinking-markdown); line-height: 1.58; }',
     '.task-tool-summary-text {',
   ]) assert.ok(detail.includes(selector), `Task owner missing: ${selector}`)
   assert.match(detail, /\.task-thinking-content \{[^}]*font-size: var\(--text-task-process\)/)
@@ -232,8 +232,8 @@ test('Task reading typography has three viewport tiers and never enlarges naviga
   assert.match(typography, /@media \(min-width: 1400px\) \{\s*\.task-surface\.task-session-view \{\s*--text-task-body:var\(--font-size-lg\);\s*--text-task-tool:var\(--font-size-md\);\s*\}\s*\}/)
 
   assert.match(owner, /\.task-message-content \.markdown \{ font-size: var\(--text-task-body\); \}/)
-  assert.match(owner, /\.task-thinking-content \.markdown \{ font-size: var\(--text-task-thinking-markdown\); \}/)
-  assert.match(owner, /\.task-process-message \.markdown \{ font-size: var\(--text-task-process\); \}/)
+  assert.match(owner, /\.task-thinking-content \.markdown \{ font-size: var\(--text-task-thinking-markdown\); line-height: 1\.58; \}/)
+  assert.match(owner, /\.task-process-message \.markdown \{ font-size: var\(--text-task-process\); line-height: 1\.6; \}/)
   assert.match(owner, /\.task-tool-call > summary\.task-tool-row \{[^}]*font: var\(--text-task-tool\)/)
   assert.match(owner, /\.task-surface \.markdown pre,[\s\S]*?font: var\(--text-task-code\)/)
   // Metadata and fixed control typography must remain on their existing scale.

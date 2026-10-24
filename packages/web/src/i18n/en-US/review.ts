@@ -301,6 +301,7 @@ export const englishReviewMessages: LocaleMessagesDto = {
         selectSession: 'Select a session to start reviewing',
       },
       fileChanges: {
+        pathTransition: '{{oldPath}} → {{path}}',
         roundTitle: '{{count}} file changes observed in this turn',
         titleCount: '{{count}} changed files in this session',
         viewDiff: 'View diff',

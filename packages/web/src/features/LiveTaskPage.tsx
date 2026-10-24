@@ -396,7 +396,7 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
   const submitLiveMessage = (message: LiveMessageDto, behavior?: 'follow-up') => {
     const result = resolveLiveSlash(message, commands)
     if (result.kind === 'blocked') {
-      setError(`${result.name} 不是可直接发送的消息；当前 Runtime 未提供相应 Web 操作`)
+      setError(t('live.slashCommandBlocked', { name: result.name }))
       return
     }
     if (result.kind === 'action') {
@@ -408,14 +408,14 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
         clearComposer()
         navigate('/review')
       } else if (command.action === 'open-model') {
-        if (!modelControl) { setError('当前 Runtime 没有可用的模型选择器'); return }
+        if (!modelControl) { setError(t('live.modelSelectorUnavailable')); return }
         clearComposer()
         setModelMenuOpenRequest(value => value + 1)
       } else if (command.action === 'runtime-action') {
         const action = runtimeDisclosures.flatMap(item => item.actions ?? [])
           .find(item => item.actionId === command.runtimeActionId)
         if (!action || state?.status !== 'ready' || state.isStreaming) {
-          setError('当前状态不支持执行此命令')
+          setError(t('live.commandUnavailable'))
           return
         }
         clearComposer()
@@ -437,7 +437,7 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
     setError('')
     try {
       const updated = await liveApi.setDefaultModelControl(current.liveId, current.runtimeSessionId, modelControl.value)
-      if (!updated || updated.defaultValue !== modelControl.value) throw new Error('Pi 没有确认默认模型已保存')
+      if (!updated || updated.defaultValue !== modelControl.value) throw new Error(t('live.defaultModelNotSaved'))
       setModelControl(updated)
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : String(reason))
@@ -523,7 +523,7 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
     </div>}
   </div> : undefined
 
-  return <main className={`live-task-page live-task-page ${embedded ? 'live-task-page-embedded' : ''}`}>
+  return <main className={`live-task-page ${embedded ? 'live-task-page-embedded' : ''}`}>
     <TaskSurface
       mode="live"
       className="live-task-workspace"
@@ -708,8 +708,8 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
           disabled={state?.status === 'terminating' || state?.status === 'terminated'}
           connectionLabel={connectionLabel}
           disconnected={streamSupported && !connected}
-          onSyncSession={streamSupported && product?.capabilities.includes('recovery') ? synchronizeSession : undefined}
-          onReconnectSession={streamSupported && (state?.status === 'ready' || state?.status === 'initializing') ? reconnectSession : undefined}
+          {...(streamSupported && product?.capabilities.includes('recovery') ? { onSyncSession: synchronizeSession } : {})}
+          {...(streamSupported && (state?.status === 'ready' || state?.status === 'initializing') ? { onReconnectSession: reconnectSession } : {})}
           connectionBusy={connectionBusy}
           sessionActions={composerSessionActions}
           modelControl={modelControl}
@@ -718,7 +718,7 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
           controlsReady={state?.status === 'ready'}
           onModelChange={value => { void changeModel(value) }}
           modelMenuOpenRequest={modelMenuOpenRequest}
-          onSetDefaultModel={product?.capabilities.includes('model-default') ? () => { void setGlobalDefaultModel() } : undefined}
+          {...(product?.capabilities.includes('model-default') ? { onSetDefaultModel: () => { void setGlobalDefaultModel() } } : {})}
           onThinkingChange={value => { void changeThinking(value) }}
           showStreamingModes={Boolean(product?.capabilities.includes('steer') && product.capabilities.includes('queue'))}
           streamingMode={streamingBehavior}

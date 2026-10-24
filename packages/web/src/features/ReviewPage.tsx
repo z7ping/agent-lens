@@ -283,6 +283,7 @@ export function ReviewPage({ model, embedded = false, latestRequest = 0 }: { mod
             onDraftPresenceChange={setComposerHasContent}
             canSubmit={!historyInteractionPending && !historyInteractionBlocked && !attachmentPending}
             onSubmit={message => { void sendReviewMessage(message) }}
+            onEscape={undefined}
                         placeholder={t('task:live.composerPlaceholder')}
             ariaLabel={t('task:live.composerAria')}
             onAttachmentPendingChange={setAttachmentPending}

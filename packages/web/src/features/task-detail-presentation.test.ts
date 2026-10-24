@@ -22,12 +22,12 @@ const toolGroup: TaskToolGroupModel = {
 }
 const round: TaskRoundModel = { id: 'round:test', label: '第 3 轮', state: 'settled', preview: '核对 Tool / Thinking / Message 层级', toolCount: 4, errorCount: 0, durationMs: 108_000, highLatency: false }
 
-test('Tool Group 不新增整组详情层，仅收起超出前三项的普通调用', () => {
+test('Tool Group 不新增整组详情层，仅收起超出首项的普通调用', () => {
   const html = renderToStaticMarkup(createElement(TaskToolGroup, { model: toolGroup }))
   assert.match(html, /data-task-tool-group="true"/)
   assert.doesNotMatch(html, /<details[^>]*data-task-tool-group/)
-  assert.equal((html.match(/data-tool-fact="true"/g) ?? []).length, 3)
-  assert.match(html, /展开其余 1 项/)
+  assert.equal((html.match(/data-tool-fact="true"/g) ?? []).length, 1)
+  assert.match(html, /展开 3 项/)
 })
 
 test('测试类和未知 Tool 使用稳定语义降级', () => {
@@ -226,10 +226,10 @@ test('Read/Search 优先使用原生入参目标，不再重复“读取 read”
   ] }
   const html = renderToStaticMarkup(createElement(TaskToolGroup, { model: group, defaultExpanded: true }))
   assert.equal((html.match(/class="task-tool-preview-slot"/g) ?? []).length, 4)
-  assert.match(html, /class="task-tool-target" title="src\/menu.ts">src\/menu.ts/)
+  assert.match(html, /class="task-tool-target task-tool-target-file" title="src\/menu.ts"/)
   assert.match(html, /class="task-tool-target" title="小程序权限菜单">小程序权限菜单/)
   assert.doesNotMatch(html, />读取<\/span>|>搜索<\/span>/)
-  assert.equal((html.match(/class="task-tool-target"/g) ?? []).length, 2)
+  assert.equal((html.match(/class="task-tool-target"/g) ?? []).length, 1)
   assert.match(html, /task-tool-summary-text" title="read">read/)
   assert.match(html, /task-tool-summary-text" title="memory_search">memory_search/)
 })

@@ -94,6 +94,12 @@ class FakePiLiveService implements PiLiveService {
     return []
   }
 
+  async defaultModel() {
+    return { provider: this.model.provider, modelId: this.model.id }
+  }
+
+  async setDefaultModel(_runtimeSessionId: string, _provider: string, _modelId: string) {}
+
   async workspaceFileReferences() {
     return []
   }
@@ -163,6 +169,10 @@ class FakePiLiveService implements PiLiveService {
   async clearQueue() {
     this.clearQueueCalls += 1
     return { steering: ['queued-steer'], followUp: ['queued-follow-up'] }
+  }
+
+  async mutateQueue() {
+    return this.queueState()
   }
 
   async abort(_runtimeSessionId: string, options: { restoreQueue?: boolean } = {}) {

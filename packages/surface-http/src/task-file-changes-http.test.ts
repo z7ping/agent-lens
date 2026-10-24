@@ -163,7 +163,7 @@ test('Review summary-mode uses inclusive canonical bounds to find tool edits wit
     historicalObservation('prompt', 'message.user', { text: 'edit' }),
     historicalObservation('write', 'tool.call', { nativeToolName: 'write_file', callId: 'w', input: { path: 'round.ts' } }),
     historicalObservation('result', 'tool.result', { callId: 'w', status: 'success' }),
-    historicalObservation('native', 'artifact.action', { action: 'file.change', changes }),
+    historicalObservation('native', 'artifact.action', { action: 'file.change', status: 'completed', changes }),
     historicalObservation('answer', 'message.assistant', { text: 'done' }),
     historicalObservation('after', 'artifact.action', { action: 'file.change', changes: { 'after.ts': { type: 'add' } } }),
   ]

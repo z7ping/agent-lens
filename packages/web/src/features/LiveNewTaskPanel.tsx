@@ -293,7 +293,7 @@ export function LiveNewTaskPanel({
         </label>
 
         {missingIntegration && <div className="task-center-project-hint" role="status">
-            {selectedProduct.availability.reason}
+            {selectedProduct?.availability.reason}
             <Button size="small" onClick={() => navigate(`/agents?view=management&agent=${encodeURIComponent(missingIntegration.productId)}`)}>
               {t('center.newTask.openIntegrationManagement')}
             </Button>
@@ -321,11 +321,11 @@ export function LiveNewTaskPanel({
                 <SelectMenu
                   value={selectedKey}
                   options={projectOptions}
-                  selectedOption={selectedProject ? {
+                  {...(selectedProject ? { selectedOption: {
                     value: selectedProject.key,
                     label: selectedProject.label,
                     description: selectedProject.cwd,
-                  } : undefined}
+                  } } : {})}
                   onChange={setSelectedKey}
                   ariaLabel={t('center.newTask.selectProjectAria')}
                   placeholder={options.length ? t('center.newTask.selectProject') : projectLoading ? t('center.newTask.loadingProjects') : t('center.newTask.noProject')}

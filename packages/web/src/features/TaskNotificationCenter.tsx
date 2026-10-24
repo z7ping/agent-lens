@@ -101,7 +101,7 @@ export function TaskNotificationBanner() {
     navigate(notificationHref(item))
   }
   return <div className={`task-notification-banner is-${item.level}`} role="status" aria-live="polite">
-    <UiIcon name={notificationIcon(item.level)} size={18}/>
+    <UiIcon name={notificationIcon(item.level)} size={16}/>
     <div className="task-notification-banner-copy">
       <strong>{item.liveId} · {item.title || t(`notifications.level.${item.level}`)}</strong>
       <span>{item.message}</span>

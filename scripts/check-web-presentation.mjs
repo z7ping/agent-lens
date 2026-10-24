@@ -230,7 +230,7 @@ const filterConsumers = [
 const selectMenuSource = readFileSync(p('components/SelectMenu.tsx'), 'utf8')
 const selectMenuCss = readFileSync(p('components/select-menu.css'), 'utf8')
 // 统一组件必须只有一套 CSS/事件契约：页面只给业务数据，不能给样式和选择策略。
-if (!sidebarFilter.includes('nextAgentFilterSelection(agentSelection.value, sourceId, detectedIds)')
+if (!sidebarFilter.includes('nextAgentFilterSelection(agentSelection.value, sourceId, selectableIds)')
   || /multipleSelectionBehavior|variant\?: 'inline'|closeOnOutside\?:|defaultOpen\?:|className\?:/.test(sidebarFilter)
   || !workspaceSidebar.includes('.workspace-sidebar-filter-disclosure > summary')
   || !workspaceSidebar.includes('.workspace-sidebar-filter-disclosure .ui-disclosure-body')

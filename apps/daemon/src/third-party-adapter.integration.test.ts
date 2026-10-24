@@ -49,7 +49,7 @@ test('third-party Source and Live share Cordis runtime and canonical history pip
         observations: [{
           kind: 'unknown' as const,
           capturedAt: record.capturedAt,
-          nativeEventId: record.nativeId,
+          ...(record.nativeId ? { nativeEventId: record.nativeId } : {}),
           identityHints: { nativeSessionId: record.sourceSessionNativeId ?? 'unknown' },
           payload: { rawType: record.nativeType, rawPayload: record.payload },
         }],

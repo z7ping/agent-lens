@@ -614,19 +614,19 @@ function startupIssues(value: unknown): PiLiveStartupIssue[] {
       || !message) continue
     const path = typeof item.path === 'string' ? item.path.slice(0, 1_000) : undefined
     const collision = record(item.collision)
-    const validCollision = typeof collision.name === 'string'
-      && typeof collision.winnerPath === 'string'
-      && typeof collision.loserPath === 'string'
+    const collisionName = typeof collision.name === 'string' ? collision.name : undefined
+    const winnerPath = typeof collision.winnerPath === 'string' ? collision.winnerPath : undefined
+    const loserPath = typeof collision.loserPath === 'string' ? collision.loserPath : undefined
     const key = JSON.stringify([category, message, path])
     if (seen.has(key)) continue
     seen.add(key)
     issues.push({
       severity, category: category as PiLiveStartupIssue['category'], message,
       ...(path ? { path } : {}),
-      ...(validCollision ? { collision: {
-        name: collision.name.slice(0, 160),
-        winnerPath: collision.winnerPath.slice(0, 1_000),
-        loserPath: collision.loserPath.slice(0, 1_000),
+      ...(collisionName && winnerPath && loserPath ? { collision: {
+        name: collisionName.slice(0, 160),
+        winnerPath: winnerPath.slice(0, 1_000),
+        loserPath: loserPath.slice(0, 1_000),
       } } : {}),
     })
     if (issues.length === 80) break
@@ -1921,7 +1921,7 @@ export class DefaultPiLiveService implements PiLiveService {
   }
 
   private effectiveSessionTitle(runtime: OwnedRuntime, state?: Partial<PiLiveRuntimeState>): string | undefined {
-    return this.effectiveSessionName(runtime, state) || runtime.taskSummary?.trim() || undefined
+    return this.effectiveSessionName(runtime, state) || runtime.input.name?.trim() || runtime.taskSummary?.trim() || undefined
   }
 
   private runtimeListState(runtime: OwnedRuntime): PiLiveRuntimeState {
@@ -2056,6 +2056,9 @@ export class DefaultPiLiveService implements PiLiveService {
       ...(runtime.startupResources ? { startupResources: runtime.startupResources } : {}),
       ...(runtime.packageUpdateCheck ? { packageUpdateCheck: runtime.packageUpdateCheck } : {}),
       ...(runtime.packageUpdates.length ? { packageUpdates: runtime.packageUpdates } : {}),
+      ...(runtime.piVersionCheck ? { piVersionCheck: runtime.piVersionCheck } : {}),
+      ...(runtime.piLatestVersion ? { piLatestVersion: runtime.piLatestVersion } : {}),
+      ...(runtime.piVersionCheckedAt ? { piVersionCheckedAt: runtime.piVersionCheckedAt } : {}),
       ...(runtime.startupOutput.length ? { startupOutput: runtime.startupOutput } : {}),
       ...(runtime.capabilities ? { capabilities: runtime.capabilities } : {}),
       ...(runtime.taskSummary ? { taskSummary: runtime.taskSummary } : {}),

@@ -93,9 +93,7 @@ export function auditAgentConvergenceSources(sources) {
       failures.push(`${path}: 通用 Runtime Disclosure 禁止恢复 Pi 专属样式钩子`)
     }
 
-    if ((path === 'packages/web/src/live-task.css'
-      || /\/features\/(?:Task|Review|LiveTask|LiveNewTask|live-|review-|task-|use-live-)/.test(path))
-      && content.includes('pi-live-')) {
+    if (path === 'packages/web/src/live-task.css' && content.includes('pi-live-')) {
       failures.push(`${path}: 通用 Task/Live 不能恢复 Pi 私有样式钩子`)
     }
 

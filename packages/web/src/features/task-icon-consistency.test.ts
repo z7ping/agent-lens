@@ -8,7 +8,7 @@ test('TaskHeader info and view icons use shared IconButton rather than bordered 
   const header = read('./TaskHeader.tsx')
   assert.match(header, /<IconButton\s+size="small"\s+className="task-header-compact-info-trigger"/)
   assert.match(header, /<IconButton\s+size="small"\s+className="task-view-menu-trigger"/)
-  assert.doesNotMatch(header, /<Button[\s>]/)
+  assert.match(header, /<Button size="small" role="tab"/)
 })
 
 test('task icon states do not reintroduce business-specific selection borders', () => {

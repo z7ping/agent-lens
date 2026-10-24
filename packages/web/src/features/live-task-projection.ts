@@ -466,7 +466,7 @@ export function preserveOptimisticImagePreviews(
       ...item,
       attachments: item.attachments!.map(attachment =>
         attachment.type === 'image'
-          ? { ...attachment, dataUrl: outgoingImages[imageIndex++]!.dataUrl }
+          ? { ...attachment, dataUrl: outgoingImages[imageIndex++]!.dataUrl! }
           : attachment),
     }
   }

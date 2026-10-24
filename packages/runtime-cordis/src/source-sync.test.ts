@@ -324,6 +324,7 @@ test('profiled source detection preserves one installation root while keeping pr
       confidence: 'exact',
     },
   ])
+  profiled.manifest.productId = 'dsh'
   const ctx = {
     sources: { list: () => [profiled] },
     capturePolicy: capturePolicy(['dsh']),

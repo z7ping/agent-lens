@@ -409,7 +409,7 @@ async function* ingestCodexFileWithThreadNames(
     yield titleRecord
     previousMetadata.titleFingerprint = titleFingerprint
     previousMetadata.titleContentFingerprint = titleContentFingerprint
-    previousMetadata.titleOriginFingerprint = titleOriginFingerprint
+    if (titleOriginFingerprint) previousMetadata.titleOriginFingerprint = titleOriginFingerprint
     await ctx.checkpoint.set(metadataKey, previousMetadata)
   }
 

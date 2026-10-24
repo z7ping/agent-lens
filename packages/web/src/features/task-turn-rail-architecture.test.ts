@@ -139,7 +139,7 @@ test('Live 用单一处理详情容器管理过程，结论单独展示，思考
   assert.match(timeline, /toolCount=\{toolCount\}/)
   const shared = readFileSync(new URL('./TaskSessionContent.tsx', import.meta.url), 'utf8')
   assert.match(shared, /defaultExpanded=\{mode === 'live' && props\.state === 'running'\}/)
-  assert.match(shared, /autoCollapseOnSettle=\{mode === 'live'\}/)
+  assert.doesNotMatch(shared, /autoCollapseOnSettle/)
   assert.doesNotMatch(timeline, /<LiveToolGroup/)
   assert.match(timeline, /<TaskSessionTool/)
   assert.match(timeline, /showContentActions=\{item\.kind === 'message'/)

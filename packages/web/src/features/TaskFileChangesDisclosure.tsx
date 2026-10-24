@@ -239,7 +239,7 @@ export function TaskFileChangesDisclosure({
               </span>
               <span className="task-file-change-directory" title={item.path}>
                 {item.changeType === 'renamed' && item.oldPath
-                  ? `${item.oldPath} → ${item.path}`
+                  ? t('local.fileChanges.pathTransition', { oldPath: item.oldPath, path: item.path })
                   : fileNameAndDirectory(item.path).directory}
               </span>
             </span>

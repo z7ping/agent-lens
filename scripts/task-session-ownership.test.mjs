@@ -44,7 +44,7 @@ test('扫描新增子目录 TSX，拒绝自建 Task 消息与变相 DOM', () => 
     const errors = auditTaskSessionOwnership(root).join('\n')
     assert.match(errors, /AltSessionView.tsx.*TaskMessage/)
     assert.match(errors, /NewView.tsx.*task-message-row/)
-    assert.match(errors, /HermesMessage.tsx.*私有/)
+    assert.match(errors, /ThirdPartyMessage.tsx.*私有/)
   })
 })
 

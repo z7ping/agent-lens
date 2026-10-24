@@ -176,6 +176,7 @@ test('Oldest Codex page does not claim older data merely because reverse cursor 
   const adapter = new CodexLiveAdapter(rpc as unknown as CodexRpc)
   await adapter.start({ workspacePath: '/repo' })
   const result = await adapter.snapshot('native-1', undefined, { edge: 'earliest', limit: 10 })
+  assert.ok(result.page)
   assert.equal(result.page.hasEarlier, false)
   assert.equal(result.page.hasLater, true)
   await adapter.dispose()

@@ -8,7 +8,7 @@ const taskMessage = readFileSync(new URL('./TaskMessage.tsx', import.meta.url), 
 const genericLive = readFileSync(new URL('./LiveTaskPage.tsx', import.meta.url), 'utf8')
 const liveTaskTimeline = readFileSync(new URL('./LiveTaskTimeline.tsx', import.meta.url), 'utf8')
 const taskDetailCss = readFileSync(new URL('../task-detail.css', import.meta.url), 'utf8')
-const taskRound = readFileSync(new URL('./PiLiveTaskRound.tsx', import.meta.url), 'utf8')
+const taskRound = readFileSync(new URL('./TaskSessionContent.tsx', import.meta.url), 'utf8')
 const taskSurface = readFileSync(new URL('./TaskSurface.tsx', import.meta.url), 'utf8')
 
 test('流式 Markdown 只提交已闭合块，当前块保持实时正文', () => {
@@ -31,8 +31,8 @@ test('流式 Markdown 不会在未闭合 fenced code 中间切块', () => {
 
 test('Pi Live assistant 与 thinking 都把 running 状态交给统一 MarkdownContent', () => {
   assert.match(taskMessage, /<MarkdownContent text=\{text\} streaming=\{streaming\}\/>/)
-  assert.match(taskRound, /<MarkdownContent text=\{text\} streaming=\{streaming\}\/>/)
-  assert.match(taskRound, /streaming=\{state === 'running' && item\.state === 'running'\}/)
+  assert.match(taskRound, /<MarkdownContent text=\{model\.text\} streaming=\{streaming\}\/>/)
+  assert.match(liveTaskTimeline, /<TaskSessionThinking[\s\S]*?streaming=\{item\.streaming\}/)
 })
 
 test('显式草稿 revision 才重建 Lexical 文档，本地编辑不会形成受控值回声', () => {

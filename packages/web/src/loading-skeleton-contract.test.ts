@@ -15,7 +15,7 @@ test('loading skeletons reflect the current Task Center rows and flat session re
   assert.match(shared, /className="review-detail-skeleton-user"/)
   assert.match(shared, /className="review-detail-skeleton-answer"/)
   assert.doesNotMatch(shared, /review-detail-skeleton-metrics|session-skeleton-card/)
-  assert.match(taskCenter, /review\.loading && !review\.response && <SessionListSkeleton\/>/)
+  assert.match(taskCenter, /review\.loading && !review\.response && !localSessions\.length && <SessionListSkeleton\/>/)
   assert.match(taskCenter, /<Suspense fallback=\{<ReviewDetailSkeleton\/>\}>/)
   assert.doesNotMatch(taskCenter, /task-center-list-skeleton/)
   assert.doesNotMatch(review, /<SessionListSkeleton\/>/)

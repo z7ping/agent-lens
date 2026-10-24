@@ -697,14 +697,15 @@ test('generic structured Live error keeps code/category/retryability with no pro
     type: 'error', message: '', code: 'MODEL_UNAVAILABLE', category: 'provider', retryable: true,
   }))
   const failure = result.at(-1)
-  assert.ok(failure?.kind === 'message')
+  if (failure?.kind !== 'message') throw new Error('Expected a failure message')
   assert.equal(failure.text, 'MODEL_UNAVAILABLE')
   assert.equal(failure.error, true)
   assert.deepEqual(failure.errorDiagnostic, {
     code: 'MODEL_UNAVAILABLE', category: 'provider', retryable: true,
   })
   const legacy = reduceLiveTaskEvent(initial, event(2, { type: 'error', message: 'plain failure' }))
-  assert.equal(legacy.at(-1)?.kind === 'message' ? legacy.at(-1).text : '', 'plain failure')
+  const legacyFailure = legacy.at(-1)
+  assert.equal(legacyFailure?.kind === 'message' ? legacyFailure.text : '', 'plain failure')
 })
 
 test('reconnect retains structured SSE diagnostic when native snapshot has the same error text', () => {

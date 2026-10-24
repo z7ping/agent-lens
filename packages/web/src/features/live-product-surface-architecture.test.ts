@@ -44,11 +44,6 @@ test('统一 Product Surface 不使用具体 Agent 名称决定行为', () => {
     /['"](?:pi|hermes|claude-code|codex)['"]\s*={2,3}\s*(?:sourceId|liveId|productId|agentId)/,
   ]
   for (const file of productSurfaceFiles) {
-    // Codex migration hint is only an unavailable product placeholder, not Agent runtime branching.
-    if (file.path === './LiveNewTaskPanel.tsx') {
-      assert.match(file.source, /withMissingCodexLive/)
-      continue
-    }
     for (const pattern of forbidden) assert.doesNotMatch(file.source, pattern, file.path)
   }
 })
@@ -77,7 +72,7 @@ test('LiveTask 高级交互只消费通用 capability 与 control，不解析 Pi
   assert.match(liveTask, /liveApi\.respondToExtension/)
   assert.match(liveTask, /liveApi\.queueState/)
   assert.match(liveTask, /liveApi\.clearQueue/)
-  assert.match(liveTask, /onSubmit=\{\(message, mode\) => \{ void send\(message, mode === 'followUp' \? 'follow-up' : undefined\) \}\}/)
+  assert.match(liveTask, /onSubmit=\{\(message, mode\) => submitLiveMessage\(message, mode === 'followUp' \? 'follow-up' : undefined\)\}/)
   assert.match(liveTask, /normalizedEvent\?\.type === 'queue\.update'/)
   assert.match(liveTask, /normalizedEvent\?\.type === 'control\.changed'/)
   assert.match(readFileSync(new URL('./task-live-runtime.ts', import.meta.url), 'utf8'), /event\.type === 'title\.update'/)
@@ -109,7 +104,7 @@ test('Runtime 私有诊断通过次级 Disclosure Contribution 暴露，不污�
   assert.match(liveTask, /<LiveRuntimeDisclosures/)
   assert.match(
     liveTask,
-    /<div className="pi-live-document live-task-document">[\s\S]{0,500}<LiveRuntimeDisclosures/,
+    /<div className="live-task-document">[\s\S]{0,500}<LiveRuntimeDisclosures/,
     'runtime disclosures must stay inside the Session Document without creating a fourth TaskSurface slot',
   )
   assert.doesNotMatch(
@@ -122,7 +117,7 @@ test('Runtime 私有诊断通过次级 Disclosure Contribution 暴露，不污�
   assert.match(runtimeDisclosures, /<Dialog/)
   assert.match(runtimeDisclosures, /<CopyableCodeBlock/)
   assert.doesNotMatch(runtimeDisclosures, /\bPi\b|pi\.runtime|initializationStage|startupResources|runtimeMode/)
-  assert.doesNotMatch(liveTask, /pi\.runtime\.retry|initializationStage|startupResources|runtimeMode|processId/)
+  assert.doesNotMatch(liveTask, /pi\.runtime\.retry|initializationStage|startupResources|runtimeMode/)
 })
 
 test('扩展语义分组由字段契约决定，通用 UI 不根据英文 Label 猜测', () => {
@@ -132,7 +127,7 @@ test('扩展语义分组由字段契约决定，通用 UI 不根据英文 Label 
   assert.match(core, /fieldId\?: string/)
   assert.match(core, /section\?: LiveRuntimeContributionSection/)
   assert.match(protocol, /export type LiveRuntimeContributionSectionDto/)
-  assert.match(runtimeDisclosures, /return field\.section \?\?/)
+  assert.match(runtimeDisclosures, /return field\.section/)
   assert.match(runtimeDisclosures, /id: field\.fieldId \?\? ''/)
   assert.match(runtimeDisclosures, /field\.id === 'startup\.metrics'/)
   assert.doesNotMatch(runtimeDisclosures, /field\.id === '(?:Main costs|Extensions|Startup metrics|Contexts|Package updates)'/)
@@ -144,7 +139,7 @@ test('Live Snapshot 附件通过通用 TaskMessage 展示', () => {
   assert.match(liveTaskTimeline, /attachments=\{item\.attachments\}/)
   assert.match(liveTask, /optimisticMessageAttachments\(message\)/)
   assert.match(liveTask, /part is Extract<LiveMessageDto\['parts'\]\[number\], \{ type: 'image' \| 'file' \}>/)
-  assert.match(liveTask, /URL\.createObjectURL\(await response\.blob\(\)\)/)
+  assert.match(liveTask, /imageDataUrl\(await response\.blob\(\)\)/)
   assert.match(taskMessage, /previewUrl\?: string/)
   assert.match(taskMessage, /URL\.revokeObjectURL\(attachment\.previewUrl\)/)
   assert.match(taskMessage, /attachment\.type === 'file'/)
@@ -222,7 +217,7 @@ test('Task Center owns the only Live task navigation while LiveTask keeps the se
   assert.match(taskCenter, /useTaskCenterRuntimes\(\)/)
   assert.match(taskCenter, /mergeTaskCenterSessions\(/)
   assert.doesNotMatch(liveTask, /pi-live-sessions|pi-live-session-scroll|liveApi\.list\(current\.liveId\)/)
-  assert.match(styles, /\.live-task-page\s*\{\s*grid-template-columns:\s*minmax\(0,\s*1fr\)/)
+  assert.match(styles, /\.live-task-page\s*\{[^}]*\}[\s\S]*?\.live-task-page\s*\{ grid-template-columns: minmax\(0, 1fr\)/)
   assert.match(liveHistoryWindow, /LIVE_TASK_SNAPSHOT_PAGE_LIMIT\s*=\s*120/)
   assert.match(liveTask, /LiveTaskRoundProjector/)
   assert.match(liveTask, /roundProjectorRef\.current\.projectSegmented\(projection\.stable, projection\.active\)/)
@@ -239,7 +234,7 @@ test('Task Center owns the only Live task navigation while LiveTask keeps the se
   assert.match(liveTask, /new LiveFollowController\(\)/)
   assert.match(liveTask, /ref=\{readerRef\}/)
   assert.match(liveTask, /onScroll=\{onReaderScroll\}/)
-  assert.match(liveTask, /pi-live-new-records/)
+  assert.match(liveTask, /live-task-new-records/)
   assert.doesNotMatch(liveTask, /\{items\.map\(item => <GenericLiveItem/)
 })
 

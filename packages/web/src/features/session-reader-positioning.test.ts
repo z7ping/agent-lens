@@ -39,13 +39,13 @@ test('entry settles at the tail and cancels as soon as the reader interacts', ()
     const stop = settleReaderAtLatest(() => pane, () => true)
     step()
     assert.equal(pane.scrollTop, 1100)
-    pane.scrollHeight = 1800
+    ;(pane as unknown as { scrollHeight: number }).scrollHeight = 1800
     step()
     assert.equal(pane.scrollTop, 1500)
     for (const listener of listeners.get('wheel') ?? []) {
       if (typeof listener === 'function') listener(new Event('wheel'))
     }
-    pane.scrollHeight = 2400
+    ;(pane as unknown as { scrollHeight: number }).scrollHeight = 2400
     step()
     assert.equal(pane.scrollTop, 1500, 'manual intent must stop scheduled scrolling')
     assert.equal(frames.size, 0)

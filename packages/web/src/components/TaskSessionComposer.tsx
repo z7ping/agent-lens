@@ -188,18 +188,18 @@ export function TaskSessionComposer({
           options={modelControl?.options.map(option => ({
             value: option.value, label: option.label || option.value,
             ...((option.description || option.value === modelControl.defaultValue) ? {
-              description: [option.description, option.value === modelControl.defaultValue ? '全局默认' : '']
+              description: [option.description, option.value === modelControl.defaultValue ? t('live.globalDefault') : '']
                 .filter(Boolean).join(' · '),
             } : {}),
           })) ?? []}
           onChange={value => onModelChange?.(value)}
-          openRequest={modelMenuOpenRequest}
+          {...(modelMenuOpenRequest !== undefined ? { openRequest: modelMenuOpenRequest } : {})}
           footer={onSetDefaultModel && modelControl?.value ? <Button
             size="small"
             variant="quiet"
             disabled={controlsBusy || !controlsReady || modelControl.value === modelControl.defaultValue}
             onClick={onSetDefaultModel}
-          >{modelControl.value === modelControl.defaultValue ? '已是全局默认' : '设为全局默认'}</Button> : undefined}
+          >{modelControl.value === modelControl.defaultValue ? t('live.alreadyGlobalDefault') : t('live.setGlobalDefault')}</Button> : undefined}
         />}
         {thinkingVisible && <ComposerPillSelect
           control="thinking"
