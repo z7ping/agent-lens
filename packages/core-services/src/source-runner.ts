@@ -480,12 +480,24 @@ function isDurablyNativeRecoverable(
   record: SourceRecord,
 ): boolean {
   const capability = source.rawRecovery?.describe(record)
-  return Boolean(source.nativeSessionCoverageComplete === true && capability?.canReread
-    && capability.authority === 'native-store'
-    && capability.locatorStability === 'stable'
-    && capability.mutability === 'append-oriented'
-    && capability.verification === 'fingerprint'
-    && capability.persistencePreference === 'reference')
+  if (source.nativeSessionCoverageComplete !== true || !capability?.canReread
+    || !capability.canReparse || !capability.replayable
+    || capability.authority !== 'native-store'
+    || capability.verification !== 'fingerprint'
+    || capability.persistencePreference !== 'reference') return false
+  // Immutable JSONL records are always verified by original offset/hash.
+  if (record.locator.kind === 'file') {
+    return capability.locatorStability === 'stable'
+      && capability.mutability === 'append-oriented'
+  }
+  // Mutable SQLite rowids are NOT durable event identities. Only a Source
+  // explicitly attesting that its entire CURRENT per-session state can be
+  // re-read from the same native DB snapshot may avoid second persistence.
+  // This deliberately does not promise overwritten/deleted historical rows.
+  return record.locator.kind === 'database'
+    && capability.recoveryScope === 'session-current-state'
+    && capability.locatorStability === 'best-effort'
+    && capability.mutability === 'mutable'
 }
 
 async function shouldReadNativeOnly(
