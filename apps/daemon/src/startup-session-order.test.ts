@@ -37,3 +37,17 @@ test('startup session fast path precedes deferred projection repair and maintena
   assert.ok(startupJoin < deferredDelay)
   assert.ok(deferredDelay < fullRepair)
 })
+
+test('certified Native-only source startup gates Runtime Capture without legacy environment switches',()=>{
+  // SourceHistoryRunner already defaults certified new sessions to native
+  // ownership; daemon startup must not race it with the old 500ms capture timer.
+  assert.match(main,/const nativeFastCaptureGate = targets\.length === 1/)
+  assert.match(main,/targets\[0\]\?\.source\.nativeSessionCoverageComplete === true/)
+  assert.match(main,/Boolean\(targets\[0\]\?\.source\.discoverNativeSessions\)/)
+  assert.match(main,/Boolean\(targets\[0\]\?\.source\.rawRecovery\?\.verify\)/)
+  assert.match(main,/const nativeFast = targets\.some\(target =>/)
+  assert.match(main,/nativeCaptureStartupBatches\(targets, nativeFast\)/)
+  assert.match(main,/onNativeCatalogReady: \(\) => releaseCapture\?\.\(\)/)
+  assert.doesNotMatch(main,/AGENT_LENS_NATIVE_ONLY_NEW_SESSIONS/)
+  assert.doesNotMatch(main,/AGENT_LENS_NATIVE_CATALOG_FAST_SCAN/)
+})

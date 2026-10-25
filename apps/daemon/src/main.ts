@@ -623,9 +623,14 @@ try {
     const startPreparedSource = async (targets: Awaited<ReturnType<typeof prepareRegisteredSources>>['targets']) => {
       // 监听器初始目录扫描可能很大；先建立监听任务，同时读取最新历史。
       // 两者都完成后再重扫 latest，补齐监听就绪窗口内的文件变化。
-      const nativeFastCaptureGate = process.env.AGENT_LENS_NATIVE_ONLY_NEW_SESSIONS === '1'
-        && process.env.AGENT_LENS_NATIVE_CATALOG_FAST_SCAN === '1'
-        && targets.length === 1 && Boolean(targets[0]?.source.discoverNativeSessions)
+      // The certified native owner is now the default. Runtime Capture must
+      // wait until this Installation's latest native metadata pass claims
+      // ownership, otherwise a runtime event may win an immutable Legacy claim.
+      const nativeFastCaptureGate = targets.length === 1
+        && targets[0]?.source.nativeSessionCoverageComplete === true
+        && Boolean(targets[0]?.source.discoverNativeSessions)
+        && Boolean(targets[0]?.source.readNativeSessionPage)
+        && Boolean(targets[0]?.source.rawRecovery?.verify)
       let releaseCapture: (() => void) | undefined
       const captureReady = nativeFastCaptureGate
         ? new Promise<void>(resolve => { releaseCapture = resolve })
@@ -694,12 +699,14 @@ try {
     const startupTasks: Promise<void>[] = []
     const prepared = await prepareRegisteredSources(app.context, runtimeController.signal, undefined, {
       onPrepared: targets => {
-        // The experimental native owner handshake must be per Installation,
-        // not per Source detection batch. A single Source may detect multiple
-        // runtime profiles: sharing one capture gate previously let its second
-        // installation claim legacy before the catalog proof completed.
-        const nativeFast = process.env.AGENT_LENS_NATIVE_ONLY_NEW_SESSIONS === '1'
-          && process.env.AGENT_LENS_NATIVE_CATALOG_FAST_SCAN === '1'
+        // Certified Sources must run their ownership handshake per Installation
+        // before Runtime Capture. Non-certified Sources keep the legacy path.
+        // Do not reintroduce the removed experimental environment switches.
+        const nativeFast = targets.some(target =>
+          target.source.nativeSessionCoverageComplete === true
+          && Boolean(target.source.discoverNativeSessions)
+          && Boolean(target.source.readNativeSessionPage)
+          && Boolean(target.source.rawRecovery?.verify))
         const batches = nativeCaptureStartupBatches(targets, nativeFast)
         for (const batch of batches) {
           startupTasks.push(startPreparedSource(batch).catch(error => {
