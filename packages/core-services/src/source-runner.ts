@@ -473,6 +473,23 @@ function noPersistedObservations(): ProcessResult {
  * converted. The original record must be verifiable and the original session
  * reader must independently authorize the Catalog location.
  */
+/** Only append-oriented, fingerprint-stable original sources may replace
+ * durable SQL events. Mutable SQLite rowIds cannot guarantee recovery after
+ * compaction or in-place updates even if they happen to verify today.
+ */
+function isDurablyNativeRecoverable(
+  source: SourceDefinition,
+  record: SourceRecord,
+): boolean {
+  const capability = source.rawRecovery?.describe(record)
+  return Boolean(capability?.canReread
+    && capability.authority === 'native-store'
+    && capability.locatorStability === 'stable'
+    && capability.mutability === 'append-oriented'
+    && capability.verification === 'fingerprint'
+    && capability.persistencePreference === 'reference')
+}
+
 async function shouldReadNativeOnly(
   storage: StorageService,
   tracker: NativeSessionCatalogTracker,
@@ -502,7 +519,7 @@ async function shouldReadNativeOnly(
   }
   if (process.env[NATIVE_ONLY_WRITER_OPT_IN] !== '1'
     || !source.readNativeSessionPage || !source.rawRecovery?.verify
-    || !source.rawRecovery.describe(record).canReread
+    || !isDurablyNativeRecoverable(source, record)
     || record.sourceId !== source.manifest.sourceId
     || record.installationId !== installation.id
     || !record.locator.path || !record.fingerprint) return claimLegacy()
@@ -878,7 +895,7 @@ export class SourceHistoryRunner {
             || record.sourceSessionNativeId !== entry.nativeSessionId
             || record.locator.path !== entry.filePath
             || !record.fingerprint
-            || !source.rawRecovery.describe(record).canReread) continue
+            || !isDurablyNativeRecoverable(source, record)) continue
           let verified = false
           try {
             verified = (await source.rawRecovery.verify(record, context)).state === 'verified'
