@@ -61,13 +61,16 @@ test('native Catalog HTTP exposes only authorized session identities, no physica
       before:{lastActivityAt:now,sourceId:'codex',installationId:'installation',
         nativeSessionId:'B',locationKind:'native'},
     })
+    const metadataSearch = await fetch(`${base}?search=title&limit=2`)
+    assert.equal(metadataSearch.status,200)
+    assert.equal(seen[2]?.search,'title')
     const onlyNative = await fetch(`${base}?onlyWithoutLegacyReview=1&limit=2`)
     assert.equal(onlyNative.status,200)
-    assert.equal(seen[2]?.onlyWithoutLegacyReview,true)
+    assert.equal(seen[3]?.onlyWithoutLegacyReview,true)
     const filtered=await fetch(`${base}?sourceId=codex`)
     assert.equal(filtered.status,200)
     assert.deepEqual(await filtered.json(),{items:[],hasMore:false})
-    assert.equal(seen.length,3)
+    assert.equal(seen.length,4)
   } finally { await http.dispose() }
 })
 
