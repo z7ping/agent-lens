@@ -245,6 +245,9 @@ export interface SourceDefinition {
    * can be reconstructed from the original source store. Defaults to false.
    * Sources with transient runtime-hook-only facts must not set this until a
    * separate nonduplicate sidecar has its own verified read/recovery path.
+   * Mutable SQLite may cover the current Source-owned session snapshot only
+   * if rawRecovery explicitly reports recoveryScope=session-current-state.
+   * Overwritten/deleted prior row revisions are NOT promised by Scheme B.
    */
   nativeSessionCoverageComplete?: boolean
   /** Read source-owned, per-session original Hook inbox archives only. Caller
