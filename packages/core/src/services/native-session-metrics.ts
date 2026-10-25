@@ -3,6 +3,46 @@
  * One row per native session plus at most 256 per-tool aggregates. No event
  * IDs, prompts, arguments, outputs, raw errors, evidence, or payload JSON.
  */
+/** A projection rule change requires rebuilding the affected Source sessions. */
+export const NATIVE_SESSION_METRIC_PROJECTION_VERSION='native-source-metrics-v1'
+
+export interface NativeSessionMetricOverviewQuery {
+  sourceId:string
+  /** The current registered Source parser, not a remembered DB version. */
+  parserVersion:string
+  installationId?:string
+  from?:string
+  to?:string
+}
+export interface NativeSessionMetricToolTotal {
+  nativeToolName:string
+  callCount:number
+  resultCount:number
+  errorCount:number
+  totalDurationMs:number
+  sessionCount:number
+}
+export interface NativeSessionMetricOverview {
+  sourceId:string
+  eligibleSessions:number
+  readySessions:number
+  missingSessions:number
+  staleSessions:number
+  partialSessions:number
+  /** Only verified COMPLETE sessions contribute to these totals. */
+  totals:{
+    interactionCount:number
+    toolCallCount:number
+    toolResultCount:number
+    toolErrorCount:number
+    errorCount:number
+    inputTokens:number|null
+    outputTokens:number|null
+  }
+  /** Only tool names and numbers. No event ID, args or output. */
+  tools:NativeSessionMetricToolTotal[]
+}
+
 export interface NativeSessionMetricTool {
   nativeToolName: string
   callCount: number
@@ -46,6 +86,11 @@ export interface NativeSessionMetricsStore {
   get(identity: {
     sourceId: string; installationId: string; nativeSessionId: string
   }): Promise<NativeSessionMetricReadResult>
+  /** SQL-only aggregates over CURRENT complete Native-only claims.
+   * Reports missing/stale/partial sessions separately, never adds old SQL
+   * and native totals together for the same Source identity.
+   */
+  overview?(query:NativeSessionMetricOverviewQuery):Promise<NativeSessionMetricOverview>
   /** Explicit invalidation on source/parse/policy change or user deletion. */
   invalidate(identity: {
     sourceId: string; installationId: string; nativeSessionId: string
