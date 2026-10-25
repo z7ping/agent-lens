@@ -937,7 +937,7 @@ test('Catalog native Review shares one Task DTO with bounded Hook-exclusive fact
     },
   }
   const old=process.env.AGENT_LENS_NATIVE_HOOK_ARCHIVE
-  process.env.AGENT_LENS_NATIVE_HOOK_ARCHIVE='1'
+  delete process.env.AGENT_LENS_NATIVE_HOOK_ARCHIVE
   const app=await startHttpSurface(storage,{port:0,nativeSessionReader:reader})
   try{
     const base=`http://${app.host}:${app.port}/api/v1/native-sessions`
@@ -949,7 +949,7 @@ test('Catalog native Review shares one Task DTO with bounded Hook-exclusive fact
     }
     assert.equal(dto.state,'available')
     assert.equal(dto.boundaryIntegrity,'complete')
-    assert.equal(dto.hookEventsTruncated,undefined)
+    assert.equal(dto.hookEventsTruncated,undefined,'default-on archive completes bounded archived page')
     assert.equal(dto.hookFactsPartial,true,'tool hooks remain on standalone evidence lane')
     assert.equal(hookReads,2)
     assert.deepEqual(dto.interactions[0]?.nodes.map(node=>node.kind??node.type),[
@@ -962,6 +962,14 @@ test('Catalog native Review shares one Task DTO with bounded Hook-exclusive fact
     const native=await ordinary.json() as typeof dto
     assert.equal(native.interactions[0]?.nodes.length,2,'raw native window must remain Hook-free')
     assert.equal(hookReads,2)
+    process.env.AGENT_LENS_NATIVE_HOOK_ARCHIVE='0'
+    const disabled = await fetch(base+'/'+encodeURIComponent(nativeId)+'/review')
+    assert.equal(disabled.status,200)
+    const partial = await disabled.json() as typeof dto
+    assert.equal(partial.hookEventsTruncated,true,
+      'emergency archive disable cannot advertise complete Hook availability')
+    assert.equal(partial.boundaryIntegrity,'complete',
+      'verified transcript turns remain complete even if Hook evidence is partial')
   }finally{
     if(old===undefined)delete process.env.AGENT_LENS_NATIVE_HOOK_ARCHIVE
     else process.env.AGENT_LENS_NATIVE_HOOK_ARCHIVE=old
