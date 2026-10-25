@@ -685,11 +685,12 @@ test('native Hook endpoint is metadata-authorized, returns partial Review nodes 
     const base=`http://${server.host}:${server.port}/api/v1/native-sessions/${nativeId}/hooks`
     const response=await fetch(base)
     assert.equal(response.status,200)
-    const data=await response.json() as {state:string;boundaryIntegrity:string;sessionId:string;hookEventsTruncated:boolean}
+    const data=await response.json() as {state:string;boundaryIntegrity:string;sessionId:string;hookEventsTruncated:boolean;hookFactsPartial:boolean}
     assert.equal(data.state,'available')
     assert.equal(data.boundaryIntegrity,'partial')
     assert.equal(data.sessionId,nativeId)
     assert.equal(data.hookEventsTruncated,false)
+    assert.equal(data.hookFactsPartial,true,'Hook archive EOF is not proof of lifecycle completeness')
     assert.equal(JSON.stringify(data).includes('/private/session.jsonl'),false)
     assert.equal((await fetch(base+'?filePath=/etc/passwd')).status,400)
     assert.equal((await fetch(base,{method:'POST'})).status,405)
