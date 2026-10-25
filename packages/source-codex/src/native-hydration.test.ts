@@ -65,3 +65,49 @@ test('Codex: both active and native archived JSONL hydrate without persisting th
     await rm(home, { recursive: true, force: true })
   }
 })
+
+
+test('Codex session page reads native events from active and archived roots without checkpoints', async () => {
+  const home = await mkdtemp(join(tmpdir(), 'agent-lens-codex-page-'))
+  const sessions = join(home, 'sessions')
+  const archived = join(home, 'archived_sessions')
+  const header = JSON.stringify({ type: 'session_meta', payload: { id: 'codex-page' } })
+  const message = (id: number) => JSON.stringify({ type: 'response_item', timestamp: '2026-10-25T00:00:00Z',
+    payload: { type: 'message', role: 'assistant', content: [{ type: 'output_text', text: `reply ${id}` }] } })
+  const host = { id: 'host', name: 'host', platform: process.platform, arch: process.arch,
+    createdAt: '2026-10-25T00:00:00Z', lastSeenAt: '2026-10-25T00:00:00Z' }
+  const installation = { id: 'codex-page-inst', hostId: host.id, productId: 'codex',
+    configRoot: home, dataRoot: sessions,
+    firstSeenAt: '2026-10-25T00:00:00Z', lastSeenAt: '2026-10-25T00:00:00Z' }
+  let checkpointCalls = 0
+  const ctx: SourceRawRecoveryContext = { host, installation, abortSignal: new AbortController().signal,
+    checkpoint: { async get() { checkpointCalls++; return null }, async set() { checkpointCalls++ },
+      async clear() { checkpointCalls++ } } }
+  try {
+    for (const folder of [sessions, archived]) {
+      await mkdir(folder, { recursive: true })
+      const path = join(folder, 'session.jsonl')
+      await writeFile(path, [header, message(1), message(2)].join('\n') + '\n')
+      const read = codexSourceDefinition.readNativeSessionPage!
+      const first = await read({ filePath: path, nativeSessionId: 'codex-page', limit: 1 }, ctx)
+      assert.equal(first.state, 'available')
+      if (first.state !== 'available') continue
+      assert.equal(first.records.length, 1)
+      assert.equal(first.hasMore, true)
+      const second = await read({ filePath: path, nativeSessionId: 'codex-page', limit: 2, cursor: first.nextCursor }, ctx)
+      assert.equal(second.state, 'available')
+      if (second.state !== 'available') continue
+      assert.equal(second.records.length, 2)
+      assert.equal(second.records[0]?.sourceSequence, 2)
+      assert.equal(second.records[1]?.sourceSequence, 3)
+      const normalized = await codexSourceDefinition.normalize(second.records[1]!, { host, installation })
+      assert.equal(normalized.observations.some(x => x.kind === 'message.assistant'), true)
+      assert.equal(second.hasMore, false)
+      assert.deepEqual(await read({ filePath: path, nativeSessionId: 'wrong' }, ctx),
+        { state: 'drifted', reason: 'native-session-identity-changed' })
+    }
+    assert.equal(checkpointCalls, 0)
+  } finally {
+    await rm(home, { recursive: true, force: true })
+  }
+})
