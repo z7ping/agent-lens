@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import type { HubReviewSessionSummaryDto, LiveMessageDto, ReviewNodeDto } from '@agent-lens/protocol'
+import type { HubReviewSessionSummaryDto, LiveMessageDto, NativeSessionSummaryDto, ReviewNodeDto } from '@agent-lens/protocol'
 import { fetchHubReviewSessions } from '../client/hub-review'
 import { liveApi, LiveRequestError, type LiveProductMetadata } from '../client/live'
 import { settleReaderAtLatest } from './session-reader-positioning'
@@ -34,6 +34,10 @@ export function useReviewSession(model: AgentLensClientModel, embedded: boolean)
   const [roundFilterLoading, setRoundFilterLoading] = useState(false)
   const [showAllEvents, setShowAllEvents] = useState(true)
   const [hubSessions, setHubSessions] = useState<HubReviewSessionSummaryDto[]>([])
+  const [nativeSessions, setNativeSessions] = useState<NativeSessionSummaryDto[]>([])
+  const [nativeCursor, setNativeCursor] = useState<string | undefined>()
+  const [nativeLoadingMore, setNativeLoadingMore] = useState(false)
+  const nativeRequestKeyRef = useRef('')
   const [liveProducts, setLiveProducts] = useState<LiveProductMetadata[]>([])
   const [historyInteractionPending, setHistoryInteractionPending] = useState<'' | 'resume' | 'fork-at'>('')
   const [historyInteractionError, setHistoryInteractionError] = useState('')
@@ -59,11 +63,86 @@ export function useReviewSession(model: AgentLensClientModel, embedded: boolean)
     [detail?.id, detail?.productId, detail?.statisticsCompleteness, liveProducts],
   )
   const visibleHubSessions = useMemo(() => hubSessions.filter(item => hubSessionVisibility(item, review)), [hubSessions, review.filters, t])
+  // Catalog-only sessions are a separate metadata stream, deduplicated in
+  // SQLite BEFORE LIMIT. Never invent Review totals, error flags or project
+  // membership for a source that has not been persisted.
+  const nativeFilterKey = JSON.stringify(review.filters)
+  const visibleNativeSessions = useMemo(() => {
+    const { sourceIds, range } = review.filters
+    const now = new Date()
+    const start = range === 'all' ? Number.NEGATIVE_INFINITY
+      : range === 'today'
+        ? new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime()
+        : now.getTime() - (range === '7d' ? 7 : 30) * 86_400_000
+    return nativeSessions.filter(item =>
+      (sourceIds === null || sourceIds.includes(item.sourceId))
+      && Number.isFinite(Date.parse(item.lastActivityAt))
+      && Date.parse(item.lastActivityAt) >= start)
+  }, [nativeSessions, nativeFilterKey])
+
+  useEffect(() => {
+    const filters = review.filters
+    const allowed = !embedded && !filters.projectId
+      && filters.status === 'all' && !filters.search.trim()
+      && (filters.sourceIds === null || filters.sourceIds.length > 0)
+    nativeRequestKeyRef.current = nativeFilterKey
+    if (!allowed) {
+      setNativeSessions([])
+      setNativeCursor(undefined)
+      return
+    }
+    const controller = new AbortController()
+    setNativeSessions([])
+    setNativeCursor(undefined)
+    const sourceId = filters.sourceIds?.length === 1 ? filters.sourceIds[0] : undefined
+    void model.nativeSessions({
+      ...(sourceId ? { sourceId } : {}),
+      onlyWithoutLegacyReview: true, limit: 100, signal: controller.signal,
+    }).then(page => {
+      if (controller.signal.aborted) return
+      setNativeSessions(page.items)
+      setNativeCursor(page.hasMore ? page.nextCursor : undefined)
+    }, () => {
+      if (controller.signal.aborted) return
+      // Native Reader is an additive capability. It must not suppress the
+      // existing persisted Review when catalog is temporarily unavailable.
+      setNativeSessions([])
+      setNativeCursor(undefined)
+    })
+    return () => controller.abort()
+  }, [embedded, nativeFilterKey, review.response?.meta.generatedAt, model])
+
+  const loadMoreNativeSessions = useCallback(async () => {
+    if (!nativeCursor || nativeLoadingMore) return
+    const requestKey = nativeRequestKeyRef.current
+    setNativeLoadingMore(true)
+    try {
+      const selected = review.filters.sourceIds
+      const page = await model.nativeSessions({
+        ...(selected?.length === 1 && selected[0] ? { sourceId: selected[0] } : {}),
+        onlyWithoutLegacyReview: true, limit: 100, cursor: nativeCursor,
+      })
+      if (nativeRequestKeyRef.current !== requestKey) return
+      setNativeSessions(current => {
+        const rows = new Map(current.map(item => [item.id, item]))
+        for (const item of page.items) rows.set(item.id, item)
+        return [...rows.values()]
+      })
+      setNativeCursor(page.hasMore ? page.nextCursor : undefined)
+    } catch {
+      // Keep already displayed sessions and preserve cursor for manual retry.
+      // A temporary Source/Catalog failure must not hide SQL history.
+    } finally {
+      setNativeLoadingMore(false)
+    }
+  }, [nativeCursor, nativeLoadingMore, nativeFilterKey, model])
+
   const sessionGroups = useMemo(() => {
     const groups = new Map<ReviewDayGroup, UnifiedReviewSessionListEntry[]>()
     const now = new Date()
     const combined: UnifiedReviewSessionListEntry[] = [
       ...(review.response?.items ?? []).map(item => ({ origin: 'local' as const, id: item.id, activityAt: item.endedAt || item.startedAt, local: item })),
+      ...visibleNativeSessions.map(item => ({ origin: 'native' as const, id: item.id, activityAt: item.lastActivityAt, native: item })),
       ...visibleHubSessions.map(item => ({ origin: 'remote' as const, id: item.id, activityAt: hubSessionTime(item), remote: item })),
     ].sort((left, right) => {
       const leftAt = Date.parse(left.activityAt)
@@ -84,7 +163,7 @@ export function useReviewSession(model: AgentLensClientModel, embedded: boolean)
       label: t(`local.day.${key}`),
       items,
     }))
-  }, [review.response?.items, visibleHubSessions, t])
+  }, [review.response?.items, visibleNativeSessions, visibleHubSessions, t])
 
   useEffect(() => {
     if (!detail?.id) {
@@ -623,6 +702,10 @@ export function useReviewSession(model: AgentLensClientModel, embedded: boolean)
     detail,
     detailLiveInteraction,
     visibleHubSessions,
+    visibleNativeSessions,
+    nativeHasMore: Boolean(nativeCursor),
+    nativeLoadingMore,
+    loadMoreNativeSessions,
     sessionGroups,
     loadOlder,
     loadFollowing,

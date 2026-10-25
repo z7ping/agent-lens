@@ -93,6 +93,19 @@ test('native session catalog remains metadata-only, stable and independently pag
     const unmatched = await catalog.query({onlyWithoutLegacyReview:true,limit:1,locationKind:'native'})
     assert.deepEqual(unmatched.items.map(x=>x.nativeSessionId),['a'])
     assert.equal(unmatched.hasMore,false)
+    // An older v34 metadata row has not yet received its stable ID index.
+    // Do not display an unopenable native link as a usable Task session.
+    storage.db.prepare(`UPDATE native_session_catalog SET review_session_id=NULL
+      WHERE source_id=? AND installation_id=? AND native_session_id=? AND location_kind=?`)
+      .run('pi','local-pi','a','native')
+    assert.deepEqual((await catalog.query({
+      onlyWithoutLegacyReview:true,locationKind:'native',
+    })).items,[])
+    // The next ordinary metadata refresh restores ID lookup automatically.
+    await catalog.upsert(old)
+    assert.deepEqual((await catalog.query({
+      onlyWithoutLegacyReview:true,locationKind:'native',
+    })).items.map(x=>x.nativeSessionId),['a'])
     // Unfiltered view still exposes all original catalog entries.
     const allNative = await catalog.query({locationKind:'native',limit:3})
     assert.deepEqual(allNative.items.map(x=>x.nativeSessionId),['c','b','a'])
