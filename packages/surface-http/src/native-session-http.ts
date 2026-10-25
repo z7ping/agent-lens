@@ -12,6 +12,77 @@ const MAX_IDENTIFIER = 512
 const MAX_CURSOR_BYTES = 512
 const MAX_LIMIT = 16
 const MAX_RESPONSE_BYTES = 4 * 1024 * 1024
+const MAX_REVIEW_PAGES = 8
+const MAX_REVIEW_OBSERVATIONS = 128
+// Bound the aggregate *before* allocating a projected Review DTO.
+const MAX_REVIEW_INPUT_BYTES = 2 * 1024 * 1024
+
+/**
+ * Assemble contiguous, source-validated native pages before running the ONE
+ * existing Review grouping projection. This pairs tool calls/results across
+ * ordinary byte windows without persisting any events.
+ *
+ * The cap is deliberate: a turn beyond the budget remains "partial"; callers
+ * must not treat this as full-session or safe turn-by-turn pagination yet.
+ */
+async function readContiguousReviewPages(
+  reader: NativeSessionWindowReader,
+  query: NativeSessionReadQuery,
+  first: Extract<NativeSessionReadResult, {state: 'available'}>,
+): Promise<NativeSessionReadResult> {
+  let current = first
+  let pages = 1
+  let observations = [...first.observations]
+  let recordIds = [...first.observationRecordIds]
+  let bytes: number
+  try {
+    bytes = Buffer.byteLength(JSON.stringify(observations), 'utf8')
+  } catch {
+    // The projection owns circular-value handling. Do not expand unbounded.
+    bytes = MAX_REVIEW_INPUT_BYTES
+  }
+  let previousOffset = query.cursor?.offset ?? 0
+
+  while (current.hasMore && !current.pendingTail
+    && pages < MAX_REVIEW_PAGES && observations.length < MAX_REVIEW_OBSERVATIONS
+    && bytes < MAX_REVIEW_INPUT_BYTES) {
+    query.signal.throwIfAborted()
+    if (current.nextCursor.offset <= previousOffset) {
+      return { state: 'unsupported', reason: 'native-review-cursor-not-advancing' }
+    }
+    const next = await reader.read({ ...query, cursor: current.nextCursor })
+    if (next.state !== 'available') return next // fail closed on drift or lost access
+    if (next.nextCursor.fileIdentity !== current.nextCursor.fileIdentity) {
+      return { state: 'drifted', reason: 'native-review-file-identity-changed' }
+    }
+    let nextBytes: number
+    try {
+      nextBytes = Buffer.byteLength(JSON.stringify(next.observations), 'utf8')
+    } catch {
+      nextBytes = MAX_REVIEW_INPUT_BYTES
+    }
+    if (observations.length + next.observations.length > MAX_REVIEW_OBSERVATIONS
+      || bytes + nextBytes > MAX_REVIEW_INPUT_BYTES) {
+      // The returned cursor still points to the last *included* page.
+      break
+    }
+    observations = [...observations, ...next.observations]
+    recordIds = [...recordIds, ...next.observationRecordIds]
+    bytes += nextBytes
+    previousOffset = current.nextCursor.offset
+    current = next
+    pages++
+  }
+
+  return {
+    ...current,
+    observations,
+    observationRecordIds: recordIds,
+    // Evidence must never leave the reader; Review nodes intentionally have
+    // no persisted Evidence IDs or raw source locator.
+    evidenceCandidates: [],
+  }
+}
 
 function identifier(params: URLSearchParams, key: string): string {
   const values = params.getAll(key)
@@ -97,14 +168,18 @@ export async function handleNativeSessionWindowRequest(
   }
   response.once('close', close)
   try {
-    const result = await reader.read({
+    const readQuery: NativeSessionReadQuery = {
       sourceId,
       installationId,
       nativeSessionId,
       limit,
       ...(cursor ? { cursor } : {}),
       signal: abort.signal,
-    })
+    }
+    const first = await reader.read(readQuery)
+    const result = formatValues[0] === 'review' && first.state === 'available'
+      ? await readContiguousReviewPages(reader, readQuery, first)
+      : first
     if (abort.signal.aborted || response.destroyed) return true
     if (result.state !== 'available') {
       writeJson(response, 200, result)

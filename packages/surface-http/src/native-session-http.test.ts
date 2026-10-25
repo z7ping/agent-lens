@@ -19,23 +19,24 @@ test('native session HTTP reads via identities only, supports opaque cursor and 
         limit: query.limit,
         hasAbortSignal: typeof query.signal?.addEventListener === 'function',
       })
+      const followup = query.cursor?.offset === 128 && calls.length === 3
       return {
         state: 'available',
         observations: [{
-          kind: 'message.user',
+          kind: followup ? 'message.assistant' : 'message.user',
           capturedAt: '2026-10-25T00:00:00Z',
           identityHints: { nativeSessionId: 'session 1' },
           payload: { text: '[redacted]' },
         }],
-        observationRecordIds: ['record-1'],
+        observationRecordIds: [followup ? 'record-2' : 'record-1'],
         evidenceCandidates: [{
           captureMethod: 'native-log',
           derivation: 'observed',
           capturedAt: '2026-10-25T00:00:00Z',
           sourceLocator: { kind: 'file', path: '/sensitive/work/secret.jsonl' },
         }],
-        nextCursor: { offset: 128, sequence: 1, fileIdentity: '1:2' },
-        hasMore: true,
+        nextCursor: { offset: followup ? 256 : 128, sequence: followup ? 2 : 1, fileIdentity: '1:2' },
+        hasMore: !followup,
         pendingTail: false,
       }
     },
@@ -63,9 +64,10 @@ test('native session HTTP reads via identities only, supports opaque cursor and 
       interactions: Array<{nodes: Array<{type:string; text?:string}>}>
     }
     assert.equal(rendered.state, 'available')
-    assert.equal(rendered.boundaryIntegrity, 'partial')
+    assert.equal(rendered.boundaryIntegrity, 'complete')
     assert.equal(rendered.interactions[0]?.nodes[0]?.type, 'message')
     assert.equal(rendered.interactions[0]?.nodes[0]?.text, '[redacted]')
+    assert.equal(rendered.interactions[0]?.nodes[1]?.type, 'message')
     assert.equal(JSON.stringify(rendered).includes('/sensitive/work'), false)
 
     const second = await fetch(`${endpoint}?sourceId=pi&installationId=inst&nativeSessionId=session%201&limit=2&cursor=${body.nextCursor}`)
@@ -75,11 +77,114 @@ test('native session HTTP reads via identities only, supports opaque cursor and 
     }, {
       sourceId: 'pi', installationId: 'inst', nativeSessionId: 'session 1', limit: 8, hasAbortSignal: true,
     }, {
+      sourceId: 'pi', installationId: 'inst', nativeSessionId: 'session 1', limit: 8,
+      cursor: { offset: 128, sequence: 1, fileIdentity: '1:2' }, hasAbortSignal: true,
+    }, {
       sourceId: 'pi', installationId: 'inst', nativeSessionId: 'session 1', limit: 2,
       cursor: { offset: 128, sequence: 1, fileIdentity: '1:2' }, hasAbortSignal: true,
     }])
   } finally {
     await server.dispose()
+  }
+})
+
+
+test('native Review pairs tool calls/results across source windows without leaking Evidence', async () => {
+  let reads = 0
+  const at = '2026-10-25T00:00:00Z'
+  const native = (kind: 'message.user' | 'tool.call' | 'tool.result', sourceSequence: number, payload: object) => ({
+    kind, sourceSequence, capturedAt: at, payload,
+    identityHints: { nativeSessionId: 'S1' },
+  })
+  const reader: NativeSessionWindowReader = {
+    async read(query) {
+      reads++
+      const first = query.cursor === undefined
+      return {
+        state: 'available',
+        observations: first ? [
+          native('message.user', 1000, {text:'run'}),
+          native('tool.call', 2000, {callId:'one',nativeToolName:'shell',input:{command:'test'}}),
+        ] : [
+          native('tool.result', 3000, {callId:'one',success:true,output:'done'}),
+        ],
+        observationRecordIds: first ? ['r1', 'r2'] : ['r3'],
+        // This must not be emitted as a raw file locator in the Review DTO.
+        evidenceCandidates: [{
+          captureMethod: 'native-log', derivation: 'observed', capturedAt: at,
+          sourceLocator: {kind:'file',path:'/sensitive/private.jsonl'},
+        }],
+        nextCursor: {offset: first ? 256 : 512,sequence: first ? 2 : 3,fileIdentity:'1:2'},
+        hasMore: first, pendingTail: false,
+      }
+    },
+  }
+  const surface = await startHttpSurface(noopStorage, {port:0,nativeSessionReader:reader})
+  const base = `http://${surface.host}:${surface.port}/api/v1/native-sessions/window?sourceId=pi&installationId=inst&nativeSessionId=S1`
+  try {
+    const response = await fetch(`${base}&format=review`)
+    assert.equal(response.status, 200)
+    const body = await response.json() as {
+      boundaryIntegrity: string; observationCount:number; hasMore:boolean; nextCursor:string;
+      interactions:Array<{nodes:Array<{type:string;status?:string;output?:string;observationIds:string[]}>}>
+    }
+    assert.equal(reads, 2)
+    assert.equal(body.boundaryIntegrity, 'complete')
+    assert.equal(body.observationCount, 3)
+    assert.equal(body.hasMore, false)
+    assert.equal(body.interactions.length, 1)
+    const tool = body.interactions[0]?.nodes.find(n=>n.type==='tool')
+    assert.equal(tool?.status, 'success')
+    assert.equal(tool?.output, 'done')
+    assert.equal(tool?.observationIds.length, 2)
+    assert.equal(JSON.stringify(body).includes('/sensitive/'), false)
+    // A client jumping in at the second byte window does not have the call.
+    const single = await fetch(`${base}&format=review&cursor=${encodeNativeSessionCursor({
+      offset:256,sequence:2,fileIdentity:'1:2',
+    })}`)
+    const partial = await single.json() as {boundaryIntegrity:string;interactions:Array<{nodes:Array<{type:string}>}>}
+    assert.equal(partial.boundaryIntegrity, 'partial')
+    assert.equal(partial.interactions[0]?.nodes[0]?.type, 'event')
+  } finally {
+    await surface.dispose()
+  }
+})
+
+test('native Review stops on bounded read budget, stalled cursor and identity drift', async () => {
+  const baseReader = (mode:'long'|'stalled'|'drift'): NativeSessionWindowReader => ({
+    async read(query) {
+      const n = (query.cursor?.sequence ?? 0) + 1
+      return {
+        state:'available',
+        observations:[{
+          kind:'message.user',capturedAt:'2026-10-25T00:00:00Z',
+          identityHints:{nativeSessionId:'S1'},payload:{text:'page '+n},
+        }],
+        observationRecordIds:['r'+n], evidenceCandidates:[],
+        nextCursor:{
+          offset: mode==='stalled' ? 0 : n*128,
+          sequence:n,
+          fileIdentity: mode==='drift' && n===2 ? '3:4' : '1:2',
+        },
+        hasMore: mode==='long' || (mode==='stalled' && n===1) || (mode==='drift' && n===1),
+        pendingTail:false,
+      }
+    },
+  })
+  for (const [mode, expected] of [
+    ['long','partial'], ['stalled','native-review-cursor-not-advancing'],
+    ['drift','native-review-file-identity-changed'],
+  ] as const) {
+    const surface=await startHttpSurface(noopStorage,{port:0,nativeSessionReader:baseReader(mode)})
+    try {
+      const response=await fetch(`http://${surface.host}:${surface.port}/api/v1/native-sessions/window?sourceId=pi&installationId=inst&nativeSessionId=S1&format=review`)
+      const body=await response.json() as {boundaryIntegrity?:string;reason?:string;observationCount?:number}
+      assert.equal(response.status,200)
+      assert.equal(body.reason ?? body.boundaryIntegrity,expected)
+      if(mode==='long') assert.equal(body.observationCount,8)
+    } finally {
+      await surface.dispose()
+    }
   }
 })
 
