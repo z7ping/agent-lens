@@ -802,7 +802,7 @@ function normalizeRuntime(record: SourceRecord): ObservationCandidate | null {
       nativeToolName: toolName,
       ...(callId ? { callId } : {}),
       ...(turnId ? { turnId } : {}),
-    }, { identity })
+    }, { identity, ...(callId ? { nativeCallId: callId } : {}) })
   }
   if (hookName === 'StopFailure') {
     return candidate(record, envelope, 'session.lifecycle', {
