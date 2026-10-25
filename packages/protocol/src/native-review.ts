@@ -47,6 +47,12 @@ export type NativeBodySearchResponseDto =
     }
   | { state: 'unavailable' | 'drifted' | 'unsupported'; reason: string }
 
+/** A lightweight per-session status for lazy Native-only metric refresh. */
+export type NativeMetricStatusDto = {
+  state:'available'|'missing'|'stale'|'unsupported'|'unavailable'|'drifted'
+  reason?:string
+}
+
 /** SQL-only numerical projection. No event rows or local file locations. */
 export interface NativeMetricOverviewSourceDto {
   sourceId:string

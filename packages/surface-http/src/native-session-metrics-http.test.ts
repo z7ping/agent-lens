@@ -36,6 +36,7 @@ test('explicit native metric rebuild consumes Source reader pages, persists numb
   }
   const catalog={
     getByReviewSessionId:async(q:string)=>q===id?entry:null,
+    hasNativeOnlyWriteClaim:async()=>true,
   }
   const seenOffsets:number[]=[]
   const reader:NativeSessionWindowReader={
@@ -113,7 +114,10 @@ test('native metric materialization never marks unverified Hook coverage complet
   let recorded:NativeSessionMetricSnapshot|null=null
   const storage={
     ...unsupportedStorage,
-    nativeSessionCatalog:{getByReviewSessionId:async()=>hookEntry},
+    nativeSessionCatalog:{
+      getByReviewSessionId:async()=>hookEntry,
+      hasNativeOnlyWriteClaim:async()=>true,
+    },
     nativeSessionMetrics:{
       get:async()=>({state:'missing'}),
       replace:async(s:NativeSessionMetricSnapshot)=>{recorded=s;return true},
@@ -141,5 +145,37 @@ test('native metric materialization never marks unverified Hook coverage complet
     assert.equal(body.coverage,'partial')
     assert.equal(body.reason,'native-source-coverage-unverified')
     assert.equal((recorded as NativeSessionMetricSnapshot | null)?.coverage,'partial')
+  }finally{await app.dispose()}
+})
+
+test('legacy catalog records never trigger duplicate native metric scans',async()=>{
+  let reads=0
+  let metricCalls=0
+  const storage={
+    ...unsupportedStorage,
+    nativeSessionCatalog:{
+      getByReviewSessionId:async()=>entry,
+      hasNativeOnlyWriteClaim:async()=>false,
+    },
+    nativeSessionMetrics:{
+      get:async()=>{metricCalls++;return {state:'missing'} as const},
+      replace:async()=>{metricCalls++;return true},
+    },
+  } as unknown as StorageService
+  const reader:NativeSessionWindowReader={
+    async read(){reads++;throw new Error('Legacy metrics must not scan Source files')},
+  }
+  const app=await startHttpSurface(storage,{port:0,nativeSessionReader:reader,sources,capturePolicy:policy})
+  try{
+    const base=`http://${app.host}:${app.port}/api/v1/native-sessions/${encodeURIComponent(id)}/metrics`
+    for(const [path,method] of [['', 'GET'], ['/rebuild','POST']] as const){
+      const result=await fetch(base+path,{method})
+      assert.equal(result.status,200)
+      assert.deepEqual(await result.json(),{
+        state:'unsupported',reason:'native-metrics-legacy-session',
+      })
+    }
+    assert.equal(reads,0)
+    assert.equal(metricCalls,0)
   }finally{await app.dispose()}
 })

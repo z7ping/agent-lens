@@ -7,6 +7,7 @@ const hook=read('./use-review-session.ts')
 const page=read('./ReviewPage.tsx')
 const model=read('../client/model-review.ts')
 const storage=read('../../../storage-sqlite/src/native-session-catalog.ts')
+const api=read('../client/api.ts')
 
 test('native-only entries use indexed SQL source identity dedup before pagination',()=>{
   assert.match(storage,/review_session_id IS NOT NULL/)
@@ -18,6 +19,15 @@ test('native-only entries use indexed SQL source identity dedup before paginatio
   assert.match(hook,/origin: 'native'/)
   assert.match(hook,/nativeCursor/)
   assert.match(hook,/loadMoreNativeSessions/)
+})
+
+test('opening a certified native Review lazily rebuilds only missing or stale numerical metrics',()=>{
+  assert.match(model,/summary\.sourceId === 'pi' && summary\.locationKind === 'native'/)
+  assert.match(model,/this\.api\.nativeMetricStatus\(id, signal\)/)
+  assert.match(model,/status\.state === 'missing' \|\| status\.state === 'stale'/)
+  assert.match(model,/this\.api\.rebuildNativeMetric\(id, signal\)/)
+  assert.match(api,/\/metrics\/rebuild/)
+  assert.match(api,/method: 'POST'/)
 })
 
 test('native details render inside the only existing Review TaskSurface, with no fabricated controls',()=>{
