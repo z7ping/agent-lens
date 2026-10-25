@@ -15,8 +15,9 @@ const MAX_RESUMABLE=8
  * Starts only after a user requests Usage/Insights; never scans at startup,
  * reads legacy SQL events, or starts a persistent background polling loop.
  *
- * Until Hook completeness and mutable SQLite recovery are certified, only
- * Pi is eligible. Source authorization and CapturePolicy remain in Reader.
+ * Any Source can participate only after explicitly certifying full native
+ * session coverage; uncertified/disabled Sources never trigger body reads.
+ * Source authorization and CapturePolicy remain in the Reader.
  */
 export class NativeMetricsAutoRefresh {
   private readonly abort=new AbortController()
@@ -25,7 +26,10 @@ export class NativeMetricsAutoRefresh {
   // is persisted. Bound open sessions to avoid retaining large call maps.
   private readonly ongoing=new Map<string,NativeMetricRebuildProgress>()
   private active:Promise<void>|null=null
-  private before:NativeSessionMetricRebuildCursor|undefined
+  // Independent per-Source keyset cursors; one certified Source per trigger
+  // avoids multiplying the bounded reader budget as adapters are enabled.
+  private readonly beforeBySource=new Map<string,NativeSessionMetricRebuildCursor>()
+  private nextSourceId:string|undefined
 
   constructor(
     private readonly catalog:NativeSessionCatalogStore|undefined,
@@ -46,19 +50,29 @@ export class NativeMetricsAutoRefresh {
   }
 
   private async run():Promise<void> {
-    const source=this.sources!.list().find(item=>item.manifest.sourceId==='pi')
-    if(!source?.readNativeSessionPage || source.nativeSessionCoverageComplete!==true
-      || !this.policy!.isSourceEnabled('pi'))return
+    const eligible=this.sources!.list().filter(source=>
+      source.nativeSessionCoverageComplete===true
+      && Boolean(source.readNativeSessionPage)
+      && this.policy!.isSourceEnabled(source.manifest.sourceId))
+      .sort((a,b)=>a.manifest.sourceId.localeCompare(b.manifest.sourceId))
+    if(!eligible.length)return
+    const nextIndex=eligible.findIndex(item=>item.manifest.sourceId===this.nextSourceId)
+    const source=eligible[nextIndex<0?0:nextIndex]!
+    const sourceId=source.manifest.sourceId
+    this.nextSourceId=eligible[(nextIndex<0?0:nextIndex)+1]?.manifest.sourceId
+      ?? eligible[0]!.manifest.sourceId
     const candidates=await this.metrics!.findRebuildCandidates!({
-      sourceId:'pi',parserVersion:source.manifest.parserVersion,
-    },MAX_SESSIONS_PER_TRIGGER,this.before)
+      sourceId,parserVersion:source.manifest.parserVersion,
+    },MAX_SESSIONS_PER_TRIGGER,this.beforeBySource.get(sourceId))
     // Advance past the selected metadata page even if some sessions fail or
     // are cooling down. Otherwise the newest four block every older session.
     const last=candidates.at(-1)
-    this.before=last && candidates.length===MAX_SESSIONS_PER_TRIGGER
-      ? {lastActivityAt:last.lastActivityAt,installationId:last.installationId,
-          nativeSessionId:last.nativeSessionId}
-      : undefined
+    if(last && candidates.length===MAX_SESSIONS_PER_TRIGGER){
+      this.beforeBySource.set(sourceId,{
+        lastActivityAt:last.lastActivityAt,installationId:last.installationId,
+        nativeSessionId:last.nativeSessionId,
+      })
+    }else this.beforeBySource.delete(sourceId)
     for(const candidate of candidates){
       if(this.abort.signal.aborted)return
       const key=JSON.stringify([
@@ -72,7 +86,7 @@ export class NativeMetricsAutoRefresh {
         if(oldest!==undefined)this.recent.delete(oldest)
       }
       this.recent.set(key,now+RETRY_COOLDOWN_MS)
-      if(candidate.sourceId!=='pi')continue
+      if(candidate.sourceId!==sourceId)continue
       const entry=await this.catalog!.getByReviewSessionId(candidate.reviewSessionId)
       if(!entry || entry.locationKind!=='native'
         || entry.sourceId!==candidate.sourceId
@@ -102,6 +116,7 @@ export class NativeMetricsAutoRefresh {
     this.abort.abort()
     this.recent.clear()
     this.ongoing.clear()
-    this.before=undefined
+    this.beforeBySource.clear()
+    this.nextSourceId=undefined
   }
 }

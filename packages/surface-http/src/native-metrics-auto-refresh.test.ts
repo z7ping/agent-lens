@@ -268,3 +268,93 @@ test('a changed native Catalog revision discards in-memory progress before any n
   assert.equal(snapshots[0]?.fileSize,revised.fileSize)
   assert.equal(snapshots[0]?.interactionCount,65)
 })
+
+test('lazy native metrics schedules all certified Sources fairly, never hardcoding Pi',async()=>{
+  const picked:string[]=[]
+  const readSources:string[]=[]
+  const stored:NativeSessionMetricSnapshot[]=[]
+  const definitions=[
+    {manifest:{sourceId:'pi',parserVersion:'pi-v1'},nativeSessionCoverageComplete:true,
+      readNativeSessionPage:async()=>{throw Error('Reader Worker owns Source bytes')}},
+    {manifest:{sourceId:'codex',parserVersion:'codex-v2'},nativeSessionCoverageComplete:true,
+      readNativeSessionPage:async()=>{throw Error('Reader Worker owns Source bytes')}},
+    {manifest:{sourceId:'opencode',parserVersion:'db-v3'},nativeSessionCoverageComplete:false,
+      readNativeSessionPage:async()=>{throw Error('Mutable DB must never be read')}},
+  ]
+  const sources={list:()=>definitions} as unknown as SourceService
+  const enabled={isSourceEnabled:(sourceId:string)=>sourceId!=='opencode'}
+    as unknown as CapturePolicyService
+  const metrics={
+    async findRebuildCandidates(query:{sourceId:string;parserVersion:string}){
+      picked.push(query.sourceId)
+      assert.equal(query.parserVersion,query.sourceId==='pi'?'pi-v1':'codex-v2')
+      return [{
+        reviewSessionId:`native:${query.sourceId}`,
+        sourceId:query.sourceId,installationId:'installation',nativeSessionId:'S1',
+        lastActivityAt:at,
+      }]
+    },
+    async replace(snapshot:NativeSessionMetricSnapshot){stored.push(snapshot);return true},
+  } as unknown as NativeSessionMetricsStore
+  const nativeCatalog={
+    async getByReviewSessionId(id:string){
+      const sourceId=id.slice('native:'.length)
+      return {...entry,sourceId,installationId:'installation',nativeSessionId:'S1'}
+    },
+  } as unknown as NativeSessionCatalogStore
+  const reader={
+    async read(query:{sourceId:string}){
+      readSources.push(query.sourceId)
+      return {
+        state:'available' as const,
+        observations:[{kind:'message.user' as const,capturedAt:at,
+          identityHints:{nativeSessionId:'S1'},payload:{text:'secret'}}],
+        observationRecordIds:['private-source-record'],evidenceCandidates:[],
+        nextCursor:{offset:42,sequence:1,fileIdentity:'dev:1'},
+        hasMore:false,pendingTail:false,
+      }
+    },
+  } as unknown as NativeSessionWindowReader
+  const refresh=new NativeMetricsAutoRefresh(nativeCatalog,metrics,reader,sources,enabled)
+  try{
+    assert.deepEqual(picked,[],'never scan at startup')
+    for(let i=0;i<3;i++){refresh.schedule();await flush()}
+    assert.deepEqual(picked,['codex','pi','codex'])
+    assert.deepEqual(readSources,['codex','pi'])
+    assert.deepEqual(stored.map(item=>item.sourceId),['codex','pi'])
+    assert.equal(JSON.stringify(stored).includes('secret'),false)
+    assert.equal(JSON.stringify(stored).includes('private-source-record'),false)
+  }finally{refresh.dispose()}
+})
+
+test('per-Source metric pagination does not reuse a different Source keyset cursor',async()=>{
+  const visited:Array<{sourceId:string;after:string|null}>=[]
+  const sources={list:()=>['pi','codex'].map(sourceId=>({
+    manifest:{sourceId,parserVersion:'1'},nativeSessionCoverageComplete:true,
+    readNativeSessionPage:async()=>{throw Error('Reader Worker owns Source bytes')},
+  }))} as unknown as SourceService
+  const metrics={
+    async findRebuildCandidates(scope:{sourceId:string},limit:number,
+      before?:{nativeSessionId:string}){
+      assert.equal(limit,4)
+      visited.push({sourceId:scope.sourceId,after:before?.nativeSessionId??null})
+      const start=before?4:0
+      return Array.from({length:4},(_,i)=>({
+        reviewSessionId:`native:${scope.sourceId}-${start+i}`,
+        sourceId:scope.sourceId,installationId:'installation',
+        nativeSessionId:`S${start+i}`,lastActivityAt:at,
+      }))
+    },
+  } as unknown as NativeSessionMetricsStore
+  const notFound={getByReviewSessionId:async()=>null} as unknown as NativeSessionCatalogStore
+  const refresh=new NativeMetricsAutoRefresh(notFound,metrics,
+    {read:async()=>{throw Error('No registered Catalog entry')}} as unknown as NativeSessionWindowReader,
+    sources,{isSourceEnabled:()=>true} as unknown as CapturePolicyService)
+  try{
+    for(let i=0;i<4;i++){refresh.schedule();await flush()}
+    assert.deepEqual(visited,[
+      {sourceId:'codex',after:null},{sourceId:'pi',after:null},
+      {sourceId:'codex',after:'S3'},{sourceId:'pi',after:'S3'},
+    ])
+  }finally{refresh.dispose()}
+})
