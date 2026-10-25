@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto'
 import { stat } from 'node:fs/promises'
+import { join } from 'node:path'
 import type {
   DetectedSource,
   ObservationCapability,
@@ -10,7 +11,7 @@ import {
   defineAgentLensPlugin,
   type AgentLensContext,
 } from '@agent-lens/runtime-cordis'
-import { readAuthorizedNativeJsonlEntry, readNativeSessionWindow, verifyJsonlLineSha256 } from '@agent-lens/source-support'
+import { readArchivedHookInboxSession, readAuthorizedNativeJsonlEntry, readNativeSessionWindow, verifyJsonlLineSha256 } from '@agent-lens/source-support'
 import { discoverCodexAssets } from './assets'
 import {
   CODEX_CURRENT_PARSER_VERSION,
@@ -19,7 +20,7 @@ import {
 import { detectCodex } from './detect'
 import { codexHistoryRoots, ingestCodexHistory, listCodexHistoryFiles, readSessionMetadata } from './history'
 import { nativeIdForEntry, nativeTypeForEntry } from './format'
-import { startCodexRuntimeCapture } from './runtime'
+import { codexRuntimeInternals, startCodexRuntimeCapture } from './runtime'
 import { normalizeCodexSessionAttribution } from './session-attribution'
 
 export const codexManifest: SourcePluginManifest = {
@@ -127,6 +128,24 @@ export const codexSourceDefinition: SourceDefinition = {
   detect: detectCodex,
   declareCapabilities: declareCodexCapabilities,
   rawRecovery: jsonlRawRecovery,
+  async readArchivedNativeHooks(nativeSessionId, ctx) {
+    ctx.abortSignal.throwIfAborted()
+    const inbox = codexRuntimeInternals.inboxDirectory()
+    const archive = await readArchivedHookInboxSession({ inbox, nativeSessionId })
+    const records = archive.map(item => {
+      const envelope = codexRuntimeInternals.parseEnvelope(item.content, item.fileName)
+      const archivePath = join(inbox, 'archive',
+        createHash('sha256').update(nativeSessionId).digest('hex'), item.fileName)
+      const record = codexRuntimeInternals.sourceRecordFromEnvelope(envelope, archivePath, ctx)
+      if (record.sourceSessionNativeId !== nativeSessionId
+        || record.sourceId !== 'codex' || record.installationId !== ctx.installation.id) {
+        throw new Error('Archived Codex Hook does not belong to requested native session')
+      }
+      return record
+    })
+    ctx.abortSignal.throwIfAborted()
+    return records
+  },
   async *discoverNativeSessions(ctx) {
     const paths = await listCodexHistoryFiles(ctx.installation, ctx.historyWindow)
     for (const filePath of paths) {
