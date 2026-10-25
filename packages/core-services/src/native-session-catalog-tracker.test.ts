@@ -57,6 +57,10 @@ test('incremental tracker writes only metadata once per native file window', asy
     assert.equal(await tracker.observe(source, record(path)), false)
     // Missing/inaccessible != confirmed deletion: existing catalog stays intact.
     assert.equal(stored.length, 2)
+    // Same clock tick: successful index must not be throttled by the failed stat.
+    await writeFile(path,'{"type":"session","id":"pi-original"}\n')
+    assert.equal(await tracker.observe(source, record(path)), true)
+    assert.equal(stored.length, 3)
   } finally {
     await rm(root, { recursive: true, force: true })
   }
@@ -136,5 +140,20 @@ test('catalog indexes native session titles only, never user/tool content',async
       ...record(path),payload:{entry:{type:'session_info',name:'Explicit new title'}},
     }),true)
     assert.equal(stored[3]?.title,'Explicit new title')
+  }finally{await rm(root,{recursive:true,force:true})}
+})
+
+test('failed catalog upsert is not remembered as an indexed session',async()=>{
+  const root=await mkdtemp(join(tmpdir(),'al-index-retry-'))
+  const path=join(root,'session.jsonl')
+  let attempts=0
+  const catalog={async upsert(){attempts++;if(attempts===1)throw Error('writer busy')}}
+    as unknown as NativeSessionCatalogStore
+  const tracker=new NativeSessionCatalogTracker(catalog,()=>1_000,30_000)
+  try {
+    await writeFile(path,'{}\n')
+    await assert.rejects(()=>tracker.observe(source,record(path)),/writer busy/)
+    assert.equal(await tracker.observe(source,record(path)),true)
+    assert.equal(attempts,2)
   }finally{await rm(root,{recursive:true,force:true})}
 })
