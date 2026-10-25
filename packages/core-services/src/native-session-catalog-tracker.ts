@@ -114,10 +114,11 @@ export class NativeSessionCatalogTracker {
       const oldest = this.inspected.keys().next().value
       if (oldest !== undefined) this.inspected.delete(oldest)
     }
+    const cachedTitle = title ?? previous?.title
     this.inspected.set(key, {
       checkedAt: now,
       activityMs: Math.max(previous?.activityMs ?? Number.NEGATIVE_INFINITY, activityMs),
-      ...(title ?? previous?.title ? { title: title ?? previous?.title } : {}),
+      ...(cachedTitle ? { title: cachedTitle } : {}),
     })
 
     let file
