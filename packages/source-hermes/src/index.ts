@@ -773,7 +773,8 @@ function normalizeHookEnvelope(record: SourceRecord, envelope: HermesHookEnvelop
     // not exclusively when the chat identity is finalized. Treating this
     // observer Hook as session.ended would misreport an active chat as closed.
     return [candidate(record, envelope, 'session.lifecycle', {
-      event: 'turn.ended',
+      event: event.failed === true ? 'turn.failed'
+        : event.interrupted === true ? 'turn.interrupted' : 'turn.ended',
       ...(typeof event.completed === 'boolean' ? {completed:event.completed} : {}),
       ...(typeof event.failed === 'boolean' ? {failed:event.failed} : {}),
       ...(typeof event.interrupted === 'boolean' ? {interrupted:event.interrupted} : {}),
