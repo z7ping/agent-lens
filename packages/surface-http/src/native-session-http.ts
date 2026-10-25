@@ -676,19 +676,42 @@ export async function handleNativeSessionWindowRequest(
           && ['codex','claude-code','hermes'].includes(sourceId)) {
           const hooks: ObservationCandidate[] = []
           const recordIds: string[] = []
+          let hookBytes = 0
           let hookCursor: string | undefined
           let completeHookLane = process.env.AGENT_LENS_NATIVE_HOOK_ARCHIVE === '1'
           const visited = new Set<string>()
           for (let page = 0; page < 4 && !abort.signal.aborted; page++) {
-            const result = await reader.readArchivedHooks({
-              sourceId, installationId, nativeSessionId,
-              signal: abort.signal,
-              ...(hookCursor ? {cursor:hookCursor} : {}),
-            })
-            if (result.state !== 'available') {
+            let result: Awaited<ReturnType<NonNullable<NativeSessionWindowReader['readArchivedHooks']>>>
+            try {
+              result = await reader.readArchivedHooks({
+                sourceId, installationId, nativeSessionId,
+                signal: abort.signal,
+                ...(hookCursor ? {cursor:hookCursor} : {}),
+              })
+            } catch {
+              // Main native history remains readable, but Hook-only facts are
+              // explicitly marked partial; never pretend absent is complete.
               completeHookLane = false
               break
             }
+            if (result.state !== 'available'
+              || result.observations.length !== result.observationRecordIds.length) {
+              completeHookLane = false
+              break
+            }
+            let pageBytes = 0
+            try {
+              pageBytes = Buffer.byteLength(JSON.stringify(result.observations), 'utf8')
+            } catch {
+              completeHookLane = false
+              break
+            }
+            if (hookBytes + pageBytes > MAX_REVIEW_INPUT_BYTES
+              || hooks.length + result.observations.length > MAX_REVIEW_OBSERVATIONS) {
+              completeHookLane = false
+              break
+            }
+            hookBytes += pageBytes
             hooks.push(...result.observations)
             recordIds.push(...result.observationRecordIds)
             if (!result.nextCursor) {
