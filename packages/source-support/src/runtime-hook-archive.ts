@@ -5,6 +5,15 @@ import { basename, join } from 'node:path'
 const MAX_EVENT_BYTES = 1024 * 1024
 const MAX_FILES_PER_READ = 128
 
+/** Source-owned Hook originals are the only durable recovery lane for
+ * Hook-exclusive runtime facts. Archiving is on by default; an explicit
+ * emergency opt-out keeps the original legacy inbox deletion behavior.
+ * Archive uses link/unlink on the SAME filesystem (no second payload copy).
+ */
+export function nativeHookArchiveEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
+  return env.AGENT_LENS_NATIVE_HOOK_ARCHIVE !== '0'
+}
+
 function opaqueSessionDirectory(nativeSessionId: string, installationId?: string): string {
   if (!nativeSessionId || nativeSessionId.length > 512) {
     throw new TypeError('Hook archive requires a valid native session identity')
