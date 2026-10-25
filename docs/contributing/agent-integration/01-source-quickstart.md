@@ -35,8 +35,8 @@ const source: SourceDefinition = {
     return []
   },
   async declareCapabilities() {
-    // TODO: 只有 ingestHistory 确实可用才声明 available
-    return [{ sourceId: 'example', name: 'history', status: 'available', captureModes: ['native-log'] }]
+    // TODO: 完成真实 ingestHistory 并通过测试后才能改为 available
+    return [{ sourceId: 'example', name: 'history', status: 'unavailable', captureModes: [] }]
   },
   async *ingestHistory(ctx) {
     // TODO: 从 ctx.installation 提供的位置按窗口、Checkpoint 增量读取
