@@ -48,7 +48,10 @@ export class NativeSessionMetricAccumulator {
         this.calls++
         const name=firstString(payload,['nativeToolName','toolName','tool_name','name'])
         const id=callIdentity(observation)
-        if(name && id) this.namesByCallId.set(id,name)
+        if(name && id){
+          if(this.namesByCallId.size<8192)this.namesByCallId.set(id,name)
+          else this.truncated=true
+        }
         const tool=name?this.tool(name):null
         if(tool)tool.callCount++
         else this.truncated=true
