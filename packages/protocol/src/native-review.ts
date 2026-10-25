@@ -26,6 +26,8 @@ export interface NativeBodySearchHitDto {
   sourceId: string
   installationId: string
   nativeSessionId: string
+  lastActivityAt: string
+  title?: string
   observationId: string
   kind: string
   at: string
