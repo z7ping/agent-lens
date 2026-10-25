@@ -46,6 +46,7 @@ import {
   type AgentLensContext,
 } from '@agent-lens/runtime-cordis'
 import {
+  archiveAcceptedHookInboxFile,
   isCompleteJson,
   isMissingPathError,
   readJsonlLines,
@@ -575,8 +576,13 @@ export async function startClaudeRuntimeCapture(
         const filePath = join(inbox, fileName)
         try {
           const envelope = parseRuntimeEnvelope(await readFile(filePath, 'utf8'), fileName)
-          await emitter.emit(runtimeRecord(envelope, filePath, ctx))
-          await unlink(filePath)
+          const record = runtimeRecord(envelope, filePath, ctx)
+          await emitter.emit(record)
+          if (process.env.AGENT_LENS_NATIVE_HOOK_ARCHIVE === '1' && record.sourceSessionNativeId) {
+            await archiveAcceptedHookInboxFile({inbox,fileName,nativeSessionId:record.sourceSessionNativeId})
+          } else {
+            await unlink(filePath)
+          }
         } catch {
           break
         }
