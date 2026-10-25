@@ -80,6 +80,16 @@ export type NativeSessionMetricReadResult =
   | { state: 'available'; snapshot: NativeSessionMetricSnapshot }
   | { state: 'missing' | 'stale' }
 
+/** Minimal catalog-bound identity for one lazy, source-authorized refresh. */
+export interface NativeMetricPendingSession {
+  sourceId:string
+  installationId:string
+  nativeSessionId:string
+  fileIdentity:string
+  fileSize:number
+  fileMtimeMs:number
+}
+
 export interface NativeSessionMetricsStore {
   /** Atomically replace the derived snapshot only for a Catalog-matching revision. */
   replace(snapshot: NativeSessionMetricSnapshot): Promise<boolean>
@@ -92,6 +102,8 @@ export interface NativeSessionMetricsStore {
    * and native totals together for the same Source identity.
    */
   overview?(query:NativeSessionMetricOverviewQuery):Promise<NativeSessionMetricOverview>
+  /** SQL-only bounded work discovery. Never fetch or persist Source payloads. */
+  nextPending?(query:{sourceId:string;parserVersion:string}):Promise<NativeMetricPendingSession|null>
   /** Explicit invalidation on source/parse/policy change or user deletion. */
   invalidate(identity: {
     sourceId: string; installationId: string; nativeSessionId: string
