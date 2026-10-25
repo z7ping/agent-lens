@@ -321,3 +321,71 @@ test('preexisting Legacy claim continues to persist a verified Pi session after 
   assert.equal(verifies,0)
   assert.equal(claims,0)
 })
+
+test('verified OpenCode current-state SQLite claim replaces duplicate event storage without claiming immutable rows',async()=>{
+  const root=await mkdtemp(join(tmpdir(),'al-native-opencode-writer-'))
+  const path=join(root,'opencode.db')
+  const nativeSessionId='new-current-session'
+  const record:SourceRecord={
+    id:'part-1',sourceId:'opencode',installationId:'inst',
+    sourceSessionNativeId:nativeSessionId,nativeType:'part/text',capturedAt:at,
+    locator:{kind:'database',path,table:'part',rowId:'1'},
+    fingerprint:'current-row-fingerprint',payload:{part:{text:'PRIVATE ORIGINAL'}},
+    parserVersion:'4',
+  }
+  let catalogRow:NativeSessionCatalogEntry|undefined
+  let rawWrites=0,commits=0,claims=0,verifies=0
+  const store={
+    async getSessionWriteMode(){return null},
+    async upsert(row:NativeSessionCatalogEntry){catalogRow=row},
+    async get(){return catalogRow??null},
+    async claimNativeOnlyWrite(){claims++;return true},
+    async claimLegacyWrite(){throw Error('No Legacy claim for proven current-state')},
+  } as unknown as NativeSessionCatalogStore
+  const storage={
+    nativeSessionCatalog:store,
+    repositories:{sourceRecords:{async put(){rawWrites++}}},
+    async transaction<T>(action:()=>Promise<T>){return action()},
+  } as unknown as StorageService
+  const host:Host={id:'host',name:'test',platform:process.platform,arch:process.arch,
+    createdAt:at,lastSeenAt:at}
+  const installation:AgentInstallation={id:'inst',hostId:'host',productId:'opencode',
+    dataRoot:root,firstSeenAt:at,lastSeenAt:at}
+  const source={
+    manifest:{sourceId:'opencode',productId:'opencode',parserVersion:'4'},
+    nativeSessionCoverageComplete:true,
+    rawRecovery:{
+      describe(){return{
+        authority:'native-store',locatorStability:'best-effort',mutability:'mutable',
+        verification:'fingerprint',canReread:true,canReparse:true,replayable:true,
+        persistencePreference:'reference',recoveryScope:'session-current-state',
+      }},
+      async verify(){verifies++;return{state:'verified',checkedAt:at}},
+    },
+    async readNativeSessionPage(){
+      const info=await stat(path)
+      return {state:'available',records:[record],
+        nextCursor:{offset:1,sequence:1,fileIdentity:`${info.dev}:${info.ino}`},
+        hasMore:false,pendingTail:false}
+    },
+    async normalize(){throw Error('Native-only source must not normalize into Legacy writer')},
+  } as unknown as SourceDefinition
+  try{
+    await writeFile(path,'original native SQLite authority')
+    await sourceRunnerInternals.processSourceRecordWithOwnership(
+      storage,
+      {async commit(){commits++;throw Error('No Observation duplication')}} as unknown as ObservationService,
+      {async declare(){return{}}} as unknown as CoverageService,
+      {sanitizeSourceRecord:(value:SourceRecord)=>value,
+        sanitizeNormalizedOutput:(value:unknown)=>value} as unknown as CapturePolicyService,
+      new NativeSessionCatalogTracker(store,Date.now,0),
+      source,host,installation,undefined,record,new AbortController().signal,
+    )
+    assert.equal(rawWrites,0)
+    assert.equal(commits,0)
+    assert.equal(claims,1)
+    assert.equal(verifies,1)
+    assert.equal(catalogRow?.nativeSessionId,nativeSessionId)
+    assert.equal(JSON.stringify(catalogRow).includes('PRIVATE ORIGINAL'),false)
+  }finally{await rm(root,{recursive:true,force:true})}
+})

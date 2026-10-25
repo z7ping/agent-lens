@@ -757,8 +757,9 @@ const databaseRawRecovery: NonNullable<SourceDefinition['rawRecovery']> = {
           canReread: true,
           canReparse: true,
           replayable: true,
-          persistencePreference: 'preserve',
-          reason: 'database rowId can be re-read and fingerprinted but is not yet treated as a long-term stable business locator',
+          persistencePreference: 'reference',
+          recoveryScope: 'session-current-state',
+          reason: 'OpenCode SQLite is authority for current session/part/message state; old overwritten row versions are not preserved and rowId is only a snapshot cursor',
         }
       : {
           authority: record.locator.kind === 'runtime-hook' ? 'agent-lens-only' : 'unknown',
@@ -831,6 +832,10 @@ export const openCodeSourceDefinition: SourceDefinition = {
   detect: detectOpenCode,
   declareCapabilities: declareOpenCodeCapabilities,
   rawRecovery: databaseRawRecovery,
+  // OpenCode history and Runtime Tail both originate from its own SQLite
+  // part/message/session state. No Hook-only inbox events are claimed here.
+  // The contract covers current Source state, not deleted/rewritten row history.
+  nativeSessionCoverageComplete: true,
   async *discoverNativeSessions(ctx) {
     const root = ctx.installation.dataRoot ?? ctx.installation.configRoot
     if (!root || ctx.abortSignal.aborted) return
