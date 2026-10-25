@@ -8,6 +8,8 @@ import { openCodeSourceDefinition } from '@agent-lens/source-opencode'
 import type {
   NativeWorkerReadInput,
   NativeWorkerReadResult,
+  NativeWorkerHookReadInput,
+  NativeWorkerHookReadResult,
   NativeWorkerRequest,
   NativeWorkerReply,
 } from '@agent-lens/core-services'
@@ -99,14 +101,104 @@ async function read(input: NativeWorkerReadInput, signal: AbortSignal): Promise<
   return result
 }
 
+async function readHooks(
+  input: NativeWorkerHookReadInput,
+  signal: AbortSignal,
+): Promise<NativeWorkerHookReadResult> {
+  const source = sources.get(input.sourceId)
+  if (!source?.readArchivedNativeHooksPage) {
+    return {state:'unsupported',reason:'source-not-supported-by-hook-worker'}
+  }
+  if (source.manifest.parserVersion !== input.parserVersion) {
+    return {state:'unsupported',reason:'native-worker-parser-version-mismatch'}
+  }
+  if (!input.nativeSessionId || input.nativeSessionId.length > 512
+    || !input.host.id || !input.installation.id
+    || input.installation.hostId !== input.host.id
+    || input.installation.productId !== source.manifest.productId
+    || (input.cursor !== undefined && (!input.cursor || input.cursor.length > 512
+      || !/^[A-Za-z0-9_-]+$/.test(input.cursor)))) {
+    return {state:'unsupported',reason:'native-worker-request-invalid'}
+  }
+  signal.throwIfAborted()
+  let page: Awaited<ReturnType<NonNullable<SourceDefinition['readArchivedNativeHooksPage']>>>
+  try {
+    page = await source.readArchivedNativeHooksPage(input.nativeSessionId, {
+      host: input.host, installation: input.installation, checkpoint, abortSignal: signal,
+    }, input.cursor)
+  } catch (error) {
+    if (error instanceof TypeError && error.message === 'Invalid archived Hook cursor') {
+      return {state:'unsupported',reason:'native-hook-cursor-invalid'}
+    }
+    throw error
+  }
+  if (page.records.length > 16
+    || (page.hasMore && (!page.records.length || !page.nextCursor
+      || page.nextCursor === input.cursor || page.nextCursor.length > 512
+      || !/^[A-Za-z0-9_-]+$/.test(page.nextCursor)))
+    || (!page.hasMore && page.nextCursor)) {
+    return {state:'unsupported',reason:'native-hook-page-invalid'}
+  }
+  const entries: Extract<NativeWorkerHookReadResult,{state:'available'}>['entries'] = []
+  for (const record of page.records) {
+    signal.throwIfAborted()
+    if (record.sourceId !== input.sourceId
+      || record.installationId !== input.installation.id
+      || record.sourceSessionNativeId !== input.nativeSessionId
+      || record.locator.kind !== 'runtime-hook') {
+      return {state:'drifted',reason:'native-hook-record-identity-drifted'}
+    }
+    entries.push({
+      recordId: record.id,
+      sourceId: record.sourceId,
+      installationId: record.installationId,
+      sourceSessionNativeId: input.nativeSessionId,
+      normalized: await source.normalize(record, {
+        host: input.host, installation: input.installation,
+      }),
+    })
+  }
+  const result: NativeWorkerHookReadResult = {
+    state:'available',entries,hasMore:page.hasMore,
+    ...(page.nextCursor ? {nextCursor:page.nextCursor} : {}),
+  }
+  try {
+    if (Buffer.byteLength(JSON.stringify(result),'utf8') > MAX_RESPONSE_BYTES) {
+      return {state:'unsupported',reason:'native-hook-worker-response-too-large'}
+    }
+  } catch {
+    return {state:'unsupported',reason:'native-hook-worker-response-not-serializable'}
+  }
+  return result
+}
+
 channel.on('message', (request: NativeWorkerRequest) => {
   if (request.kind === 'cancel') {
     aborts.get(request.id)?.abort()
     return
   }
-  if (request.kind !== 'read' || !Number.isSafeInteger(request.id)) return
+  if ((request.kind !== 'read' && request.kind !== 'read-hooks')
+    || !Number.isSafeInteger(request.id)) return
   const controller = new AbortController()
   aborts.set(request.id, controller)
+  if (request.kind === 'read-hooks') {
+    void readHooks(request.input, controller.signal)
+      .then(result => {
+        if (!controller.signal.aborted) {
+          channel.postMessage({kind:'hook-reply',id:request.id,result} satisfies NativeWorkerReply)
+        }
+      })
+      .catch(() => {
+        if (!controller.signal.aborted) {
+          channel.postMessage({
+            kind:'hook-reply',id:request.id,
+            result:{state:'unsupported',reason:'native-hook-worker-read-failed'},
+          } satisfies NativeWorkerReply)
+        }
+      })
+      .finally(() => aborts.delete(request.id))
+    return
+  }
   void read(request.input, controller.signal)
     .then(result => {
       if (!controller.signal.aborted) {
