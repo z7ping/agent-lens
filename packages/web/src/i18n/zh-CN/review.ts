@@ -358,6 +358,7 @@ export const chineseReviewMessages: LocaleMessagesDto = {
         expandPage: '展开本页轮次',
         newRecords: '有新记录',
         querying: '正在查询完整会话…',
+        nativeWindow: '原生会话 · 仅展示已加载轮次',
         latencyNote: '“耗时较高”由服务器基于完整会话的轮次耗时分布计算。',
         loadingOlder: '正在加载更早轮次…',
         loadFailedRetry: '加载失败 · 重试',

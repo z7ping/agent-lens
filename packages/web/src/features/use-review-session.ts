@@ -53,7 +53,11 @@ export function useReviewSession(model: AgentLensClientModel, embedded: boolean)
   const agents = snapshot.facets?.agents ?? []
   const projects = snapshot.facets?.projects ?? []
   const detail = review.detail
-  const detailLiveInteraction = useMemo(() => projectReviewLiveInteraction(detail, liveProducts), [detail?.productId, liveProducts])
+  const detailLiveInteraction = useMemo(
+    () => detail?.statisticsCompleteness === 'window'
+      ? undefined : projectReviewLiveInteraction(detail, liveProducts),
+    [detail?.id, detail?.productId, detail?.statisticsCompleteness, liveProducts],
+  )
   const visibleHubSessions = useMemo(() => hubSessions.filter(item => hubSessionVisibility(item, review)), [hubSessions, review.filters, t])
   const sessionGroups = useMemo(() => {
     const groups = new Map<ReviewDayGroup, UnifiedReviewSessionListEntry[]>()
@@ -449,11 +453,12 @@ export function useReviewSession(model: AgentLensClientModel, embedded: boolean)
       title,
       agentLabel: detail.sourceIds.map(id => agentLabel(id)).join(' / '),
       projectLabel: detail.projectName,
-      statusLabel: detail.errorCount > 0 ? t('local.interaction.errors') : undefined,
+      statusLabel: detail.statisticsCompleteness === 'window'
+        ? undefined : detail.errorCount > 0 ? t('local.interaction.errors') : undefined,
       startedAt: detail.startedAt,
       endedAt: detail.endedAt,
       workspacePath: detail.workspacePath,
-      metrics: [
+      metrics: detail.statisticsCompleteness === 'window' ? [] : [
         { value: detail.interactionCount, label: t('local.interaction.metricRounds') },
         { value: detail.toolCount, label: t('local.interaction.metricCalls') },
         ...(detail.errorCount > 0 ? [{ value: detail.errorCount, label: t('local.interaction.metricErrors'), tone: 'danger' as const }] : []),

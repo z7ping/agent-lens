@@ -146,7 +146,7 @@ export function ReviewPage({ model, embedded = false, latestRequest = 0 }: { mod
         className="review-session-view"
         boundaryNavigation={detail ? {
           startDisabled: roundFilterLoading || atStart,
-          endDisabled: roundFilterLoading,
+          endDisabled: roundFilterLoading || detail.statisticsCompleteness === 'window',
           onStart: showFromStart,
           onEnd: jumpToLatest,
         } : undefined}
@@ -168,21 +168,26 @@ export function ReviewPage({ model, embedded = false, latestRequest = 0 }: { mod
           readingControls={<Toolbar className="round-nav" aria-label={t('local.roundNav.aria')}>
             <div className="round-nav-filters" aria-label={t('local.roundNav.filterAria')}>
               <Button className={roundFilter === 'all' && !isBackward ? 'active' : ''} aria-pressed={roundFilter === 'all' && !isBackward} disabled={roundFilterLoading} onClick={() => void selectRoundFilter('all')}>{t('local.roundNav.all')}{roundFilter === 'all' && !isBackward && <span>{annotatedInteractions.length}{pageIncomplete ? '+' : ''}</span>}</Button>
-              <Button className={roundFilter === 'errors' ? 'active' : ''} aria-pressed={roundFilter === 'errors'} disabled={roundFilterLoading} onClick={() => void selectRoundFilter('errors')}>{t('local.roundNav.errors')}{roundFilter === 'errors' && <span>{annotatedInteractions.length}{pageIncomplete ? '+' : ''}</span>}</Button>
-              <Button className={roundFilter === 'latency' ? 'active' : ''} aria-pressed={roundFilter === 'latency'} title={t('local.roundNav.latencyNote')} disabled={roundFilterLoading} onClick={() => void selectRoundFilter('latency')}>{t('local.roundNav.latency')}{roundFilter === 'latency' && <span>{annotatedInteractions.length}{pageIncomplete ? '+' : ''}</span>}</Button>
+              <Button className={roundFilter === 'errors' ? 'active' : ''} aria-pressed={roundFilter === 'errors'} disabled={roundFilterLoading || detail.statisticsCompleteness === 'window'} onClick={() => void selectRoundFilter('errors')}>{t('local.roundNav.errors')}{roundFilter === 'errors' && <span>{annotatedInteractions.length}{pageIncomplete ? '+' : ''}</span>}</Button>
+              <Button className={roundFilter === 'latency' ? 'active' : ''} aria-pressed={roundFilter === 'latency'} title={t('local.roundNav.latencyNote')} disabled={roundFilterLoading || detail.statisticsCompleteness === 'window'} onClick={() => void selectRoundFilter('latency')}>{t('local.roundNav.latency')}{roundFilter === 'latency' && <span>{annotatedInteractions.length}{pageIncomplete ? '+' : ''}</span>}</Button>
             </div>
             <div className="round-nav-actions" aria-label={t('local.roundNav.actionsAria')}>
               {review.detailHasNewData && <Button className="round-nav-live" onClick={() => void jumpToLatest()}>{t('local.roundNav.newRecords')}<UiIcon name="arrow-down" size={14}/></Button>}
             </div>
+            {detail.statisticsCompleteness === 'window'
+              && <span className="round-nav-status">{t('local.roundNav.nativeWindow')}</span>}
             {roundFilterLoading && <span className="round-nav-status">{t('local.roundNav.querying')}</span>}
           </Toolbar>}
           infoItems={taskDetailModel ? [
-            { label: t('local.header.project'), value: taskDetailModel.projectLabel ?? t('local.session.unlinkedProject') },
-            ...(taskDetailModel.startedAt && Number.isFinite(Date.parse(taskDetailModel.startedAt))
+            ...(detail.statisticsCompleteness === 'window' ? [] : [
+              { label: t('local.header.project'), value: taskDetailModel.projectLabel ?? t('local.session.unlinkedProject') },
+            ]),
+            ...(detail.statisticsCompleteness !== 'window' && taskDetailModel.startedAt && Number.isFinite(Date.parse(taskDetailModel.startedAt))
               ? [{ label: t('local.header.startTime'), value: formatDateTime(taskDetailModel.startedAt) }] : []),
-            ...(taskDetailModel.endedAt && Number.isFinite(Date.parse(taskDetailModel.endedAt))
+            ...(detail.statisticsCompleteness !== 'window' && taskDetailModel.endedAt && Number.isFinite(Date.parse(taskDetailModel.endedAt))
               ? [{ label: t('local.header.endTime'), value: formatDateTime(taskDetailModel.endedAt) }] : []),
-            { label: t('local.header.duration'), value: duration(detail.durationMs) },
+            ...(detail.statisticsCompleteness === 'window'
+              ? [] : [{ label: t('local.header.duration'), value: duration(detail.durationMs) }]),
             ...(taskDetailModel.workspacePath ? [{
               label: t('local.header.workspace'),
               value: <span className="local-path-value">
