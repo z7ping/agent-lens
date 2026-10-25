@@ -7,6 +7,8 @@ import type {
   SourceService,
   StorageService,
 } from '@agent-lens/core'
+import type { NativeReaderWorkerPort } from './native-reader-worker-client'
+import type { NativeWorkerNormalizedRecord } from './native-reader-worker-protocol'
 
 /** Read-only checkpoint to ensure native review cannot update ingestion state. */
 const readOnlyCheckpoint: SourceCheckpointService = {
@@ -54,6 +56,7 @@ export class NativeSessionReader {
     private readonly storage: StorageService,
     private readonly sources: SourceService,
     private readonly capturePolicy: CapturePolicyService,
+    private readonly nativeWorker?: NativeReaderWorkerPort,
   ) {}
 
   async read(query: NativeSessionReadQuery): Promise<NativeSessionReadResult> {
@@ -87,43 +90,74 @@ export class NativeSessionReader {
     const host = await this.storage.repositories.hosts.get(installation.hostId)
     if (!host) return { state: 'unavailable', reason: 'native-source-host-unavailable' }
 
-    const result = await source.readNativeSessionPage(
-      {
-        filePath: catalog.filePath,
-        nativeSessionId: catalog.nativeSessionId,
-        ...(query.cursor ? { cursor: query.cursor } : {}),
-        ...(query.limit === undefined ? {} : { limit: query.limit }),
-      },
-      {
+    const sourceQuery = {
+      filePath: catalog.filePath,
+      nativeSessionId: catalog.nativeSessionId,
+      ...(query.cursor ? { cursor: query.cursor } : {}),
+      ...(query.limit === undefined ? {} : { limit: query.limit }),
+    }
+    let nextCursor: SourceNativeSessionCursor
+    let hasMore: boolean
+    let pendingTail: boolean
+    let normalizedRows: NativeWorkerNormalizedRecord[]
+
+    if (this.nativeWorker?.supports(query.sourceId)) {
+      // Native I/O and Source normalization are isolated in a bounded worker.
+      // The parent keeps Catalog authority and the effective CapturePolicy.
+      const result = await this.nativeWorker.read({
+        sourceId: query.sourceId,
+        parserVersion: source.manifest.parserVersion,
+        query: sourceQuery,
         host,
         installation,
-        abortSignal: query.signal,
-        checkpoint: readOnlyCheckpoint,
-      },
-    )
-    if (result.state !== 'available') return result
+      }, query.signal)
+      if (result.state !== 'available') return result
+      nextCursor = result.nextCursor
+      hasMore = result.hasMore
+      pendingTail = result.pendingTail
+      normalizedRows = result.entries
+    } else {
+      // Unported Source integrations retain the current in-process reader.
+      const result = await source.readNativeSessionPage(sourceQuery, {
+        host, installation, abortSignal: query.signal, checkpoint: readOnlyCheckpoint,
+      })
+      if (result.state !== 'available') return result
+      nextCursor = result.nextCursor
+      hasMore = result.hasMore
+      pendingTail = result.pendingTail
+      normalizedRows = []
+      for (const record of result.records) {
+        query.signal.throwIfAborted()
+        if (record.installationId !== installation.id || record.sourceId !== query.sourceId
+          || record.sourceSessionNativeId !== catalog.nativeSessionId) {
+          return { state: 'drifted', reason: 'native-record-identity-changed' }
+        }
+        normalizedRows.push({
+          recordId: record.id,
+          sourceId: record.sourceId,
+          installationId: record.installationId,
+          ...(record.sourceSessionNativeId ? { sourceSessionNativeId: record.sourceSessionNativeId } : {}),
+          normalized: await source.normalize(record, { host, installation }),
+        })
+      }
+    }
 
-    // A replaced file with the same path/native session id is not the same
-    // catalogued source. An append to the same file keeps the identity.
-    if (result.nextCursor.fileIdentity !== catalog.fileIdentity) {
+    if (nextCursor.fileIdentity !== catalog.fileIdentity) {
       return { state: 'drifted', reason: 'native-catalog-file-identity-changed' }
     }
 
     const observations: ObservationCandidate[] = []
     const observationRecordIds: string[] = []
     const evidenceCandidates: EvidenceCandidate[] = []
-    for (const record of result.records) {
+    for (const row of normalizedRows) {
       query.signal.throwIfAborted()
-      if (record.installationId !== installation.id || record.sourceId !== query.sourceId
-        || record.sourceSessionNativeId !== catalog.nativeSessionId) {
+      if (row.installationId !== installation.id || row.sourceId !== query.sourceId
+        || row.sourceSessionNativeId !== catalog.nativeSessionId) {
         return { state: 'drifted', reason: 'native-record-identity-changed' }
       }
-      // Reuse the existing Source normalizer, but never call the ingestion
-      // service. Payload stays in memory and is not cached by this reader.
-      const normalized = await source.normalize(record, { host, installation })
-      const sanitized = this.capturePolicy.sanitizeNormalizedOutput(normalized)
+      const sanitized = this.capturePolicy.sanitizeNormalizedOutput(row.normalized)
       observations.push(...sanitized.observations)
-      observationRecordIds.push(...sanitized.observations.map(() => record.id))
+      observationRecordIds.push(...sanitized.observations.map(() => row.recordId))
       evidenceCandidates.push(...sanitized.evidenceCandidates)
     }
 
@@ -132,9 +166,9 @@ export class NativeSessionReader {
       observations,
       observationRecordIds,
       evidenceCandidates,
-      nextCursor: result.nextCursor,
-      hasMore: result.hasMore,
-      pendingTail: result.pendingTail,
+      nextCursor,
+      hasMore,
+      pendingTail,
     }
   }
 }
