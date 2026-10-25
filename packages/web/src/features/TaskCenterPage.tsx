@@ -332,9 +332,9 @@ export function TaskCenterPage({ model, mode, sidebarHost }: { model: AgentLensC
           setNativeBodyError(true)
           return
         }
-        setNativeBodySessions([...new Map(page.items.map(hit=>[
-          hit.sessionId,nativeSessionFromHit(hit),
-        ])).values()])
+        const sessions=new Map<string,NativeSessionSummaryDto>()
+        for(const hit of page.items)sessions.set(hit.sessionId,nativeSessionFromHit(hit))
+        setNativeBodySessions([...sessions.values()])
         setNativeBodyPartial(page.hasMore || page.pendingTail)
         setNativeBodyCursor(page.pendingTail?undefined:page.nextCursor)
       },()=>{
