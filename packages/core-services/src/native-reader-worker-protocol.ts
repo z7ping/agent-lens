@@ -11,6 +11,7 @@ export type NativeWorkerSourceId = 'pi' | 'codex'
 export interface NativeWorkerReadInput {
   sourceId: string
   parserVersion: string
+  expectedFileIdentity: string
   query: SourceNativeSessionPageQuery
   host: Host
   installation: AgentInstallation
