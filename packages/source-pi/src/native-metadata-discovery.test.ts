@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises'
+import { mkdtemp, mkdir, rm, stat, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import test from 'node:test'
@@ -29,7 +29,7 @@ test('Pi discovers native files from headers and metadata, not transcript replay
     assert.equal(rows[0]?.installationId,'pi-install')
     assert.equal(rows[0]?.filePath,path)
     assert.equal(rows[0]?.locationKind,'native')
-    assert.equal(rows[0]?.fileSize,(await import('node:fs/promises')).stat(path).then(x=>x.size) instanceof Promise, false)
+    assert.equal(rows[0]?.fileSize,(await stat(path)).size)
     assert.equal(JSON.stringify(rows).includes('private content'),false)
   }finally{ await rm(root,{recursive:true,force:true}) }
 })
