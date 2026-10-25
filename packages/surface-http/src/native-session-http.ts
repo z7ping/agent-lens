@@ -8,6 +8,8 @@ import { badRequest, writeJson } from './http-utils'
 
 export interface NativeSessionWindowReader {
   read(query: NativeSessionReadQuery): Promise<NativeSessionReadResult>
+  /** Source-authorized, one-record native media hydration (never public raw DTO). */
+  readUnpersistedMediaPage?(query: NativeSessionReadQuery): Promise<NativeSessionReadResult>
 }
 
 const PATH = '/api/v1/native-sessions/window'
@@ -399,10 +401,13 @@ export async function handleNativeSessionAttachmentRequest(
     return true
   }
   const signal = AbortSignal.timeout(10_000)
-  const page=await reader.read({
+  const mediaQuery={
     sourceId:entry.sourceId,installationId:entry.installationId,
     nativeSessionId:entry.nativeSessionId,cursor,limit:1,signal,
-  })
+  }
+  const page=await (reader.readUnpersistedMediaPage
+    ? reader.readUnpersistedMediaPage(mediaQuery)
+    : reader.read(mediaQuery))
   if(page.state!=='available'){
     writeJson(response,409,{state:page.state,reason:page.reason})
     return true
