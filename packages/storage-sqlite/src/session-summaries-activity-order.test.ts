@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { DefaultIdentityService, DefaultObservationService } from '@agent-lens/core-services'
+import { SqliteExecutor } from './executor'
+import { SqliteSessionSummaryReader, sessionSummaryInternals } from './session-summaries'
 import { SqliteStorageService } from './storage'
 
 test('session summaries filter, sort and paginate by latest activity time', async () => {
@@ -66,6 +68,49 @@ test('session summaries filter, sort and paginate by latest activity time', asyn
 
     }
   } finally {
+    await storage.close()
+  }
+})
+
+test('cooperative summary rebuild yields between individual sessions so foreground work can run',async()=>{
+  assert.equal(sessionSummaryInternals.DEFAULT_REBUILD_BATCH_SIZE,1)
+  const storage=new SqliteStorageService({path:':memory:'})
+  await storage.migrate()
+  try{
+    const identity=new DefaultIdentityService(storage)
+    const observations=new DefaultObservationService(storage,identity)
+    const host=await identity.resolveHost({name:'cooperative-summary-host'})
+    const installation=await identity.resolveInstallation({hostId:host.id,productId:'pi'})
+    for(let index=0;index<4;index++){
+      const at=`2026-10-25T04:00:0${index}.000Z`
+      await observations.commit({
+        sourceId:'pi',host,installation,
+        candidate:{
+          kind:'message.user',
+          nativeEventId:`cooperative-${index}`,
+          occurredAt:at,capturedAt:at,
+          payload:{text:`task ${index}`,provenance:{actualAuthor:'human-user',contentRole:'user-request'}},
+          identityHints:{nativeSessionId:`cooperative-session-${index}`},
+          dedupHints:{nativeEventId:`cooperative-${index}`},
+        },evidenceCandidates:[],
+      })
+    }
+    const executor=new SqliteExecutor(storage.db)
+    let foregroundQueries=0
+    const rebuilt=new SqliteSessionSummaryReader(executor,{
+      yieldControl:async()=>{
+        // This request enters the same Writer serialization queue after
+        // COMMIT, proving no long cross-session SQLite transaction owns it.
+        await executor.run(()=>storage.db.prepare('SELECT COUNT(*) AS total FROM logical_sessions').get())
+        foregroundQueries++
+      },
+    })
+    await rebuilt.rebuild({strategy:'cooperative'})
+    assert.equal(foregroundQueries,3,
+      'four sessions must offer foreground a chance to run three times')
+    const projected=storage.db.prepare('SELECT COUNT(*) AS total FROM session_summary_projection').get() as {total:number}
+    assert.equal(projected.total,4)
+  }finally{
     await storage.close()
   }
 })

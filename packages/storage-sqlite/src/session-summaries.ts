@@ -10,7 +10,10 @@ import { sqliteRowId } from './repository-row-mappers'
 
 const MAX_LIMIT = 500
 const MAX_SEQUENCE = Number.MAX_SAFE_INTEGER
-const DEFAULT_REBUILD_BATCH_SIZE = 25
+// A long synchronous SQLite statement cannot be preempted by the writer queue.
+// Cooperatively rebuild one session per transaction to yield to foreground
+// requests between expensive per-session aggregate calculations.
+const DEFAULT_REBUILD_BATCH_SIZE = 1
 const SESSION_ACTIVITY = ['user-task', 'branch-task', 'subagent', 'internal-review', 'system-activity'] as const
 
 type SqliteRow = Record<string, unknown>
