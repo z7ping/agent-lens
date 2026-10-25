@@ -86,6 +86,11 @@ export class NativeMetricsAutoRefresh {
           if(result.state==='in_progress')this.ongoing.set(key,result.progress)
         }catch{
           if(this.abort.signal.aborted)return
+          // A permanently failing Reader must not monopolize a Source's
+          // future candidate pages. Discard only its ephemeral partial state;
+          // retry from the original Source after the ordinary cooldown.
+          this.ongoing.delete(key)
+          this.recent.set(key,Date.now()+RETRY_COOLDOWN_MS)
         }
       }else this.ongoing.delete(key)
       return

@@ -455,3 +455,64 @@ test('certified JSONL metrics reject append after native EOF before publishing c
     assert.equal(snapshots[0]?.fileSize,changed.size)
   }finally{await rm(root,{recursive:true,force:true})}
 })
+
+test('failed long-session resume releases its slot so a different native session can be rebuilt',async()=>{
+  let candidateRequests=0
+  let brokenReads=0
+  let healthyReads=0
+  const snapshots:NativeSessionMetricSnapshot[]=[]
+  const metrics={
+    async findRebuildCandidates(){
+      candidateRequests++
+      return candidateRequests===1?[{
+        reviewSessionId:'native:first',sourceId:'pi',installationId:'pi-local',
+        nativeSessionId:'broken',lastActivityAt:at,
+      }]:[{
+        reviewSessionId:'native:second',sourceId:'pi',installationId:'pi-local',
+        nativeSessionId:'healthy',lastActivityAt:at,
+      }]
+    },
+    async replace(value:NativeSessionMetricSnapshot){snapshots.push(value);return true},
+  } as unknown as NativeSessionMetricsStore
+  const entries={
+    async getByReviewSessionId(id:string){
+      if(id==='native:first')return {...entry,nativeSessionId:'broken'}
+      if(id==='native:second')return {...entry,nativeSessionId:'healthy'}
+      return null
+    },
+  } as unknown as NativeSessionCatalogStore
+  const reader:NativeSessionWindowReader={
+    async read(query){
+      if(query.nativeSessionId==='broken'){
+        brokenReads++
+        const index=query.cursor?.sequence??0
+        if(index===64)throw Error('worker unavailable after first 64 pages')
+        return {state:'available',observations:[],observationRecordIds:[],
+          evidenceCandidates:[],hasMore:true,pendingTail:false,
+          nextCursor:{offset:index+1,sequence:index+1,fileIdentity:'dev:1'}}
+      }
+      healthyReads++
+      return {state:'available',observations:[],observationRecordIds:[],
+        evidenceCandidates:[],hasMore:false,pendingTail:false,
+        nextCursor:{offset:1,sequence:1,fileIdentity:'dev:1'}}
+    },
+  }
+  const refresh=new NativeMetricsAutoRefresh(entries,metrics,reader,source,policy)
+  try{
+    refresh.schedule()
+    await flush()
+    assert.equal(brokenReads,64)
+    assert.equal(snapshots.length,0)
+    refresh.schedule()
+    await flush()
+    assert.equal(brokenReads,65)
+    assert.equal(snapshots.length,0)
+    refresh.schedule()
+    await flush()
+    assert.equal(brokenReads,65,
+      'failed resume must not retry indefinitely ahead of other sessions')
+    assert.equal(healthyReads,1)
+    assert.equal(candidateRequests,2)
+    assert.deepEqual(snapshots.map(item=>item.nativeSessionId),['healthy'])
+  }finally{refresh.dispose()}
+})
