@@ -132,8 +132,9 @@ async function readCodexArchivedHookPage(
   const archive = await readArchivedHookInboxPage({ inbox, nativeSessionId, installationId: ctx.installation.id, limit: 16, ...(cursor ? {cursor} : {}) })
   const records = archive.items.map(item => {
     const envelope = codexRuntimeInternals.parseEnvelope(item.content, item.fileName)
-    const archivePath = join(inbox, 'archive',
-      createHash('sha256').update(nativeSessionId).digest('hex'), item.fileName)
+    const archivePath = archivedHookInboxRecordPath({
+      inbox, fileName: item.fileName, nativeSessionId, installationId: ctx.installation.id,
+    })
     const record = codexRuntimeInternals.sourceRecordFromEnvelope(envelope, archivePath, ctx)
     if (record.sourceSessionNativeId !== nativeSessionId
       || record.sourceId !== 'codex' || record.installationId !== ctx.installation.id) {
