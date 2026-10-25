@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto'
 import type {
   DetectedSource,
   ObservationCapability,
@@ -8,7 +9,7 @@ import {
   defineAgentLensPlugin,
   type AgentLensContext,
 } from '@agent-lens/runtime-cordis'
-import { readAuthorizedNativeJsonlEntry, verifyJsonlLineSha256 } from '@agent-lens/source-support'
+import { readAuthorizedNativeJsonlEntry, readNativeSessionWindow, verifyJsonlLineSha256 } from '@agent-lens/source-support'
 import { discoverPiAssets, piAssetInternals } from './assets'
 import { PI_PARSER_VERSION, PI_SOURCE_ID } from './constants'
 import { normalizePiRecord } from './normalize'
@@ -125,6 +126,53 @@ export const piSourceDefinition: SourceDefinition = {
   detect: detectPi,
   declareCapabilities: declarePiCapabilities,
   rawRecovery: jsonlRawRecovery,
+  async readNativeSessionPage(query, ctx) {
+    const page = await readNativeSessionWindow({
+      path: query.filePath,
+      allowedRoots: ctx.installation.dataRoot ? [ctx.installation.dataRoot] : [],
+      ...(query.cursor ? { cursor: query.cursor } : {}),
+      ...(query.limit === undefined ? {} : { limit: query.limit }),
+      signal: ctx.abortSignal,
+    })
+    if (page.state !== 'available') return page
+    ctx.abortSignal.throwIfAborted()
+    const session = await readPiSessionMetadata(query.filePath)
+    if (session.nativeSessionId !== query.nativeSessionId) {
+      return { state: 'drifted', reason: 'native-session-identity-changed' }
+    }
+    const records = page.lines.map(line => {
+      const entry = line.entry
+      const nativeId = typeof entry.id === 'string' && entry.id ? entry.id : undefined
+      const timestamp = typeof entry.timestamp === 'string' ? entry.timestamp
+        : typeof (entry.message as { timestamp?: unknown } | undefined)?.timestamp === 'number'
+          ? new Date((entry.message as { timestamp: number }).timestamp).toISOString()
+          : undefined
+      const recordHash = createHash('sha256')
+        .update(`${query.filePath}|${line.offset}|${line.textFingerprint}`).digest('hex').slice(0, 32)
+      return {
+        id: `pi-record-${recordHash}`,
+        sourceId: PI_SOURCE_ID,
+        installationId: ctx.installation.id,
+        sourceSessionNativeId: session.nativeSessionId,
+        nativeType: `history/${typeof entry.type === 'string' ? entry.type : 'unknown'}`,
+        ...(nativeId ? { nativeId } : {}),
+        sourceSequence: line.sequence * 1000,
+        ...(timestamp ? { occurredAt: timestamp } : {}),
+        capturedAt: new Date().toISOString(),
+        locator: { kind: 'file' as const, path: query.filePath, offset: line.offset },
+        fingerprint: line.textFingerprint,
+        payload: { entry, session },
+        parserVersion: PI_PARSER_VERSION,
+      }
+    })
+    return {
+      state: 'available',
+      records,
+      nextCursor: page.nextCursor,
+      hasMore: page.hasMore,
+      pendingTail: page.pendingTail,
+    }
+  },
   discoverAssets: discoverPiAssets,
   ingestHistory: ingestPiHistory,
   startCapture: startPiRuntimeCapture,

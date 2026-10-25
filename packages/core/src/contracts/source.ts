@@ -181,6 +181,34 @@ export interface DiscoveredAsset {
   states?: DiscoveredAssetStateHint[]
 }
 
+/**
+ * Native session windows are read-only and transient. filePath MUST come from a
+ * trusted local Session Catalog, never from raw HTTP or an untrusted client.
+ * Unlike ingestHistory this never advances a checkpoint or persists facts.
+ */
+export interface SourceNativeSessionCursor {
+  offset: number
+  sequence: number
+  fileIdentity: string
+}
+
+export interface SourceNativeSessionPageQuery {
+  filePath: string
+  nativeSessionId: string
+  cursor?: SourceNativeSessionCursor
+  limit?: number
+}
+
+export type SourceNativeSessionPageResult =
+  | {
+      state: 'available'
+      records: SourceRecord[]
+      nextCursor: SourceNativeSessionCursor
+      hasMore: boolean
+      pendingTail: boolean
+    }
+  | { state: 'unavailable' | 'drifted' | 'unsupported'; reason: string }
+
 export interface SourceDefinition {
   manifest: SourcePluginManifest
   detect(ctx: SourceDetectionContext): Promise<DetectedSource[]>
@@ -189,5 +217,6 @@ export interface SourceDefinition {
   ingestHistory?(ctx: SourceHistoryExecutionContext): AsyncIterable<SourceRecord>
   startCapture?(ctx: SourceExecutionContext, emit: SourceRecordEmitter): Promise<Disposable>
   rawRecovery?: SourceRawRecoveryPolicy
+  readNativeSessionPage?(query: SourceNativeSessionPageQuery, ctx: SourceExecutionContext): Promise<SourceNativeSessionPageResult>
   normalize(record: SourceRecord, ctx: SourceNormalizationContext): Promise<NormalizedSourceOutput>
 }

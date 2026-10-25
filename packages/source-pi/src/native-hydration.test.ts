@@ -79,3 +79,41 @@ test('Pi: metadata-only reference hydrates an original event and reuses the orig
     await rm(root, { recursive: true, force: true })
   }
 })
+
+
+test('Pi session page reads native messages by cursor without checkpoints or event persistence', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'agent-lens-pi-page-'))
+  const path = join(root, 'session.jsonl')
+  const header = JSON.stringify({ type: 'session', id: 'pi-page' })
+  const message = (id: number) => JSON.stringify({ type: 'message', id: `msg-${id}`,
+    message: { role: 'user', content: `turn ${id}` } })
+  const host = { id: 'host', name: 'host', platform: process.platform, arch: process.arch,
+    createdAt: '2026-10-25T00:00:00Z', lastSeenAt: '2026-10-25T00:00:00Z' }
+  const installation = { id: 'pi-page-inst', hostId: host.id, productId: 'pi', dataRoot: root,
+    firstSeenAt: '2026-10-25T00:00:00Z', lastSeenAt: '2026-10-25T00:00:00Z' }
+  let checkpointCalls = 0
+  const ctx: SourceRawRecoveryContext = { host, installation, abortSignal: new AbortController().signal,
+    checkpoint: { async get() { checkpointCalls++; return null }, async set() { checkpointCalls++ },
+      async clear() { checkpointCalls++ } } }
+  try {
+    await writeFile(path, [header, message(1), message(2)].join('\n') + '\n')
+    const read = piSourceDefinition.readNativeSessionPage!
+    const first = await read({ filePath: path, nativeSessionId: 'pi-page', limit: 2 }, ctx)
+    assert.equal(first.state, 'available')
+    if (first.state !== 'available') return
+    assert.equal(first.records.length, 2)
+    assert.equal(first.hasMore, true)
+    const next = await read({ filePath: path, nativeSessionId: 'pi-page', cursor: first.nextCursor, limit: 2 }, ctx)
+    assert.equal(next.state, 'available')
+    if (next.state !== 'available') return
+    assert.deepEqual(next.records.map(x => x.nativeId), ['msg-2'])
+    assert.equal(next.hasMore, false)
+    assert.equal(checkpointCalls, 0)
+    const normalized = await piSourceDefinition.normalize(next.records[0]!, { host, installation })
+    assert.equal(normalized.observations[0]?.kind, 'message.user')
+    assert.deepEqual(await read({ filePath: path, nativeSessionId: 'wrong' }, ctx),
+      { state: 'drifted', reason: 'native-session-identity-changed' })
+  } finally {
+    await rm(root, { recursive: true, force: true })
+  }
+})
