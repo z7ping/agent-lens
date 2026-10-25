@@ -46,6 +46,10 @@ export function ReviewPage({ model, embedded = false, latestRequest = 0 }: { mod
     detail,
     detailLiveInteraction,
     visibleHubSessions,
+    visibleNativeSessions,
+    nativeHasMore,
+    nativeLoadingMore,
+    loadMoreNativeSessions,
     sessionGroups,
     loadOlder,
     loadFollowing,
@@ -108,7 +112,7 @@ export function ReviewPage({ model, embedded = false, latestRequest = 0 }: { mod
 
     <div className="review-layout">
       {!embedded && <aside className="session-panel">
-        <div className="session-panel-head"><div><b>{t('local.list.sessions')}</b><span>{t('local.list.ordering')}</span></div><span className="count-badge">{(review.response?.items.length ?? 0) + visibleHubSessions.length}{review.response?.meta.hasMore ? '+' : ''}</span></div>
+        <div className="session-panel-head"><div><b>{t('local.list.sessions')}</b><span>{t('local.list.ordering')}</span></div><span className="count-badge">{(review.response?.items.length ?? 0) + visibleNativeSessions.length + visibleHubSessions.length}{review.response?.meta.hasMore || nativeHasMore ? '+' : ''}</span></div>
         <div className="session-scroll">
           {review.loading && !review.response && <div className="empty-state">{t('local.list.loading')}</div>}
           {sessionGroups.map(group => <section className="session-group-block" key={group.key}>
@@ -126,6 +130,26 @@ export function ReviewPage({ model, embedded = false, latestRequest = 0 }: { mod
                 <div className="session-item-title-row"><div className="session-item-title" title={presentation.title}>{sessionListTitle(presentation.title, t('local.session.agentSession', { agent: agentLabel(item.sourceIds[0] ?? '', item.productId) }), item.sourceIds)}</div>{liveInteraction?.canResume ? <StatusBadge tone="success">{t('local.session.resumable')}</StatusBadge> : presentation.activityLabel && <StatusBadge className="session-activity-badge">{presentation.activityLabel}</StatusBadge>}</div>
                 <div className="session-item-meta"><span className={`source-dot ${sourceDot(item.sourceIds[0] ?? '')}`}/><span>{agentLabel(item.sourceIds[0] ?? '', item.productId)}</span><span className="session-item-project">{item.projectName ?? item.workspacePath?.split(/[\\/]/).pop() ?? t('local.session.noProject')}</span><time title={t('local.list.recentActivity', { time: formatTime(entry.activityAt) })}>{sessionRelativeTime(entry.activityAt)}</time></div>
               </button>
+            })() : entry.origin === 'native' ? (() => {
+              const item = entry.native
+              const title = item.title?.trim() || t('local.session.agentSession', {
+                agent: agentLabel(item.sourceId, item.sourceId),
+              })
+              return <button key={`native:${item.id}`}
+                className={`session-item ${review.selectedId === item.id ? 'session-item-active' : ''}`}
+                onClick={() => select(item.id)}>
+                <div className="session-item-title-row">
+                  <div className="session-item-title" title={title}>{title}</div>
+                </div>
+                <div className="session-item-meta">
+                  <span className={`source-dot ${sourceDot(item.sourceId)}`}/>
+                  <span>{agentLabel(item.sourceId, item.sourceId)}</span>
+                  <span className="session-item-project">{t('local.session.nativeIndexed')}</span>
+                  <time title={t('local.list.recentActivity', { time: formatTime(item.lastActivityAt) })}>
+                    {sessionRelativeTime(item.lastActivityAt)}
+                  </time>
+                </div>
+              </button>
             })() : (() => {
               const item = entry.remote
               const time = hubSessionTime(item)
@@ -136,8 +160,14 @@ export function ReviewPage({ model, embedded = false, latestRequest = 0 }: { mod
             })())}
           </section>)}
           {review.response?.meta.hasMore && <button ref={sessionLoadSentinelRef} className="session-load-more" disabled={review.loadingMore} onClick={() => void model.loadMoreReview()}>{review.loadingMore ? t('local.list.loadMoreLoading') : review.error ? t('local.list.loadMoreFailed') : t('local.list.loadMoreAuto')}</button>}
-          {review.response && !review.response.meta.hasMore && review.response.items.length > 0 && <div className="session-load-more" aria-live="polite">{t('local.list.allLoaded')}</div>}
-          {!review.loading && !review.response?.items.length && !visibleHubSessions.length && <div className="empty-state">{t('local.list.empty')}</div>}
+          {nativeHasMore && <button className="session-load-more" disabled={nativeLoadingMore}
+            onClick={() => void loadMoreNativeSessions()}>
+            {nativeLoadingMore ? t('local.list.loadMoreLoading') : t('local.list.loadMoreAuto')}
+          </button>}
+          {review.response && !review.response.meta.hasMore && !nativeHasMore
+            && (review.response.items.length > 0 || visibleNativeSessions.length > 0)
+            && <div className="session-load-more" aria-live="polite">{t('local.list.allLoaded')}</div>}
+          {!review.loading && !review.response?.items.length && !visibleNativeSessions.length && !visibleHubSessions.length && <div className="empty-state">{t('local.list.empty')}</div>}
         </div>
       </aside>}
 
