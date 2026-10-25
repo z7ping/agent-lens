@@ -30,7 +30,7 @@ export class NativeReaderWorkerClient implements NativeReaderWorkerPort {
   constructor(private readonly workerUrl = resolveNativeReaderWorkerUrl()) {}
 
   supports(sourceId: string): boolean {
-    return sourceId === 'pi' || sourceId === 'codex'
+    return sourceId === 'pi' || sourceId === 'codex' || sourceId === 'claude-code'
   }
 
   private ensureWorker(): Worker {
