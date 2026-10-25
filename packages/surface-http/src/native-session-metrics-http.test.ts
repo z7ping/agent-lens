@@ -19,6 +19,7 @@ const id=nativeReviewSessionId(entry.sourceId,entry.installationId,entry.nativeS
 const policy={isSourceEnabled:()=>true} as unknown as CapturePolicyService
 const sources={
   list:()=>[{manifest:{sourceId:'pi',productId:'pi',parserVersion:'pi-version-3'},
+    nativeSessionCoverageComplete:true,
     readNativeSessionPage(){throw Error('Reader Worker must read source, never HTTP directly')}}],
 } as unknown as SourceService
 const unsupportedStorage={health:async()=>({ok:true})} as unknown as StorageService
