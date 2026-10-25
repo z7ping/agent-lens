@@ -9,7 +9,7 @@ import type {
   SourceRecordEmitter,
 } from '@agent-lens/core'
 import { abortableDelay } from '@agent-lens/runtime-cordis'
-import { asRecord, isMissingPathError, startHistoryFileWatch } from '@agent-lens/source-support'
+import { archiveAcceptedHookInboxFile, asRecord, isMissingPathError, startHistoryFileWatch } from '@agent-lens/source-support'
 import { CODEX_CURRENT_PARSER_VERSION } from './current-protocol'
 import { codexHistoryRoots, ingestCodexFile, listJsonlFiles } from './history'
 
