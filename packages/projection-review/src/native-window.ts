@@ -15,6 +15,8 @@ export interface NativeReviewProjectionInput {
   observations: readonly ObservationCandidate[]
   /** Correlates every normalized candidate to its source record, not SQL IDs. */
   observationRecordIds?: readonly string[]
+  /** Opaque Source record-start cursors for lazy native media hydration. */
+  observationCursors?: readonly string[]
   hasMore: boolean
   pendingTail: boolean
   /** Encoded Source cursor, with no underlying file path. */
@@ -68,7 +70,22 @@ export function nativeReviewSessionId(sourceId: string, installationId: string, 
   return `native:${stableId([sourceId, installationId, nativeSessionId])}`
 }
 
+export function nativeReviewObservationId(
+  sourceId: string, installationId: string, nativeSessionId: string,
+  candidate: ObservationCandidate, recordId: string, withinRecordOrdinal: number,
+): string {
+  const sessionId = nativeReviewSessionId(sourceId, installationId, nativeSessionId)
+  return `native-observation:${stableId([
+    sessionId, recordId, candidate.kind,
+    candidate.nativeEventId ?? '', candidate.sourceSequence ?? '',
+    withinRecordOrdinal,
+  ])}`
+}
+
 export function projectNativeReviewWindow(input: NativeReviewProjectionInput): NativeReviewWindowDto {
+  if (input.observationCursors && input.observationCursors.length !== input.observations.length) {
+    throw new Error('Native Review candidate and rewind cursor identity counts disagree')
+  }
   if (input.observationRecordIds && input.observationRecordIds.length !== input.observations.length) {
     throw new Error('Native Review candidate and source record identity counts disagree')
   }
@@ -112,6 +129,11 @@ export function projectNativeReviewWindow(input: NativeReviewProjectionInput): N
     }
   })
 
+  const attachmentCursors = new Map<string, string>()
+  items.forEach((item, index) => {
+    const cursor = input.observationCursors?.[index]
+    if (cursor && /^native-observation:[0-9a-f]{32}$/.test(item.id)) attachmentCursors.set(item.id, cursor)
+  })
   const changedFiles = summarizeObservedTaskFileChanges(observedTaskFileChanges(items))
   const files = changedFiles.slice(0, 64).map(change => ({
     path: change.path,
@@ -136,6 +158,11 @@ export function projectNativeReviewWindow(input: NativeReviewProjectionInput): N
       ...interaction,
       // Stable even if an interaction's global ordinal changes.
       id: `native-review:${stableId([sessionId, interaction.nodes[0]?.id ?? interaction.startedAt])}`,
+      nodes: interaction.nodes.map(node => {
+        const cursor = node.type === 'message' && node.attachments?.length
+          ? attachmentCursors.get(node.id) : undefined
+        return cursor ? { ...node, nativeAttachmentCursor: cursor } : node
+      }),
     })),
     observationCount: items.length,
     hasMore: input.hasMore,
