@@ -110,7 +110,12 @@ export function projectNativeReviewWindow(input: NativeReviewProjectionInput): N
     installationId: input.installationId,
     nativeSessionId: input.nativeSessionId,
     sessionId,
-    interactions: buildInteractions(items),
+    interactions: buildInteractions(items).map(interaction => ({
+      ...interaction,
+      // Ordinals are page-local until cross-page stitching is implemented.
+      // IDs must nevertheless be stable and unique across windows.
+      id: `native-review:${stableId([sessionId, interaction.nodes[0]?.id ?? interaction.startedAt])}`,
+    })),
     observationCount: items.length,
     hasMore: input.hasMore,
     pendingTail: input.pendingTail,
