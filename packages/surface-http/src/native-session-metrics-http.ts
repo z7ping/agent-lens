@@ -182,7 +182,7 @@ export async function rebuildNativeSessionMetrics(
   // mtime/size and inode remain unchanged. A reader cursor proves a local
   // snapshot, not that the entire multi-page scan came from one revision.
   // Check the actual source revision before publishing numerical totals.
-  if (/\\.(?:db|sqlite)$/i.test(entry.filePath)) {
+  if (/\.(?:db|sqlite)$/i.test(entry.filePath)) {
     let current: Awaited<ReturnType<typeof nativeSqliteRevision>>
     try { current=await nativeSqliteRevision(entry.filePath) }
     catch {
