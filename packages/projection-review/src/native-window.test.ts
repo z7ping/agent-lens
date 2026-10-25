@@ -405,3 +405,33 @@ test('reused native call ID across user turns cannot claim an ambiguous Hook',()
   assert.equal(result.observationCount,native.observationCount)
   assert.equal(result.hookFactsPartial,true)
 })
+
+
+test('separate Hook originals with equal kind, time and payload remain distinct facts',()=>{
+  const native=projectNativeReviewWindow({
+    ...page,completeBoundaries:true,
+    observations:[
+      {...candidate('message.user',1,{text:'run'}),occurredAt:'2026-10-25T04:00:00Z'},
+      {...candidate('message.assistant',2,{text:'done'}),occurredAt:'2026-10-25T04:00:05Z'},
+    ],
+    observationRecordIds:['native-user','native-assistant'],
+  })
+  const observedAt='2026-10-25T04:00:01Z'
+  const hooks:ObservationCandidate[]=[
+    {...candidate('permission.request',3,{decision:'ask',toolName:'shell'}),occurredAt:observedAt},
+    {...candidate('permission.request',4,{decision:'ask',toolName:'shell'}),occurredAt:observedAt},
+  ]
+  const result=overlayNativeHookEvents({
+    window:native,observations:hooks,
+    observationRecordIds:['distinct-source-hook-1','distinct-source-hook-2'],truncated:false,
+  })
+  const events=result.interactions[0]?.nodes.filter(node=>node.type==='event') ?? []
+  assert.equal(events.length,2,'payload/time similarity must never erase separate source originals')
+  assert.equal(new Set(events.map(node=>node.id)).size,2)
+  assert.equal(result.observationCount,native.observationCount+2)
+  const repeated=overlayNativeHookEvents({
+    window:result,observations:hooks,
+    observationRecordIds:['distinct-source-hook-1','distinct-source-hook-2'],truncated:false,
+  })
+  assert.deepEqual(repeated.interactions,result.interactions,'reopening one source record is idempotent')
+})
