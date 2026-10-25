@@ -40,6 +40,11 @@ export async function nativeMetricContribution(
   const defs=sources.list().filter(source=>
     (!selected || ids.has(source.manifest.sourceId))
     && policy.isSourceEnabled(source.manifest.sourceId))
+  if(selected && defs.length!==ids.size){
+    // A selected disabled, unknown, or not-yet-discovered Source is NOT a
+    // verified empty dataset; pretending complete would conceal a gap.
+    return {state:'unsupported',reason:'native-metrics-source-scope-unavailable'}
+  }
   if(defs.length>32){
     return {state:'unsupported',reason:'native-metrics-sources-budget'}
   }
