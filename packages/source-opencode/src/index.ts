@@ -28,7 +28,7 @@ import {
   resolveOpenCodeRoots,
   type AgentLensContext,
 } from '@agent-lens/runtime-cordis'
-import { isMissingPathError, watchSourceFiles, type SourceFileWatchHandle } from '@agent-lens/source-support'
+import { isMissingPathError, nativeSqliteRevision, watchSourceFiles, type SourceFileWatchHandle } from '@agent-lens/source-support'
 import { discoverOpenCodeAssets } from './assets.js'
 import { OPENCODE_KNOWN_PROJECT_CWDS_CHECKPOINT_KEY } from './workspace-context.js'
 
