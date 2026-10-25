@@ -3,7 +3,7 @@ import { lstat, mkdtemp, mkdir, readFile, rm, stat, symlink, writeFile } from 'n
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import test from 'node:test'
-import { archiveAcceptedHookInboxFile, readArchivedHookInboxSession } from './runtime-hook-archive'
+import { archiveAcceptedHookInboxFile, readArchivedHookInboxPage, readArchivedHookInboxSession } from './runtime-hook-archive'
 
 test('archive accepted source Hook by hard link: original is single-copy and session-scoped',async()=>{
   const inbox=await mkdtemp(join(tmpdir(),'al-native-hook-'))
@@ -57,3 +57,39 @@ test('sidecar rejects source filename traversal and unbounded event bodies',asyn
     await assert.rejects(readArchivedHookInboxSession({inbox,nativeSessionId:'S1',limit:1000}),/out of range/)
   }finally{await rm(inbox,{recursive:true,force:true})}
 })
+
+test('Hook sidecar pages preserve every source file, reject cross-session cursor and path injection',async()=>{
+  const inbox=await mkdtemp(join(tmpdir(),'al-native-hook-page-'))
+  try{
+    for(let index=0;index<5;index++){
+      const fileName=`event-${index}.json`
+      await writeFile(join(inbox,fileName),JSON.stringify({id:index,event:{session_id:'S1'}}))
+      await archiveAcceptedHookInboxFile({inbox,fileName,nativeSessionId:'S1'})
+    }
+    const first=await readArchivedHookInboxPage({inbox,nativeSessionId:'S1',limit:2})
+    assert.deepEqual(first.items.map(item=>item.fileName),['event-0.json','event-1.json'])
+    assert.equal(first.hasMore,true)
+    assert.ok(first.nextCursor)
+    assert.equal(first.nextCursor.includes(inbox),false)
+    const second=await readArchivedHookInboxPage({
+      inbox,nativeSessionId:'S1',limit:2,cursor:first.nextCursor,
+    })
+    assert.deepEqual(second.items.map(item=>item.fileName),['event-2.json','event-3.json'])
+    assert.equal(second.hasMore,true)
+    const third=await readArchivedHookInboxPage({
+      inbox,nativeSessionId:'S1',limit:2,cursor:second.nextCursor,
+    })
+    assert.deepEqual(third.items.map(item=>item.fileName),['event-4.json'])
+    assert.equal(third.hasMore,false)
+    assert.equal(third.nextCursor,undefined)
+    await assert.rejects(
+      readArchivedHookInboxPage({inbox,nativeSessionId:'S2',limit:2,cursor:first.nextCursor}),
+      /Invalid archived Hook cursor/,
+    )
+    await assert.rejects(
+      readArchivedHookInboxPage({inbox,nativeSessionId:'S1',cursor:'Li4vcGFzc3dk'}),
+      /Invalid archived Hook cursor/,
+    )
+  }finally{await rm(inbox,{recursive:true,force:true})}
+})
+
