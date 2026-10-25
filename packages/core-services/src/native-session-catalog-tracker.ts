@@ -109,18 +109,6 @@ export class NativeSessionCatalogTracker {
     const titleChanged = Boolean(title && previous?.title !== title)
     if (previous && now - previous.checkedAt < this.minRefreshMs
       && !significantActivity && !titleChanged) return false
-    // Limit memory, even during long multi-source history scans.
-    if (this.inspected.size >= 1024) {
-      const oldest = this.inspected.keys().next().value
-      if (oldest !== undefined) this.inspected.delete(oldest)
-    }
-    const cachedTitle = title ?? previous?.title
-    this.inspected.set(key, {
-      checkedAt: now,
-      activityMs: Math.max(previous?.activityMs ?? Number.NEGATIVE_INFINITY, activityMs),
-      ...(cachedTitle ? { title: cachedTitle } : {}),
-    })
-
     let file
     try {
       file = await stat(path)
@@ -152,6 +140,19 @@ export class NativeSessionCatalogTracker {
         : new Date(file.mtimeMs).toISOString(),
       ...(title ? { title } : {}),
       updatedAt: new Date(now).toISOString(),
+    })
+    // Cache only a successful catalog update. An ENOENT/permission error or
+    // failed SQLite write must retry immediately on the next observed record.
+    // Throttling failed attempts hides sessions for 30 seconds at startup.
+    if (this.inspected.size >= 1024) {
+      const oldest = this.inspected.keys().next().value
+      if (oldest !== undefined) this.inspected.delete(oldest)
+    }
+    const cachedTitle = title ?? previous?.title
+    this.inspected.set(key, {
+      checkedAt: now,
+      activityMs: Math.max(previous?.activityMs ?? Number.NEGATIVE_INFINITY, activityMs),
+      ...(cachedTitle ? { title: cachedTitle } : {}),
     })
     return true
   }
