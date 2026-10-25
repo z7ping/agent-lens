@@ -233,6 +233,7 @@ export const codexSourceDefinition: SourceDefinition = {
       recordCursors: page.lines.map(line => ({
         offset: line.offset, sequence: line.sequence - 1,
         fileIdentity: page.nextCursor.fileIdentity,
+        boundaryHash: line.boundaryHash,
       })),
       nextCursor: page.nextCursor,
       hasMore: page.hasMore,

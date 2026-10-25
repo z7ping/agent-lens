@@ -1119,3 +1119,41 @@ test('native Review never silently truncates more than 512 provenance candidates
   }finally{await surface.dispose()}
 })
 
+
+test('opaque JSONL cursor retains a bounded fingerprint and rejects malformed hash',async()=>{
+  const hash='a'.repeat(64)
+  const raw=encodeNativeSessionCursor({
+    offset:128,sequence:2,fileIdentity:'1:2',boundaryHash:hash,
+    mode:'review-turns',turnOrdinal:3,
+  })
+  const seen:Array<Record<string,unknown>>=[]
+  const reader:NativeSessionWindowReader={
+    async read(query){
+      seen.push({...query.cursor})
+      return {state:'unsupported',reason:'test-reader'}
+    },
+  }
+  const surface=await startHttpSurface(noopStorage,{port:0,nativeSessionReader:reader})
+  const endpoint=`http://${surface.host}:${surface.port}/api/v1/native-sessions/window?sourceId=pi&installationId=inst&nativeSessionId=S1&format=review-turns`
+  try{
+    const result=await fetch(endpoint+'&cursor='+raw)
+    assert.equal(result.status,200)
+    assert.deepEqual(seen,[{
+      offset:128,sequence:2,fileIdentity:'1:2',boundaryHash:hash,
+      mode:'review-turns',turnOrdinal:3,
+    }])
+    const malicious=Buffer.from(JSON.stringify({
+      offset:128,sequence:2,fileIdentity:'1:2',
+      boundaryHash:'not-a-hash',mode:'review-turns',turnOrdinal:3,
+    })).toString('base64url')
+    assert.equal((await fetch(endpoint+'&cursor='+malicious)).status,400)
+    const extra=Buffer.from(JSON.stringify({
+      offset:128,sequence:2,fileIdentity:'1:2',
+      boundaryHash:hash,mode:'review-turns',turnOrdinal:3,
+      arbitraryFilePath:'/private/native.jsonl',
+    })).toString('base64url')
+    assert.equal((await fetch(endpoint+'&cursor='+extra)).status,400)
+    assert.equal(seen.length,1,'unsafe cursors cannot reach the Source reader')
+  }finally{await surface.dispose()}
+})
+

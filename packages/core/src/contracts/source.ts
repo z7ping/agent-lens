@@ -193,6 +193,8 @@ export interface SourceNativeSessionCursor {
   offset: number
   sequence: number
   fileIdentity: string
+  /** Optional hash of the 256 bytes preceding this source boundary. */
+  boundaryHash?: string
 }
 
 export interface SourceNativeSessionPageQuery {

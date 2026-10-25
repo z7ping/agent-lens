@@ -93,3 +93,39 @@ test('native window enforces record size and cancellation limits',async()=>{
     assert.deepEqual(await readNativeSessionWindow({path,allowedRoots:[root],limit:65}),{state:'unsupported',reason:'invalid-window-reference'})
   }finally{await rm(root,{recursive:true,force:true})}
 })
+
+
+test('native JSONL cursor detects same-inode overwrite at its previous line boundary',async()=>{
+  const root=await mkdtemp(join(tmpdir(),'agent-lens-native-cursor-hash-'))
+  const path=join(root,'session.jsonl')
+  try{
+    const initial=JSON.stringify({id:1})+'\n'+JSON.stringify({id:2})+'\n'
+    await writeFile(path,initial)
+    const args={path,allowedRoots:[root]}
+    const first=await readNativeSessionWindow({...args,limit:1})
+    assert.equal(first.state,'available')
+    if(first.state!=='available')return
+    assert.match(first.nextCursor.boundaryHash??'',/^[0-9a-f]{64}$/)
+    assert.match(first.lines[0]?.boundaryHash??'',/^[0-9a-f]{64}$/)
+    const second=await readNativeSessionWindow({...args,cursor:first.nextCursor,limit:1})
+    assert.equal(second.state,'available')
+    // Replace one source record with the SAME byte length and no inode change.
+    // A simple dev:ino / line-alignment check would incorrectly accept it.
+    await writeFile(path,JSON.stringify({id:9})+'\n'+JSON.stringify({id:2})+'\n')
+    const drifted=await readNativeSessionWindow({...args,cursor:first.nextCursor,limit:1})
+    assert.deepEqual(drifted,{state:'drifted',reason:'native-cursor-boundary-changed'})
+    const invalid=await readNativeSessionWindow({...args,cursor:{
+      ...first.nextCursor,boundaryHash:'not-a-sha256',
+    }})
+    assert.deepEqual(invalid,{state:'unsupported',reason:'invalid-window-reference'})
+    // Legacy 3-field cursors remain readable, but every NEW returned cursor
+    // carries the fingerprint and can be verified on the next page.
+    const legacy=await readNativeSessionWindow({...args,cursor:{
+      offset:first.nextCursor.offset,sequence:first.nextCursor.sequence,
+      fileIdentity:first.nextCursor.fileIdentity,
+    }})
+    assert.equal(legacy.state,'available')
+    if(legacy.state==='available')assert.match(legacy.nextCursor.boundaryHash??'',/^[0-9a-f]{64}$/)
+  }finally{await rm(root,{recursive:true,force:true})}
+})
+
