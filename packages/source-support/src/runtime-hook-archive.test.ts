@@ -4,7 +4,7 @@ import { createHash } from 'node:crypto'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import test from 'node:test'
-import { archiveAcceptedHookInboxFile, archivedHookInboxRecordPath, nativeHookArchiveEnabled, prepareHookInboxArchive, verifyPreparedHookInboxOriginal, readArchivedHookInboxPage, readArchivedHookInboxSession } from './runtime-hook-archive'
+import { archiveAcceptedHookInboxFile, archivedHookInboxRecordPath, nativeHookArchiveEnabled, createHookInboxRetryGate, prepareHookInboxArchive, verifyPreparedHookInboxOriginal, readArchivedHookInboxPage, readArchivedHookInboxSession } from './runtime-hook-archive'
 
 test('archive accepted source Hook by hard link: original is single-copy and session-scoped',async()=>{
   const inbox=await mkdtemp(join(tmpdir(),'al-native-hook-'))
@@ -415,4 +415,35 @@ test('single Hook original verification binds captured bytes to installation and
     assert.equal(await verifyPreparedHookInboxOriginal(input),'drifted',
       'same-length mutation after sealing cannot claim original Source identity')
   }finally{await rm(inbox,{recursive:true,force:true})}
+})
+
+test('Hook retry gate lets healthy files proceed while a failed original cools down',()=>{
+  let now=100
+  const retry=createHookInboxRetryGate({now:()=>now,cooldownMs:1000,maxEntries:3})
+  assert.equal(retry.shouldAttempt('a.json'),true)
+  retry.markFailed('a.json')
+  assert.equal(retry.shouldAttempt('a.json'),false)
+  assert.equal(retry.shouldAttempt('b.json'),true,'a poisoned first Hook cannot starve another session')
+  now+=999
+  assert.equal(retry.shouldAttempt('a.json'),false)
+  now+=1
+  assert.equal(retry.shouldAttempt('a.json'),true,'the original is retryable after cooldown')
+  retry.markFailed('a.json')
+  retry.markDelivered('a.json')
+  assert.equal(retry.shouldAttempt('a.json'),true,'successful delivery removes failure state')
+})
+
+test('Hook retry gate has a finite budget and never owns or deletes original events',()=>{
+  let now=0
+  const retry=createHookInboxRetryGate({now:()=>now,cooldownMs:2000,maxEntries:2})
+  retry.markFailed('old.json')
+  retry.markFailed('next.json')
+  retry.markFailed('latest.json')
+  assert.equal(retry.shouldAttempt('old.json'),true,'bounded failure memory evicts oldest')
+  assert.equal(retry.shouldAttempt('next.json'),false)
+  assert.equal(retry.shouldAttempt('latest.json'),false)
+  now=2000
+  assert.equal(retry.shouldAttempt('next.json'),true)
+  assert.throws(()=>createHookInboxRetryGate({maxEntries:0}),/Invalid Hook inbox retry bounds/)
+  assert.throws(()=>createHookInboxRetryGate({cooldownMs:-1}),/Invalid Hook inbox retry bounds/)
 })
