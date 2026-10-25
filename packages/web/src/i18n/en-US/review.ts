@@ -363,6 +363,7 @@ export const englishReviewMessages: LocaleMessagesDto = {
         newRecords: 'New records available',
         querying: 'Querying full session…',
         nativeWindow: 'Native session · loaded turns only',
+        checkNativeTail: 'Check new turns',
         nativeHookPartial: 'Only some Hook events can be linked to these turns',
         latencyNote: '“High latency” is calculated by the server from the duration distribution of rounds in the full session.',
         loadingOlder: 'Loading earlier rounds…',
