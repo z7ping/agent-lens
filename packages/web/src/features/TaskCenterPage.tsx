@@ -317,6 +317,7 @@ export function TaskCenterPage({ model, mode, sidebarHost }: { model: AgentLensC
     setNativeBodyCursor(undefined)
     setNativeBodyPartial(false)
     setNativeBodyError(false)
+    setNativeBodyLoading(false)
     if(!allowed){setNativeBodyLoading(false);return}
     const controller=new AbortController()
     const sourceId=filters.sourceIds?.length===1?filters.sourceIds[0]:undefined
@@ -392,8 +393,10 @@ export function TaskCenterPage({ model, mode, sidebarHost }: { model: AgentLensC
             setNativeBodyError(false)
           }
         }catch{
-          setNativeBodyError(true)
-          setNativeBodyPartial(true)
+          if(nativeRequestKeyRef.current===key){
+            setNativeBodyError(true)
+            setNativeBodyPartial(true)
+          }
         }
       }
     }finally{setNativeLoadingMore(false)}
