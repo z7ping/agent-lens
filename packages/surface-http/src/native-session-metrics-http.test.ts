@@ -36,6 +36,7 @@ test('explicit native metric rebuild consumes Source reader pages, persists numb
   }
   const catalog={
     getByReviewSessionId:async(q:string)=>q===id?entry:null,
+    hasNativeOnlyWriteClaim:async()=>true,
   }
   const seenOffsets:number[]=[]
   const reader:NativeSessionWindowReader={
@@ -113,7 +114,10 @@ test('native metric materialization never marks unverified Hook coverage complet
   let recorded:NativeSessionMetricSnapshot|null=null
   const storage={
     ...unsupportedStorage,
-    nativeSessionCatalog:{getByReviewSessionId:async()=>hookEntry},
+    nativeSessionCatalog:{
+      getByReviewSessionId:async()=>hookEntry,
+      hasNativeOnlyWriteClaim:async()=>true,
+    },
     nativeSessionMetrics:{
       get:async()=>({state:'missing'}),
       replace:async(s:NativeSessionMetricSnapshot)=>{recorded=s;return true},
