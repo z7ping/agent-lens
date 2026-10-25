@@ -107,3 +107,66 @@ test('withdrawing Source coverage attestation prevents background Native-only sc
     assert.equal(reads,0)
   }finally{refresh.dispose()}
 })
+
+test('failed or cooled-down recent sessions do not starve older Native-only metrics',async()=>{
+  const all=Array.from({length:9},(_,index)=>({
+    reviewSessionId:`native:${index.toString(16).padStart(32,'0')}`,
+    sourceId:'pi',installationId:'pi-local',nativeSessionId:`item-${index}`,
+    lastActivityAt:at,
+  }))
+  const seenPages:string[][]=[]
+  const metrics={
+    async findRebuildCandidates(_scope:unknown,limit:number,before?:{
+      lastActivityAt:string;installationId:string;nativeSessionId:string
+    }){
+      const page=all.filter(row=>!before
+        || row.lastActivityAt<before.lastActivityAt
+        || (row.lastActivityAt===before.lastActivityAt
+          && (row.installationId>before.installationId
+            || (row.installationId===before.installationId
+              && row.nativeSessionId>before.nativeSessionId))))
+        .slice(0,limit)
+      seenPages.push(page.map(row=>row.nativeSessionId))
+      return page
+    },
+    async replace(){return true},
+  } as unknown as NativeSessionMetricsStore
+  const scopedCatalog={
+    async getByReviewSessionId(id:string){
+      const row=all.find(candidate=>candidate.reviewSessionId===id)
+      return row?{...entry,nativeSessionId:row.nativeSessionId}:null
+    },
+  } as unknown as NativeSessionCatalogStore
+  const readIds:string[]=[]
+  const reader={
+    async read(query:{nativeSessionId:string}){
+      readIds.push(query.nativeSessionId)
+      if(query.nativeSessionId==='item-0')return {
+        state:'unavailable' as const,reason:'temporary-source-unavailable',
+      }
+      return {
+        state:'available' as const,
+        observations:[],observationRecordIds:[],evidenceCandidates:[],
+        nextCursor:{offset:42,sequence:1,fileIdentity:'dev:1'},
+        hasMore:false,pendingTail:false,
+      }
+    },
+  } as unknown as NativeSessionWindowReader
+  const refresh=new NativeMetricsAutoRefresh(scopedCatalog,metrics,reader,source,policy)
+  try{
+    for(let i=0;i<3;i++){
+      refresh.schedule()
+      await flush()
+    }
+    assert.deepEqual(seenPages,[
+      ['item-0','item-1','item-2','item-3'],
+      ['item-4','item-5','item-6','item-7'],
+      ['item-8'],
+    ])
+    assert.deepEqual(readIds,all.map(row=>row.nativeSessionId))
+    // The scan wraps, but the cooldown prevents a hot failure from rescanning.
+    refresh.schedule()
+    await flush()
+    assert.deepEqual(readIds,all.map(row=>row.nativeSessionId))
+  }finally{refresh.dispose()}
+})
