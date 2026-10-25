@@ -198,6 +198,7 @@ test('native Hook overlay only merges attested permission/subagent facts within 
   assert.equal(merged.boundaryIntegrity,'complete')
   assert.equal(merged.observationCount,native.observationCount+2)
   assert.equal(merged.hookEventsTruncated,true)
+  assert.equal(merged.hookFactsPartial,true)
   assert.equal(JSON.stringify(merged).includes('hook-tool'),false)
   const again=overlayNativeHookEvents({
     window:merged,observations:hooks,
