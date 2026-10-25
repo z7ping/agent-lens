@@ -7,7 +7,7 @@ const REQUEST_TIMEOUT_MS = 30_000
 export function resolveNativeReaderWorkerUrl(moduleUrl = import.meta.url): URL {
   return moduleUrl.endsWith('.mjs')
     ? new URL('./native-reader-worker.mjs', moduleUrl)
-    : new URL('./native-reader-worker-source.mjs', moduleUrl)
+    : new URL('../../../apps/daemon/src/native-reader/worker-source.mjs', moduleUrl)
 }
 
 export interface NativeReaderWorkerPort {
