@@ -757,8 +757,9 @@ const databaseRawRecovery: NonNullable<SourceDefinition['rawRecovery']> = {
           canReread: true,
           canReparse: true,
           replayable: true,
-          persistencePreference: 'preserve',
-          reason: 'database rowId can be re-read and fingerprinted but is not yet treated as a long-term stable business locator',
+          persistencePreference: 'reference',
+          recoveryScope: 'session-current-state',
+          reason: 'OpenCode SQLite is authority for current session/part/message state; old overwritten row versions are not preserved and rowId is only a snapshot cursor',
         }
       : {
           authority: record.locator.kind === 'runtime-hook' ? 'agent-lens-only' : 'unknown',
