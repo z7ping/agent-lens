@@ -12,6 +12,7 @@ import { hermesManifest } from '@agent-lens/source-hermes'
 import { openCodeManifest } from '@agent-lens/source-opencode'
 import { HERMES_STATE_DB_NAME, OPENCODE_DB_NAME } from '@agent-lens/runtime-cordis'
 import { DatabaseSync } from 'node:sqlite'
+import { archiveAcceptedHookInboxFile } from '@agent-lens/source-support'
 
 const now = '2026-10-25T00:00:00Z'
 const host: Host = {
@@ -212,3 +213,54 @@ test('native Worker cancellation and termination cannot leave a pending read ali
     query: { filePath: '/missing.jsonl', nativeSessionId: 'session' },
   }, new AbortController().signal))
 })
+
+test('Hook native Worker isolates Hermes per-session archive and preserves bounded continuation',async()=>{
+  const inbox=await mkdtemp(join(tmpdir(),'agent-lens-hook-worker-'))
+  const previous=process.env.AGENT_LENS_HERMES_INBOX
+  process.env.AGENT_LENS_HERMES_INBOX=inbox
+  const worker=new NativeReaderWorkerClient()
+  try{
+    for(let i=0;i<17;i++){
+      const fileName=`event-${String(i).padStart(3,'0')}.json`
+      await writeFile(join(inbox,fileName),JSON.stringify({
+        id:'h-'+i,
+        event:{hook_event_name:'pre_approval_request',session_id:'H-original',
+          tool_name:'shell',timestamp:now},
+      }))
+      await archiveAcceptedHookInboxFile({inbox,fileName,nativeSessionId:'H-original'})
+    }
+    const input={
+      sourceId:'hermes',parserVersion:hermesManifest.parserVersion,
+      nativeSessionId:'H-original',
+      host,installation:installation('hermes',inbox),
+    }
+    const first=await worker.readHooks(input,new AbortController().signal)
+    assert.equal(first.state,'available')
+    if(first.state!=='available')return
+    assert.equal(first.entries.length,16)
+    assert.equal(first.hasMore,true)
+    assert.ok(first.nextCursor)
+    assert.equal(first.entries[0]?.normalized.observations[0]?.kind,'permission.request')
+    const second=await worker.readHooks({
+      ...input,cursor:first.nextCursor,
+    },new AbortController().signal)
+    assert.equal(second.state,'available')
+    if(second.state!=='available')return
+    assert.equal(second.entries.length,1)
+    assert.equal(second.hasMore,false)
+    const wrong=await worker.readHooks({
+      ...input,nativeSessionId:'H-other',cursor:first.nextCursor,
+    },new AbortController().signal)
+    assert.deepEqual(wrong,{state:'unsupported',reason:'native-hook-cursor-invalid'})
+    const wrongParser=await worker.readHooks({
+      ...input,parserVersion:'outdated',
+    },new AbortController().signal)
+    assert.deepEqual(wrongParser,{state:'unsupported',reason:'native-worker-parser-version-mismatch'})
+  }finally{
+    await worker.dispose()
+    if(previous===undefined)delete process.env.AGENT_LENS_HERMES_INBOX
+    else process.env.AGENT_LENS_HERMES_INBOX=previous
+    await rm(inbox,{recursive:true,force:true})
+  }
+})
+

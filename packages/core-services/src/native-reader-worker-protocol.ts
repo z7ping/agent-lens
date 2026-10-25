@@ -37,12 +37,32 @@ export type NativeWorkerReadResult =
     }
   | { state: 'unavailable' | 'drifted' | 'unsupported'; reason: string }
 
+/** Hook archive requests carry only trusted Source + session identities,
+ * not client paths or event bodies. The existing source adapter owns its inbox.
+ */
+export interface NativeWorkerHookReadInput {
+  sourceId: string
+  parserVersion: string
+  nativeSessionId: string
+  cursor?: string
+  host: Host
+  installation: AgentInstallation
+}
+
+export type NativeWorkerHookReadResult =
+  | {
+      state: 'available'
+      entries: NativeWorkerNormalizedRecord[]
+      hasMore: boolean
+      nextCursor?: string
+    }
+  | { state: 'unavailable' | 'drifted' | 'unsupported'; reason: string }
+
 export type NativeWorkerRequest =
   | { kind: 'read'; id: number; input: NativeWorkerReadInput }
+  | { kind: 'read-hooks'; id: number; input: NativeWorkerHookReadInput }
   | { kind: 'cancel'; id: number }
 
-export interface NativeWorkerReply {
-  kind: 'reply'
-  id: number
-  result: NativeWorkerReadResult
-}
+export type NativeWorkerReply =
+  | { kind: 'reply'; id: number; result: NativeWorkerReadResult }
+  | { kind: 'hook-reply'; id: number; result: NativeWorkerHookReadResult }

@@ -310,3 +310,54 @@ test('Hook source pagination never reports success for unresumable or stagnant c
     {state:'unsupported',reason:'native-hook-next-cursor-unexpected'})
 })
 
+test('Hook reader delegates isolated Source normalization to Worker then applies parent CapturePolicy',async()=>{
+  let direct=0
+  let workerCalls=0
+  const source={
+    manifest:{sourceId:'pi',productId:'pi',parserVersion:'1'},
+    async readArchivedNativeHooksPage(){direct++;throw Error('HTTP thread must not parse Hook files')},
+    async normalize(){direct++;throw Error('HTTP thread must not normalize Hook facts')},
+  } as unknown as SourceDefinition
+  const storage={
+    nativeSessionCatalog:{async get(){return catalog}},
+    repositories:{installations:{async get(){return installation}},hosts:{async get(){return host}}},
+  } as unknown as StorageService
+  const policy={
+    isSourceEnabled(){return true},
+    sanitizeNormalizedOutput(input: {observations:typeof sample[]}) {
+      return {...input,observations:input.observations.map(item=>({
+        ...item,payload:{text:'[worker-redacted]'},
+      }))}
+    },
+  } as unknown as CapturePolicyService
+  const worker={
+    supports(){return true},
+    async read(){throw Error('Must use readHooks operation, not native transcript read')},
+    async readHooks(input:{sourceId:string;nativeSessionId:string;cursor?:string}) {
+      workerCalls++
+      assert.equal(input.sourceId,'pi')
+      assert.equal(input.nativeSessionId,'S1')
+      assert.equal(input.cursor,'cursor-1')
+      return {
+        state:'available' as const,
+        entries:[{
+          sourceId:'pi',installationId:'install',sourceSessionNativeId:'S1',
+          recordId:'native-hook-1',
+          normalized:{observations:[sample],evidenceCandidates:[]},
+        }],
+        hasMore:false,
+      }
+    },
+  }
+  const reader=new NativeSessionReader(storage,{list:()=>[source]} as unknown as SourceService,policy,worker)
+  const answer=await reader.readArchivedHooks({...query,cursor:'cursor-1'})
+  assert.equal(answer.state,'available')
+  if(answer.state==='available'){
+    assert.deepEqual(answer.observations[0]?.payload,{text:'[worker-redacted]'})
+    assert.deepEqual(answer.observationRecordIds,['native-hook-1'])
+    assert.equal(answer.truncated,false)
+  }
+  assert.equal(direct,0)
+  assert.equal(workerCalls,1)
+})
+

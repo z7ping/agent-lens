@@ -95,48 +95,85 @@ export class NativeSessionReader {
     }
     const host = await this.storage.repositories.hosts.get(installation.hostId)
     if (!host) return { state: 'unavailable', reason: 'native-source-host-unavailable' }
-    let page: { records: import('@agent-lens/core').SourceRecord[]; hasMore: boolean; nextCursor?: string }
-    try {
-      const context = { host, installation, abortSignal: query.signal, checkpoint: readOnlyCheckpoint }
-      page = source.readArchivedNativeHooksPage
-        ? await source.readArchivedNativeHooksPage(query.nativeSessionId, context, query.cursor)
-        : { records: await source.readArchivedNativeHooks!(query.nativeSessionId, context), hasMore: false }
-    } catch (error) {
-      if (error instanceof TypeError && error.message === 'Invalid archived Hook cursor') {
-        return { state:'unsupported', reason:'native-hook-cursor-invalid' }
+    let rows: NativeWorkerNormalizedRecord[]
+    let hasMore = false
+    let nextCursor: string | undefined
+    let legacySinglePage = false
+    if (this.nativeWorker?.supports(query.sourceId) && this.nativeWorker.readHooks) {
+      // Keep original Hook parsing and normalization away from HTTP/Daemon.
+      // The parent alone owns Catalog authorization and CapturePolicy.
+      const result = await this.nativeWorker.readHooks({
+        sourceId: query.sourceId,
+        parserVersion: source.manifest.parserVersion,
+        nativeSessionId: query.nativeSessionId,
+        ...(query.cursor ? {cursor: query.cursor} : {}),
+        host, installation,
+      }, query.signal)
+      if (result.state !== 'available') return result
+      rows = result.entries
+      hasMore = result.hasMore
+      nextCursor = result.nextCursor
+    } else {
+      let page: { records: import('@agent-lens/core').SourceRecord[]; hasMore: boolean; nextCursor?: string }
+      try {
+        const context = { host, installation, abortSignal: query.signal, checkpoint: readOnlyCheckpoint }
+        page = source.readArchivedNativeHooksPage
+          ? await source.readArchivedNativeHooksPage(query.nativeSessionId, context, query.cursor)
+          : { records: await source.readArchivedNativeHooks!(query.nativeSessionId, context), hasMore: false }
+      } catch (error) {
+        if (error instanceof TypeError && error.message === 'Invalid archived Hook cursor') {
+          return { state:'unsupported', reason:'native-hook-cursor-invalid' }
+        }
+        throw error
       }
-      throw error
+      if (page.records.length > 16) {
+        return {state:'unsupported',reason:'native-hook-archive-page-too-large'}
+      }
+      hasMore = page.hasMore
+      nextCursor = page.nextCursor
+      legacySinglePage = !source.readArchivedNativeHooksPage
+      rows = []
+      for (const record of page.records) {
+        query.signal.throwIfAborted()
+        if (record.sourceId !== query.sourceId
+          || record.installationId !== installation.id
+          || record.sourceSessionNativeId !== query.nativeSessionId
+          || record.locator.kind !== 'runtime-hook') {
+          return {state:'drifted',reason:'native-hook-record-identity-drifted'}
+        }
+        rows.push({
+          recordId: record.id,
+          sourceId: record.sourceId,
+          installationId: record.installationId,
+          sourceSessionNativeId: record.sourceSessionNativeId,
+          normalized: await source.normalize(record, {host, installation}),
+        })
+      }
     }
-    const records = page.records
-    // A source's continuation contract must prove progress. Do not return a
-    // seemingly usable page when remaining Hook events are unreachable.
-    if (page.hasMore && (!records.length || !page.nextCursor
-      || page.nextCursor === query.cursor || page.nextCursor.length > 512
-      || !/^[A-Za-z0-9_-]+$/.test(page.nextCursor))) {
+    if (hasMore && (!rows.length || !nextCursor
+      || nextCursor === query.cursor || nextCursor.length > 512
+      || !/^[A-Za-z0-9_-]+$/.test(nextCursor))) {
       return {state:'unsupported',reason:'native-hook-next-cursor-invalid'}
     }
-    if (!page.hasMore && page.nextCursor) {
+    if (!hasMore && nextCursor) {
       return {state:'unsupported',reason:'native-hook-next-cursor-unexpected'}
     }
-    // A Source can emit at most sixteen bounded Hook records for one page.
-    if (records.length > 16) {
+    if (rows.length > 16) {
       return {state:'unsupported',reason:'native-hook-archive-page-too-large'}
     }
     const observations: ObservationCandidate[] = []
     const observationRecordIds: string[] = []
-    for (const record of records) {
+    for (const row of rows) {
       query.signal.throwIfAborted()
-      if (record.sourceId !== query.sourceId
-        || record.installationId !== installation.id
-        || record.sourceSessionNativeId !== query.nativeSessionId
-        || record.locator.kind !== 'runtime-hook') {
-        return { state: 'drifted', reason: 'native-hook-record-identity-drifted' }
+      if (row.sourceId !== query.sourceId
+        || row.installationId !== installation.id
+        || row.sourceSessionNativeId !== query.nativeSessionId) {
+        return {state:'drifted',reason:'native-hook-record-identity-drifted'}
       }
-      const normalized = this.capturePolicy.sanitizeNormalizedOutput(
-        await source.normalize(record, {host, installation}))
+      const normalized = this.capturePolicy.sanitizeNormalizedOutput(row.normalized)
       for (const observation of normalized.observations) {
         observations.push(observation)
-        observationRecordIds.push(record.id)
+        observationRecordIds.push(row.recordId)
       }
     }
     let candidateBytes: number
@@ -147,8 +184,8 @@ export class NativeSessionReader {
     }
     return {
       state: 'available', observations, observationRecordIds,
-      truncated: page.hasMore || (!source.readArchivedNativeHooksPage && records.length === 16),
-      ...(page.nextCursor ? { nextCursor: page.nextCursor } : {}),
+      truncated: hasMore || (legacySinglePage && rows.length === 16),
+      ...(nextCursor ? { nextCursor } : {}),
     }
   }
 
