@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import type {
   CapturePolicyService, NativeSessionCatalogEntry, NativeSessionCatalogQuery,
-  NativeSessionCatalogStore, ObservationCandidate, SourceNativeSessionCursor,
+  NativeSessionCatalogStore, SourceNativeSessionCursor,
 } from '@agent-lens/core'
 import { nativeReviewObservationId, nativeReviewSessionId } from '@agent-lens/projection-review'
 import { badRequest, writeJson } from './http-utils'
@@ -11,7 +11,7 @@ import type { NativeSessionWindowReader } from './native-session-http'
 const PATH = '/api/v1/native-sessions/search'
 const MAX_CURSOR = 4096
 const PAGE_RECORDS = 16
-const MAX_HITS = 8
+const MAX_HITS = 64
 const MAX_PAGE_BYTES = 2 * 1024 * 1024
 
 type Before = NonNullable<NativeSessionCatalogQuery['before']>
@@ -208,7 +208,11 @@ export async function handleNativeSessionBodySearchRequest(
         return true
       }
       const match=text.toLocaleLowerCase().indexOf(needle)
-      if(match<0 || items.length>=MAX_HITS)continue
+      if(match<0)continue
+      if(items.length>=MAX_HITS){
+        writeJson(response,200,{state:'unsupported',reason:'native-search-matches-budget'})
+        return true
+      }
       items.push({
         sessionId:nativeReviewSessionId(entry.sourceId,entry.installationId,entry.nativeSessionId),
         sourceId:entry.sourceId,installationId:entry.installationId,nativeSessionId:entry.nativeSessionId,
