@@ -170,3 +170,56 @@ test('failed or cooled-down recent sessions do not starve older Native-only metr
     assert.deepEqual(readIds,all.map(row=>row.nativeSessionId))
   }finally{refresh.dispose()}
 })
+
+test('a 65-page native session resumes the numerical accumulator instead of rescanning page zero',async()=>{
+  const key='native:0123456789abcdef0123456789abcdef'
+  const pageCount=65
+  let pages=0
+  const readOffsets:number[]=[]
+  const snapshots:NativeSessionMetricSnapshot[]=[]
+  const metrics={
+    findRebuildCandidates:async()=>[{
+      reviewSessionId:key,sourceId:'pi',installationId:'pi-local',
+      nativeSessionId:'session-1',lastActivityAt:at,
+    }],
+    replace:async(snapshot:NativeSessionMetricSnapshot)=>{
+      snapshots.push(snapshot)
+      return true
+    },
+  } as unknown as NativeSessionMetricsStore
+  const reader:NativeSessionWindowReader={
+    async read(query){
+      const index=query.cursor?.sequence??0
+      readOffsets.push(index)
+      pages++
+      return {
+        state:'available',
+        observations:[{kind:'message.user' as const,capturedAt:at,
+          identityHints:{nativeSessionId:'session-1'},payload:{text:'private user text'}}],
+        observationRecordIds:[`source-record-${index}`],
+        evidenceCandidates:[],
+        nextCursor:{offset:(index+1)*32,sequence:index+1,fileIdentity:'dev:1'},
+        hasMore:index+1<pageCount,pendingTail:false,
+      }
+    },
+  }
+  const refresh=new NativeMetricsAutoRefresh(catalog,metrics,reader,source,policy)
+  try{
+    refresh.schedule()
+    await flush()
+    assert.equal(pages,64)
+    assert.equal(snapshots.length,0,'never publish a 64-page prefix as full totals')
+    refresh.schedule()
+    await flush()
+    assert.equal(pages,65,'second trigger reads only the remaining page')
+    assert.deepEqual(readOffsets,Array.from({length:65},(_,i)=>i))
+    assert.equal(snapshots.length,1)
+    assert.equal(snapshots[0]?.coverage,'complete')
+    assert.equal(snapshots[0]?.interactionCount,65)
+    assert.equal(JSON.stringify(snapshots).includes('private user text'),false)
+    assert.equal(JSON.stringify(snapshots).includes('source-record-'),false)
+    refresh.schedule()
+    await flush()
+    assert.equal(pages,65,'cooldown prevents immediately scanning a completed session')
+  }finally{refresh.dispose()}
+})
