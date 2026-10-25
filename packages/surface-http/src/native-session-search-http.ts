@@ -146,7 +146,7 @@ export async function handleNativeSessionBodySearchRequest(
   const scopeHash=createHash('sha256').update(JSON.stringify([needle,sourceId])).digest('hex')
   const cursor=decode(url.searchParams.get('cursor'),scopeHash)
   const page=await catalog.query({
-    limit:1,onlyWithoutLegacyReview:true,
+    limit:1,locationKind:'native',onlyWithoutLegacyReview:true,
     ...(sourceId ? {sourceId} : {}),
     ...(cursor?.before ? {before:cursor.before} : {}),
   })
@@ -190,6 +190,7 @@ export async function handleNativeSessionBodySearchRequest(
     }
     const items:Array<{
       sessionId:string;sourceId:string;installationId:string;nativeSessionId:string;
+      lastActivityAt:string;title?:string;
       observationId:string;kind:string;at:string;excerpt:string
     }>=[]
     let inputBytes=0
@@ -216,6 +217,7 @@ export async function handleNativeSessionBodySearchRequest(
       items.push({
         sessionId:nativeReviewSessionId(entry.sourceId,entry.installationId,entry.nativeSessionId),
         sourceId:entry.sourceId,installationId:entry.installationId,nativeSessionId:entry.nativeSessionId,
+        lastActivityAt:entry.lastActivityAt,...(entry.title?{title:entry.title}:{}),
         observationId:nativeReviewObservationId(entry.sourceId,entry.installationId,
           entry.nativeSessionId,observation,id,ordinal),
         kind:observation.kind,at:observation.occurredAt??observation.capturedAt,
