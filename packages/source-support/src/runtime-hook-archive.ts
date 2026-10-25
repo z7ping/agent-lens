@@ -1,4 +1,5 @@
 import { createHash, randomUUID } from 'node:crypto'
+import type { Stats } from 'node:fs'
 import { link, lstat, mkdir, open, readFile, readdir, unlink, writeFile } from 'node:fs/promises'
 import { basename, join } from 'node:path'
 
@@ -136,6 +137,59 @@ export async function archiveAcceptedHookInboxFile(
 ): Promise<void> {
   await prepareHookInboxArchive(input)
   await unlink(join(input.inbox,input.fileName))
+}
+
+/** Verify one prepared, installation-scoped Hook original for the
+ * Source RawRecovery policy. Never follows arbitrary source-provided paths,
+ * returns event payloads or relies on an unsealed legacy archive.
+ */
+export async function verifyPreparedHookInboxOriginal(input: {
+  inbox:string; fileName:string; nativeSessionId:string; installationId:string;
+  expectedSha256:string;
+}):Promise<'verified'|'unavailable'|'drifted'> {
+  if(!/^[a-f0-9]{64}$/.test(input.expectedSha256)){
+    throw new TypeError('Invalid Hook original fingerprint')
+  }
+  const filePath=archivedHookInboxRecordPath(input)
+  let info:Stats
+  try{info=await lstat(filePath)}
+  catch(error){
+    if(['ENOENT','ENOTDIR','EACCES','EPERM'].includes(
+      (error as NodeJS.ErrnoException).code ?? ''))return 'unavailable'
+    throw error
+  }
+  if(!info.isFile() || info.isSymbolicLink() || info.size<=0
+    || info.size>MAX_EVENT_BYTES)return 'drifted'
+  let handle:Awaited<ReturnType<typeof open>>
+  try{handle=await open(filePath,'r')}
+  catch(error){
+    if(['ENOENT','ENOTDIR','EACCES','EPERM'].includes(
+      (error as NodeJS.ErrnoException).code ?? ''))return 'unavailable'
+    throw error
+  }
+  let actualSha256:string|undefined
+  try{
+    const opened=await handle.stat()
+    if(!opened.isFile() || opened.dev!==info.dev || opened.ino!==info.ino
+      || opened.size!==info.size)return 'drifted'
+    const data=await handle.readFile()
+    const after=await handle.stat()
+    if(data.length!==opened.size || after.dev!==opened.dev
+      || after.ino!==opened.ino || after.size!==opened.size
+      || after.mtimeMs!==opened.mtimeMs || after.ctimeMs!==opened.ctimeMs){
+      return 'drifted'
+    }
+    actualSha256=createHash('sha256').update(data).digest('hex')
+  }finally{await handle.close()}
+  let seal:string
+  try{seal=await readFile(`${filePath}.sha256`,'utf8')}
+  catch(error){
+    if(['ENOENT','ENOTDIR','EACCES','EPERM'].includes(
+      (error as NodeJS.ErrnoException).code ?? ''))return 'unavailable'
+    throw error
+  }
+  return seal===input.expectedSha256 && actualSha256===input.expectedSha256
+    ?'verified':'drifted'
 }
 
 /** A cursor is bound to one installation+session AND to the exact ordered

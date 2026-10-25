@@ -4,7 +4,7 @@ import { createHash } from 'node:crypto'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import test from 'node:test'
-import { archiveAcceptedHookInboxFile, archivedHookInboxRecordPath, nativeHookArchiveEnabled, prepareHookInboxArchive, readArchivedHookInboxPage, readArchivedHookInboxSession } from './runtime-hook-archive'
+import { archiveAcceptedHookInboxFile, archivedHookInboxRecordPath, nativeHookArchiveEnabled, prepareHookInboxArchive, verifyPreparedHookInboxOriginal, readArchivedHookInboxPage, readArchivedHookInboxSession } from './runtime-hook-archive'
 
 test('archive accepted source Hook by hard link: original is single-copy and session-scoped',async()=>{
   const inbox=await mkdtemp(join(tmpdir(),'al-native-hook-'))
@@ -386,5 +386,33 @@ test('Hook emitter failure after preparation leaves replayable original; retry a
     await archiveAcceptedHookInboxFile(input)
     await assert.rejects(lstat(join(inbox,input.fileName)),{code:'ENOENT'})
     assert.equal(await readFile(prepared,'utf8'),payload)
+  }finally{await rm(inbox,{recursive:true,force:true})}
+})
+
+test('single Hook original verification binds captured bytes to installation and session',async()=>{
+  const inbox=await mkdtemp(join(tmpdir(),'al-hook-original-proof-'))
+  const fileName='hook.json',nativeSessionId='S1',installationId='installed-agent'
+  const original=JSON.stringify({id:'H1',action:'permission'})
+  const expectedSha256=createHash('sha256').update(original).digest('hex')
+  const input={inbox,fileName,nativeSessionId,installationId,expectedSha256}
+  try{
+    await writeFile(join(inbox,fileName),original)
+    await prepareHookInboxArchive(input)
+    assert.equal(await verifyPreparedHookInboxOriginal(input),'verified')
+    assert.equal(await verifyPreparedHookInboxOriginal({...input,installationId:'another'}),'unavailable')
+    assert.equal(await verifyPreparedHookInboxOriginal({...input,nativeSessionId:'another'}),'unavailable')
+    assert.equal(await verifyPreparedHookInboxOriginal({...input,
+      expectedSha256:createHash('sha256').update('other').digest('hex')}),'drifted')
+    await assert.rejects(verifyPreparedHookInboxOriginal({...input,expectedSha256:'bad'}),
+      /Invalid Hook original fingerprint/)
+    const target=archivedHookInboxRecordPath(input)
+    const {unlink}=await import('node:fs/promises')
+    await unlink(`${target}.sha256`)
+    assert.equal(await verifyPreparedHookInboxOriginal(input),'unavailable',
+      'unsealed historical originals cannot be treated as a verified Hook reference')
+    await writeFile(`${target}.sha256`,expectedSha256)
+    await writeFile(target,JSON.stringify({id:'H1',action:'permissiox'}))
+    assert.equal(await verifyPreparedHookInboxOriginal(input),'drifted',
+      'same-length mutation after sealing cannot claim original Source identity')
   }finally{await rm(inbox,{recursive:true,force:true})}
 })
