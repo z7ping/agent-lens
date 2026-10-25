@@ -81,7 +81,7 @@ export class NativeMetricsAutoRefresh {
       try{
         const result=await rebuildNativeSessionMetrics(
           entry,this.metrics!,this.reader!,source,this.abort.signal,
-          {incremental:true, ...(resume?{progress:resume}:{})},
+          {enabled:true, ...(resume?{progress:resume}:{})},
         )
         if(result.state==='in_progress'){
           if(!this.ongoing.has(key) && this.ongoing.size>=MAX_RESUMABLE){
