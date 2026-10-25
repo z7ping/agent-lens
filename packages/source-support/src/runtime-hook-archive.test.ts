@@ -328,7 +328,11 @@ test('Hook archive recovery refuses a symlink substituted for a sealed original'
     await writeFile(outside,'sensitive outside file')
     const {unlink}=await import('node:fs/promises')
     await unlink(archivePath)
-    await symlink(outside,archivePath)
+    try{await symlink(outside,archivePath)}
+    catch(error){
+      if(['EPERM','EACCES','ENOTSUP'].includes((error as NodeJS.ErrnoException).code ?? ''))return
+      throw error
+    }
     await assert.rejects(
       readArchivedHookInboxPage({inbox,nativeSessionId,installationId}),
       /Hook archive contains invalid event file/,
