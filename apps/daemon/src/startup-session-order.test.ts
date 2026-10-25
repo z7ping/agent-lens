@@ -7,7 +7,9 @@ const main = readFileSync(new URL('./main.ts', import.meta.url), 'utf8')
 test('startup session fast path precedes deferred projection repair and maintenance delay', () => {
   const dirty = main.indexOf('const sessionSummaryRunState = await beginSessionSummaryProjectionRun')
   const prepare = main.indexOf("startupSessionDiagnostics.markFirst('source.prepare.started')")
-  const captureTask = main.indexOf('const captureTask = abortableDelay(500, runtimeController.signal)')
+  const captureGate = main.indexOf('const nativeFastCaptureGate =')
+  const captureReady = main.indexOf('const captureReady = nativeFastCaptureGate')
+  const captureTask = main.indexOf('const captureTask = captureReady')
   const capture = main.indexOf("startupSessionDiagnostics.markFirst('source.capture.started')")
   const latest = main.indexOf("startupSessionDiagnostics.markFirst('history.latest.started')")
   const latestFlush = main.indexOf('await app.context.projections.flush(SESSION_SUMMARY_PROJECTION_ID)', latest)
@@ -16,11 +18,15 @@ test('startup session fast path precedes deferred projection repair and maintena
   const fullRepair = main.indexOf("session summary projection cooperative rebuild started", deferredDelay)
   const startupJoin = main.indexOf('await Promise.all(startupTasks)', latest)
 
-  for (const position of [dirty, prepare, captureTask, capture, latest, latestFlush, catchup, startupJoin, deferredDelay, fullRepair]) {
+  for (const position of [dirty, prepare, captureGate, captureReady, captureTask, capture, latest, latestFlush, catchup, startupJoin, deferredDelay, fullRepair]) {
     assert.notEqual(position, -1)
   }
   assert.ok(dirty < prepare)
   assert.ok(dirty < captureTask)
+  assert.ok(captureGate < captureReady && captureReady < captureTask)
+  assert.match(main, /: abortableDelay\(500, runtimeController\.signal\)/)
+  assert.match(main, /onNativeCatalogReady: \(\) => releaseCapture\?\.\(\)/)
+  assert.match(main, /finally \{[\s\S]*?releaseCapture\?\.\(\)[\s\S]*?await captureTask/)
   assert.ok(captureTask < latest)
   assert.ok(captureTask < capture)
   assert.ok(latest < latestFlush)
