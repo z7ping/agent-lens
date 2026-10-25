@@ -64,7 +64,7 @@ export class SqliteNativeSessionCatalog {
           file_identity=excluded.file_identity,
           file_size=excluded.file_size,
           file_mtime_ms=excluded.file_mtime_ms,
-          last_activity_at=excluded.last_activity_at,
+          last_activity_at=MAX(native_session_catalog.last_activity_at, excluded.last_activity_at),
           title=COALESCE(excluded.title,native_session_catalog.title),
           updated_at=excluded.updated_at
       `).run(input.sourceId,input.installationId,input.nativeSessionId,input.locationKind,

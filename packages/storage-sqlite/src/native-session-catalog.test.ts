@@ -30,6 +30,12 @@ test('native session catalog remains metadata-only, stable and independently pag
     await catalog.upsert(newest)
     await catalog.upsert({ ...middle, fileSize: 300, title: 'Generated session title' })
 
+    // File walkers can observe older events after newer ones during replay.
+    // Keep the newest real session activity even when upserts arrive late.
+    await catalog.upsert({ ...middle, lastActivityAt: '2026-10-21T00:00:00Z' })
+    assert.equal((await catalog.get({sourceId:'pi',installationId:'local-pi',nativeSessionId:'b'}))?.lastActivityAt,
+      '2026-10-22T00:00:00Z')
+
     const first = await catalog.query({ limit: 2 })
     assert.deepEqual(first.items.map(x => x.nativeSessionId), ['c','b'])
     assert.equal(first.hasMore,true)

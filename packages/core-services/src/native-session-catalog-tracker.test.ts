@@ -75,3 +75,30 @@ test('tracker rejects non-native records and sources without native reader capab
   assert.equal(await tracker.observe(withoutNativeReader as SourceDefinition, recordAtPath), false)
   assert.deepEqual(stored, [])
 })
+
+test('native SQLite catalog observes real message clock through WAL mtime throttle',async()=>{
+  const root=await mkdtemp(join(tmpdir(),'agent-lens-catalog-sqlite-'))
+  const path=join(root,'state.db')
+  const stored:NativeSessionCatalogEntry[]=[]
+  const catalog={ async upsert(entry:NativeSessionCatalogEntry){stored.push(entry)} } as NativeSessionCatalogStore
+  let now=Date.parse(at)
+  const tracker=new NativeSessionCatalogTracker(catalog,()=>now,30_000)
+  const dbSource={
+    manifest:{sourceId:'hermes'},readNativeSessionPage(){},
+    rawRecovery:{describe:()=>accepted},
+  } as unknown as SourceDefinition
+  const atOffset=(minute:number):SourceRecord=>({
+    ...record(path),sourceId:'hermes',occurredAt:new Date(now+minute*60_000).toISOString(),
+    locator:{kind:'database',path,table:'messages',rowId:String(minute+1)},
+  })
+  try{
+    await writeFile(path,'fake source-owned database file for metadata-only tracking')
+    assert.equal(await tracker.observe(dbSource,atOffset(0)),true)
+    assert.equal(await tracker.observe(dbSource,atOffset(2)),false)
+    assert.equal(await tracker.observe(dbSource,atOffset(6)),true)
+    assert.equal(stored.length,2)
+    assert.equal(stored[0]?.lastActivityAt,new Date(now).toISOString())
+    assert.equal(stored[1]?.lastActivityAt,new Date(now+6*60_000).toISOString())
+    assert.equal(JSON.stringify(stored).includes('DO_NOT_PERSIST'),false)
+  }finally{await rm(root,{recursive:true,force:true})}
+})

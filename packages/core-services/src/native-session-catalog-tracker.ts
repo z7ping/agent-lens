@@ -11,7 +11,7 @@ import type {
  * This is not an additional startup scan and never stores record payload.
  */
 export class NativeSessionCatalogTracker {
-  private readonly inspected = new Map<string, number>()
+  private readonly inspected = new Map<string, { checkedAt: number; activityMs: number }>()
 
   constructor(
     private readonly catalog?: NativeSessionCatalogStore,
@@ -36,13 +36,26 @@ export class NativeSessionCatalogTracker {
     const key = `${record.sourceId}\u0000${record.installationId}\u0000${record.sourceSessionNativeId}\u0000${path}`
     const now = this.now()
     const previous = this.inspected.get(key)
-    if (previous !== undefined && now - previous < this.minRefreshMs) return false
+    const nativeActivityMs = originalDatabase && record.occurredAt
+      ? Date.parse(record.occurredAt)
+      : Number.NaN
+    const activityMs = Number.isFinite(nativeActivityMs) ? nativeActivityMs : Number.NEGATIVE_INFINITY
+    // SQLite WAL may leave the main DB mtime unchanged. During a fast import,
+    // update activity at most once per 5 native minutes even if wall clock
+    // throttling has not expired. This keeps long-lived sessions discoverable
+    // without one SQLite catalog write for every message.
+    const significantActivity = originalDatabase && previous
+      && activityMs - previous.activityMs >= 5 * 60_000
+    if (previous && now - previous.checkedAt < this.minRefreshMs && !significantActivity) return false
     // Limit memory, even during long multi-source history scans.
     if (this.inspected.size >= 1024) {
       const oldest = this.inspected.keys().next().value
       if (oldest !== undefined) this.inspected.delete(oldest)
     }
-    this.inspected.set(key, now)
+    this.inspected.set(key, {
+      checkedAt: now,
+      activityMs: Math.max(previous?.activityMs ?? Number.NEGATIVE_INFINITY, activityMs),
+    })
 
     let file
     try {
