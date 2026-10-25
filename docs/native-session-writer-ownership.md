@@ -18,3 +18,11 @@ Daemon 进程启动前显式配置 `AGENT_LENS_NATIVE_ONLY_NEW_SESSIONS=1`，只
 这是为了逐步收敛消费者的**显式实验开关**，不是生产默认模式。Native-only 会话的全局用量/工具统计、文件变更汇总、附件/原始 Evidence、错误/耗时全局筛选、尾轮定位与继续对话等仍有旧事件消费者；Live 的运行时原生状态与 Review 的历史按需读取也不能混淆。启用前需确认这些差异可接受，下一阶段继续补齐。归档/恢复/安全清理尚未完成。
 
 **不允许**将缺失、漂移、权限不足的原生源当作可删除；归属表仅是存储模式元数据，不包含事件副本或允许自动删除的授权。
+
+## Pi/Codex file-level fast index (experimental)
+
+When **both** `AGENT_LENS_NATIVE_ONLY_NEW_SESSIONS=1` and `AGENT_LENS_NATIVE_CATALOG_FAST_SCAN=1` are set, history sync for Sources implementing `discoverNativeSessions` first enumerates source-owned session files and reads only their headers/stat. Before skipping a whole file, the Source-native reader must return an authorized first record with a matching file identity and session ID; the Source's fingerprint verifier must confirm it; and SQLite must atomically accept a `native-only` claim (which fails for existing SQL sessions).
+
+Only successfully claimed files bypass `ingestHistory` payload parsing. Existing sessions with legacy events and unsupported/read-failed Sources keep legacy record ingestion. The ordinary history checkpoint remains independent; no synthetic observations, tool calls, or Evidence are created merely for catalog indexing.
+
+**Do not make these flags the production default yet.** Runtime-only hook observations, native media/attachment readers, cross-session aggregates, search and Vault restoration do not all have equivalent consumers. Daemon still starts runtime capture concurrently with the initial history pass, so an early legacy ownership claim may win; no conversion or deletion is attempted. Disabling a flag is not a safe migration strategy for previously claimed native-only sessions; the durable mode prevents event re-persistence for those exact sessions. Recovery needs to read the original native file or a verified Vault archive.
