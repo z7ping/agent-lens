@@ -1,9 +1,10 @@
 import { createHash } from 'node:crypto'
-import type { ObservationCandidate } from '@agent-lens/core'
+import type { EvidenceCandidate, ObservationCandidate } from '@agent-lens/core'
 import {
   type JsonValue,
   type NativeReviewWindowDto,
   type TimelineItemDto,
+  type TimelineEvidenceDto,
 } from '@agent-lens/protocol'
 import { buildInteractions } from './nodes'
 import { observedTaskFileChanges, summarizeObservedTaskFileChanges } from '@agent-lens/projection-session'
@@ -15,6 +16,8 @@ export interface NativeReviewProjectionInput {
   observations: readonly ObservationCandidate[]
   /** Correlates every normalized candidate to its source record, not SQL IDs. */
   observationRecordIds?: readonly string[]
+  /** Source-normalized, policy-sanitized provenance only; never expose raw locators. */
+  evidenceCandidates?: readonly EvidenceCandidate[]
   /** Opaque Source record-start cursors for lazy native media hydration. */
   observationCursors?: readonly string[]
   hasMore: boolean
@@ -91,6 +94,34 @@ export function projectNativeReviewWindow(input: NativeReviewProjectionInput): N
   }
   const sessionId = nativeReviewSessionId(input.sourceId, input.installationId, input.nativeSessionId)
   const sourceSessionId = `native-source:${stableId([input.sourceId, input.installationId, input.nativeSessionId])}`
+  const provenance = new Map<string, TimelineEvidenceDto[]>()
+  // A candidate must explicitly name the same SourceRecord that produced
+  // the observation. Timestamp or payload similarity is not sufficient
+  // evidence to attach a fact to a particular interaction.
+  const presentRecords = new Set(input.observationRecordIds ?? [])
+  for (const candidate of input.evidenceCandidates ?? []) {
+    const recordId = candidate.sourceRecordId
+    if (!recordId || !presentRecords.has(recordId)) continue
+    const row = provenance.get(recordId) ?? []
+    if (row.length >= 8) continue // bounded per record, not an SQL evidence copy
+    const id = `native-evidence:${stableId([
+      sessionId, recordId, candidate.captureMethod, candidate.derivation,
+      candidate.nativeStableId ?? '', candidate.parserVersion ?? '',
+      candidate.eventTime ?? '', row.length,
+    ])}`
+    row.push({
+      id,
+      captureMethod: candidate.captureMethod,
+      derivation: candidate.derivation,
+      confidence: candidate.confidenceHint ?? 'unknown',
+      ...(candidate.parserVersion ? {parserVersion:candidate.parserVersion} : {}),
+      ...(candidate.eventTime ? {eventTime:candidate.eventTime} : {}),
+      capturedAt: candidate.capturedAt,
+      // Raw sourceLocator/path and candidate.missingReason never reach HTTP.
+      // Source-owned IDs only participate in the opaque derived evidence ID.
+    })
+    provenance.set(recordId, row)
+  }
   const candidateOccurrences = new Map<string, number>()
   const items: TimelineItemDto[] = input.observations.map((candidate, index) => {
     const recordId = input.observationRecordIds?.[index]
@@ -125,7 +156,7 @@ export function projectNativeReviewWindow(input: NativeReviewProjectionInput): N
       capturedAt: candidate.capturedAt,
       effectiveAt: at,
       payload,
-      evidence: [],
+      evidence: recordId ? (provenance.get(recordId) ?? []) : [],
     }
   })
 
