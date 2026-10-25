@@ -34,6 +34,8 @@ test('opt-in native-only Writer skips SourceRecord / Observation / Evidence only
     async getByReviewSessionId(){return catalog??null},
     async query(){return {items:catalog?[catalog]:[],hasMore:false}},
     async hasNativeOnlyWriteClaim(){return claimed},
+    async getSessionWriteMode(){return claimed ? 'native-only' : null},
+    async claimLegacyWrite(){return claimed ? 'native-only' : 'legacy'},
     async claimNativeOnlyWrite(value){
       assert.equal(value.sourceId,nativeKey.sourceId)
       assert.equal(value.installationId,nativeKey.installationId)
