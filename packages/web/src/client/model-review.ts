@@ -2,6 +2,7 @@ import type { LiveUpdateArea, LiveUpdateEventDto, ReviewDetailFilter, ReviewResp
 import { type QueryFilters, type ReviewFilters } from './api'
 import { AgentLensIntegrationModel } from './model-integration'
 import { INITIAL_REVIEW_LIMIT } from './model-base'
+import { translateProduct } from '../i18n/runtime'
 import { nativeReviewDetail, nativeReviewNextPage } from './native-review-adapter'
 
 const REVIEW_PAGE_SIZE = 20
@@ -280,7 +281,7 @@ export abstract class AgentLensReviewModel extends AgentLensIntegrationModel {
               cursor: detail.page.nextCursor,
               turnLimit: 4,
             })
-            if (window.state !== 'available') throw new Error(`原生会话读取不可用：${window.reason}`)
+            if (window.state !== 'available') throw new Error(translateProduct('review:local.session.nativeReadUnavailable', { reason: window.reason }))
             return nativeReviewNextPage(detail, window)
           })()
         : await this.api.reviewDetail(selectedId, {
@@ -690,8 +691,8 @@ export abstract class AgentLensReviewModel extends AgentLensIntegrationModel {
       ])
       if (controller.signal.aborted || generation !== this.detailGeneration
         || this.snapshot.review.selectedId !== id) return
-      if (!summary) throw new Error('原生会话目录不存在或尚未建立可读取的稳定身份')
-      if (window.state !== 'available') throw new Error(`原生会话读取不可用：${window.reason}`)
+      if (!summary) throw new Error(translateProduct('review:local.session.nativeIdentityUnavailable'))
+      if (window.state !== 'available') throw new Error(translateProduct('review:local.session.nativeReadUnavailable', { reason: window.reason }))
       const detail = nativeReviewDetail(summary, window)
       this.publish({
         ...this.snapshot,

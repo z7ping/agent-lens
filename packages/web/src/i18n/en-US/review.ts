@@ -39,6 +39,8 @@ export const englishReviewMessages: LocaleMessagesDto = {
         agentSession: '{{agent}} session',
         noProject: 'No project',
         nativeIndexed: 'Native session',
+        nativeReadUnavailable: 'Native session read unavailable: {{reason}}',
+        nativeIdentityUnavailable: 'The native session has no resolvable catalog identity',
         unlinkedProject: 'Unlinked project',
         resumable: 'Resume available to try',
         remoteSource: 'Remote · {{node}}',
