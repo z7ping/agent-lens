@@ -106,3 +106,41 @@ test('native overview excludes legacy claim even when a numerical cache row exis
     assert.deepEqual(overview.tools,[])
   }finally{await storage.close()}
 })
+
+test('native metric rebuild candidates paginate fairly when activity timestamps tie',async()=>{
+  const storage=new SqliteStorageService({path:':memory:'})
+  await storage.migrate()
+  try{
+    const ids=Array.from({length:9},(_,index)=>`item-${index}`)
+    // Same timestamp intentionally exercises the stable installation/native ID tie-break.
+    for(const id of ids){
+      const row=location(id)
+      await storage.nativeSessionCatalog.upsert(row)
+      assert.equal(await storage.nativeSessionCatalog.claimNativeOnlyWrite(row),true)
+    }
+    const metrics=storage.nativeSessionMetrics
+    const query={sourceId:source,parserVersion}
+    const page1=await metrics.findRebuildCandidates(query,4)
+    const last1=page1.at(-1)!
+    const page2=await metrics.findRebuildCandidates(query,4,{
+      lastActivityAt:last1.lastActivityAt,
+      installationId:last1.installationId,
+      nativeSessionId:last1.nativeSessionId,
+    })
+    const last2=page2.at(-1)!
+    const page3=await metrics.findRebuildCandidates(query,4,{
+      lastActivityAt:last2.lastActivityAt,
+      installationId:last2.installationId,
+      nativeSessionId:last2.nativeSessionId,
+    })
+    assert.deepEqual([page1.length,page2.length,page3.length],[4,4,1])
+    assert.deepEqual([...page1,...page2,...page3].map(item=>item.nativeSessionId),ids)
+    assert.deepEqual([...page1,...page2,...page3].map(item=>item.lastActivityAt),
+      ids.map(()=>at))
+    await assert.rejects(
+      ()=>metrics.findRebuildCandidates(query,4,{
+        lastActivityAt:'broken',installationId:installation,nativeSessionId:'item-0',
+      }),/Invalid native metric refresh scope/,
+    )
+  }finally{await storage.close()}
+})

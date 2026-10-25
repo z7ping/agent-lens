@@ -50,7 +50,12 @@ export interface NativeSessionMetricRebuildCandidate {
   sourceId:string
   installationId:string
   nativeSessionId:string
+  /** Metadata-only keyset for fair, bounded rebuild scheduling. */
+  lastActivityAt:string
 }
+
+export type NativeSessionMetricRebuildCursor = Pick<NativeSessionMetricRebuildCandidate,
+  'lastActivityAt'|'installationId'|'nativeSessionId'>
 
 export interface NativeSessionMetricTool {
   nativeToolName: string
@@ -101,8 +106,8 @@ export interface NativeSessionMetricsStore {
    */
   overview?(query:NativeSessionMetricOverviewQuery):Promise<NativeSessionMetricOverview>
   /** Metadata-only candidates; does not read native sessions or scan at startup. */
-  findRebuildCandidates?(query:NativeSessionMetricOverviewQuery,limit:number):
-    Promise<NativeSessionMetricRebuildCandidate[]>
+  findRebuildCandidates?(query:NativeSessionMetricOverviewQuery,limit:number,
+    before?:NativeSessionMetricRebuildCursor):Promise<NativeSessionMetricRebuildCandidate[]>
   /** Explicit invalidation on source/parse/policy change or user deletion. */
   invalidate(identity: {
     sourceId: string; installationId: string; nativeSessionId: string

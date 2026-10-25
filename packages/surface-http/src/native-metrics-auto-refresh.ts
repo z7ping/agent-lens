@@ -1,6 +1,6 @@
 import type {
   CapturePolicyService, NativeSessionCatalogStore, NativeSessionMetricsStore,
-  SourceService,
+  NativeSessionMetricRebuildCursor, SourceService,
 } from '@agent-lens/core'
 import type { NativeSessionWindowReader } from './native-session-http'
 import { rebuildNativeSessionMetrics } from './native-session-metrics-http'
@@ -21,6 +21,7 @@ export class NativeMetricsAutoRefresh {
   private readonly abort=new AbortController()
   private readonly recent=new Map<string,number>()
   private active:Promise<void>|null=null
+  private before:NativeSessionMetricRebuildCursor|undefined
 
   constructor(
     private readonly catalog:NativeSessionCatalogStore|undefined,
@@ -46,7 +47,14 @@ export class NativeMetricsAutoRefresh {
       || !this.policy!.isSourceEnabled('pi'))return
     const candidates=await this.metrics!.findRebuildCandidates!({
       sourceId:'pi',parserVersion:source.manifest.parserVersion,
-    },MAX_SESSIONS_PER_TRIGGER)
+    },MAX_SESSIONS_PER_TRIGGER,this.before)
+    // Advance past the selected metadata page even if some sessions fail or
+    // are cooling down. Otherwise the newest four block every older session.
+    const last=candidates.at(-1)
+    this.before=last && candidates.length===MAX_SESSIONS_PER_TRIGGER
+      ? {lastActivityAt:last.lastActivityAt,installationId:last.installationId,
+          nativeSessionId:last.nativeSessionId}
+      : undefined
     for(const candidate of candidates){
       if(this.abort.signal.aborted)return
       const key=JSON.stringify([
@@ -79,5 +87,6 @@ export class NativeMetricsAutoRefresh {
   dispose():void {
     this.abort.abort()
     this.recent.clear()
+    this.before=undefined
   }
 }
