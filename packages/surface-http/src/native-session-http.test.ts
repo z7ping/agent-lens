@@ -944,7 +944,7 @@ test('Catalog native Review shares one Task DTO with bounded Hook-exclusive fact
     const response=await fetch(base+'/'+encodeURIComponent(nativeId)+'/review')
     assert.equal(response.status,200)
     const dto=await response.json() as {
-      state:string;boundaryIntegrity:string;hookEventsTruncated?:boolean;
+      state:string;boundaryIntegrity:string;hookEventsTruncated?:boolean;hookFactsPartial?:boolean;
       interactions:Array<{nodes:Array<{type:string;kind?:string;payload?:unknown}>}>
     }
     assert.equal(dto.state,'available')
