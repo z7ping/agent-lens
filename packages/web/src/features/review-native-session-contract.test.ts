@@ -22,7 +22,8 @@ test('native-only entries use indexed SQL source identity dedup before paginatio
 })
 
 test('opening a certified native Review lazily rebuilds only missing or stale numerical metrics',()=>{
-  assert.match(model,/summary\.sourceId === 'pi' && summary\.locationKind === 'native'/)
+  assert.match(model,/if \(summary\.locationKind === 'native'\)/)
+  assert.doesNotMatch(model,/summary\.sourceId === 'pi' && summary\.locationKind/)
   assert.match(model,/this\.api\.nativeMetricStatus\(id, signal\)/)
   assert.match(model,/status\.state === 'missing' \|\| status\.state === 'stale'/)
   assert.match(model,/this\.api\.rebuildNativeMetric\(id, signal\)/)
