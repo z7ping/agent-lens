@@ -4,6 +4,9 @@ import type {
   TaskFileChangeRecord,
 } from '@agent-lens/core'
 
+/** A native read window needs only these fields, never a stored Observation row. */
+type FileChangeObservation = Pick<CanonicalObservation, 'id' | 'logicalSessionId' | 'kind' | 'occurredAt' | 'capturedAt' | 'payload'>
+
 type RecordValue = Record<string, unknown>
 
 interface MutationIntent {
@@ -159,7 +162,7 @@ export function patchMutationPaths(value: string): MutationIntent['paths'] {
   return result
 }
 
-export function toolMutationIntent(observation: CanonicalObservation): MutationIntent | undefined {
+export function toolMutationIntent(observation: FileChangeObservation): MutationIntent | undefined {
   if (observation.kind !== 'tool.call') return undefined
   const payload = record(observation.payload)
   const name = normalizedToolName(payload)
@@ -200,11 +203,11 @@ export function toolMutationIntent(observation: CanonicalObservation): MutationI
   return undefined
 }
 
-export function toolResultCallId(observation: CanonicalObservation): string | undefined {
+export function toolResultCallId(observation: FileChangeObservation): string | undefined {
   return observation.kind === 'tool.result' ? callId(record(observation.payload)) : undefined
 }
 
-function resultSucceeded(observation: CanonicalObservation): boolean | undefined {
+function resultSucceeded(observation: FileChangeObservation): boolean | undefined {
   if (observation.kind !== 'tool.result') return undefined
   const payload = record(observation.payload)
   const explicitError = payload.error
@@ -218,18 +221,18 @@ function resultSucceeded(observation: CanonicalObservation): boolean | undefined
   return true
 }
 
-function effectiveAt(observation: CanonicalObservation): string {
+function effectiveAt(observation: FileChangeObservation): string {
   return observation.occurredAt ?? observation.capturedAt
 }
 
 export function observedTaskFileChanges(
-  observations: readonly CanonicalObservation[],
+  observations: readonly FileChangeObservation[],
 ): TaskFileChangeCandidate[] {
-  const pendingByCall = new Map<string, { observation: CanonicalObservation; intent: MutationIntent }>()
-  const unkeyed: Array<{ observation: CanonicalObservation; intent: MutationIntent }> = []
+  const pendingByCall = new Map<string, { observation: FileChangeObservation; intent: MutationIntent }>()
+  const unkeyed: Array<{ observation: FileChangeObservation; intent: MutationIntent }> = []
   const result: TaskFileChangeCandidate[] = []
 
-  const emit = (observation: CanonicalObservation, intent: MutationIntent) => {
+  const emit = (observation: FileChangeObservation, intent: MutationIntent) => {
     for (const item of intent.paths) {
       result.push({
         logicalSessionId: observation.logicalSessionId,
