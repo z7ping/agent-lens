@@ -104,3 +104,16 @@ test('Task Center directly indexes Native-only sessions without forcing a Legacy
   assert.match(page,/nativeCursor && <Button/)
   assert.match(page,/openHistoryTask\(entry\.id\)/)
 })
+
+test('Task Center native full-text search preserves explicit progress and Source-owned cursors',()=>{
+  assert.match(page,/model\.nativeBodySearch\(search,\{/)
+  assert.match(page,/model\.nativeBodySearch\(filters\.search\.trim\(\),\{/)
+  assert.match(page,/setNativeBodyCursor\(page\.pendingTail\?undefined:page\.nextCursor\)/)
+  assert.match(page,/setNativeBodyPartial\(page\.hasMore \|\| page\.pendingTail\)/)
+  assert.match(page,/nativeBodySessions/)
+  assert.match(page,/nativeSessionFromHit\(hit\)/)
+  assert.match(page,/nativeBodyLoading/)
+  assert.match(page,/nativeRequestKeyRef\.current!==key/)
+  assert.match(zhTask,/nativeSearchPartial:/)
+  assert.match(zhTask,/nativeSearchError:/)
+})
