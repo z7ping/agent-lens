@@ -1,6 +1,7 @@
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import type {
   CapturePolicyService, NativeSessionCatalogStore, NativeSessionMetricsStore,
+  NATIVE_SESSION_METRIC_PROJECTION_VERSION,
   SourceService, SourceNativeSessionCursor,
 } from '@agent-lens/core'
 import { NativeSessionMetricAccumulator } from '@agent-lens/projection-usage'
