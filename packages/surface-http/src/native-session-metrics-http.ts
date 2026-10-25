@@ -120,7 +120,8 @@ export async function rebuildNativeSessionMetrics(
     sourceId:entry.sourceId,installationId:entry.installationId,
     nativeSessionId:entry.nativeSessionId,
   }
-  if(incremental && !incremental.reviewSessionId && !incremental.progress){
+  const reviewSessionId=incremental?.reviewSessionId ?? incremental?.progress?.reviewSessionId
+  if(incremental && (!reviewSessionId || !/^native:[a-f0-9]{32}$/.test(reviewSessionId))){
     return {state:'unsupported' as const,reason:'native-metrics-resume-session-id-missing'}
   }
   const prior=incremental?.progress
@@ -170,7 +171,7 @@ export async function rebuildNativeSessionMetrics(
     if(!cursor) return {state:'unsupported' as const,
       reason:'native-metrics-resume-cursor-missing'}
     return {state:'in_progress' as const,progress:{
-      reviewSessionId:incremental?.reviewSessionId ?? prior?.reviewSessionId ?? '',
+      reviewSessionId:reviewSessionId!,
       ...identity,fileIdentity:entry.fileIdentity,fileSize:entry.fileSize,
       fileMtimeMs:entry.fileMtimeMs,parserVersion:source.manifest.parserVersion,
       accumulator,cursor,scannedRecords,
