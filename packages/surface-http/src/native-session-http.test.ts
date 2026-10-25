@@ -414,3 +414,46 @@ test('complete-turn reader fails closed on pending tool across users and excessi
     } finally { await surface.dispose() }
   }
 })
+
+test('native complete-turn at EOF never certifies unresolved tool calls or metadata-only sessions', async () => {
+  for (const mode of ['unresolved-tool', 'no-user', 'empty-records'] as const) {
+    const reader: NativeSessionWindowReader = {
+      async read() {
+        const at = '2026-10-25T00:00:00Z'
+        const observed = mode === 'empty-records' ? [] : mode === 'no-user'
+          ? [{kind: 'session.lifecycle' as const, capturedAt: at,
+            identityHints: {nativeSessionId: 'S1'}, payload: {event: 'session.started'}}]
+          : [
+            {kind: 'message.user' as const, capturedAt: at,
+              identityHints: {nativeSessionId: 'S1'}, payload: {text: 'run tool'}},
+            {kind: 'tool.call' as const, capturedAt: at,
+              identityHints: {nativeSessionId: 'S1'}, payload: {callId: 'pending', nativeToolName: 'shell'}},
+          ]
+        return {
+          state: 'available' as const,
+          observations: observed,
+          observationRecordIds: observed.map((_, i) => `row-${i}`),
+          observationCursors: observed.map((_, i) => ({
+            offset: i * 64, sequence: i, fileIdentity: '1:2',
+          })),
+          evidenceCandidates: [],
+          nextCursor: {offset: Math.max(1, observed.length) * 64,
+            sequence: Math.max(1, observed.length), fileIdentity: '1:2'},
+          hasMore: false, pendingTail: false,
+        }
+      },
+    }
+    const surface = await startHttpSurface(noopStorage, {port: 0, nativeSessionReader: reader})
+    try {
+      const url = `http://${surface.host}:${surface.port}/api/v1/native-sessions/window?sourceId=pi&installationId=inst&nativeSessionId=S1&format=review-turns`
+      const result = await fetch(url)
+      assert.equal(result.status, 200)
+      assert.deepEqual(await result.json(), {
+        state: 'unsupported',
+        reason: mode === 'unresolved-tool' ? 'native-review-turn-tool-pending' : 'native-review-no-user-turn',
+      })
+    } finally {
+      await surface.dispose()
+    }
+  }
+})
