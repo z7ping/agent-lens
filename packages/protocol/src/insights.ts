@@ -1,4 +1,5 @@
 import { AGENT_LENS_PROTOCOL_VERSION } from './timeline'
+import type { NativeMetricContributionDto } from './native-review'
 
 export type InsightConfidenceDto = 'exact' | 'high' | 'medium' | 'low' | 'unknown'
 
@@ -85,5 +86,6 @@ export interface InsightsResponseDto {
     sessionSampleLimit: number
     workflowPatternMinimumSessions: number
     notes: string[]
+    native?: NativeMetricContributionDto
   }
 }
