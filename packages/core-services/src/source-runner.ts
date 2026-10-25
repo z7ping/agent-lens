@@ -878,6 +878,7 @@ export class SourceHistoryRunner {
         checkpointScope(source.manifest.sourceId, installation.id, runtimeProfile),
       )
       const verifiedNativePaths = new Set<string>()
+      const verifiedNativeSessionIds = new Set<string>()
       // Certified Sources claim only after original Source verification.
       // Existing SQL sessions refuse the claim and preserve Legacy ownership.
       if (source.nativeSessionCoverageComplete === true
@@ -937,7 +938,10 @@ export class SourceHistoryRunner {
           if (await catalog.claimNativeOnlyWrite({
             ...key, filePath: entry.filePath, fileIdentity: entry.fileIdentity,
           })) {
-            verifiedNativePaths.add(entry.filePath)
+            // Shared native SQLite databases contain several independently
+            // claimed sessions. Never exclude all rows by the common DB path.
+            if (record.locator.kind === 'file') verifiedNativePaths.add(entry.filePath)
+            verifiedNativeSessionIds.add(entry.nativeSessionId)
             this.nativeCatalogTracker.rememberWriteMode(key, 'native-only')
           }
           if (input.cooperate) await input.cooperate()
@@ -960,6 +964,8 @@ export class SourceHistoryRunner {
         ...(input.historyWindow ? { historyWindow: input.historyWindow } : {}),
         ...(verifiedNativePaths.size
           ? { skipNativeSessionFile: (filePath: string) => verifiedNativePaths.has(filePath) } : {}),
+        ...(verifiedNativeSessionIds.size
+          ? { skipNativeSessionId: (id: string) => verifiedNativeSessionIds.has(id) } : {}),
         reportProgress: update => progress.report(update),
       })) {
         if (input.cooperate) await input.cooperate()

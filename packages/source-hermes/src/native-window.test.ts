@@ -69,6 +69,12 @@ test('Hermes native SQLite pages isolate session rows and normalize with no chec
     assert.equal(second.nextCursor.offset,3)
     assert.equal(second.hasMore,false)
     assert.equal(checkpointWrites,0)
+    const legacyRecords=[]
+    for await(const record of hermesSourceDefinition.ingestHistory!({
+      ...ctx,skipNativeSessionId:id=>id==='S1',
+    })) legacyRecords.push(record)
+    assert.deepEqual(legacyRecords.map(item=>item.sourceSessionNativeId),['OTHER'],
+      'shared Hermes SQLite must retain Legacy rows from a different session')
     const normalized=await hermesSourceDefinition.normalize(second.records[0]!,{host,installation})
     assert.ok(Array.isArray(normalized.observations))
     const info=await stat(path)

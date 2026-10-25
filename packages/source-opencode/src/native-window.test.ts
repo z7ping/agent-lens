@@ -63,6 +63,12 @@ test('OpenCode native SQLite reads only one session with an exact rowid rewind c
     assert.equal(second.nextCursor.offset,3)
     assert.equal(second.hasMore,false)
     assert.equal(writes,0)
+    const legacyRecords=[]
+    for await(const record of openCodeSourceDefinition.ingestHistory!({
+      ...ctx,skipNativeSessionId:id=>id==='S1',
+    })) legacyRecords.push(record)
+    assert.deepEqual(legacyRecords.map(item=>item.sourceSessionNativeId),['other'],
+      'a shared SQLite DB must keep other Legacy sessions even when S1 was claimed native')
     const normalized=await openCodeSourceDefinition.normalize(second.records[0]!,{host,installation})
     assert.ok(Array.isArray(normalized.observations))
     const info=await stat(path)
