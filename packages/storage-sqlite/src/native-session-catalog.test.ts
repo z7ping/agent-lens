@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { resolve } from 'node:path'
-import { nativeReviewSessionId } from '@agent-lens/core'
+import { nativeReviewSessionId } from '@agent-lens/projection-review'
 import { SqliteStorageService } from './storage'
 
 const now = '2026-10-25T00:00:00.000Z'
