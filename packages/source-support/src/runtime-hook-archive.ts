@@ -138,6 +138,53 @@ export async function archiveAcceptedHookInboxFile(
   await unlink(join(input.inbox,input.fileName))
 }
 
+/** Verify one prepared, installation-scoped Hook original for the
+ * Source RawRecovery policy. Never follows arbitrary source-provided paths,
+ * returns event payloads or relies on an unsealed legacy archive.
+ */
+export async function verifyPreparedHookInboxOriginal(input: {
+  inbox:string; fileName:string; nativeSessionId:string; installationId:string;
+  expectedSha256:string;
+}):Promise<'verified'|'unavailable'|'drifted'> {
+  if(!/^[a-f0-9]{64}$/.test(input.expectedSha256)){
+    throw new TypeError('Invalid Hook original fingerprint')
+  }
+  const filePath=archivedHookInboxRecordPath(input)
+  let info:Awaited<ReturnType<typeof lstat>>
+  try{info=await lstat(filePath)}
+  catch(error){
+    if(['ENOENT','ENOTDIR','EACCES','EPERM'].includes(
+      (error as NodeJS.ErrnoException).code ?? ''))return 'unavailable'
+    throw error
+  }
+  if(!info.isFile() || info.isSymbolicLink() || info.size<=0
+    || info.size>MAX_EVENT_BYTES)return 'drifted'
+  const handle=await open(filePath,'r')
+  let actualSha256:string
+  try{
+    const opened=await handle.stat()
+    if(!opened.isFile() || opened.dev!==info.dev || opened.ino!==info.ino
+      || opened.size!==info.size)return 'drifted'
+    const data=await handle.readFile()
+    const after=await handle.stat()
+    if(data.length!==opened.size || after.dev!==opened.dev
+      || after.ino!==opened.ino || after.size!==opened.size
+      || after.mtimeMs!==opened.mtimeMs || after.ctimeMs!==opened.ctimeMs){
+      return 'drifted'
+    }
+    actualSha256=createHash('sha256').update(data).digest('hex')
+  }finally{await handle.close()}
+  let seal:string
+  try{seal=await readFile(`${filePath}.sha256`,'utf8')}
+  catch(error){
+    if(['ENOENT','ENOTDIR','EACCES','EPERM'].includes(
+      (error as NodeJS.ErrnoException).code ?? ''))return 'unavailable'
+    throw error
+  }
+  return seal===input.expectedSha256 && actualSha256===input.expectedSha256
+    ?'verified':'drifted'
+}
+
 /** A cursor is bound to one installation+session AND to the exact ordered
  * directory snapshot. A newly archived file can sort before a page cursor;
  * resume MUST reject that drift instead of silently skipping the new event.
