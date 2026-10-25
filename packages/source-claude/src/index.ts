@@ -49,6 +49,7 @@ import {
   isCompleteJson,
   isMissingPathError,
   readJsonlLines,
+  readNativeSessionWindow,
   sourceFileIdentity,
   startHistoryFileWatch,
   verifyJsonlLineSha256,
@@ -242,6 +243,34 @@ async function readClaudeSessionCwd(filePath: string): Promise<string | undefine
       }
     }
     return undefined
+  } finally {
+    await handle.close()
+  }
+}
+
+/**
+ * Unlike Pi, Claude JSONL has no mandatory first-line session header.
+ * Use the first explicit sessionId within the bounded native header preview;
+ * fall back to the original file stem, matching history ingest semantics.
+ */
+async function readClaudeNativeSessionIdentity(filePath: string): Promise<string> {
+  const handle = await open(filePath, 'r')
+  try {
+    const buffer = Buffer.alloc(256 * 1024)
+    const { bytesRead } = await handle.read(buffer, 0, buffer.length, 0)
+    const text = buffer.subarray(0, bytesRead).toString('utf8')
+    for (const line of text.split(/\r?\n/).slice(0, 64)) {
+      if (!line.trim()) continue
+      try {
+        const entry = asRecord(JSON.parse(line))
+        const identity = stringField(entry, 'sessionId', 'session_id')
+        if (identity) return identity
+      } catch {
+        // Identity lookup is bounded and read-only; the native page reader
+        // remains responsible for returning malformed JSON as unsupported.
+      }
+    }
+    return basename(filePath, extname(filePath))
   } finally {
     await handle.close()
   }
@@ -1007,6 +1036,73 @@ export const claudeSourceDefinition: SourceDefinition = {
   detect: detectClaudeCode,
   declareCapabilities: declareClaudeCapabilities,
   rawRecovery: jsonlRawRecovery,
+  async readNativeSessionPage(query, ctx) {
+    const dataRoot = ctx.installation.dataRoot
+      ?? (ctx.installation.configRoot ? join(ctx.installation.configRoot, 'projects') : undefined)
+    const page = await readNativeSessionWindow({
+      path: query.filePath,
+      allowedRoots: dataRoot ? [dataRoot] : [],
+      ...(query.cursor ? { cursor: query.cursor } : {}),
+      ...(query.limit === undefined ? {} : { limit: query.limit }),
+      signal: ctx.abortSignal,
+    })
+    if (page.state !== 'available') return page
+    ctx.abortSignal.throwIfAborted()
+    const [nativeId, cwd] = await Promise.all([
+      readClaudeNativeSessionIdentity(query.filePath),
+      readClaudeSessionCwd(query.filePath),
+    ])
+    if (nativeId !== query.nativeSessionId) {
+      return { state: 'drifted', reason: 'native-session-identity-changed' }
+    }
+    // Do not trust metadata from a second open if the original native file
+    // was replaced between reads; the Worker checks identity again too.
+    const current = await stat(query.filePath)
+    if (sourceFileIdentity(current) !== page.nextCursor.fileIdentity) {
+      return { state: 'drifted', reason: 'native-file-identity-changed' }
+    }
+    const records = []
+    for (const line of page.lines) {
+      const entry = line.entry
+      if (nativeSessionId(entry, query.filePath) !== nativeId) {
+        return { state: 'drifted' as const, reason: 'native-session-record-identity-changed' }
+      }
+      const nativeEntry = nativeEntryId(entry)
+      const timestamp = stringField(entry, 'timestamp', 'ts')
+      records.push({
+        id: `claude-record-${sha256(`${query.filePath}|${line.offset}|${line.textFingerprint}`).slice(0, 32)}`,
+        sourceId: SOURCE_ID,
+        installationId: ctx.installation.id,
+        sourceSessionNativeId: nativeId,
+        nativeType: `history/${stringField(entry, 'type') ?? 'unknown'}`,
+        ...(nativeEntry ? { nativeId: nativeEntry } : {}),
+        sourceSequence: line.sequence,
+        ...(timestamp ? { occurredAt: timestamp } : {}),
+        capturedAt: new Date().toISOString(),
+        locator: { kind: 'file' as const, path: query.filePath, offset: line.offset },
+        fingerprint: line.textFingerprint,
+        payload: {
+          entry,
+          session: {
+            nativeSessionId: nativeId,
+            ...(cwd ? { cwd } : {}),
+          },
+        },
+        parserVersion: PARSER_VERSION,
+      })
+    }
+    return {
+      state: 'available',
+      records,
+      recordCursors: page.lines.map(line => ({
+        offset: line.offset, sequence: line.sequence - 1,
+        fileIdentity: page.nextCursor.fileIdentity,
+      })),
+      nextCursor: page.nextCursor,
+      hasMore: page.hasMore,
+      pendingTail: page.pendingTail,
+    }
+  },
   discoverAssets: discoverClaudeAssets,
   ingestHistory: ingestClaudeHistory,
   startCapture: startClaudeRuntimeCapture,
