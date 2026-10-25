@@ -170,7 +170,7 @@ test('Hermes runtime Hook original is independently verifiable from its sealed a
     const turn=turnNormalized.observations[0]
     assert.equal(turn?.kind,'session.lifecycle')
     assert.deepEqual(turn?.payload,{
-      event:'turn.ended',completed:false,failed:true,interrupted:false,
+      event:'turn.failed',completed:false,failed:true,interrupted:false,
       turnId:'T1',taskId:'TASK-1',reason:'model_error',
     })
     assert.notEqual((turn?.payload as {event?:string})?.event,'session.ended',
