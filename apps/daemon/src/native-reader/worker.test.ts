@@ -7,6 +7,7 @@ import type { AgentInstallation, Host } from '@agent-lens/core'
 import { NativeReaderWorkerClient } from '@agent-lens/core-services'
 import { piManifest } from '@agent-lens/source-pi'
 import { codexManifest } from '@agent-lens/source-codex'
+import { claudeManifest } from '@agent-lens/source-claude'
 
 const now = '2026-10-25T00:00:00Z'
 const host: Host = {
@@ -56,6 +57,54 @@ test('isolated Pi native Worker reads and normalizes actual JSONL without a data
       query: { filePath, nativeSessionId: 'native-session' },
     }, new AbortController().signal)
     assert.deepEqual(bad, { state: 'unsupported', reason: 'native-worker-parser-version-mismatch' })
+  } finally {
+    await worker.dispose()
+    await rm(root, { recursive: true, force: true })
+  }
+})
+
+test('isolated Claude native Reader uses the same source normalizer and trusted project root', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'agent-lens-claude-native-worker-'))
+  const projects = join(root, 'projects')
+  const filePath = join(projects, 'claude-session.jsonl')
+  const worker = new NativeReaderWorkerClient()
+  try {
+    await mkdir(projects, { recursive: true })
+    await writeFile(filePath, [
+      JSON.stringify({ type: 'file-history-snapshot' }),
+      JSON.stringify({
+        type: 'user', sessionId: 'claude-session', uuid: 'u1', cwd: root,
+        message: { role: 'user', content: 'hello from Claude original JSONL' },
+      }),
+    ].join('\n') + '\n')
+    const info = await stat(filePath)
+    const fileIdentity = `${info.dev}:${info.ino}`
+    const result = await worker.read({
+      sourceId: 'claude-code',
+      parserVersion: claudeManifest.parserVersion,
+      expectedFileIdentity: fileIdentity,
+      host,
+      installation: {
+        ...installation('claude-code', projects),
+        configRoot: root,
+      },
+      query: { filePath, nativeSessionId: 'claude-session', limit: 8 },
+    }, new AbortController().signal)
+    assert.equal(result.state, 'available')
+    if (result.state !== 'available') return
+    assert.equal(result.entries.length, 2)
+    assert.equal(result.entries[1]?.recordCursor?.sequence, 1)
+    assert.equal(result.entries[1]?.recordCursor?.fileIdentity, fileIdentity)
+    assert.equal(result.entries[1]?.normalized.observations.some(x => x.kind === 'message.user'), true)
+    assert.equal(result.pendingTail, false)
+
+    const foreign = await worker.read({
+      sourceId: 'claude-code', parserVersion: claudeManifest.parserVersion,
+      expectedFileIdentity: fileIdentity, host,
+      installation: { ...installation('claude-code', projects), configRoot: root },
+      query: { filePath: join(root, 'foreign.jsonl'), nativeSessionId: 'claude-session' },
+    }, new AbortController().signal)
+    assert.notEqual(foreign.state, 'available')
   } finally {
     await worker.dispose()
     await rm(root, { recursive: true, force: true })
