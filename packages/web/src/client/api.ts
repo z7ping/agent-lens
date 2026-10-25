@@ -370,6 +370,8 @@ export class AgentLensApi {
     cursor?: string
     format?: 'review' | 'review-turns'
     limit?: number
+    /** Batch complete turns, not native source records; maximum four per request. */
+    turnLimit?: number
     signal?: AbortSignal
   } = {}): Promise<NativeReviewWindowResponseDto> {
     const params = new URLSearchParams({
@@ -381,6 +383,9 @@ export class AgentLensApi {
     if (options.cursor) params.set('cursor', options.cursor)
     if (options.limit !== undefined) {
       params.set('limit', String(Math.max(1, Math.min(options.limit, 16))))
+    }
+    if (options.turnLimit !== undefined) {
+      params.set('turnLimit', String(Math.max(1, Math.min(options.turnLimit, 4))))
     }
     return requestJson<NativeReviewWindowResponseDto>(
       `/api/v1/native-sessions/window?${params}`,
