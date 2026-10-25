@@ -5,6 +5,7 @@ import type {
   NativeSessionMetricOverview,
   NativeSessionMetricOverviewQuery,
   NativeSessionMetricRebuildCandidate,
+  NativeSessionMetricRebuildCursor,
 } from '@agent-lens/core'
 import { NATIVE_SESSION_METRIC_PROJECTION_VERSION } from '@agent-lens/core'
 import type { SqliteExecutor } from './executor'
@@ -274,10 +275,15 @@ export class SqliteNativeSessionMetrics implements NativeSessionMetricsStore {
   /** Only NEW Native-only sessions needing (re)projection. No event reads. */
   findRebuildCandidates(
     input:NativeSessionMetricOverviewQuery,limit:number,
+    before?:NativeSessionMetricRebuildCursor,
   ):Promise<NativeSessionMetricRebuildCandidate[]>{
     if(!input.sourceId || !input.parserVersion
       || input.sourceId.length>128 || input.parserVersion.length>512
-      || !Number.isSafeInteger(limit) || limit<1 || limit>4){
+      || !Number.isSafeInteger(limit) || limit<1 || limit>4
+      || (before && (!before.lastActivityAt || before.lastActivityAt.length>128
+        || !Number.isFinite(Date.parse(before.lastActivityAt))
+        || !before.installationId || before.installationId.length>512
+        || !before.nativeSessionId || before.nativeSessionId.length>512))){
       throw new TypeError('Invalid native metric refresh scope')
     }
     return this.executor.run(()=>{
@@ -285,7 +291,8 @@ export class SqliteNativeSessionMetrics implements NativeSessionMetricsStore {
         SELECT catalog.review_session_id AS reviewSessionId,
           catalog.source_id AS sourceId,
           catalog.installation_id AS installationId,
-          catalog.native_session_id AS nativeSessionId
+          catalog.native_session_id AS nativeSessionId,
+          catalog.last_activity_at AS lastActivityAt
         FROM native_session_write_claims AS claim
         JOIN native_session_catalog AS catalog
           ON catalog.source_id=claim.source_id
@@ -304,10 +311,20 @@ export class SqliteNativeSessionMetrics implements NativeSessionMetricsStore {
             OR metrics.file_mtime_ms<>catalog.file_mtime_ms
             OR metrics.parser_version<>?
             OR metrics.projection_version<>?)
-        ORDER BY catalog.last_activity_at DESC
+          ${before ? `AND (
+            catalog.last_activity_at < ?
+            OR (catalog.last_activity_at = ? AND catalog.installation_id > ?)
+            OR (catalog.last_activity_at = ? AND catalog.installation_id = ?
+                AND catalog.native_session_id > ?)
+          )` : ''}
+        ORDER BY catalog.last_activity_at DESC,
+          catalog.installation_id ASC,catalog.native_session_id ASC
         LIMIT ?
       `).all(input.sourceId,input.parserVersion,
-        NATIVE_SESSION_METRIC_PROJECTION_VERSION,limit) as NativeSessionMetricRebuildCandidate[]
+        NATIVE_SESSION_METRIC_PROJECTION_VERSION,
+        ...(before ? [before.lastActivityAt,before.lastActivityAt,before.installationId,
+          before.lastActivityAt,before.installationId,before.nativeSessionId] : []),
+        limit) as NativeSessionMetricRebuildCandidate[]
       return rows
     })
   }
