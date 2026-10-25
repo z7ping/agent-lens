@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
+import { NATIVE_SESSION_METRIC_PROJECTION_VERSION } from '@agent-lens/core'
 import type {
   CapturePolicyService, NativeSessionCatalogEntry, NativeSessionMetricsStore,
   NativeSessionMetricSnapshot, SourceService, StorageService,
@@ -218,5 +219,37 @@ test('Pi cannot claim complete numerical coverage after Source attestation is wi
     assert.equal(value.coverage,'partial')
     assert.equal(value.reason,'native-source-coverage-unverified')
     assert.equal((snapshot as NativeSessionMetricSnapshot|null)?.coverage,'partial')
+  }finally{await app.dispose()}
+})
+
+test('cached complete per-session metrics become stale when Source coverage is revoked',async()=>{
+  const snapshot:NativeSessionMetricSnapshot={
+    sourceId:entry.sourceId,installationId:entry.installationId,
+    nativeSessionId:entry.nativeSessionId,fileIdentity:entry.fileIdentity,
+    fileSize:entry.fileSize,fileMtimeMs:entry.fileMtimeMs,
+    parserVersion:'pi-version-3',
+    projectionVersion:NATIVE_SESSION_METRIC_PROJECTION_VERSION,
+    computedAt:at,coverage:'complete',
+    interactionCount:1,toolCallCount:1,toolResultCount:1,toolErrorCount:0,
+    errorCount:0,inputTokens:10,outputTokens:5,tools:[],
+  }
+  const storage={
+    ...unsupportedStorage,
+    nativeSessionCatalog:{
+      getByReviewSessionId:async()=>entry,
+      hasNativeOnlyWriteClaim:async()=>true,
+    },
+    nativeSessionMetrics:{get:async()=>({state:'available',snapshot})},
+  } as unknown as StorageService
+  const revokedSource={
+    list:()=>[{manifest:{sourceId:'pi',parserVersion:'pi-version-3'},
+      nativeSessionCoverageComplete:false}],
+  } as unknown as SourceService
+  const app=await startHttpSurface(storage,{port:0,sources:revokedSource,capturePolicy:policy})
+  try{
+    const base=`http://${app.host}:${app.port}/api/v1/native-sessions/${encodeURIComponent(id)}/metrics`
+    assert.deepEqual(await (await fetch(base)).json(),{
+      state:'stale',reason:'native-source-coverage-unverified',
+    })
   }finally{await app.dispose()}
 })
