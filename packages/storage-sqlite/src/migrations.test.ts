@@ -11,8 +11,8 @@ test('storage migrations keep heavy indexes out of startup and maintenance creat
     const migrations = storage.db.prepare(
       'SELECT version, name FROM schema_migrations ORDER BY version',
     ).all() as Array<{ version: number; name: string }>
-    assert.equal(migrations.at(-1)?.version, 37)
-    assert.equal(migrations.at(-1)?.name, 'native-write-mode-ownership')
+    assert.equal(migrations.at(-1)?.version, 38)
+    assert.equal(migrations.at(-1)?.name, 'native-session-numerical-projections')
 
     const indexesBefore = storage.db.prepare("PRAGMA index_list('observations')").all() as Array<{ name: string }>
     const namesBefore = new Set(indexesBefore.map(item => item.name))
@@ -77,10 +77,15 @@ test('storage migrations keep heavy indexes out of startup and maintenance creat
 
     const projectionTables = storage.db.prepare(`
       SELECT name FROM sqlite_master
-      WHERE type = 'table' AND name IN ('unknown_observation_projection', 'tool_usage_fact_projection')
+      WHERE type = 'table' AND name IN (
+        'unknown_observation_projection', 'tool_usage_fact_projection',
+        'native_session_metrics', 'native_session_tool_metrics'
+      )
       ORDER BY name
     `).all() as Array<{ name: string }>
     assert.deepEqual(projectionTables.map(row => row.name), [
+      'native_session_metrics',
+      'native_session_tool_metrics',
       'tool_usage_fact_projection',
       'unknown_observation_projection',
     ])
@@ -259,7 +264,7 @@ test('v27 从已有 v26 journal 回填 first/latest Entity Head 并补全 18 Roo
     await storage.migrate()
     assert.equal(
       (storage.db.prepare('SELECT COALESCE(MAX(version), 0) AS version FROM schema_migrations').get() as { version: number }).version,
-      37,
+      38,
     )
 
     const head = storage.db.prepare(`
