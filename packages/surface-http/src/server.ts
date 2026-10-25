@@ -61,6 +61,7 @@ import { handleLiveAttachmentRequest } from './live-attachments-http'
 import { handleNativeSessionWindowRequest, handleNativeSessionAttachmentRequest, handleNativeSessionHookRequest, type NativeSessionWindowReader } from './native-session-http'
 import { handleNativeSessionCatalogRequest } from './native-session-catalog-http'
 import { handleNativeSessionBodySearchRequest } from './native-session-search-http'
+import { handleNativeSessionMetricsRequest } from './native-session-metrics-http'
 import { reviewAttachmentSources } from './review-attachments'
 import { handleLiveRequest } from './live-http'
 import { handleManagedAssetFilesRequest } from './managed-asset-files'
@@ -274,6 +275,9 @@ export async function startHttpSurface(
     try {
       const url = new URL(request.url ?? '/', `http://${AGENT_LENS_HTTP_HOST}`)
       route = httpRouteLabel(url.pathname)
+      if (await handleNativeSessionMetricsRequest(request,response,url,
+        storage.nativeSessionCatalog,storage.nativeSessionMetrics,
+        options.nativeSessionReader,options.sources,options.capturePolicy)) return
       if (await handleNativeSessionBodySearchRequest(request, response, url,
         storage.nativeSessionCatalog, options.nativeSessionReader, options.capturePolicy)) return
       if (await handleNativeSessionCatalogRequest(request, response, url, storage.nativeSessionCatalog, options.capturePolicy)) return
