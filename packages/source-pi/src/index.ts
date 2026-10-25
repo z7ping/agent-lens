@@ -168,6 +168,10 @@ export const piSourceDefinition: SourceDefinition = {
     return {
       state: 'available',
       records,
+      recordCursors: page.lines.map(line => ({
+        offset: line.offset, sequence: line.sequence - 1,
+        fileIdentity: page.nextCursor.fileIdentity,
+      })),
       nextCursor: page.nextCursor,
       hasMore: page.hasMore,
       pendingTail: page.pendingTail,
