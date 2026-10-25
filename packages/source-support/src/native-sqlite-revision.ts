@@ -23,8 +23,10 @@ export async function nativeSqliteRevision(
     if (!['ENOENT','ENOTDIR'].includes((error as NodeJS.ErrnoException).code ?? '')) throw error
   }
   if (wal && !wal.isFile()) throw new TypeError('Native database WAL must be a regular file')
-  const fileSize=db.size+(wal?.size??0)
-  const fileMtimeMs=Math.max(db.mtimeMs,wal?.mtimeMs??0)
+  // Node's stat overload can return Stats or BigIntStats in shared code.
+  // Normalize to bounded numeric metadata before arithmetic and SQL storage.
+  const fileSize=Number(db.size)+Number(wal?.size??0)
+  const fileMtimeMs=Math.max(Number(db.mtimeMs),Number(wal?.mtimeMs??0))
   if (!Number.isSafeInteger(fileSize) || fileSize<0
     || !Number.isFinite(fileMtimeMs) || fileMtimeMs<0) {
     throw new TypeError('Invalid native database revision')
