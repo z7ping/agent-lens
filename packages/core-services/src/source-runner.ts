@@ -485,15 +485,17 @@ async function shouldReadNativeOnly(
     installationId: record.installationId,
     nativeSessionId,
   }
-  // Read the durable claim first. Capture hooks without a native record also
-  // belong to this session: do not secretly resurrect a second SQL history.
-  if (await catalog.hasNativeOnlyWriteClaim(key)) return true
-  if (process.env[NATIVE_ONLY_WRITER_OPT_IN] !== '1') return false
-  if (!source.readNativeSessionPage || !source.rawRecovery?.verify
+  // Two independent runners may race for the same session. Every path must
+  // claim an immutable owner BEFORE persisting legacy events or skipping them.
+  const established = await catalog.getSessionWriteMode(key)
+  if (established) return established === 'native-only'
+  const claimLegacy = async () => (await catalog.claimLegacyWrite(key)) === 'native-only'
+  if (process.env[NATIVE_ONLY_WRITER_OPT_IN] !== '1'
+    || !source.readNativeSessionPage || !source.rawRecovery?.verify
     || !source.rawRecovery.describe(record).canReread
     || record.sourceId !== source.manifest.sourceId
     || record.installationId !== installation.id
-    || !record.locator.path || !record.fingerprint) return false
+    || !record.locator.path || !record.fingerprint) return claimLegacy()
 
   signal.throwIfAborted()
   const context = {
@@ -507,13 +509,13 @@ async function shouldReadNativeOnly(
     } satisfies SourceCheckpointService,
   }
   const verification = await source.rawRecovery.verify(record, context)
-  if (verification.state !== 'verified') return false
+  if (verification.state !== 'verified') return claimLegacy()
 
   // The Catalog update is metadata-only. This MUST succeed before claiming
   // native ownership. A throttled row may already be durable from this Source.
   await tracker.observe(source, record)
   const native = await catalog.get({ ...key, locationKind: 'native' })
-  if (!native || native.filePath !== record.locator.path) return false
+  if (!native || native.filePath !== record.locator.path) return claimLegacy()
 
   const probe = await source.readNativeSessionPage({
     filePath: native.filePath,
@@ -522,11 +524,14 @@ async function shouldReadNativeOnly(
   }, context)
   if (probe.state !== 'available'
     || probe.nextCursor.fileIdentity !== native.fileIdentity
-    || probe.records.length === 0) return false
+    || probe.records.length === 0) return claimLegacy()
 
-  return catalog.claimNativeOnlyWrite({
+  const nativeOnly = await catalog.claimNativeOnlyWrite({
     ...key, filePath: native.filePath, fileIdentity: native.fileIdentity,
   })
+  // If the competing legacy writer claimed this session while Source proof
+  // was in flight, honor its decision instead of mixing the two histories.
+  return nativeOnly || claimLegacy()
 }
 
 async function processSourceRecordWithOwnership(
