@@ -53,6 +53,7 @@ const migrations: readonly Migration[] = [
   { version: 35, name: 'native-review-identity-index', fileName: '035-native-review-identity-index.sql' },
   { version: 36, name: 'native-session-write-claims', fileName: '036-native-session-write-claims.sql' },
   { version: 37, name: 'native-write-mode-ownership', fileName: '037-native-write-mode-ownership.sql' },
+  { version: 38, name: 'native-session-numerical-projections', fileName: '038-native-session-metrics.sql' },
 ]
 
 async function readMigrationSql(fileName: string): Promise<string> {
