@@ -16,7 +16,7 @@ const entry:NativeSessionCatalogEntry={
   lastActivityAt:at,updatedAt:at,title:'Test session',
 }
 const id=nativeReviewSessionId(entry.sourceId,entry.installationId,entry.nativeSessionId)
-const policy={isSourceEnabled:()=>true} as CapturePolicyService
+const policy={isSourceEnabled:()=>true} as unknown as CapturePolicyService
 const sources={
   list:()=>[{manifest:{sourceId:'pi',productId:'pi',parserVersion:'pi-version-3'},
     readNativeSessionPage(){throw Error('Reader Worker must read source, never HTTP directly')}}],

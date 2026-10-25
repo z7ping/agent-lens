@@ -64,7 +64,7 @@ test('native full-text search pages original Source records and Catalog sessions
       }
     },
   }
-  const policy={isSourceEnabled:(source:string)=>source==='pi'} as CapturePolicyService
+  const policy={isSourceEnabled:(source:string)=>source==='pi'} as unknown as CapturePolicyService
   const storage={health:async()=>({ok:true}),nativeSessionCatalog:catalog} as unknown as StorageService
   const app=await startHttpSurface(storage,{port:0,nativeSessionReader:reader,capturePolicy:policy})
   const base=`http://${app.host}:${app.port}/api/v1/native-sessions/search?q=hello`
@@ -116,7 +116,7 @@ test('native body search fails closed on drift and never claims a completed scan
     },
   }
   const storage={health:async()=>({ok:true}),nativeSessionCatalog:catalog} as unknown as StorageService
-  const policy={isSourceEnabled:()=>true} as CapturePolicyService
+  const policy={isSourceEnabled:()=>true} as unknown as CapturePolicyService
   const app=await startHttpSurface(storage,{port:0,nativeSessionReader:reader,capturePolicy:policy})
   try{
     const url=`http://${app.host}:${app.port}/api/v1/native-sessions/search?q=hello`
@@ -154,7 +154,7 @@ test('native body search reports budgets instead of silently omitting matches',a
     },
   }
   const storage={health:async()=>({ok:true}),nativeSessionCatalog:catalog} as unknown as StorageService
-  const policy={isSourceEnabled:()=>true} as CapturePolicyService
+  const policy={isSourceEnabled:()=>true} as unknown as CapturePolicyService
   const app=await startHttpSurface(storage,{port:0,nativeSessionReader:reader,capturePolicy:policy})
   try{
     const url=`http://${app.host}:${app.port}/api/v1/native-sessions/search?q=hello`
