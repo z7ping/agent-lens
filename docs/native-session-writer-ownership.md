@@ -30,3 +30,7 @@ Only successfully claimed files bypass `ingestHistory` payload parsing. Existing
 ## Startup capture ordering
 
 For one explicitly enabled native-fast Source in the startup latest stage, Daemon now starts Runtime Capture **after** the source's original-file verification and per-session SQLite ownership decision. Legacy parsing continues afterward; the capture handoff no longer races to claim an event stream as legacy before native indexing. In ordinary mode, multi-source batches and failure/abort paths, the existing startup/fallback behavior remains; no runtime hook is written without authorization. This is startup sequencing, not a replacement for transient runtime-only facts missing from native files.
+
+## Native-only source safety gate
+
+A `verified` record is not enough to delete the durable event copy if its upstream is mutable. Native-only **requires all**: source-controlled native storage, stable locator, append-oriented mutation model, first-row fingerprint verification, source policy `persistencePreference=reference`, and ability to reread. Hermes/OpenCode current state.db uses mutable row IDs and policy `preserve`; therefore it **must not** be assigned native-only by either the per-record or fast-file path until a native snapshot/archive recovery strategy exists. Missing capabilities stay legacy; do not equate “database query succeeded once” with long-term evidence recoverability.
