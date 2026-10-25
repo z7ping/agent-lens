@@ -76,5 +76,23 @@ test('OpenCode native SQLite reads only one session with an exact rowid rewind c
     assert.deepEqual(await read({
       filePath:path,nativeSessionId:'S1',cursor:{...second.nextCursor,fileIdentity:'changed'},
     },ctx),{state:'drifted',reason:'native-file-identity-changed'})
+    assert.equal(openCodeSourceDefinition.nativeSessionCoverageComplete,true)
+    const capability=openCodeSourceDefinition.rawRecovery!.describe(second.records[0]!)
+    assert.equal(capability.recoveryScope,'session-current-state')
+    assert.equal(capability.persistencePreference,'reference')
+    assert.equal(capability.locatorStability,'best-effort')
+    // OpenCode may rewrite an existing SQLite part row. Old cursors fail
+    // closed; a fresh Source read reconstructs the CURRENT original state.
+    db.prepare('UPDATE part SET data=? WHERE id=?')
+      .run(JSON.stringify({type:'text',text:'edited Source-owned current state'}),'p3')
+    assert.deepEqual(await read({
+      filePath:path,nativeSessionId:'S1',cursor:second.nextCursor,
+    },ctx),{state:'drifted',reason:'native-database-cursor-boundary-changed'})
+    const updated=await read({filePath:path,nativeSessionId:'S1',limit:32},ctx)
+    assert.equal(updated.state,'available')
+    if(updated.state==='available'){
+      assert.equal(updated.records.length,2)
+      assert.equal(JSON.stringify(updated.records[1]?.payload).includes('edited Source-owned current state'),true)
+    }
   }finally{db.close();await rm(root,{recursive:true,force:true})}
 })
