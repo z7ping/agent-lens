@@ -48,13 +48,25 @@ export function createParserReplayMaintenanceStages(startedAt: number): ParserRe
   ]
 }
 
-/** An experimental Native-only startup must arbitrate ownership separately
- * for each Installation before its Runtime Capture may emit records.
+/** Each certified native Installation must arbitrate write ownership before
+ * Runtime Capture. Legacy targets keep their existing combined startup and
+ * never create one asynchronous startup task per unrelated installation.
+ * Preserve target ordering even when certification is mixed.
  */
 export function nativeCaptureStartupBatches<T>(
-  targets: readonly T[], nativeFast: boolean,
+  targets: readonly T[], requiresNativeClaim: (target: T) => boolean,
 ): T[][] {
-  return nativeFast ? targets.map(target => [target]) : [[...targets]]
+  const batches: T[][]=[]
+  for (const target of targets) {
+    if (requiresNativeClaim(target)) {
+      batches.push([target])
+    } else {
+      const previous=batches.at(-1)
+      if (previous && !requiresNativeClaim(previous[0]!)) previous.push(target)
+      else batches.push([target])
+    }
+  }
+  return batches
 }
 
 export type StorageCapacityState = 'healthy' | 'approaching' | 'exceeded' | 'unknown'

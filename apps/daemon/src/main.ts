@@ -702,12 +702,11 @@ try {
         // Certified Sources must run their ownership handshake per Installation
         // before Runtime Capture. Non-certified Sources keep the legacy path.
         // Do not reintroduce the removed experimental environment switches.
-        const nativeFast = targets.some(target =>
+        const batches = nativeCaptureStartupBatches(targets, target =>
           target.source.nativeSessionCoverageComplete === true
           && Boolean(target.source.discoverNativeSessions)
           && Boolean(target.source.readNativeSessionPage)
           && Boolean(target.source.rawRecovery?.verify))
-        const batches = nativeCaptureStartupBatches(targets, nativeFast)
         for (const batch of batches) {
           startupTasks.push(startPreparedSource(batch).catch(error => {
             console.warn('[AgentLens] source startup fast path failed', error)
