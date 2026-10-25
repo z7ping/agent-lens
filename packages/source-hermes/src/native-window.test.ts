@@ -87,5 +87,33 @@ test('Hermes native SQLite pages isolate session rows and normalize with no chec
       filePath:join(root,'foreign.db'),nativeSessionId:'S1',
     },ctx)
     assert.notEqual(foreign.state,'available')
+    const capability=hermesSourceDefinition.rawRecovery!.describe(second.records[0]!)
+    assert.equal(capability.recoveryScope,'session-current-state')
+    assert.equal(capability.persistencePreference,'preserve',
+      'runtime-only Hermes Hook facts are not yet certified: do not retire Legacy')
+    assert.notEqual(hermesSourceDefinition.nativeSessionCoverageComplete,true)
+    const wrongTable={...second.records[0]!,locator:{
+      ...second.records[0]!.locator,table:'sessions',
+    }}
+    assert.equal(hermesSourceDefinition.rawRecovery!.describe(wrongTable).canReread,false)
+    assert.equal((await hermesSourceDefinition.rawRecovery!.verify!(wrongTable)).state,'unsupported')
+
+    // An in-place message rewrite invalidates a previous rowid cursor, but
+    // a fresh read still recovers the actual Source-owned current state.
+    db.prepare('UPDATE messages SET content=? WHERE id=?')
+      .run(JSON.stringify('edited current Hermes state'),'m3')
+    const stale=await hermesSourceDefinition.readNativeSessionPage!({
+      filePath:path,nativeSessionId:'S1',cursor:second.nextCursor,
+    },ctx)
+    assert.deepEqual(stale,{state:'drifted',reason:'native-database-cursor-boundary-changed'})
+    const reread=await hermesSourceDefinition.readNativeSessionPage!({
+      filePath:path,nativeSessionId:'S1',limit:32,
+    },ctx)
+    assert.equal(reread.state,'available')
+    if(reread.state==='available'){
+      assert.equal(reread.records.length,2)
+      assert.equal(JSON.stringify(reread.records[1]?.payload)
+        .includes('edited current Hermes state'),true)
+    }
   }finally{db.close();await rm(root,{recursive:true,force:true})}
 })

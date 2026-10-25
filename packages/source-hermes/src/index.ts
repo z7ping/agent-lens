@@ -856,6 +856,7 @@ export const hermesManifest: SourcePluginManifest = {
 const databaseRawRecovery: NonNullable<SourceDefinition['rawRecovery']> = {
   describe(record) {
     const recoverable = record.locator.kind === 'database'
+      && record.locator.table === 'messages'
       && Boolean(record.locator.path)
       && record.locator.rowId !== undefined
       && Boolean(record.fingerprint)
@@ -868,8 +869,12 @@ const databaseRawRecovery: NonNullable<SourceDefinition['rawRecovery']> = {
           canReread: true,
           canReparse: true,
           replayable: true,
+          // This is a Source CURRENT-state capability, not permission to
+          // switch Hermes to Native-only while optional runtime Hook facts
+          // still lack a complete per-session recovery certificate.
           persistencePreference: 'preserve',
-          reason: 'database rowId can be re-read and fingerprinted but is not yet treated as a long-term stable business locator',
+          recoveryScope: 'session-current-state',
+          reason: 'Hermes SQLite messages can be re-read as current session state; rowId is not immutable and optional Hook facts still require separate certification',
         }
       : {
           authority: record.locator.kind === 'runtime-hook' ? 'agent-lens-only' : 'unknown',
@@ -891,6 +896,7 @@ const databaseRawRecovery: NonNullable<SourceDefinition['rawRecovery']> = {
     const rowId = Number(record.locator.rowId)
     if (
       record.locator.kind !== 'database'
+      || record.locator.table !== 'messages'
       || !path
       || !Number.isSafeInteger(rowId)
       || rowId <= 0
