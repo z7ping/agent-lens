@@ -44,6 +44,7 @@ import {
   nativeHookArchiveEnabled,
   archivedHookInboxRecordPath,
   readArchivedHookInboxPage,
+  verifyPreparedHookInboxOriginal,
   nativeSqliteRevision,
   isMissingPathError,
   watchSourceFiles,
@@ -903,8 +904,29 @@ const databaseRawRecovery: NonNullable<SourceDefinition['rawRecovery']> = {
             : 'record does not expose a verifiable database row locator',
         }
   },
-  async verify(record) {
+  async verify(record, ctx) {
     const checkedAt = new Date().toISOString()
+    if(record.locator.kind==='runtime-hook'){
+      if(!ctx || record.sourceId!==SOURCE_ID
+        || record.installationId!==ctx.installation.id
+        || !record.sourceSessionNativeId || !record.locator.path
+        || !record.fingerprint){
+        return {state:'unsupported' as const,checkedAt,
+          reason:'native-hook-scoped-original-required'}
+      }
+      const proof={
+        inbox:hermesInboxDirectory(),
+        fileName:basename(record.locator.path),
+        nativeSessionId:record.sourceSessionNativeId,
+        installationId:ctx.installation.id,
+        expectedSha256:record.fingerprint,
+      }
+      if(archivedHookInboxRecordPath(proof)!==record.locator.path){
+        return {state:'drifted' as const,checkedAt,
+          reason:'native-hook-archive-location-changed'}
+      }
+      return {state:await verifyPreparedHookInboxOriginal(proof),checkedAt}
+    }
     const path = record.locator.path
     const rowId = Number(record.locator.rowId)
     if (
