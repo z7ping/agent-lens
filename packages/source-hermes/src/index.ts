@@ -40,6 +40,7 @@ import {
 } from '@agent-lens/runtime-cordis'
 import {
   archiveAcceptedHookInboxFile,
+  nativeHookArchiveEnabled,
   archivedHookInboxRecordPath,
   readArchivedHookInboxPage,
   isMissingPathError,
@@ -571,7 +572,7 @@ export async function startHermesRuntimeCapture(
           const envelope = parseInboxEnvelope(await readFile(filePath, 'utf8'), fileName)
           const record = hookRecord(envelope, filePath, ctx)
           await emitter.emit(record)
-          if (process.env.AGENT_LENS_NATIVE_HOOK_ARCHIVE === '1' && record.sourceSessionNativeId) {
+          if (nativeHookArchiveEnabled() && record.sourceSessionNativeId) {
             await archiveAcceptedHookInboxFile({ inbox, fileName, nativeSessionId: record.sourceSessionNativeId, installationId: ctx.installation.id })
           } else {
             await unlink(filePath)

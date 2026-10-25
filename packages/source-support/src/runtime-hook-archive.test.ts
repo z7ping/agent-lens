@@ -3,7 +3,7 @@ import { lstat, mkdtemp, mkdir, readFile, rm, stat, symlink, writeFile } from 'n
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import test from 'node:test'
-import { archiveAcceptedHookInboxFile, archivedHookInboxRecordPath, readArchivedHookInboxPage, readArchivedHookInboxSession } from './runtime-hook-archive'
+import { archiveAcceptedHookInboxFile, archivedHookInboxRecordPath, nativeHookArchiveEnabled, readArchivedHookInboxPage, readArchivedHookInboxSession } from './runtime-hook-archive'
 
 test('archive accepted source Hook by hard link: original is single-copy and session-scoped',async()=>{
   const inbox=await mkdtemp(join(tmpdir(),'al-native-hook-'))
@@ -145,3 +145,11 @@ test('Hook archive scope separates installations even for identical native sessi
   }finally{await rm(inbox,{recursive:true,force:true})}
 })
 
+
+
+test('source-owned Hook archive defaults to enabled with explicit emergency opt-out', () => {
+  assert.equal(nativeHookArchiveEnabled({} as NodeJS.ProcessEnv), true)
+  assert.equal(nativeHookArchiveEnabled({ AGENT_LENS_NATIVE_HOOK_ARCHIVE: '1' } as NodeJS.ProcessEnv), true)
+  assert.equal(nativeHookArchiveEnabled({ AGENT_LENS_NATIVE_HOOK_ARCHIVE: '0' } as NodeJS.ProcessEnv), false)
+  assert.equal(nativeHookArchiveEnabled({ AGENT_LENS_NATIVE_HOOK_ARCHIVE: '' } as NodeJS.ProcessEnv), true)
+})

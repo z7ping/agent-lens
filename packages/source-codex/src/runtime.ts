@@ -9,7 +9,7 @@ import type {
   SourceRecordEmitter,
 } from '@agent-lens/core'
 import { abortableDelay } from '@agent-lens/runtime-cordis'
-import { archiveAcceptedHookInboxFile, asRecord, isMissingPathError, startHistoryFileWatch } from '@agent-lens/source-support'
+import { archiveAcceptedHookInboxFile, nativeHookArchiveEnabled, asRecord, isMissingPathError, startHistoryFileWatch } from '@agent-lens/source-support'
 import { CODEX_CURRENT_PARSER_VERSION } from './current-protocol'
 import { codexHistoryRoots, ingestCodexFile, listJsonlFiles } from './history'
 
@@ -141,7 +141,7 @@ export async function startCodexRuntimeCapture(
           const envelope = parseEnvelope(text, fileName)
           const record = sourceRecordFromEnvelope(envelope, filePath, ctx)
           await emitter.emit(record)
-          if (process.env.AGENT_LENS_NATIVE_HOOK_ARCHIVE === '1' && record.sourceSessionNativeId) {
+          if (nativeHookArchiveEnabled() && record.sourceSessionNativeId) {
             await archiveAcceptedHookInboxFile({inbox,fileName,nativeSessionId:record.sourceSessionNativeId,installationId:ctx.installation.id})
           } else {
             await unlink(filePath)

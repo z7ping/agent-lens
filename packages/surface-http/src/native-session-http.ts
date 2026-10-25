@@ -4,6 +4,7 @@ import type { NativeSessionCatalogStore, ObservationCandidate, SourceNativeSessi
 import { reviewMessageAttachmentsFromPayload, type NativeReviewWindowDto } from '@agent-lens/protocol'
 
 import { nativeReviewObservationId, overlayNativeHookEvents, projectNativeReviewWindow } from '@agent-lens/projection-review'
+import { nativeHookArchiveEnabled } from '@agent-lens/source-support'
 import { badRequest, writeJson } from './http-utils'
 
 export interface NativeSessionWindowReader {
@@ -685,7 +686,7 @@ export async function handleNativeSessionWindowRequest(
           const recordIds: string[] = []
           let hookBytes = 0
           let hookCursor: string | undefined
-          let completeHookLane = process.env.AGENT_LENS_NATIVE_HOOK_ARCHIVE === '1'
+          let completeHookLane = nativeHookArchiveEnabled()
           const visited = new Set<string>()
           for (let page = 0; page < 4 && !abort.signal.aborted; page++) {
             let result: Awaited<ReturnType<NonNullable<NativeSessionWindowReader['readArchivedHooks']>>>
