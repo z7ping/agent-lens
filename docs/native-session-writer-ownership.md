@@ -55,3 +55,8 @@ Codex、Claude Code、Hermes 的 Runtime Hook 在原有 emitter 确认成功后�
 Hook Inbox 在运行中可能持续追加。仅以文件名作为续读边界时，新归档的文件若按名称排序落在游标之前，会造成事件静默漏读。现在每个 Hook 归档分页游标同时绑定安装+会话及该次读取的归档文件名列表快照，下一页目录发生增删即拒绝续读，调用方须从第一页重新取得新快照。
 
 游标仅含散列后的文件标识与快照摘要，不传源路径、Hook 正文或原文件名；旧 v1 临时游标不再接受，需要重新发起读取。此保证用于单次归档遍历，不代表原生会话运行时 Hook 已经完整捕获；Source 缺口仍需呈现为部分可用。
+
+
+## Hook 历史完整性并非归档目录完整性
+
+Native Review 的 `boundaryIntegrity=complete` 仅确认原生正文用户轮次边界。归档目录为空或当前分页到达末尾，也不能证明该会话在旧版归档尚未开启的时期没有 Hook-only 事实；故 Codex/Claude/Hermes 主视图在获得来源级全时段覆盖证明前，必须标记 `hookFactsPartial=true`。其中 `hookEventsTruncated` 只反映此次 Hook 页是否被截断，不能与完整性证明混用。此限制是停用旧 Writer 的 P0 阻塞，不得通过关闭提示绕过。
