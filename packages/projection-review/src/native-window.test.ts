@@ -271,3 +271,46 @@ test('empty Hook archive is not evidence of complete runtime capture history',()
   assert.deepEqual(overlaid.interactions,native.interactions)
 })
 
+test('native Review Evidence attaches only exact SourceRecord provenance without leaking local paths',()=>{
+  const session={
+    ...page,
+    completeBoundaries:true,
+    observations:[
+      candidate('message.user',1,{text:'please inspect'}),
+      candidate('tool.call',2,{callId:'cmd-1',nativeToolName:'shell'}),
+      candidate('tool.result',3,{callId:'cmd-1',success:true,output:'ok'}),
+    ],
+    observationRecordIds:['native-r1','native-r2','native-r2'],
+    evidenceCandidates:[
+      {captureMethod:'native-log' as const,derivation:'reported' as const,
+        sourceRecordId:'native-r2',confidenceHint:'exact' as const,
+        parserVersion:'1',capturedAt:at,
+        sourceLocator:{kind:'file' as const,path:'/private/secret/native.jsonl',offset:123}},
+      {captureMethod:'runtime-hook' as const,derivation:'observed' as const,
+        sourceRecordId:'another-native-record',confidenceHint:'high' as const,
+        capturedAt:at,missingReason:'secret:///host/hidden'},
+      {captureMethod:'native-log' as const,derivation:'reported' as const,
+        capturedAt:at,sourceLocator:{kind:'file' as const,path:'/private/unknown.jsonl'}},
+    ],
+  }
+  const first=projectNativeReviewWindow(session)
+  const nodes=first.interactions.flatMap(turn=>turn.nodes)
+  const tool=nodes.find(node=>node.type==='tool')
+  assert.equal(tool?.type,'tool')
+  if(tool?.type!=='tool')return
+  assert.equal(tool.evidence.length,1,
+    'tool call/result from the same source record must retain one evidence edge')
+  assert.equal(tool.evidence[0]?.confidence,'exact')
+  assert.equal(tool.evidence[0]?.captureMethod,'native-log')
+  assert.equal(tool.evidence[0]?.id.startsWith('native-evidence:'),true)
+  assert.equal(nodes.find(node=>node.type==='message')?.evidence.length,0,
+    'one record must never claim evidence from a different SourceRecord')
+  assert.deepEqual(projectNativeReviewWindow(session).interactions,first.interactions,
+    'derived evidence identities must be stable across native rehydration')
+  const serialized=JSON.stringify(first)
+  assert.equal(serialized.includes('/private/'),false)
+  assert.equal(serialized.includes('secret://'),false)
+  assert.equal(serialized.includes('sourceLocator'),false)
+  assert.equal(serialized.includes('another-native-record'),false)
+})
+

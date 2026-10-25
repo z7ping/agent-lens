@@ -1033,3 +1033,57 @@ test('native Hermes-style anonymous tool facts remain visible when a later nativ
   } finally {await app.dispose()}
 })
 
+
+test('complete native user turn carries exact SourceRecord Evidence without exposing file path',async()=>{
+  const at='2026-10-25T00:00:00Z'
+  const reader:NativeSessionWindowReader={
+    async read(){
+      return {
+        state:'available',
+        observations:[
+          {kind:'message.user' as const,capturedAt:at,payload:{text:'run'},identityHints:{nativeSessionId:'S-evidence'}},
+          {kind:'tool.call' as const,capturedAt:at,nativeCallId:'cmd1',
+            payload:{nativeToolName:'shell'},identityHints:{nativeSessionId:'S-evidence'}},
+          {kind:'tool.result' as const,capturedAt:at,nativeCallId:'cmd1',
+            payload:{success:true,output:'ok'},identityHints:{nativeSessionId:'S-evidence'}},
+        ],
+        observationRecordIds:['prompt-1','shell-1','shell-1'],
+        observationCursors:[
+          {offset:0,sequence:0,fileIdentity:'file-inode'},
+          {offset:64,sequence:1,fileIdentity:'file-inode'},
+          {offset:64,sequence:1,fileIdentity:'file-inode'},
+        ],
+        evidenceCandidates:[
+          {captureMethod:'native-log' as const,derivation:'reported' as const,
+            sourceRecordId:'shell-1',confidenceHint:'high' as const,
+            capturedAt:at,sourceLocator:{kind:'file' as const,path:'/private/opaque.jsonl',offset:64}},
+          {captureMethod:'native-log' as const,derivation:'reported' as const,
+            sourceRecordId:'not-current',capturedAt:at,
+            sourceLocator:{kind:'file' as const,path:'/private/wrong.jsonl'}},
+        ],
+        nextCursor:{offset:128,sequence:2,fileIdentity:'file-inode'},
+        hasMore:false,pendingTail:false,
+      }
+    },
+  }
+  const surface=await startHttpSurface(noopStorage,{port:0,nativeSessionReader:reader})
+  try{
+    const url=`http://${surface.host}:${surface.port}/api/v1/native-sessions/window?sourceId=pi&installationId=inst&nativeSessionId=S-evidence&format=review-turns`
+    const response=await fetch(url)
+    assert.equal(response.status,200)
+    const payload=await response.json() as {
+      state:string;boundaryIntegrity:string;
+      interactions:Array<{nodes:Array<{type:string;evidence:Array<{id:string;confidence:string;captureMethod:string}>}>}>
+    }
+    assert.equal(payload.state,'available')
+    assert.equal(payload.boundaryIntegrity,'complete')
+    const tool=payload.interactions[0]?.nodes.find(node=>node.type==='tool')
+    assert.equal(tool?.evidence.length,1)
+    assert.equal(tool?.evidence[0]?.confidence,'high')
+    assert.equal(tool?.evidence[0]?.captureMethod,'native-log')
+    assert.equal(JSON.stringify(payload).includes('/private/'),false)
+    assert.equal(JSON.stringify(payload).includes('not-current'),false)
+    assert.equal(JSON.stringify(payload).includes('sourceLocator'),false)
+  }finally{await surface.dispose()}
+})
+

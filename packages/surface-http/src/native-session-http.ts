@@ -1,6 +1,6 @@
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import type { NativeSessionReadQuery, NativeSessionReadResult } from '@agent-lens/core-services'
-import type { NativeSessionCatalogStore, ObservationCandidate, SourceNativeSessionCursor } from '@agent-lens/core'
+import type { EvidenceCandidate, NativeSessionCatalogStore, ObservationCandidate, SourceNativeSessionCursor } from '@agent-lens/core'
 import { reviewMessageAttachmentsFromPayload, type NativeReviewWindowDto } from '@agent-lens/protocol'
 
 import { nativeReviewObservationId, overlayNativeHookEvents, projectNativeReviewWindow } from '@agent-lens/projection-review'
@@ -48,6 +48,7 @@ async function readContiguousReviewPages(
   let pages = 1
   let observations = [...first.observations]
   let recordIds = [...first.observationRecordIds]
+  let evidenceCandidates = [...first.evidenceCandidates]
   let bytes: number
   try {
     bytes = Buffer.byteLength(JSON.stringify(observations), 'utf8')
@@ -82,6 +83,7 @@ async function readContiguousReviewPages(
     }
     observations = [...observations, ...next.observations]
     recordIds = [...recordIds, ...next.observationRecordIds]
+    evidenceCandidates = [...evidenceCandidates, ...next.evidenceCandidates].slice(0,512)
     bytes += nextBytes
     previousOffset = current.nextCursor.offset
     current = next
@@ -92,9 +94,9 @@ async function readContiguousReviewPages(
     ...current,
     observations,
     observationRecordIds: recordIds,
-    // Evidence must never leave the reader; Review nodes intentionally have
-    // no persisted Evidence IDs or raw source locator.
-    evidenceCandidates: [],
+    // Only SourceRecord-bound provenance is projected; no raw locator is
+    // exposed, and no Evidence row is inserted into SQLite.
+    evidenceCandidates,
   }
 }
 
@@ -130,6 +132,7 @@ async function readCompleteNativeTurn(
   const observations: ObservationCandidate[] = []
   const observationRecordIds: string[] = []
   const observationCursors: string[] = []
+  const evidenceCandidates: EvidenceCandidate[] = []
   const pendingTools = new Set<string>()
   let unidentifiableToolCall = false
   let unpairedToolResult = false
@@ -165,6 +168,9 @@ async function readCompleteNativeTurn(
       installationId: query.installationId,
       nativeSessionId: query.nativeSessionId,
       observations, observationRecordIds, observationCursors,
+      evidenceCandidates: evidenceCandidates.filter(candidate =>
+        candidate.sourceRecordId !== undefined
+        && observationRecordIds.includes(candidate.sourceRecordId)),
       hasMore, pendingTail: false,
       hasPrevious: query.cursor !== undefined,
       nextCursor: '',
@@ -204,6 +210,10 @@ async function readCompleteNativeTurn(
       return { state: 'unsupported', reason: 'native-review-turn-exceeds-budget' }
     }
     bytes += pageBytes
+    if (evidenceCandidates.length + current.evidenceCandidates.length > 512) {
+      return {state:'unsupported',reason:'native-review-evidence-budget'}
+    }
+    evidenceCandidates.push(...current.evidenceCandidates)
     for (let index = 0; index < current.observations.length; index++) {
       const observation = current.observations[index]!
       const recordCursor = current.observationCursors[index]!
@@ -762,6 +772,7 @@ export async function handleNativeSessionWindowRequest(
       sourceId, installationId, nativeSessionId,
       observations: result.observations,
       ...(result.observationRecordIds ? { observationRecordIds: result.observationRecordIds } : {}),
+      evidenceCandidates: result.evidenceCandidates,
       hasMore: result.hasMore,
       pendingTail: result.pendingTail,
       hasPrevious: cursor !== undefined,
