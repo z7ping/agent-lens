@@ -28,8 +28,8 @@ test('native session HTTP reads via identities only, supports opaque cursor and 
           payload: { text: '[redacted]' },
         }],
         evidenceCandidates: [{
-          captureMethod: 'file',
-          derivation: 'direct',
+          captureMethod: 'native-log',
+          derivation: 'observed',
           capturedAt: '2026-10-25T00:00:00Z',
           sourceLocator: { kind: 'file', path: '/sensitive/work/secret.jsonl' },
         }],
