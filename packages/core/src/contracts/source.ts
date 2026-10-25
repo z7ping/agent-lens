@@ -139,12 +139,23 @@ export interface SourceRawRecoveryCheck {
 
 export interface SourceRawRecoveryContext extends SourceExecutionContext {}
 
+/**
+ * Native-only transient hydration. A successful SourceRecord has its payload
+ * in memory for the existing normalizer; it MUST NOT be passed to ingestion
+ * or persisted as an independent content copy.
+ */
+export type SourceRawHydrationResult =
+  | { state: 'available'; record: SourceRecord }
+  | { state: 'unavailable' | 'drifted' | 'pending' | 'unsupported' | 'incompatible'; reason: string; currentFingerprint?: string }
+
 export interface SourceRawRecoveryPolicy {
   describe(record: SourceRecord): SourceRawRecoveryCapability
   verify?(
     record: SourceRecord,
     ctx?: SourceRawRecoveryContext,
   ): Promise<SourceRawRecoveryCheck>
+  /** Source-controlled, authorized read. Never accepts an arbitrary browser path. */
+  hydrate?(record: SourceRecord, ctx: SourceRawRecoveryContext): Promise<SourceRawHydrationResult>
 }
 
 
