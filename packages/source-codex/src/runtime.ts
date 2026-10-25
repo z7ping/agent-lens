@@ -9,7 +9,7 @@ import type {
   SourceRecordEmitter,
 } from '@agent-lens/core'
 import { abortableDelay } from '@agent-lens/runtime-cordis'
-import { archiveAcceptedHookInboxFile, prepareHookInboxArchive, nativeHookArchiveEnabled, asRecord, isMissingPathError, startHistoryFileWatch } from '@agent-lens/source-support'
+import { archiveAcceptedHookInboxFile, prepareHookInboxArchive, nativeHookArchiveEnabled, createHookInboxRetryGate, asRecord, isMissingPathError, startHistoryFileWatch } from '@agent-lens/source-support'
 import { CODEX_CURRENT_PARSER_VERSION } from './current-protocol'
 import { codexHistoryRoots, ingestCodexFile, listJsonlFiles } from './history'
 
@@ -120,6 +120,7 @@ export async function startCodexRuntimeCapture(
   const inbox = inboxDirectory()
   await mkdir(inbox, { recursive: true })
   let stopped = false
+  const hookRetry = createHookInboxRetryGate()
 
   const task = (async () => {
     while (!stopped && !ctx.abortSignal.aborted) {
@@ -135,6 +136,7 @@ export async function startCodexRuntimeCapture(
 
       for (const fileName of files) {
         if (stopped || ctx.abortSignal.aborted) break
+        if (!hookRetry.shouldAttempt(fileName)) continue
         const filePath = join(inbox, fileName)
         try {
           const originalBytes = await readFile(filePath)
@@ -162,9 +164,11 @@ export async function startCodexRuntimeCapture(
           await emitter.emit(deliveredRecord)
           if (archiveInput) await archiveAcceptedHookInboxFile(archiveInput)
           else await unlink(filePath)
+          hookRetry.markDelivered(fileName)
         } catch {
-          // Durable inbox semantics: leave the file in place and retry later.
-          break
+          // Preserve the original and retry after cooldown. This file must
+          // not starve later valid Hook originals in the same inbox.
+          hookRetry.markFailed(fileName)
         }
       }
 
