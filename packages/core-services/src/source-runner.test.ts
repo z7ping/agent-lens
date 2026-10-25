@@ -171,6 +171,8 @@ test('verified new native session defaults to metadata-only without legacy trans
     },
     async *ingestHistory(ctx){
       assert.equal(catalogReady,1,'runtime capture may start only after native claims')
+      assert.equal(ctx.skipNativeSessionId?.('fast-new'),true,
+        'the runner must expose the certified native session identity')
       if (ctx.skipNativeSessionFile?.(filePath)) return
       ingested++
       yield recordForProbe
