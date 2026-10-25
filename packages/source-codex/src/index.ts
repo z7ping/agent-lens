@@ -141,7 +141,7 @@ async function readCodexArchivedHookPage(
     }
     return record
   })
-ctx.abortSignal.throwIfAborted()
+  ctx.abortSignal.throwIfAborted()
   return {
     records,
     hasMore: archive.hasMore,
