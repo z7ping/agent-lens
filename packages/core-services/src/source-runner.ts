@@ -1157,6 +1157,7 @@ export class SourceAssetRunner {
 }
 
 export const sourceRunnerInternals = {
+  processSourceRecordWithOwnership,
   createCooperativeScheduler,
   parserReplayCheckpointKey,
   parserReplayWindowKey,
