@@ -38,7 +38,13 @@ import {
   resolveHermesRoots,
   type AgentLensContext,
 } from '@agent-lens/runtime-cordis'
-import { isMissingPathError, watchSourceFiles, type SourceFileWatchHandle } from '@agent-lens/source-support'
+import {
+  archiveAcceptedHookInboxFile,
+  readArchivedHookInboxPage,
+  isMissingPathError,
+  watchSourceFiles,
+  type SourceFileWatchHandle,
+} from '@agent-lens/source-support'
 import {
   discoverHermesAssets,
   hermesAssetInternals,
@@ -562,8 +568,13 @@ export async function startHermesRuntimeCapture(
         const filePath = join(inbox, fileName)
         try {
           const envelope = parseInboxEnvelope(await readFile(filePath, 'utf8'), fileName)
-          await emitter.emit(hookRecord(envelope, filePath, ctx))
-          await unlink(filePath)
+          const record = hookRecord(envelope, filePath, ctx)
+          await emitter.emit(record)
+          if (process.env.AGENT_LENS_NATIVE_HOOK_ARCHIVE === '1' && record.sourceSessionNativeId) {
+            await archiveAcceptedHookInboxFile({ inbox, fileName, nativeSessionId: record.sourceSessionNativeId })
+          } else {
+            await unlink(filePath)
+          }
         } catch {
           break
         }
@@ -914,11 +925,49 @@ const databaseRawRecovery: NonNullable<SourceDefinition['rawRecovery']> = {
   },
 }
 
+/** Read the original Hermes hook inode after successful inbox acknowledgement.
+ * Never accepts a host file path or reserializes the event as a second body.
+ */
+async function readHermesArchivedHookPage(
+  nativeSessionId: string,
+  ctx: SourceExecutionContext,
+  cursor?: string,
+) {
+  ctx.abortSignal.throwIfAborted()
+  const inbox = hermesInboxDirectory()
+  const page = await readArchivedHookInboxPage({
+    inbox, nativeSessionId, limit: 16,
+    ...(cursor ? { cursor } : {}),
+  })
+  const records = page.items.map(item => {
+    const envelope = parseInboxEnvelope(item.content, item.fileName)
+    const path = join(inbox, 'archive', sha256(nativeSessionId), item.fileName)
+    const record = hookRecord(envelope, path, ctx)
+    if (record.sourceId !== SOURCE_ID
+      || record.installationId !== ctx.installation.id
+      || record.sourceSessionNativeId !== nativeSessionId
+      || record.locator.kind !== 'runtime-hook') {
+      throw new Error('Archived Hermes Hook does not belong to requested native session')
+    }
+    return record
+  })
+  ctx.abortSignal.throwIfAborted()
+  return {
+    records,
+    hasMore: page.hasMore,
+    ...(page.nextCursor ? { nextCursor: page.nextCursor } : {}),
+  }
+}
+
 export const hermesSourceDefinition: SourceDefinition = {
   manifest: hermesManifest,
   detect: detectHermes,
   declareCapabilities: declareHermesCapabilities,
   rawRecovery: databaseRawRecovery,
+  async readArchivedNativeHooks(nativeSessionId, ctx) {
+    return (await readHermesArchivedHookPage(nativeSessionId, ctx)).records
+  },
+  readArchivedNativeHooksPage: readHermesArchivedHookPage,
   async *discoverNativeSessions(ctx) {
     const root = ctx.installation.dataRoot
     if (!root || ctx.abortSignal.aborted) return
