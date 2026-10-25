@@ -361,7 +361,7 @@ function normalizeRuntimeRecord(
       nativeToolName: toolName,
       input: event.tool_input ?? {},
       ...(turnId ? { turnId } : {}),
-    }, {}, actorIdentity)
+    }, callId ? {nativeCallId:callId} : {}, actorIdentity)
   }
 
   if (hookName === 'PreCompact' || hookName === 'PostCompact') {
