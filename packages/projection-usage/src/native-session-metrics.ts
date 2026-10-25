@@ -37,6 +37,8 @@ export class NativeSessionMetricAccumulator {
   private errors=0
   private inputTokens:number|null=null
   private outputTokens:number|null=null
+  private inputTokensIncomplete=false
+  private outputTokensIncomplete=false
 
   add(observation:ObservationCandidate):void {
     const payload=asRecord(observation.payload)
@@ -86,8 +88,20 @@ export class NativeSessionMetricAccumulator {
         const output=count(payload.outputTokens ?? payload.output_tokens)
         // Source usage records describe one model call/turn. Missing one side
         // never becomes zero. CapturePolicy already ran before this projection.
-        if(input!==null)this.inputTokens=(this.inputTokens??0)+input
-        if(output!==null)this.outputTokens=(this.outputTokens??0)+output
+        // Missing usage fields are unknown, not zero. A known value from
+        // another turn must not hide an unobserved side of this turn.
+        if(input===null)this.inputTokensIncomplete=true
+        else if(!this.inputTokensIncomplete){
+          const sum=(this.inputTokens??0)+input
+          if(Number.isSafeInteger(sum))this.inputTokens=sum
+          else{this.inputTokensIncomplete=true;this.inputTokens=null}
+        }
+        if(output===null)this.outputTokensIncomplete=true
+        else if(!this.outputTokensIncomplete){
+          const sum=(this.outputTokens??0)+output
+          if(Number.isSafeInteger(sum))this.outputTokens=sum
+          else{this.outputTokensIncomplete=true;this.outputTokens=null}
+        }
         break
       }
     }
@@ -114,7 +128,8 @@ export class NativeSessionMetricAccumulator {
       coverage:input.complete && !this.truncated?'complete':'partial',
       interactionCount:this.userTurns,toolCallCount:this.calls,toolResultCount:this.results,
       toolErrorCount:this.toolErrors,errorCount:this.errors,
-      inputTokens:this.inputTokens,outputTokens:this.outputTokens,
+      inputTokens:this.inputTokensIncomplete?null:this.inputTokens,
+      outputTokens:this.outputTokensIncomplete?null:this.outputTokens,
       computedAt:input.computedAt,
       tools:[...this.tools.values()].sort((a,b)=>a.nativeToolName.localeCompare(b.nativeToolName)),
     }
