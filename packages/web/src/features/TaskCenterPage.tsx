@@ -202,6 +202,15 @@ function RemoteTaskItem({ item, active, nowMs, onClick }: { item: HubReviewSessi
   </button>
 }
 
+function nativeSessionFromHit(hit:NativeBodySearchHitDto):NativeSessionSummaryDto {
+  return {
+    id:hit.sessionId,sourceId:hit.sourceId,
+    installationId:hit.installationId,nativeSessionId:hit.nativeSessionId,
+    locationKind:'native',lastActivityAt:hit.lastActivityAt,
+    ...(hit.title?{title:hit.title}:{}),
+  }
+}
+
 export function TaskCenterPage({ model, mode, sidebarHost }: { model: AgentLensClientModel; mode: TaskCenterMode; sidebarHost?: HTMLDivElement | null }) {
   const { t, i18n } = useTranslation('task')
   const { t: tNavigation } = useTranslation('navigation')
@@ -261,12 +270,6 @@ export function TaskCenterPage({ model, mode, sidebarHost }: { model: AgentLensC
   }, [mode, model, review.loading, review.response])
 
   // Native Catalog is the indexed session directory for Native-only writes.
-  const nativeSessionFromHit = (hit:NativeBodySearchHitDto):NativeSessionSummaryDto => ({
-    id:hit.sessionId,sourceId:hit.sourceId,
-    installationId:hit.installationId,nativeSessionId:hit.nativeSessionId,
-    locationKind:'native',lastActivityAt:hit.lastActivityAt,
-    ...(hit.title?{title:hit.title}:{}),
-  })
   const nativeScopeKey = JSON.stringify([
     review.filters.sourceIds,review.filters.projectId,
     review.filters.status,review.filters.search,
