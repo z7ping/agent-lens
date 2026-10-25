@@ -20,6 +20,10 @@ import { createTestCapturePolicy } from '@agent-lens/core-services/test-support'
 import { SqliteStorageService } from '@agent-lens/storage-sqlite'
 import { detectPi, piSourceDefinition } from './index'
 
+// Keep historical ingestion assertions for sessions explicitly owned by the
+// old Writer. Certified new Pi sessions are tested separately for Native-only.
+const legacyPiSource = { ...piSourceDefinition, nativeSessionCoverageComplete: false }
+
 async function waitFor(predicate: () => Promise<boolean>, timeoutMs = 2500): Promise<void> {
   const deadline = Date.now() + timeoutMs
   while (Date.now() < deadline) {
@@ -29,7 +33,7 @@ async function waitFor(predicate: () => Promise<boolean>, timeoutMs = 2500): Pro
   throw new Error('Timed out waiting for Pi native tail capture')
 }
 
-test('Pi Source covers history, assets and native-tail runtime', async () => {
+test('Pi Legacy-owned sessions preserve history, assets and native-tail runtime compatibility', async () => {
   const root = await mkdtemp(join(tmpdir(), 'agent-lens-pi-'))
   const agentDir = join(root, 'agent')
   const transcript = join(agentDir, 'sessions', 'demo', 'session.jsonl')
@@ -142,7 +146,7 @@ test('Pi Source covers history, assets and native-tail runtime', async () => {
     assert.ok(detected)
 
     const historyResult = await history.sync({
-      source: piSourceDefinition,
+      source: legacyPiSource,
       host,
       detected,
       abortSignal: new AbortController().signal,
@@ -178,7 +182,7 @@ test('Pi Source covers history, assets and native-tail runtime', async () => {
     assert.equal(facts.some(item => item.kind === 'session.lifecycle' && (item.payload as { event?: string }).event === 'assistant.stop'), false)
 
     const assetResult = await assetRunner.scan({
-      source: piSourceDefinition,
+      source: legacyPiSource,
       host,
       detected,
       abortSignal: new AbortController().signal,
@@ -208,7 +212,7 @@ test('Pi Source covers history, assets and native-tail runtime', async () => {
     ].map(item => JSON.stringify(item)).join('\n')}\n`, 'utf8')
 
     const startupLatest = await history.sync({
-      source: piSourceDefinition,
+      source: legacyPiSource,
       host,
       detected,
       abortSignal: new AbortController().signal,
@@ -218,7 +222,7 @@ test('Pi Source covers history, assets and native-tail runtime', async () => {
 
     const runtimeController = new AbortController()
     const handle = await runtime.start({
-      source: piSourceDefinition,
+      source: legacyPiSource,
       host,
       detected,
       abortSignal: runtimeController.signal,
@@ -300,7 +304,7 @@ test('Pi Source covers history, assets and native-tail runtime', async () => {
       SELECT COUNT(*) AS count FROM source_records WHERE source_id = 'pi' AND parser_version != '13'
     `).get() as { count: number }
     const replay = await history.replay({
-      source: piSourceDefinition,
+      source: legacyPiSource,
       host,
       detected,
       abortSignal: new AbortController().signal,

@@ -15,6 +15,9 @@ import { createTestCapturePolicy } from '@agent-lens/core-services/test-support'
 import { SqliteStorageService } from '@agent-lens/storage-sqlite'
 import { detectPi, discoverPiAssets, piSourceDefinition } from './index'
 
+// These SQL history assertions concern explicit Legacy-owned sessions only.
+const legacyPiSource = { ...piSourceDefinition, nativeSessionCoverageComplete: false }
+
 function sessionLine(id = 'pi-integrity-session') {
   return JSON.stringify({
     type: 'session',
@@ -59,7 +62,66 @@ async function withHistoryRunner<T>(
   }
 }
 
-test('Pi history does not consume an unterminated partial JSONL entry', async () => {
+
+test('certified new Pi history is Native-only by default while original JSONL remains readable',async()=>{
+  const root=await mkdtemp(join(tmpdir(),'agent-lens-pi-native-default-'))
+  const agentDir=join(root,'agent')
+  const transcript=join(agentDir,'sessions','new','session.jsonl')
+  const nativeSessionId='native-pi-session-1'
+  await mkdir(dirname(transcript),{recursive:true})
+  await writeFile(transcript,[
+    sessionLine(nativeSessionId),
+    JSON.stringify({
+      type:'message',id:'native-user-1',
+      timestamp:'2026-10-25T08:00:00.000Z',
+      message:{role:'user',content:[{type:'text',text:'Single source of truth'}]},
+    }),
+    '',
+  ].join('\n'),'utf8')
+  try{
+    await withHistoryRunner(agentDir,async({storage,history,host,detected})=>{
+      const input={
+        source:piSourceDefinition,host,detected,
+        abortSignal:new AbortController().signal,
+      }
+      const first=await history.sync(input)
+      assert.equal(first.records,0,
+        'certified JSONL must not be normalized into an extra SQL event history')
+      const key={sourceId:'pi',installationId:first.installationId,nativeSessionId}
+      assert.equal(await storage.nativeSessionCatalog.getSessionWriteMode(key),'native-only')
+      const catalog=await storage.nativeSessionCatalog.get(key)
+      assert.ok(catalog)
+      assert.equal(catalog.filePath,transcript)
+      assert.equal((await storage.repositories.observations.query({
+        installationId:first.installationId,kind:'message.user',limit:10,
+      })).length,0,'single-copy native history must not populate SQL messages')
+      const installation=await storage.repositories.installations.get(first.installationId)
+      assert.ok(installation)
+      const page=await piSourceDefinition.readNativeSessionPage!({
+        filePath:catalog.filePath,nativeSessionId,limit:16,
+      },{
+        host,installation,abortSignal:new AbortController().signal,
+        checkpoint:{
+          async get(){return null},
+          async set(){throw Error('Native Reader may not mutate ingest checkpoints')},
+          async clear(){throw Error('Native Reader may not mutate ingest checkpoints')},
+        },
+      })
+      assert.equal(page.state,'available')
+      if(page.state!=='available')return
+      assert.equal(page.records.length,2)
+      assert.equal(page.records[1]?.nativeId,'native-user-1')
+      assert.equal((page.records[1]?.payload as {
+        entry?:{message?:{content?:Array<{text?:string}>}}
+      }).entry?.message?.content?.[0]?.text,'Single source of truth')
+      const repeat=await history.sync(input)
+      assert.equal(repeat.records,0)
+      assert.equal(await storage.nativeSessionCatalog.getSessionWriteMode(key),'native-only')
+    })
+  }finally{await rm(root,{recursive:true,force:true})}
+})
+
+test('Pi Legacy history does not consume an unterminated partial JSONL entry', async () => {
   const root = await mkdtemp(join(tmpdir(), 'agent-lens-pi-partial-'))
   const agentDir = join(root, 'agent')
   const transcript = join(agentDir, 'sessions', 'partial', 'session.jsonl')
@@ -71,7 +133,7 @@ test('Pi history does not consume an unterminated partial JSONL entry', async ()
   try {
     await withHistoryRunner(agentDir, async ({ storage, history, host, detected }) => {
       const first = await history.sync({
-        source: piSourceDefinition,
+        source: legacyPiSource,
         host,
         detected,
         abortSignal: new AbortController().signal,
@@ -82,7 +144,7 @@ test('Pi history does not consume an unterminated partial JSONL entry', async ()
       await appendFile(transcript, 'lo"}]}}\n', 'utf8')
 
       const second = await history.sync({
-        source: piSourceDefinition,
+        source: legacyPiSource,
         host,
         detected,
         abortSignal: new AbortController().signal,
@@ -98,7 +160,7 @@ test('Pi history does not consume an unterminated partial JSONL entry', async ()
   }
 })
 
-test('Pi history resets checkpoint after truncation or physical file replacement', async () => {
+test('Pi Legacy history resets checkpoint after truncation or physical file replacement', async () => {
   const root = await mkdtemp(join(tmpdir(), 'agent-lens-pi-reset-'))
   const agentDir = join(root, 'agent')
   const transcript = join(agentDir, 'sessions', 'reset', 'session.jsonl')
@@ -120,7 +182,7 @@ test('Pi history resets checkpoint after truncation or physical file replacement
   try {
     await withHistoryRunner(agentDir, async ({ storage, history, host, detected }) => {
       const sync = () => history.sync({
-        source: piSourceDefinition,
+        source: legacyPiSource,
         host,
         detected,
         abortSignal: new AbortController().signal,
@@ -157,7 +219,7 @@ test('Pi history resets checkpoint after truncation or physical file replacement
   }
 })
 
-test('Pi history preserves a newline-terminated malformed row and continues afterwards', async () => {
+test('Pi Legacy history preserves a newline-terminated malformed row and continues afterwards', async () => {
   const root = await mkdtemp(join(tmpdir(), 'agent-lens-pi-malformed-'))
   const agentDir = join(root, 'agent')
   const transcript = join(agentDir, 'sessions', 'malformed', 'session.jsonl')
@@ -177,7 +239,7 @@ test('Pi history preserves a newline-terminated malformed row and continues afte
   try {
     await withHistoryRunner(agentDir, async ({ storage, history, host, detected }) => {
       const result = await history.sync({
-        source: piSourceDefinition,
+        source: legacyPiSource,
         host,
         detected,
         abortSignal: new AbortController().signal,
@@ -358,7 +420,7 @@ test('Pi session SourceRecord nativeId is the upstream session id without AgentL
   try {
     await withHistoryRunner(agentDir, async ({ storage, history, host, detected }) => {
       await history.sync({
-        source: piSourceDefinition,
+        source: legacyPiSource,
         host,
         detected,
         abortSignal: new AbortController().signal,
