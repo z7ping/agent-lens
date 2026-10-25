@@ -1048,19 +1048,18 @@ async function readClaudeArchivedHookPage(
   nativeSessionId: string, ctx: SourceExecutionContext, cursor?: string,
 ) {
   ctx.abortSignal.throwIfAborted()
-    const inbox = runtimeInboxDirectory()
-    const archive = await readArchivedHookInboxPage({ inbox, nativeSessionId, limit: 16, ...(cursor ? {cursor} : {}) })
-    const records = archive.items.map(item => {
-      const envelope = parseRuntimeEnvelope(item.content, item.fileName)
-      const archivePath = join(inbox, 'archive', sha256(nativeSessionId), item.fileName)
-      const record = runtimeRecord(envelope, archivePath, ctx)
-      if (record.sourceSessionNativeId !== nativeSessionId
-        || record.sourceId !== SOURCE_ID || record.installationId !== ctx.installation.id) {
-        throw new Error('Archived Claude Hook does not belong to requested native session')
-      }
-      return record
-    })
-    ctx.abortSignal.throwIfAborted()
+  const inbox = runtimeInboxDirectory()
+  const archive = await readArchivedHookInboxPage({ inbox, nativeSessionId, limit: 16, ...(cursor ? {cursor} : {}) })
+  const records = archive.items.map(item => {
+    const envelope = parseRuntimeEnvelope(item.content, item.fileName)
+    const archivePath = join(inbox, 'archive', sha256(nativeSessionId), item.fileName)
+    const record = runtimeRecord(envelope, archivePath, ctx)
+    if (record.sourceSessionNativeId !== nativeSessionId
+      || record.sourceId !== SOURCE_ID || record.installationId !== ctx.installation.id) {
+      throw new Error('Archived Claude Hook does not belong to requested native session')
+    }
+    return record
+  })
   return {
     records,
     hasMore: archive.hasMore,
