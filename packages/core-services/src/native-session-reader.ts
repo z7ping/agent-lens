@@ -36,6 +36,8 @@ export type NativeSessionReadResult =
       observations: ObservationCandidate[]
       /** Ordered native record provenance per candidate, used for stable ephemeral DTO IDs. */
       observationRecordIds: string[]
+      /** Optional exact native record boundary for each observation, trusted server-side only. */
+      observationCursors?: SourceNativeSessionCursor[]
       evidenceCandidates: EvidenceCandidate[]
       nextCursor: SourceNativeSessionCursor
       hasMore: boolean
@@ -130,7 +132,7 @@ export class NativeSessionReader {
       hasMore = result.hasMore
       pendingTail = result.pendingTail
       normalizedRows = []
-      for (const record of result.records) {
+      for (const [index, record] of result.records.entries()) {
         query.signal.throwIfAborted()
         if (record.installationId !== installation.id || record.sourceId !== query.sourceId
           || record.sourceSessionNativeId !== catalog.nativeSessionId) {
@@ -138,6 +140,7 @@ export class NativeSessionReader {
         }
         normalizedRows.push({
           recordId: record.id,
+          ...(result.recordCursors?.[index] ? { recordCursor: result.recordCursors[index] } : {}),
           sourceId: record.sourceId,
           installationId: record.installationId,
           ...(record.sourceSessionNativeId ? { sourceSessionNativeId: record.sourceSessionNativeId } : {}),
@@ -152,6 +155,8 @@ export class NativeSessionReader {
 
     const observations: ObservationCandidate[] = []
     const observationRecordIds: string[] = []
+    const observationCursors: SourceNativeSessionCursor[] = []
+    let allRecordCursors = true
     const evidenceCandidates: EvidenceCandidate[] = []
     for (const row of normalizedRows) {
       query.signal.throwIfAborted()
@@ -159,9 +164,25 @@ export class NativeSessionReader {
         || row.sourceSessionNativeId !== catalog.nativeSessionId) {
         return { state: 'drifted', reason: 'native-record-identity-changed' }
       }
+      if (row.recordCursor) {
+        const fromOffset = query.cursor?.offset ?? 0
+        if (row.recordCursor.fileIdentity !== catalog.fileIdentity
+          || !Number.isSafeInteger(row.recordCursor.offset)
+          || row.recordCursor.offset < fromOffset
+          || row.recordCursor.offset >= nextCursor.offset
+          || !Number.isSafeInteger(row.recordCursor.sequence)
+          || row.recordCursor.sequence < 0) {
+          return { state: 'drifted', reason: 'native-record-cursor-invalid' }
+        }
+      } else {
+        allRecordCursors = false
+      }
       const sanitized = this.capturePolicy.sanitizeNormalizedOutput(row.normalized)
       observations.push(...sanitized.observations)
       observationRecordIds.push(...sanitized.observations.map(() => row.recordId))
+      if (row.recordCursor) {
+        observationCursors.push(...sanitized.observations.map(() => row.recordCursor!))
+      }
       evidenceCandidates.push(...sanitized.evidenceCandidates)
     }
 
@@ -169,6 +190,7 @@ export class NativeSessionReader {
       state: 'available',
       observations,
       observationRecordIds,
+      ...(allRecordCursors ? { observationCursors } : {}),
       evidenceCandidates,
       nextCursor,
       hasMore,

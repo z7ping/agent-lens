@@ -93,11 +93,15 @@ test('Codex session page reads native events from active and archived roots with
       assert.equal(first.state, 'available')
       if (first.state !== 'available') continue
       assert.equal(first.records.length, 1)
+      assert.deepEqual(first.recordCursors?.map(c => [c.offset,c.sequence]), [[0,0]])
       assert.equal(first.hasMore, true)
       const second = await read({ filePath: path, nativeSessionId: 'codex-page', limit: 2, cursor: first.nextCursor }, ctx)
       assert.equal(second.state, 'available')
       if (second.state !== 'available') continue
       assert.equal(second.records.length, 2)
+      assert.equal(second.recordCursors?.[0]?.offset, first.nextCursor.offset)
+      assert.equal(second.recordCursors?.[0]?.sequence, 1)
+      assert.equal(second.recordCursors?.[1]?.sequence, 2)
       assert.equal(second.records[0]?.sourceSequence, 2)
       assert.equal(second.records[1]?.sourceSequence, 3)
       const normalized = await codexSourceDefinition.normalize(second.records[1]!, { host, installation })

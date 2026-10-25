@@ -19,6 +19,8 @@ export interface NativeWorkerReadInput {
 
 export interface NativeWorkerNormalizedRecord {
   recordId: string
+  /** Exact source-owned rewind point, never a client file path. */
+  recordCursor?: SourceNativeSessionCursor
   sourceId: string
   installationId: string
   sourceSessionNativeId?: string

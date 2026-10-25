@@ -55,11 +55,14 @@ async function read(input: NativeWorkerReadInput, signal: AbortSignal): Promise<
   if (page.nextCursor.fileIdentity !== input.expectedFileIdentity) {
     return { state: 'drifted', reason: 'native-catalog-file-identity-changed' }
   }
+  if (page.recordCursors && page.recordCursors.length !== page.records.length) {
+    return { state: 'unsupported', reason: 'native-worker-record-cursors-mismatch' }
+  }
   if (page.records.length > 64) {
     return { state: 'unsupported', reason: 'native-worker-record-limit' }
   }
   const entries: Extract<NativeWorkerReadResult, {state: 'available'}>['entries'] = []
-  for (const record of page.records) {
+  for (const [index, record] of page.records.entries()) {
     signal.throwIfAborted()
     if (record.sourceId !== input.sourceId || record.installationId !== input.installation.id
       || record.sourceSessionNativeId !== input.query.nativeSessionId) {
@@ -71,6 +74,7 @@ async function read(input: NativeWorkerReadInput, signal: AbortSignal): Promise<
     })
     entries.push({
       recordId: record.id,
+      ...(page.recordCursors?.[index] ? { recordCursor: page.recordCursors[index] } : {}),
       sourceId: record.sourceId,
       installationId: record.installationId,
       ...(record.sourceSessionNativeId ? { sourceSessionNativeId: record.sourceSessionNativeId } : {}),
