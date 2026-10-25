@@ -50,6 +50,17 @@ test('Native-only totals are returned separately with incomplete/unknown coverag
   })
 })
 
+test('selected disabled or unavailable Source never looks like a verified empty aggregate',async()=>{
+  const metrics={overview:async()=>{
+    throw Error('Unknown source must not query the metrics store')
+  }} as unknown as NativeSessionMetricsStore
+  for(const sourceIds of [['codex'],['missing-agent'],['pi','codex']]){
+    assert.deepEqual(await nativeMetricContribution(metrics,sources,policy,{sourceIds}),{
+      state:'unsupported',reason:'native-metrics-source-scope-unavailable',
+    })
+  }
+})
+
 test('unsupported project and tool filters must not appear as complete aggregates',async()=>{
   const metrics={
     async overview(){throw Error('not accessed')},
