@@ -134,7 +134,7 @@ test('opt-in native-only Writer skips SourceRecord / Observation / Evidence only
       ()=>sourceRunnerInternals.processSourceRecordWithOwnership(
         storage, observations, coverage, policy, tracker,
         source, host, installation, undefined,
-        {...record,locator:{...record.locator,path:join(root,'other.jsonl')}},
+        {...record,locator:{kind:'file' as const,path:join(root,'other.jsonl'),offset:0}},
         new AbortController().signal,
       ),
       /native-only-source-record-location-drift/,
