@@ -653,3 +653,47 @@ test('native Review lazy images resolve from source cursor, never SQL rows or ar
     assert.equal(reads,3)
   }finally{await server.dispose()}
 })
+
+test('native Hook endpoint is metadata-authorized, returns partial Review nodes without Source paths',async()=>{
+  const at='2026-10-25T00:00:00Z'
+  const entry:NativeSessionCatalogEntry={
+    sourceId:'codex',installationId:'codex-inst',nativeSessionId:'S-hook',
+    locationKind:'native',filePath:'/private/session.jsonl',
+    fileIdentity:'2:3',fileSize:1024,fileMtimeMs:1000,lastActivityAt:at,updatedAt:at,
+  }
+  const nativeId=nativeReviewSessionId(entry.sourceId,entry.installationId,entry.nativeSessionId)
+  const storage={
+    ...noopStorage,
+    nativeSessionCatalog:{async getByReviewSessionId(id:string){return id===nativeId?entry:null}},
+  } as unknown as StorageService
+  let reads=0
+  const reader:NativeSessionWindowReader={
+    async read(){throw Error('Hook endpoint must not scan native history')},
+    async readArchivedHooks(query){
+      reads++
+      assert.equal(query.sourceId,'codex')
+      assert.equal(query.nativeSessionId,'S-hook')
+      return {state:'available',observations:[{
+        kind:'tool.call' as const,capturedAt:at,
+        payload:{nativeToolName:'Read',callId:'hook-1'},
+        identityHints:{nativeSessionId:'S-hook'},
+      }],observationRecordIds:['hook-record-1'],truncated:false}
+    },
+  }
+  const server=await startHttpSurface(storage,{port:0,nativeSessionReader:reader})
+  try {
+    const base=`http://${server.host}:${server.port}/api/v1/native-sessions/${nativeId}/hooks`
+    const response=await fetch(base)
+    assert.equal(response.status,200)
+    const data=await response.json() as {state:string;boundaryIntegrity:string;sessionId:string;hookEventsTruncated:boolean}
+    assert.equal(data.state,'available')
+    assert.equal(data.boundaryIntegrity,'partial')
+    assert.equal(data.sessionId,nativeId)
+    assert.equal(data.hookEventsTruncated,false)
+    assert.equal(JSON.stringify(data).includes('/private/session.jsonl'),false)
+    assert.equal((await fetch(base+'?filePath=/etc/passwd')).status,400)
+    assert.equal((await fetch(base,{method:'POST'})).status,405)
+    assert.equal((await fetch(base.replace(nativeId,`native:${'0'.repeat(32)}`))).status,404)
+    assert.equal(reads,1)
+  }finally{await server.dispose()}
+})
