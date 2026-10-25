@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto'
 import type {
   DetectedSource,
   ObservationCapability,
@@ -8,7 +9,7 @@ import {
   defineAgentLensPlugin,
   type AgentLensContext,
 } from '@agent-lens/runtime-cordis'
-import { readAuthorizedNativeJsonlEntry, verifyJsonlLineSha256 } from '@agent-lens/source-support'
+import { readAuthorizedNativeJsonlEntry, readNativeSessionWindow, verifyJsonlLineSha256 } from '@agent-lens/source-support'
 import { discoverCodexAssets } from './assets'
 import {
   CODEX_CURRENT_PARSER_VERSION,
@@ -16,6 +17,7 @@ import {
 } from './current-protocol'
 import { detectCodex } from './detect'
 import { codexHistoryRoots, ingestCodexHistory, readSessionMetadata } from './history'
+import { nativeIdForEntry, nativeTypeForEntry } from './format'
 import { startCodexRuntimeCapture } from './runtime'
 import { normalizeCodexSessionAttribution } from './session-attribution'
 
@@ -124,6 +126,52 @@ export const codexSourceDefinition: SourceDefinition = {
   detect: detectCodex,
   declareCapabilities: declareCodexCapabilities,
   rawRecovery: jsonlRawRecovery,
+  async readNativeSessionPage(query, ctx) {
+    const page = await readNativeSessionWindow({
+      path: query.filePath,
+      allowedRoots: codexHistoryRoots(ctx.installation),
+      ...(query.cursor ? { cursor: query.cursor } : {}),
+      ...(query.limit === undefined ? {} : { limit: query.limit }),
+      signal: ctx.abortSignal,
+    })
+    if (page.state !== 'available') return page
+    ctx.abortSignal.throwIfAborted()
+    const session = await readSessionMetadata(query.filePath)
+    if (session.nativeSessionId !== query.nativeSessionId) {
+      return { state: 'drifted', reason: 'native-session-identity-changed' }
+    }
+    const records = page.lines.map(line => {
+      const entry = line.entry
+      const nativeId = nativeIdForEntry(entry)
+      const nativeType = nativeTypeForEntry(entry)
+      const occurredAt = typeof entry.timestamp === 'string' ? entry.timestamp
+        : entry.type === 'session_meta' ? session.startedAt : undefined
+      const recordHash = createHash('sha256')
+        .update(`${session.nativeSessionId}|${line.sequence}|${line.textFingerprint}`).digest('hex').slice(0, 32)
+      return {
+        id: `codex-record-${recordHash}`,
+        sourceId: 'codex',
+        installationId: ctx.installation.id,
+        sourceSessionNativeId: session.nativeSessionId,
+        nativeType,
+        ...(nativeId ? { nativeId } : {}),
+        sourceSequence: line.sequence,
+        ...(occurredAt ? { occurredAt } : {}),
+        capturedAt: new Date().toISOString(),
+        locator: { kind: 'file' as const, path: query.filePath, offset: line.offset },
+        fingerprint: line.textFingerprint,
+        payload: { entry, session },
+        parserVersion: CODEX_CURRENT_PARSER_VERSION,
+      }
+    })
+    return {
+      state: 'available',
+      records,
+      nextCursor: page.nextCursor,
+      hasMore: page.hasMore,
+      pendingTail: page.pendingTail,
+    }
+  },
   discoverAssets: discoverCodexAssets,
   ingestHistory: ingestCurrentCodexHistory,
   startCapture: startCodexRuntimeCapture,
