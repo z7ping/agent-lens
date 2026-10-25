@@ -78,6 +78,27 @@ export type NativeMetricOverviewResponseDto =
     }
   | {state:'unavailable'|'unsupported';reason:string}
 
+/** Explicit contribution from currently verified Native-only sessions.
+ * This is NOT silently added to Legacy summary totals.
+ */
+export type NativeMetricContributionDto =
+  | {
+      state:'available'
+      coverage:'complete'|'partial'
+      eligibleSessions:number
+      readySessions:number
+      missingSessions:number
+      staleSessions:number
+      partialSessions:number
+      /** Exact for ready native sessions only; others are excluded. */
+      interactionCount:number
+      toolCallCount:number
+      errorCount:number
+      inputTokens:number|null
+      outputTokens:number|null
+    }
+  | {state:'unavailable'|'unsupported';reason:string}
+
 export type NativeReviewWindowResponseDto =
   | NativeReviewWindowDto
   | { state: 'unavailable' | 'drifted' | 'unsupported'; reason: string }

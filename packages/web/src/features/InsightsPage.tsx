@@ -131,6 +131,27 @@ export function InsightsPage({ model, toolbarHost }: { model: AgentLensClientMod
       <div className="page-content insights-content">
         {insights.error && <ErrorStateBanner message={insights.error} onRetry={() => void insightsModel.refresh()}/>} 
 
+        {data?.meta.native && <section className="insight-coverage-strip" role="status"
+          aria-label={t('page.nativeCoverageTitle')}>
+          <div><span>{t('page.nativeCoverageTitle')}</span>
+            <b>{data.meta.native.state === 'available'
+              ? t('page.nativeCoverageCount', { ready: data.meta.native.readySessions,
+                eligible: data.meta.native.eligibleSessions })
+              : t('page.nativeCoverageUnavailable')}</b></div>
+          {data.meta.native.state === 'available' && <>
+            <div><span>{t('page.nativeVerifiedCalls')}</span>
+              <b>{data.meta.native.toolCallCount}</b></div>
+            <div><span>{t('page.nativeVerifiedErrors')}</span>
+              <b>{data.meta.native.errorCount}</b></div>
+            <div><span>{t('page.nativeCoverageStatus')}</span>
+              <b className={data.meta.native.coverage === 'partial' ? 'is-warning' : ''}>
+                {data.meta.native.coverage === 'partial'
+                  ? t('page.nativePartialCoverage') : t('page.nativeCompleteCoverage')}</b></div>
+          </>}
+          <small>{t('page.nativeSeparateNote')}</small>
+        </section>}
+
+
         {insights.loading && !data ? <WorkspaceSkeleton kind="insights"/> : data && data.summary.sessionCount > 0 ? <>
           <section className="insight-coverage-strip" aria-label={t('page.coverageAria')}>
             <div><span>{t('page.statisticsRange')}</span><b>{rangeLabel(insights.filters.range, t, locale, data.meta.from, data.meta.to)}</b></div>

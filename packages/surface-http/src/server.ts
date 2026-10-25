@@ -63,6 +63,7 @@ import { handleNativeSessionCatalogRequest } from './native-session-catalog-http
 import { handleNativeSessionBodySearchRequest } from './native-session-search-http'
 import { handleNativeSessionMetricsRequest } from './native-session-metrics-http'
 import { handleNativeSessionMetricsOverviewRequest } from './native-session-metrics-overview-http'
+import { nativeMetricContribution } from './native-metrics-contribution'
 import { reviewAttachmentSources } from './review-attachments'
 import { handleLiveRequest } from './live-http'
 import { handleManagedAssetFilesRequest } from './managed-asset-files'
@@ -898,11 +899,27 @@ export async function startHttpSurface(
         return
       }
       if (url.pathname === '/api/v1/usage') {
-        writeJson(response, 200, await usage.query(parseUsageQuery(url.searchParams)))
+        const query=parseUsageQuery(url.searchParams)
+        const legacy=await usage.query(query)
+        const native=storage.nativeSessionMetrics?.overview && options.sources && options.capturePolicy
+          ? await nativeMetricContribution(storage.nativeSessionMetrics,options.sources,options.capturePolicy,query)
+          : undefined
+        // Legacy and Native-only values remain separate, never double counted
+        // and never falsely presented as a complete combined usage aggregate.
+        writeJson(response,200,{
+          ...legacy,meta:{...legacy.meta,...(native?{native}:{})},
+        })
         return
       }
       if (url.pathname === '/api/v1/insights') {
-        writeJson(response, 200, await insights.query(parseInsightsQuery(url.searchParams)))
+        const query=parseInsightsQuery(url.searchParams)
+        const legacy=await insights.query(query)
+        const native=storage.nativeSessionMetrics?.overview && options.sources && options.capturePolicy
+          ? await nativeMetricContribution(storage.nativeSessionMetrics,options.sources,options.capturePolicy,query)
+          : undefined
+        writeJson(response,200,{
+          ...legacy,meta:{...legacy.meta,...(native?{native}:{})},
+        })
         return
       }
       if (url.pathname === '/api/v1/relationships') {

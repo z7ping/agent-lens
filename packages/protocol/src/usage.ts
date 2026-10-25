@@ -1,4 +1,5 @@
 import { AGENT_LENS_PROTOCOL_VERSION } from './timeline'
+import type { NativeMetricContributionDto } from './native-review'
 
 export type UsageAttribution = 'derived'
 export type UsageConfidence = 'high' | 'medium' | 'low'
@@ -75,6 +76,7 @@ export interface ToolAssetUsageResponseDto {
     unattributedToolCalls: number
     hasMoreTools: boolean
     projection?: ToolUsageProjectionStatusDto
+    native?: NativeMetricContributionDto
     generatedAt: string
   }
 }
