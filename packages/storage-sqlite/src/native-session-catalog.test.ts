@@ -106,6 +106,44 @@ test('native session catalog remains metadata-only, stable and independently pag
     assert.deepEqual((await catalog.query({
       onlyWithoutLegacyReview:true,locationKind:'native',
     })).items.map(x=>x.nativeSessionId),['a'])
+    // A native-only writer claim is per exact source identity, durable and
+    // cannot silently convert any historical SQL-backed session.
+    const ownership = {
+      sourceId: old.sourceId,
+      installationId: old.installationId,
+      nativeSessionId: old.nativeSessionId,
+      filePath: old.filePath,
+      fileIdentity: old.fileIdentity,
+    }
+    assert.equal(await catalog.hasNativeOnlyWriteClaim(ownership),false)
+    assert.equal(await catalog.claimNativeOnlyWrite({
+      ...ownership, fileIdentity: 'forged',
+    }),false)
+    assert.equal(await catalog.claimNativeOnlyWrite(ownership),true)
+    assert.equal(await catalog.hasNativeOnlyWriteClaim(ownership),true)
+    assert.equal(await catalog.claimNativeOnlyWrite(ownership),true) // idempotent
+    assert.equal(await catalog.claimNativeOnlyWrite({
+      ...ownership, nativeSessionId:'b',filePath:middle.filePath,
+    }),false) // prior Observation
+    assert.equal(await catalog.claimNativeOnlyWrite({
+      ...ownership, nativeSessionId:'c',filePath:newest.filePath,
+    }),false) // prior Observation
+    await catalog.upsert(location('source-record-only'))
+    storage.db.prepare(`INSERT INTO source_records(
+      id,source_id,installation_id,source_session_native_id,native_type,
+      captured_at,locator_json,payload_json,parser_version
+    ) VALUES (?,?,?,?,?,?,?,?,?)`).run(
+      'old-record','pi','local-pi','source-record-only','message.user',
+      now,'{"kind":"file"}','{"text":"old body"}','1',
+    )
+    assert.equal(await catalog.claimNativeOnlyWrite({
+      ...ownership,nativeSessionId:'source-record-only',
+      filePath:location('source-record-only').filePath,
+    }),false)
+    assert.equal(await catalog.hasNativeOnlyWriteClaim({
+      sourceId:'pi',installationId:'local-pi',nativeSessionId:'source-record-only',
+    }),false)
+
     // Unfiltered view still exposes all original catalog entries.
     const allNative = await catalog.query({locationKind:'native',limit:3})
     assert.deepEqual(allNative.items.map(x=>x.nativeSessionId),['c','b','a'])
@@ -114,7 +152,7 @@ test('native session catalog remains metadata-only, stable and independently pag
     const columns = storage.db.prepare('PRAGMA table_info(native_session_catalog)').all() as Array<{name:string}>
     assert.equal(columns.some(x=>x.name==='payload' || x.name==='payload_json' || x.name==='observation_id'),false)
     const rows = storage.db.prepare('SELECT COUNT(*) AS count FROM native_session_catalog').get() as {count:number}
-    assert.equal(rows.count,4)
+    assert.equal(rows.count,5)
     await assert.rejects(catalog.upsert({ ...middle, filePath: '../relative.jsonl' }))
     await assert.rejects(catalog.query({limit:5000}))
   } finally {
