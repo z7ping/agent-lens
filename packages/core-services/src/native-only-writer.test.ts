@@ -389,3 +389,70 @@ test('verified OpenCode current-state SQLite claim replaces duplicate event stor
     assert.equal(JSON.stringify(catalogRow).includes('PRIVATE ORIGINAL'),false)
   }finally{await rm(root,{recursive:true,force:true})}
 })
+
+test('claimed Native-only Hook uses a separately sealed Source-owned archive without duplicate SQL',async()=>{
+  const host:Host={id:'host',name:'local',platform:process.platform,arch:process.arch,
+    createdAt:at,lastSeenAt:at}
+  const installation:AgentInstallation={id:'inst',hostId:host.id,productId:'codex',
+    firstSeenAt:at,lastSeenAt:at}
+  const key={sourceId:'codex',installationId:'inst',nativeSessionId:'S1'}
+  const nativeCatalog:NativeSessionCatalogEntry={
+    ...key,locationKind:'native',filePath:'/original/native-session.jsonl',
+    fileIdentity:'1:1',fileSize:512,fileMtimeMs:10,lastActivityAt:at,updatedAt:at,
+  }
+  const original:SourceRecord={
+    id:'archived-H1',sourceId:'codex',installationId:'inst',
+    sourceSessionNativeId:'S1',nativeType:'hook/permission',capturedAt:at,
+    locator:{kind:'runtime-hook',path:'/hook-archive/verified.json',hookEventId:'H1'},
+    fingerprint:'c'.repeat(64),payload:{secret:'single original Hook'},
+    parserVersion:'1',
+  }
+  let rawWrites=0,verifies=0,verified:'verified'|'drifted'='verified'
+  const catalog={
+    async getSessionWriteMode(){return 'native-only' as const},
+    async get(){return nativeCatalog},
+    async claimLegacyWrite(){throw Error('Never reassign a native-only session')},
+  } as unknown as NativeSessionCatalogStore
+  const storage={nativeSessionCatalog:catalog,
+    repositories:{sourceRecords:{async put(){rawWrites++}}},
+    async transaction<T>(run:()=>Promise<T>){return run()},
+  } as unknown as StorageService
+  const source={
+    manifest:{sourceId:'codex',productId:'codex',parserVersion:'1'},
+    nativeSessionCoverageComplete:true,
+    readArchivedNativeHooksPage:async()=>({records:[],hasMore:false}),
+    rawRecovery:{
+      describe(){return{
+        authority:'agent-lens-only',locatorStability:'none',mutability:'ephemeral',
+        verification:'none',canReread:false,canReparse:false,replayable:false,
+        persistencePreference:'preserve',
+      }},
+      async verify(){verifies++;return{state:verified,checkedAt:at}},
+    },
+    async normalize(){throw Error('No duplicate Hook normalize on Native-only claim')},
+  } as unknown as SourceDefinition
+  const run=()=>sourceRunnerInternals.processSourceRecordWithOwnership(
+    storage,
+    {async commit(){throw Error('No duplicate SQL observations')}} as unknown as ObservationService,
+    {async declare(){throw Error('No duplicate SQL coverage')}} as unknown as CoverageService,
+    {sanitizeSourceRecord:(v:SourceRecord)=>v,
+      sanitizeNormalizedOutput:(v:unknown)=>v} as unknown as CapturePolicyService,
+    new NativeSessionCatalogTracker(catalog),
+    source,host,installation,undefined,original,new AbortController().signal,
+  )
+  const first=await run()
+  assert.equal(first.observationsCreated,0)
+  assert.equal(rawWrites,0)
+  assert.equal(verifies,1)
+  verified='drifted'
+  await assert.rejects(run(),/native-only-source-record-recovery-drift/)
+  assert.equal(rawWrites,0)
+  verified='verified'
+  source.nativeSessionCoverageComplete=false
+  await assert.rejects(run(),/native-only-source-recovery-coverage-drift/)
+  assert.equal(rawWrites,0)
+  source.nativeSessionCoverageComplete=true
+  delete source.readArchivedNativeHooksPage
+  await assert.rejects(run(),/native-only-source-recovery-coverage-drift/)
+  assert.equal(rawWrites,0)
+})
