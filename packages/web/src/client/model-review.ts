@@ -720,9 +720,10 @@ export abstract class AgentLensReviewModel extends AgentLensIntegrationModel {
         ...this.snapshot,
         review: { ...this.snapshot.review, detail, fileChanges: observedFiles, detailLoading: false, error: '' },
       })
-      // Pi is the only currently certified numerical Source. Backend also
-      // requires a durable Native-only claim; older SQL sessions are skipped.
-      if (summary.sourceId === 'pi' && summary.locationKind === 'native') {
+      // Reuse the same bounded numeric refresh for every Source-native
+      // session. The server is authoritative for native-only ownership,
+      // enabled Sources and completeness; the UI must not hardcode Pi.
+      if (summary.locationKind === 'native') {
         void this.refreshSelectedNativeMetrics(id, controller.signal)
       }
     } catch (error) {
