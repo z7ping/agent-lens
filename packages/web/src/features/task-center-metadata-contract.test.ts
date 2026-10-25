@@ -101,7 +101,7 @@ test('Task Center directly indexes Native-only sessions without forcing a Legacy
   assert.match(page,/onlyWithoutLegacyReview:true/)
   assert.match(page,/nativeTaskCenterSummaries\(nativeSessions,review\.filters,nowMs\)/)
   assert.match(page,/loadMoreNativeSessions/)
-  assert.match(page,/nativeCursor && <Button/)
+  assert.match(page,/\(nativeCursor \|\| nativeBodyCursor\) && <Button/)
   assert.match(page,/openHistoryTask\(entry\.id\)/)
 })
 
