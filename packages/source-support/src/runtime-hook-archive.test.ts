@@ -316,3 +316,22 @@ test('Hook archive fails closed on invalid Source-original digest before touchin
     assert.equal(await readFile(join(inbox,'hook.json'),'utf8'),'{"ok":true}')
   }finally{await rm(inbox,{recursive:true,force:true})}
 })
+
+test('Hook archive recovery refuses a symlink substituted for a sealed original',async()=>{
+  const inbox=await mkdtemp(join(tmpdir(),'al-hook-read-swap-'))
+  try{
+    const fileName='hook.json',nativeSessionId='S1',installationId='install'
+    await writeFile(join(inbox,fileName),'{"private":"valid Hook event"}')
+    await archiveAcceptedHookInboxFile({inbox,fileName,nativeSessionId,installationId})
+    const archivePath=archivedHookInboxRecordPath({inbox,fileName,nativeSessionId,installationId})
+    const outside=join(inbox,'outside-secret.txt')
+    await writeFile(outside,'sensitive outside file')
+    const {unlink}=await import('node:fs/promises')
+    await unlink(archivePath)
+    await symlink(outside,archivePath)
+    await assert.rejects(
+      readArchivedHookInboxPage({inbox,nativeSessionId,installationId}),
+      /Hook archive contains invalid event file/,
+    )
+  }finally{await rm(inbox,{recursive:true,force:true})}
+})
