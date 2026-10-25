@@ -622,8 +622,17 @@ try {
     const startPreparedSource = async (targets: Awaited<ReturnType<typeof prepareRegisteredSources>>['targets']) => {
       // 监听器初始目录扫描可能很大；先建立监听任务，同时读取最新历史。
       // 两者都完成后再重扫 latest，补齐监听就绪窗口内的文件变化。
-      const captureTask = abortableDelay(500, runtimeController.signal)
-        .then(() => startRegisteredSourceCapture(app.context, runtimeController.signal, targets))
+      const nativeFastCaptureGate = process.env.AGENT_LENS_NATIVE_ONLY_NEW_SESSIONS === '1'
+        && process.env.AGENT_LENS_NATIVE_CATALOG_FAST_SCAN === '1'
+        && targets.length === 1 && Boolean(targets[0]?.source.discoverNativeSessions)
+      let releaseCapture: (() => void) | undefined
+      const captureReady = nativeFastCaptureGate
+        ? new Promise<void>(resolve => { releaseCapture = resolve })
+        : abortableDelay(500, runtimeController.signal)
+      const captureTask = captureReady
+        .then(() => runtimeController.signal.aborted
+          ? { results: [], failures: [] }
+          : startRegisteredSourceCapture(app.context, runtimeController.signal, targets))
         .then(capture => {
           captureHandles.push(...capture.results)
           startupSessionDiagnostics.markFirst('source.capture.started')
@@ -635,6 +644,7 @@ try {
       // latest 同步可能比捕获启动慢，提前挂接拒绝处理以避免未处理的 Promise。
       void captureTask.catch(() => undefined)
       if (runtimeController.signal.aborted || !latestStage) {
+        releaseCapture?.()
         await captureTask
         return
       }
@@ -647,9 +657,12 @@ try {
           runtimeController.signal,
           targets,
           latestStage.window,
-          { cooperate: () => yieldToForeground(runtimeController.signal) },
+          { cooperate: () => yieldToForeground(runtimeController.signal),
+            ...(nativeFastCaptureGate ? { onNativeCatalogReady: () => releaseCapture?.() } : {}) },
         )
       } finally {
+        // Also release on failed/aborted first sync, so capture can recover.
+        releaseCapture?.()
         await captureTask
       }
       logSourceFailures(latestHistory.failures)
