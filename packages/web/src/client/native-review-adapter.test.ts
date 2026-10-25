@@ -65,7 +65,9 @@ test('native deep-linked Review uses shared model, never SQL file changes or rel
     assert.equal(first?.statisticsCompleteness,'window')
     assert.equal(first?.page.hasMore,true)
     assert.deepEqual(first?.interactions.map(x=>x.ordinal),[1])
-    assert.equal(model.getSnapshot().review.fileChanges,null)
+    assert.equal(model.getSnapshot().review.fileChanges?.logicalSessionId,id)
+    assert.equal(model.getSnapshot().review.fileChanges?.summary.observedCount,0)
+    assert.equal(model.getSnapshot().review.fileChanges?.summary.exactCount,0)
     assert.equal(model.getSnapshot().review.relationships,null)
     await model.loadMoreReviewDetail()
     const second=model.getSnapshot().review.detail
