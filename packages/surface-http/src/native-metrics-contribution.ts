@@ -12,6 +12,8 @@ export interface NativeContributionScope {
   toolName?:string
   from?:string
   to?:string
+  /** Opt-in per-tool numbers for Usage only; Insights remains compact. */
+  includeTools?:boolean
 }
 
 /** SQL-only Native-only contribution to the EXISTING Usage/Insights DTO.
@@ -34,7 +36,8 @@ export async function nativeMetricContribution(
   if(selected?.length===0){
     return {state:'available',coverage:'complete',eligibleSessions:0,readySessions:0,
       missingSessions:0,staleSessions:0,partialSessions:0,
-      interactionCount:0,toolCallCount:0,errorCount:0,inputTokens:null,outputTokens:null}
+      interactionCount:0,toolCallCount:0,errorCount:0,inputTokens:null,outputTokens:null,
+      ...(scope.includeTools?{tools:[],toolsTruncated:false}:{}),}
   }
   const ids=new Set(selected)
   const defs=sources.list().filter(source=>
@@ -64,6 +67,19 @@ export async function nativeMetricContribution(
         ?null
         :chunks.reduce((value,item)=>value+(item.totals[key]??0),0)
     const eligible=sum('eligibleSessions')
+    // Keep distinct Source identities; never invent ToolUsageDto success rates,
+    // event IDs, session links or durations from aggregate-only records.
+    const rawTools=scope.includeTools
+      ?chunks.flatMap(item=>item.tools.map(tool=>({
+        sourceId:item.sourceId,nativeToolName:tool.nativeToolName,
+        callCount:tool.callCount,resultCount:tool.resultCount,
+        errorCount:tool.errorCount,sessionCount:tool.sessionCount,
+      })))
+      :[]
+    rawTools.sort((a,b)=>b.callCount-a.callCount
+      || a.sourceId.localeCompare(b.sourceId)
+      || a.nativeToolName.localeCompare(b.nativeToolName))
+    const toolsTruncated=rawTools.length>256 || chunks.some(item=>item.toolsTruncated)
     return {
       state:'available',
       coverage:eligible===ready && chunks.every(item=>!item.toolsTruncated)?'complete':'partial',
@@ -73,6 +89,9 @@ export async function nativeMetricContribution(
       interactionCount:total('interactionCount'),toolCallCount:total('toolCallCount'),
       errorCount:total('errorCount'),inputTokens:tokens('inputTokens'),
       outputTokens:tokens('outputTokens'),
+      ...(scope.includeTools?{
+        tools:rawTools.slice(0,256),toolsTruncated,
+      }:{}),
     }
   }catch{
     // Legacy endpoints must remain useful if the Native metrics table/worker
