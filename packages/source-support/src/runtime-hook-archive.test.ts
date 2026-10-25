@@ -272,3 +272,47 @@ test('historical unsealed Hook archive remains readable, but malformed seal reje
       /Hook archive event fingerprint changed/)
   }finally{await rm(inbox,{recursive:true,force:true})}
 })
+
+test('Hook archive rejects bytes changed after emitter accepted a different original event',async()=>{
+  const inbox=await mkdtemp(join(tmpdir(),'al-hook-capture-original-'))
+  try{
+    const fileName='original.json',session='session-1',installationId='install-1'
+    const original='{"decision":"allow"}'
+    const changed='{"decision":"block"}'
+    assert.equal(Buffer.byteLength(original),Buffer.byteLength(changed))
+    const expectedSha256=createHash('sha256').update(Buffer.from(original)).digest('hex')
+    await writeFile(join(inbox,fileName),original)
+    // Simulate an original Hook event already parsed and emitted, then changed
+    // by another process before the Source's durable archive acknowledgement.
+    await writeFile(join(inbox,fileName),changed)
+    await assert.rejects(archiveAcceptedHookInboxFile({
+      inbox,fileName,nativeSessionId:session,installationId,expectedSha256,
+    }),/Hook archive original bytes changed after capture/)
+    assert.equal(await readFile(join(inbox,fileName),'utf8'),changed,
+      'failed verification must retain the inbox original for safe retry')
+    assert.deepEqual((await readArchivedHookInboxPage({
+      inbox,nativeSessionId:session,installationId,
+    })).items,[],'unverified archive must never be returned as evidence')
+    await writeFile(join(inbox,fileName),original)
+    await archiveAcceptedHookInboxFile({
+      inbox,fileName,nativeSessionId:session,installationId,expectedSha256,
+    })
+    const path=archivedHookInboxRecordPath({inbox,fileName,nativeSessionId:session,installationId})
+    assert.equal(await readFile(`${path}.sha256`,'utf8'),expectedSha256)
+    assert.deepEqual((await readArchivedHookInboxPage({
+      inbox,nativeSessionId:session,installationId,
+    })).items,[{fileName,content:original}])
+  }finally{await rm(inbox,{recursive:true,force:true})}
+})
+
+test('Hook archive fails closed on invalid Source-original digest before touching the file',async()=>{
+  const inbox=await mkdtemp(join(tmpdir(),'al-hook-capture-invalid-'))
+  try{
+    await writeFile(join(inbox,'hook.json'),'{"ok":true}')
+    await assert.rejects(archiveAcceptedHookInboxFile({
+      inbox,fileName:'hook.json',nativeSessionId:'session',installationId:'install',
+      expectedSha256:'not-a-sha',
+    }),/Invalid Hook source-original SHA-256/)
+    assert.equal(await readFile(join(inbox,'hook.json'),'utf8'),'{"ok":true}')
+  }finally{await rm(inbox,{recursive:true,force:true})}
+})

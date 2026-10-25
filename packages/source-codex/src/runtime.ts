@@ -137,12 +137,16 @@ export async function startCodexRuntimeCapture(
         if (stopped || ctx.abortSignal.aborted) break
         const filePath = join(inbox, fileName)
         try {
-          const text = await readFile(filePath, 'utf8')
-          const envelope = parseEnvelope(text, fileName)
+          const originalBytes = await readFile(filePath)
+          const envelope = parseEnvelope(originalBytes.toString('utf8'), fileName)
           const record = sourceRecordFromEnvelope(envelope, filePath, ctx)
           await emitter.emit(record)
           if (nativeHookArchiveEnabled() && record.sourceSessionNativeId) {
-            await archiveAcceptedHookInboxFile({inbox,fileName,nativeSessionId:record.sourceSessionNativeId,installationId:ctx.installation.id})
+            await archiveAcceptedHookInboxFile({
+              inbox,fileName,nativeSessionId:record.sourceSessionNativeId,
+              installationId:ctx.installation.id,
+              expectedSha256:createHash('sha256').update(originalBytes).digest('hex'),
+            })
           } else {
             await unlink(filePath)
           }
