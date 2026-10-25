@@ -1,7 +1,7 @@
 import { monitorEventLoopDelay } from 'node:perf_hooks'
 import type { AgentIntegrationRuntimeStatus, StorageService } from '@agent-lens/core'
 import { HubReviewProjection } from '@agent-lens/projection-review'
-import { NativeSessionReader } from '@agent-lens/core-services'
+import { NativeReaderWorkerClient, NativeSessionReader } from '@agent-lens/core-services'
 import {
   SESSION_SUMMARY_PROJECTION_ID,
   TASK_FILE_CHANGE_PROJECTION_ID,
@@ -245,12 +245,13 @@ const applyHttpSurface = Object.assign(
       config.healthDetails,
       config.diagnosticsDetails,
     )
+    const nativeReaderWorker = new NativeReaderWorkerClient()
     const piLive = ctx.get('piLive')
     const piEcosystem = ctx.get('piEcosystem')
     const surface = await startHttpSurface(healthStorage, {
       port: config.port ?? DEFAULT_AGENT_LENS_HTTP_PORT,
       eventHub,
-      nativeSessionReader: new NativeSessionReader(ctx.storage, ctx.sources, ctx.capturePolicy),
+      nativeSessionReader: new NativeSessionReader(ctx.storage, ctx.sources, ctx.capturePolicy, nativeReaderWorker),
       ...(ctx.sources ? { sources: ctx.sources } : {}),
       ...(ctx.capabilities ? { capabilities: ctx.capabilities } : {}),
       ...(ctx.capturePolicy ? { capturePolicy: ctx.capturePolicy } : {}),
@@ -283,6 +284,7 @@ const applyHttpSurface = Object.assign(
       unprovideHttp()
       unprovideHubReview()
       await surface.dispose()
+      await nativeReaderWorker.dispose()
     }
   },
   { inject: ['storage', 'unifiedRead', 'sources', 'identity', 'capabilities', 'assets', 'evidence', 'capturePolicy', 'backup', 'lives', 'liveAttachments'] },

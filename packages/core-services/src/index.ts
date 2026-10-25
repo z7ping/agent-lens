@@ -863,3 +863,5 @@ export class DefaultProjectionService implements ProjectionService {
 export * from './live-attachments'
 
 export * from './native-session-reader'
+export { NativeReaderWorkerClient, resolveNativeReaderWorkerUrl, type NativeReaderWorkerPort } from './native-reader-worker-client'
+export type { NativeWorkerReadInput, NativeWorkerReadResult, NativeWorkerRequest, NativeWorkerReply } from './native-reader-worker-protocol'

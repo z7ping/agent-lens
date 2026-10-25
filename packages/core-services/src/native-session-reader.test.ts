@@ -124,3 +124,64 @@ test('native reader fails closed for disabled source, missing session, replaced 
   await assert.rejects(cancelled.reader.read({ ...query, signal: signal.signal }))
   assert.equal(cancelled.calls.catalog, 0)
 })
+
+
+test('native reader uses isolated worker for supported sources and still sanitizes on the parent', async () => {
+  const baseline = fixture()
+  const { reader: _old, ...unused } = baseline
+  assert.ok(unused)
+  let sourceRead = 0
+  let workerRead = 0
+  let sanitized = 0
+  const storage = {
+    nativeSessionCatalog: { async get() { return catalog } },
+    repositories: {
+      installations: { async get() { return installation } },
+      hosts: { async get() { return host } },
+    },
+  } as unknown as StorageService
+  const sources = { list: () => [{
+    manifest: { sourceId: 'pi', productId: 'pi', parserVersion: 'current' },
+    async readNativeSessionPage() { sourceRead++; throw Error('main thread Source read is forbidden') },
+    async normalize() { throw Error('main thread normalizer is forbidden') },
+  }] } as unknown as SourceService
+  const policy = {
+    isSourceEnabled: () => true,
+    sanitizeNormalizedOutput(input: { observations: typeof sample[]; evidenceCandidates: unknown[] }) {
+      sanitized++
+      return { ...input, observations: input.observations.map(item => ({
+        ...item, payload: { text: '[parent-redacted]' },
+      })) }
+    },
+  } as unknown as CapturePolicyService
+  const worker = {
+    supports: (sourceId: string) => sourceId === 'pi',
+    async read(input: {sourceId:string; parserVersion:string; query:{filePath:string}}, signal:AbortSignal) {
+      workerRead++
+      assert.equal(input.sourceId, 'pi')
+      assert.equal(input.parserVersion, 'current')
+      assert.equal(input.query.filePath, catalog.filePath)
+      assert.equal(signal.aborted, false)
+      return {
+        state: 'available' as const,
+        entries: [{
+          recordId: 'worker-record',
+          sourceId: 'pi', installationId: installation.id,
+          sourceSessionNativeId: catalog.nativeSessionId,
+          normalized: { observations: [sample], evidenceCandidates: [] },
+        }],
+        nextCursor: { offset: 99, sequence: 2, fileIdentity: catalog.fileIdentity },
+        hasMore: false, pendingTail: false,
+      }
+    },
+  }
+  const isolated = new NativeSessionReader(storage, sources, policy, worker)
+  const output = await isolated.read(query)
+  assert.equal(output.state,'available')
+  if(output.state !== 'available') return
+  assert.deepEqual(output.observationRecordIds, ['worker-record'])
+  assert.deepEqual(output.observations[0]?.payload, {text:'[parent-redacted]'})
+  assert.equal(workerRead, 1)
+  assert.equal(sourceRead, 0)
+  assert.equal(sanitized, 1)
+})
