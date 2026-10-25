@@ -66,6 +66,7 @@ import type {
   SourceDetectionContext,
 } from '../contracts/source'
 import type { SourceRawAuditReader } from './source-raw-retention'
+import type { NativeSessionCatalogStore } from './native-session-catalog'
 import type { MaintenanceJobStore } from './maintenance'
 import type { ToolUsageObservationReader } from './tool-usage'
 import type { TaskFileChangeProjectionStore } from './task-file-changes'
@@ -579,6 +580,7 @@ export interface StorageService {
   readonly sessionSummaries?: SessionSummaryReader
   readonly sessionSummaryProjection?: SessionSummaryProjectionStore
   readonly launchableProjects?: LaunchableProjectReader
+  readonly nativeSessionCatalog?: NativeSessionCatalogStore
   readonly taskFileChanges?: TaskFileChangeProjectionStore
   readonly toolUsageObservations?: ToolUsageObservationReader
   readonly maintenance?: StorageMaintenance
@@ -599,3 +601,5 @@ export * from './source-raw-retention'
 export * from './source-raw-recovery-audit'
 
 export * from './task-file-changes'
+
+export * from './native-session-catalog'

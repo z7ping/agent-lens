@@ -11,8 +11,8 @@ test('storage migrations keep heavy indexes out of startup and maintenance creat
     const migrations = storage.db.prepare(
       'SELECT version, name FROM schema_migrations ORDER BY version',
     ).all() as Array<{ version: number; name: string }>
-    assert.equal(migrations.at(-1)?.version, 33)
-    assert.equal(migrations.at(-1)?.name, 'launchable-activity-reconciliation')
+    assert.equal(migrations.at(-1)?.version, 34)
+    assert.equal(migrations.at(-1)?.name, 'native-session-catalog')
 
     const indexesBefore = storage.db.prepare("PRAGMA index_list('observations')").all() as Array<{ name: string }>
     const namesBefore = new Set(indexesBefore.map(item => item.name))
