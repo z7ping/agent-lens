@@ -919,6 +919,77 @@ export const hermesSourceDefinition: SourceDefinition = {
   detect: detectHermes,
   declareCapabilities: declareHermesCapabilities,
   rawRecovery: databaseRawRecovery,
+  async *discoverNativeSessions(ctx) {
+    const root = ctx.installation.dataRoot
+    if (!root || ctx.abortSignal.aborted) return
+    const dbPath = join(root, DB_NAME)
+    let file
+    try { file = await stat(dbPath) }
+    catch (error) { if (isMissingPathError(error)) return; throw error }
+    if (!file.isFile()) return
+    const db = openDatabase(root)
+    const identity = `${file.dev}:${file.ino}`
+    try {
+      const messages = tableColumns(db, 'messages')
+      if (!messages.has('session_id')) return
+      const sessions = tableColumns(db, 'sessions')
+      const joinSession = sessions.has('id') && sessions.has('title')
+        ? 'LEFT JOIN sessions s ON m.session_id = s.id' : ''
+      const titleExpr = joinSession ? 'MAX(s.title)' : 'NULL'
+      const lastMsExpr = messages.has('timestamp')
+        ? `MAX(${timestampMillisSql('m.timestamp')})` : 'NULL'
+      const query = db.prepare(`
+        SELECT m.session_id AS native_session_id,
+          MAX(m.rowid) AS last_row,
+          ${lastMsExpr} AS last_ms,
+          ${titleExpr} AS session_title
+        FROM messages m ${joinSession}
+        WHERE m.session_id IS NOT NULL AND trim(m.session_id) <> ''
+        GROUP BY m.session_id
+        HAVING MAX(m.rowid) < ?
+        ORDER BY last_row DESC
+        LIMIT ?
+      `)
+      const newestSince = ctx.historyWindow?.activeSince
+        ? Date.parse(ctx.historyWindow.activeSince) : Number.NaN
+      const maxSessions = Math.max(0, Math.floor(ctx.historyWindow?.sessionLimit ?? Number.MAX_SAFE_INTEGER))
+      let lastRow = Number.MAX_SAFE_INTEGER
+      let emitted = 0
+      while (!ctx.abortSignal.aborted && emitted < maxSessions) {
+        const rows = query.all(lastRow, Math.min(128,maxSessions - emitted)) as Array<{
+          native_session_id: string;last_row:number;last_ms:number|null;session_title:string|null
+        }>
+        if (!rows.length) break
+        for (const row of rows) {
+          ctx.abortSignal.throwIfAborted()
+          if (!row.native_session_id || !Number.isSafeInteger(row.last_row)) continue
+          const observedAt = Number.isFinite(row.last_ms) && row.last_ms !== null
+            && row.last_ms >= 0 ? row.last_ms : file.mtimeMs
+          if (Number.isFinite(newestSince) && observedAt < newestSince) continue
+          const current = await stat(dbPath)
+          if (!current.isFile() || current.dev !== file.dev || current.ino !== file.ino) {
+            throw new Error('Hermes native database changed identity during catalog scan')
+          }
+          const title = row.session_title?.trim()
+          yield {
+            sourceId: SOURCE_ID, installationId: ctx.installation.id,
+            nativeSessionId: row.native_session_id,
+            locationKind: 'native' as const,
+            filePath: dbPath, fileIdentity: identity,
+            fileSize: current.size, fileMtimeMs: current.mtimeMs,
+            lastActivityAt: new Date(observedAt).toISOString(),
+            ...(title ? {title} : {}),
+            updatedAt: new Date().toISOString(),
+          }
+          emitted++
+        }
+        const last = rows[rows.length-1]!
+        if (last.last_row >= lastRow) throw new Error('Hermes catalog row cursor did not advance')
+        lastRow = last.last_row
+        if (rows.length < Math.min(128,maxSessions - (emitted - rows.length))) break
+      }
+    } finally { db.close() }
+  },
   async readNativeSessionPage(query, ctx) {
     const root = ctx.installation.dataRoot
     const limit = query.limit ?? 32
