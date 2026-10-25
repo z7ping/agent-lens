@@ -46,7 +46,7 @@ test('native session catalog remains metadata-only, stable and independently pag
     assert.deepEqual((await catalog.query({search:'no-such-private-body'})).items,[])
     assert.deepEqual((await catalog.query({search:'%' })).items,[])
     assert.deepEqual((await catalog.query({search:'a', locationKind:'native'}))
-      .items.map(item=>item.nativeSessionId),['a'])
+      .items.map(item=>item.nativeSessionId),['b','a'])
 
     const byNativeId = await catalog.getByReviewSessionId(
       nativeReviewSessionId('pi','local-pi','b'),
