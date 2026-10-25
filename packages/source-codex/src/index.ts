@@ -8,14 +8,14 @@ import {
   defineAgentLensPlugin,
   type AgentLensContext,
 } from '@agent-lens/runtime-cordis'
-import { verifyJsonlLineSha256 } from '@agent-lens/source-support'
+import { readAuthorizedNativeJsonlEntry, verifyJsonlLineSha256 } from '@agent-lens/source-support'
 import { discoverCodexAssets } from './assets'
 import {
   CODEX_CURRENT_PARSER_VERSION,
   normalizeCurrentCodexRecord,
 } from './current-protocol'
 import { detectCodex } from './detect'
-import { ingestCodexHistory } from './history'
+import { codexHistoryRoots, ingestCodexHistory, readSessionMetadata } from './history'
 import { startCodexRuntimeCapture } from './runtime'
 import { normalizeCodexSessionAttribution } from './session-attribution'
 
@@ -87,6 +87,24 @@ const jsonlRawRecovery: NonNullable<SourceDefinition['rawRecovery']> = {
             ? 'runtime-hook source is consumed from an ephemeral inbox'
             : 'record does not expose a stable JSONL path+offset+fingerprint locator',
         }
+  },
+  async hydrate(record, ctx) {
+    const read = await readAuthorizedNativeJsonlEntry({
+      reference: record,
+      installationId: ctx.installation.id,
+      sourceId: 'codex',
+      parserVersion: CODEX_CURRENT_PARSER_VERSION,
+      allowedRoots: codexHistoryRoots(ctx.installation),
+      abortSignal: ctx.abortSignal,
+    })
+    if (read.state !== 'available') return read
+    ctx.abortSignal.throwIfAborted()
+    const session = await readSessionMetadata(read.canonicalPath)
+    if (record.sourceSessionNativeId && session.nativeSessionId !== record.sourceSessionNativeId) {
+      return { state: 'drifted', reason: 'source-native-session-identity-changed' }
+    }
+    // Ignore catalog title here: Source normalizer only needs native session context.
+    return { state: 'available', record: { ...record, payload: { entry: read.entry, session } } }
   },
   async verify(record) {
     const result = await verifyJsonlLineSha256({
