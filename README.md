@@ -205,6 +205,8 @@ AgentLens 1.0 是 Cordis Application，精确使用 `@deepseek-ai/cordis@4.0.1` 
 
 更多贡献与安全报告方式见 [贡献指南](CONTRIBUTING.md) 和 [安全策略](SECURITY.md)。
 
+**贡献新的 Agent 接入：**[Source / Live / Integration 分步教程](docs/contributing/agent-integration/README.md)（当前通过仓库 PR 贡献，不承诺独立 npm 插件自动安装）。
+
 本地开发：
 
 ```bash
