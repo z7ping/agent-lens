@@ -72,8 +72,13 @@ export class SqliteNativeSessionCatalog {
         ON CONFLICT (source_id,installation_id,native_session_id,location_kind) DO UPDATE SET
           file_path=excluded.file_path,
           file_identity=excluded.file_identity,
-          file_size=excluded.file_size,
-          file_mtime_ms=excluded.file_mtime_ms,
+          file_size=CASE
+            WHEN excluded.file_identity != native_session_catalog.file_identity
+              OR excluded.file_mtime_ms > native_session_catalog.file_mtime_ms
+              THEN excluded.file_size
+            ELSE MAX(native_session_catalog.file_size, excluded.file_size)
+          END,
+          file_mtime_ms=MAX(native_session_catalog.file_mtime_ms, excluded.file_mtime_ms),
           last_activity_at=MAX(native_session_catalog.last_activity_at, excluded.last_activity_at),
           title=COALESCE(excluded.title,native_session_catalog.title),
           updated_at=excluded.updated_at,
