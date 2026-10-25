@@ -4,6 +4,7 @@ import type {
   NativeSessionMetricsStore,
   NativeSessionMetricOverview,
   NativeSessionMetricOverviewQuery,
+  NativeMetricPendingSession,
 } from '@agent-lens/core'
 import { NATIVE_SESSION_METRIC_PROJECTION_VERSION } from '@agent-lens/core'
 import type { SqliteExecutor } from './executor'
@@ -267,6 +268,43 @@ export class SqliteNativeSessionMetrics implements NativeSessionMetricsStore {
         tools:rows.slice(0,256),
         toolsTruncated:rows.length>256,
       }
+    })
+  }
+
+  /** Select only the most recent uncomputed/stale Native-only session.
+   * Uses the catalog/write-claim index, not source events.
+   */
+  nextPending(query:{sourceId:string;parserVersion:string}):Promise<NativeMetricPendingSession|null>{
+    if(!query.sourceId || query.sourceId.length>128 || !query.parserVersion
+      || query.parserVersion.length>512)throw new TypeError('Invalid pending native metric query')
+    return this.executor.run(()=>{
+      const row=this.executor.db.prepare(`
+        SELECT catalog.source_id AS sourceId,catalog.installation_id AS installationId,
+               catalog.native_session_id AS nativeSessionId,
+               catalog.file_identity AS fileIdentity,
+               catalog.file_size AS fileSize,catalog.file_mtime_ms AS fileMtimeMs
+        FROM native_session_catalog AS catalog
+        JOIN native_session_write_claims AS claim
+          ON claim.source_id=catalog.source_id
+         AND claim.installation_id=catalog.installation_id
+         AND claim.native_session_id=catalog.native_session_id
+         AND claim.mode='native-only'
+        LEFT JOIN native_session_metrics AS metrics
+          ON metrics.source_id=catalog.source_id
+         AND metrics.installation_id=catalog.installation_id
+         AND metrics.native_session_id=catalog.native_session_id
+        WHERE catalog.source_id=? AND catalog.location_kind='native'
+          AND (metrics.source_id IS NULL
+            OR metrics.file_identity<>catalog.file_identity
+            OR metrics.file_size<>catalog.file_size
+            OR metrics.file_mtime_ms<>catalog.file_mtime_ms
+            OR metrics.parser_version<>?
+            OR metrics.projection_version<>?)
+        ORDER BY catalog.last_activity_at DESC,
+                 catalog.installation_id ASC,catalog.native_session_id ASC
+        LIMIT 1
+      `).get(query.sourceId,query.parserVersion,NATIVE_SESSION_METRIC_PROJECTION_VERSION)
+      return (row as NativeMetricPendingSession | undefined)??null
     })
   }
 
