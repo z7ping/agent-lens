@@ -1097,6 +1097,7 @@ test('native Review never silently truncates more than 512 provenance candidates
           payload:{text:'check evidence'},identityHints:{nativeSessionId:'S1'},
         }],
         observationRecordIds:['native-r1'],
+        observationCursors:[{offset:0,sequence:0,fileIdentity:'inode-1'}],
         evidenceCandidates:Array.from({length:513},(_,i)=>({
           captureMethod:'native-log' as const,derivation:'observed' as const,
           sourceRecordId:'native-r1',capturedAt:'2026-10-25T00:00:00Z',
