@@ -1,6 +1,7 @@
 import { monitorEventLoopDelay } from 'node:perf_hooks'
 import type { AgentIntegrationRuntimeStatus, StorageService } from '@agent-lens/core'
 import { HubReviewProjection } from '@agent-lens/projection-review'
+import { NativeSessionReader } from '@agent-lens/core-services'
 import {
   SESSION_SUMMARY_PROJECTION_ID,
   TASK_FILE_CHANGE_PROJECTION_ID,
@@ -249,6 +250,7 @@ const applyHttpSurface = Object.assign(
     const surface = await startHttpSurface(healthStorage, {
       port: config.port ?? DEFAULT_AGENT_LENS_HTTP_PORT,
       eventHub,
+      nativeSessionReader: new NativeSessionReader(ctx.storage, ctx.sources, ctx.capturePolicy),
       ...(ctx.sources ? { sources: ctx.sources } : {}),
       ...(ctx.capabilities ? { capabilities: ctx.capabilities } : {}),
       ...(ctx.capturePolicy ? { capturePolicy: ctx.capturePolicy } : {}),
