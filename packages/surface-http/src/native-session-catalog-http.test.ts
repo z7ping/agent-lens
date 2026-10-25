@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import type { CapturePolicyService, NativeSessionCatalogEntry, NativeSessionCatalogQuery, NativeSessionCatalogStore, StorageService } from '@agent-lens/core'
+import { nativeReviewSessionId } from '@agent-lens/projection-review'
 import { startHttpSurface } from './server'
 
 const now = '2026-10-25T00:00:00Z'
@@ -34,9 +35,13 @@ test('native Catalog HTTP exposes only authorized session identities, no physica
     assert.equal(first.status,200)
     const result = await first.json() as { items: Array<Record<string,unknown>>; nextCursor: string; hasMore: boolean }
     assert.deepEqual(result.items, [{
+      id: nativeReviewSessionId('pi', 'installation', 'A'),
       sourceId: 'pi',installationId: 'installation',nativeSessionId: 'A',
       locationKind: 'native',lastActivityAt: now,title:'Session A',
     }])
+    assert.equal(result.items[0]?.id, nativeReviewSessionId('pi','installation','A'))
+    assert.equal(JSON.stringify(result).includes('/private/native'), false)
+    assert.equal(result.items[0]?.id?.startsWith('native:'),true)
     assert.equal(result.hasMore,true)
     assert.equal(JSON.stringify(result).includes('/private/native'), false)
     assert.equal(JSON.stringify(result).includes('fileIdentity'), false)
