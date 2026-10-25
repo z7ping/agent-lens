@@ -8,6 +8,7 @@ import {
   stagesAllowedByCapacity,
   storageCapacityState,
   startupHistoryStage,
+  nativeCaptureStartupBatches,
   yieldToForeground,
 } from './history-sync-plan'
 
@@ -62,4 +63,16 @@ test('前台让出点在取消后立即结束', async () => {
   controller.abort()
   await yieldToForeground(controller.signal)
   assert.equal(controller.signal.aborted, true)
+})
+
+test('native fast capture waits on independent source/installation ownership gates', () => {
+  const a={sourceId:'pi',installationId:'install-a'}
+  const b={sourceId:'pi',installationId:'install-b'}
+  const c={sourceId:'codex',installationId:'install-c'}
+  const targets=[a,b,c]
+  assert.deepEqual(nativeCaptureStartupBatches(targets,false),[targets])
+  assert.deepEqual(nativeCaptureStartupBatches(targets,true),[[a],[b],[c]])
+  assert.notEqual(nativeCaptureStartupBatches(targets,true)[0]?.[0]?.installationId,
+    nativeCaptureStartupBatches(targets,true)[1]?.[0]?.installationId)
+  assert.deepEqual(targets,[a,b,c],'source ordering is unchanged')
 })

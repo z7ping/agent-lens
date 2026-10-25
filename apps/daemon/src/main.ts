@@ -56,6 +56,7 @@ import {
 import {
   createProgressiveHistoryStages,
   createParserReplayMaintenanceStages,
+  nativeCaptureStartupBatches,
   deferredHistoryStages,
   parserReplayMaintenanceStagesAllowedByCapacity,
   stagesAllowedByCapacity,
@@ -693,11 +694,18 @@ try {
     const startupTasks: Promise<void>[] = []
     const prepared = await prepareRegisteredSources(app.context, runtimeController.signal, undefined, {
       onPrepared: targets => {
-        // 任务由同步流程持有；发现、捕获和最新会话恢复按来源推进。
-        // 最新历史先行；随后启动的捕获与二次 latest 同步覆盖交接窗口。
-        startupTasks.push(startPreparedSource(targets).catch(error => {
-          console.warn('[AgentLens] source startup fast path failed', error)
-        }))
+        // The experimental native owner handshake must be per Installation,
+        // not per Source detection batch. A single Source may detect multiple
+        // runtime profiles: sharing one capture gate previously let its second
+        // installation claim legacy before the catalog proof completed.
+        const nativeFast = process.env.AGENT_LENS_NATIVE_ONLY_NEW_SESSIONS === '1'
+          && process.env.AGENT_LENS_NATIVE_CATALOG_FAST_SCAN === '1'
+        const batches = nativeCaptureStartupBatches(targets, nativeFast)
+        for (const batch of batches) {
+          startupTasks.push(startPreparedSource(batch).catch(error => {
+            console.warn('[AgentLens] source startup fast path failed', error)
+          }))
+        }
       },
     })
     startupSessionDiagnostics.markFirst('source.prepare.completed')

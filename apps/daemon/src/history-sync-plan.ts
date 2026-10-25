@@ -48,6 +48,15 @@ export function createParserReplayMaintenanceStages(startedAt: number): ParserRe
   ]
 }
 
+/** An experimental Native-only startup must arbitrate ownership separately
+ * for each Installation before its Runtime Capture may emit records.
+ */
+export function nativeCaptureStartupBatches<T>(
+  targets: readonly T[], nativeFast: boolean,
+): T[][] {
+  return nativeFast ? targets.map(target => [target]) : [[...targets]]
+}
+
 export type StorageCapacityState = 'healthy' | 'approaching' | 'exceeded' | 'unknown'
 
 export function storageCapacityState(details: Readonly<Record<string, unknown>> | undefined): StorageCapacityState {
