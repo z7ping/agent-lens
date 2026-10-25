@@ -24,6 +24,7 @@ import type {
   VersionedCheckpoint,
 } from '@agent-lens/core'
 import { materializeEvidence } from './index'
+import { NativeSessionCatalogTracker } from './native-session-catalog-tracker'
 import { deriveParentRelationshipCandidates } from './relationship-hints'
 import { queuedHistoryStatus, SourceHistoryProgressTracker } from './source-history-progress'
 
@@ -447,6 +448,8 @@ async function processSourceRecord(
 }
 
 export class SourceHistoryRunner {
+  private readonly nativeCatalogTracker: NativeSessionCatalogTracker
+
   constructor(
     private readonly storage: StorageService,
     private readonly identity: IdentityService,
@@ -454,7 +457,9 @@ export class SourceHistoryRunner {
     private readonly capabilities: CapabilityService,
     private readonly coverage: CoverageService,
     private readonly capturePolicy: CapturePolicyService,
-  ) {}
+  ) {
+    this.nativeCatalogTracker = new NativeSessionCatalogTracker(storage.nativeSessionCatalog)
+  }
 
   async replay(input: SourceParserReplayInput): Promise<SourceParserReplayResult> {
     const { source, host, detected, abortSignal } = input
@@ -702,6 +707,16 @@ export class SourceHistoryRunner {
         result.observationsCreated += processed.observationsCreated
         result.observationsMerged += processed.observationsMerged
         result.observationsUnchanged += processed.observationsUnchanged
+        // Update only once per active native file window; indexing is best effort
+        // and must not fail the primary ingestion or delay startup with rescans.
+        try {
+          await this.nativeCatalogTracker.observe(source, record)
+        } catch (error) {
+          console.warn('[AgentLens] native session catalog update failed', {
+            sourceId: source.manifest.sourceId,
+            code: (error as NodeJS.ErrnoException).code ?? 'unknown',
+          })
+        }
         await progress.record(result)
 
         const time = record.occurredAt ?? record.capturedAt
@@ -762,6 +777,8 @@ export class SourceHistoryRunner {
 }
 
 export class SourceRuntimeRunner {
+  private readonly nativeCatalogTracker: NativeSessionCatalogTracker
+
   constructor(
     private readonly storage: StorageService,
     private readonly identity: IdentityService,
@@ -769,7 +786,9 @@ export class SourceRuntimeRunner {
     private readonly capabilities: CapabilityService,
     private readonly coverage: CoverageService,
     private readonly capturePolicy: CapturePolicyService,
-  ) {}
+  ) {
+    this.nativeCatalogTracker = new NativeSessionCatalogTracker(storage.nativeSessionCatalog)
+  }
 
   async start(input: SourceRuntimeCaptureInput): Promise<SourceRuntimeCaptureHandle> {
     const { source, host, detected, abortSignal } = input
@@ -832,6 +851,14 @@ export class SourceRuntimeRunner {
                   runtimeProfile,
                   record,
                 )
+                try {
+                  await this.nativeCatalogTracker.observe(source, record)
+                } catch (error) {
+                  console.warn('[AgentLens] native session catalog update failed', {
+                    sourceId: source.manifest.sourceId,
+                    code: (error as NodeJS.ErrnoException).code ?? 'unknown',
+                  })
+                }
                 await markHealthy(this.storage, runtimeStatus)
               } catch (error) {
                 await markFailed(this.storage, runtimeStatus, error)
