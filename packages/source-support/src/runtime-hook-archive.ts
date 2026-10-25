@@ -1,4 +1,5 @@
 import { createHash, randomUUID } from 'node:crypto'
+import type { Stats } from 'node:fs'
 import { link, lstat, mkdir, open, readFile, readdir, unlink, writeFile } from 'node:fs/promises'
 import { basename, join } from 'node:path'
 
@@ -150,7 +151,7 @@ export async function verifyPreparedHookInboxOriginal(input: {
     throw new TypeError('Invalid Hook original fingerprint')
   }
   const filePath=archivedHookInboxRecordPath(input)
-  let info:Awaited<ReturnType<typeof lstat>>
+  let info:Stats
   try{info=await lstat(filePath)}
   catch(error){
     if(['ENOENT','ENOTDIR','EACCES','EPERM'].includes(
@@ -159,8 +160,14 @@ export async function verifyPreparedHookInboxOriginal(input: {
   }
   if(!info.isFile() || info.isSymbolicLink() || info.size<=0
     || info.size>MAX_EVENT_BYTES)return 'drifted'
-  const handle=await open(filePath,'r')
-  let actualSha256:string
+  let handle:Awaited<ReturnType<typeof open>>
+  try{handle=await open(filePath,'r')}
+  catch(error){
+    if(['ENOENT','ENOTDIR','EACCES','EPERM'].includes(
+      (error as NodeJS.ErrnoException).code ?? ''))return 'unavailable'
+    throw error
+  }
+  let actualSha256:string|undefined
   try{
     const opened=await handle.stat()
     if(!opened.isFile() || opened.dev!==info.dev || opened.ino!==info.ino
