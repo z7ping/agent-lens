@@ -68,8 +68,10 @@ test('tracker rejects non-native records and sources without native reader capab
   const tracker = new NativeSessionCatalogTracker(catalog)
   const recordAtPath = record('/not-existing/session.jsonl')
   assert.equal(await tracker.observe(source, { ...recordAtPath, locator: { kind: 'runtime-hook', hookEventId: 'h' } }), false)
-  assert.equal(await tracker.observe(source, { ...recordAtPath, sourceSessionNativeId: undefined }), false)
+  const { sourceSessionNativeId: _nativeSessionId, ...withoutSessionId } = recordAtPath
+  assert.equal(await tracker.observe(source, withoutSessionId), false)
   assert.equal(await tracker.observe(source, { ...recordAtPath, sourceId: 'codex' }), false)
-  assert.equal(await tracker.observe({ ...source, readNativeSessionPage: undefined }, recordAtPath), false)
+  const { readNativeSessionPage: _reader, ...withoutNativeReader } = source
+  assert.equal(await tracker.observe(withoutNativeReader as SourceDefinition, recordAtPath), false)
   assert.deepEqual(stored, [])
 })
