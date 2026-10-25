@@ -512,12 +512,30 @@ async function shouldReadNativeOnly(
   // claim an immutable owner BEFORE persisting legacy events or skipping them.
   const established = await tracker.getWriteMode(key)
   if (established === 'native-only') {
-    // Older opt-in claims may predate Source recoverability/coverage checks.
-    // Never silently discard an ephemeral hook or a Source whose native store
-    // is no longer authoritative. Escalate as Source runtime failure instead
-    // of pretending these unique facts were safely persisted elsewhere.
-    if (!isDurablyNativeRecoverable(source, record)) {
+    // A durable claim is NOT proof that every later emitted record survived
+    // in its native store. Otherwise a replaced/truncated JSONL could cause
+    // SourceRecord/Observation/Evidence to be silently discarded.
+    if (!isDurablyNativeRecoverable(source, record)
+      || !source.rawRecovery?.verify || !record.locator.path || !record.fingerprint) {
       throw new Error('native-only-source-recovery-coverage-drift')
+    }
+    signal.throwIfAborted()
+    const registered = await catalog.get({ ...key, locationKind: 'native' })
+    if (!registered || registered.filePath !== record.locator.path) {
+      throw new Error('native-only-source-record-location-drift')
+    }
+    const verification = await source.rawRecovery.verify(record, {
+      host, installation,
+      ...(runtimeProfile ? { runtimeProfile } : {}),
+      abortSignal: signal,
+      checkpoint: {
+        async get() { return null },
+        async set() { throw new Error('Native-only verification cannot update checkpoints') },
+        async clear() { throw new Error('Native-only verification cannot remove checkpoints') },
+      } satisfies SourceCheckpointService,
+    })
+    if (verification.state !== 'verified') {
+      throw new Error('native-only-source-record-recovery-drift')
     }
     return true
   }
