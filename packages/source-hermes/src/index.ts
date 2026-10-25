@@ -956,16 +956,17 @@ export const hermesSourceDefinition: SourceDefinition = {
       let lastRow = Number.MAX_SAFE_INTEGER
       let emitted = 0
       while (!ctx.abortSignal.aborted && emitted < maxSessions) {
-        const rows = query.all(lastRow, Math.min(128,maxSessions - emitted)) as Array<{
+        const batchLimit = Math.min(128, maxSessions - emitted)
+        const rows = query.all(lastRow, batchLimit) as Array<{
           native_session_id: string;last_row:number;last_ms:number|null;session_title:string|null
         }>
         if (!rows.length) break
         for (const row of rows) {
           ctx.abortSignal.throwIfAborted()
           if (!row.native_session_id || !Number.isSafeInteger(row.last_row)) continue
-          const observedAt = Number.isFinite(row.last_ms) && row.last_ms !== null
-            && row.last_ms >= 0 ? row.last_ms : file.mtimeMs
-          if (Number.isFinite(newestSince) && observedAt < newestSince) continue
+          const sourceTime = row.last_ms === null ? undefined : normalizeTimestamp(row.last_ms)
+          const observedAt = sourceTime ?? new Date(file.mtimeMs).toISOString()
+          if (Number.isFinite(newestSince) && Date.parse(observedAt) < newestSince) continue
           const current = await stat(dbPath)
           if (!current.isFile() || current.dev !== file.dev || current.ino !== file.ino) {
             throw new Error('Hermes native database changed identity during catalog scan')
@@ -977,7 +978,7 @@ export const hermesSourceDefinition: SourceDefinition = {
             locationKind: 'native' as const,
             filePath: dbPath, fileIdentity: identity,
             fileSize: current.size, fileMtimeMs: current.mtimeMs,
-            lastActivityAt: new Date(observedAt).toISOString(),
+            lastActivityAt: observedAt,
             ...(title ? {title} : {}),
             updatedAt: new Date().toISOString(),
           }
@@ -986,7 +987,7 @@ export const hermesSourceDefinition: SourceDefinition = {
         const last = rows[rows.length-1]!
         if (last.last_row >= lastRow) throw new Error('Hermes catalog row cursor did not advance')
         lastRow = last.last_row
-        if (rows.length < Math.min(128,maxSessions - (emitted - rows.length))) break
+        if (rows.length < batchLimit) break
       }
     } finally { db.close() }
   },
