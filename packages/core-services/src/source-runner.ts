@@ -482,7 +482,7 @@ function isDurablyNativeRecoverable(
   record: SourceRecord,
 ): boolean {
   const capability = source.rawRecovery?.describe(record)
-  return Boolean(capability?.canReread
+  return Boolean(source.nativeSessionCoverageComplete === true && capability?.canReread
     && capability.authority === 'native-store'
     && capability.locatorStability === 'stable'
     && capability.mutability === 'append-oriented'

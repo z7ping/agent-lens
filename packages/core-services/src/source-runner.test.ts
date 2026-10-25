@@ -154,6 +154,7 @@ test('verified new native session skips transcript ingestion, SourceRecord and O
       productId:'test-product',parserVersion:'1'},
     async detect(){return [detected]},
     async declareCapabilities(){return []},
+    nativeSessionCoverageComplete:true,
     rawRecovery:{
       describe(){return {canReread:true,authority:'native-store',mutability:'append-oriented',
         locatorStability:'stable',verification:'fingerprint',canReparse:true,

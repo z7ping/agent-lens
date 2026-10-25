@@ -225,5 +225,11 @@ export interface SourceDefinition {
   startCapture?(ctx: SourceExecutionContext, emit: SourceRecordEmitter): Promise<Disposable>
   rawRecovery?: SourceRawRecoveryPolicy
   readNativeSessionPage?(query: SourceNativeSessionPageQuery, ctx: SourceExecutionContext): Promise<SourceNativeSessionPageResult>
+  /** Explicit attestation that all durable per-session history and runtime facts
+   * can be reconstructed from the original source store. Defaults to false.
+   * Sources with transient runtime-hook-only facts must not set this until a
+   * separate nonduplicate sidecar has its own verified read/recovery path.
+   */
+  nativeSessionCoverageComplete?: boolean
   normalize(record: SourceRecord, ctx: SourceNormalizationContext): Promise<NormalizedSourceOutput>
 }
