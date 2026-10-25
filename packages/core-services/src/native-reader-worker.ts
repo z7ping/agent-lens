@@ -29,6 +29,9 @@ async function read(input: NativeWorkerReadInput, signal: AbortSignal): Promise<
   if (!source?.readNativeSessionPage) {
     return { state: 'unsupported', reason: 'source-not-supported-by-native-worker' }
   }
+  if (input.parserVersion !== source.manifest.parserVersion) {
+    return { state: 'unsupported', reason: 'native-worker-parser-version-mismatch' }
+  }
   if (!input.query.nativeSessionId || input.query.nativeSessionId.length > 512
     || !input.host.id || input.installation.hostId !== input.host.id
     || input.installation.productId !== source.manifest.productId
