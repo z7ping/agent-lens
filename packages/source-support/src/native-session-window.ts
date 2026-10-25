@@ -109,16 +109,18 @@ export async function readNativeSessionWindow(input: {
       return { state: 'drifted', reason: 'native-file-identity-changed' }
     }
     if (offset > current.size) return { state: 'drifted', reason: 'native-file-shrank' }
-    if (input.cursor?.boundaryHash
-      && await hashAtBoundary(file, offset) !== input.cursor.boundaryHash) {
-      return { state: 'drifted', reason: 'native-cursor-boundary-changed' }
-    }
     if (offset > 0) {
       const previous = Buffer.alloc(1)
       const read = await file.read(previous, 0, 1, offset - 1)
       if (read.bytesRead !== 1 || previous[0] !== 0x0a) {
         return { state: 'drifted', reason: 'native-cursor-not-line-aligned' }
       }
+    }
+    // Once the position is a valid line boundary, verify the preceding bytes.
+    // The stronger fingerprint still detects same-inode overwritten records.
+    if (input.cursor?.boundaryHash
+      && await hashAtBoundary(file, offset) !== input.cursor.boundaryHash) {
+      return { state: 'drifted', reason: 'native-cursor-boundary-changed' }
     }
     const lines: NativeSessionLine[] = []
     let bytesReadInWindow = 0
