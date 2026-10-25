@@ -21,7 +21,7 @@ test('codex retrieves only its matching durable original Hook sidecar records',a
   try {
     await writeFile(join(inbox,'one.json'),JSON.stringify({id:'hook-1',capturedAt:at,
       event:{session_id:'S1',hook_event_name:'PreToolUse',tool_name:'Read',tool_use_id:'call-1'}}))
-    await archiveAcceptedHookInboxFile({inbox,fileName:'one.json',nativeSessionId:'S1'})
+    await archiveAcceptedHookInboxFile({inbox,fileName:'one.json',nativeSessionId:'S1',installationId:'install'})
     const rows=await codexSourceDefinition.readArchivedNativeHooks!('S1',ctx)
     assert.equal(rows.length,1)
     assert.equal(rows[0]?.sourceSessionNativeId,'S1')
@@ -32,7 +32,7 @@ test('codex retrieves only its matching durable original Hook sidecar records',a
     assert.deepEqual(await codexSourceDefinition.readArchivedNativeHooks!('other-session',ctx),[])
     await writeFile(join(inbox,'wrong.json'),JSON.stringify({id:'wrong-hook',capturedAt:at,
       event:{session_id:'S2',hook_event_name:'PreToolUse'}}))
-    await archiveAcceptedHookInboxFile({inbox,fileName:'wrong.json',nativeSessionId:'S1'})
+    await archiveAcceptedHookInboxFile({inbox,fileName:'wrong.json',nativeSessionId:'S1',installationId:'install'})
     await assert.rejects(codexSourceDefinition.readArchivedNativeHooks!('S1',ctx),/does not belong/)
   } finally {
     if(before===undefined) delete process.env.AGENT_LENS_CODEX_INBOX
