@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto'
-import { open, realpath } from 'node:fs/promises'
+import { open, realpath, type FileHandle } from 'node:fs/promises'
 import { extname, isAbsolute, relative } from 'node:path'
 import { sourceFileIdentity } from './source-fs'
 
@@ -8,11 +8,14 @@ export interface NativeSessionCursor {
   offset: number
   sequence: number
   fileIdentity: string
+  /** SHA-256 over the bounded bytes preceding this read boundary. */
+  boundaryHash?: string
 }
 
 export interface NativeSessionLine {
   entry: Record<string, unknown>
   textFingerprint: string
+  boundaryHash: string
   offset: number
   sequence: number
 }
@@ -32,6 +35,17 @@ const CHUNK_BYTES = 64 * 1024
 const MAX_RECORD_BYTES = 2 * 1024 * 1024
 const MAX_WINDOW_BYTES = 8 * 1024 * 1024
 const MAX_WINDOW_RECORDS = 64
+const CURSOR_BOUNDARY_BYTES = 256
+
+async function hashAtBoundary(file: FileHandle, offset: number): Promise<string> {
+  const length = Math.min(CURSOR_BOUNDARY_BYTES, offset)
+  const buffer = Buffer.alloc(length)
+  if (length) {
+    const { bytesRead } = await file.read(buffer, 0, length, offset - length)
+    if (bytesRead !== length) throw new Error('Native file changed during boundary verification')
+  }
+  return createHash('sha256').update(buffer).digest('hex')
+}
 
 function inside(root: string, child: string): boolean {
   const rel = relative(root, child)
@@ -56,7 +70,9 @@ export async function readNativeSessionWindow(input: {
     || !Number.isSafeInteger(limit) || limit < 1 || limit > MAX_WINDOW_RECORDS
     || (input.cursor && (!Number.isSafeInteger(input.cursor.offset) || input.cursor.offset < 0
       || !Number.isSafeInteger(input.cursor.sequence) || input.cursor.sequence < 0
-      || !input.cursor.fileIdentity))) {
+      || !input.cursor.fileIdentity
+      || (input.cursor.boundaryHash !== undefined
+        && !/^[0-9a-f]{64}$/.test(input.cursor.boundaryHash))))) {
     return { state: 'unsupported', reason: 'invalid-window-reference' }
   }
   signal?.throwIfAborted()
@@ -93,6 +109,10 @@ export async function readNativeSessionWindow(input: {
       return { state: 'drifted', reason: 'native-file-identity-changed' }
     }
     if (offset > current.size) return { state: 'drifted', reason: 'native-file-shrank' }
+    if (input.cursor?.boundaryHash
+      && await hashAtBoundary(file, offset) !== input.cursor.boundaryHash) {
+      return { state: 'drifted', reason: 'native-cursor-boundary-changed' }
+    }
     if (offset > 0) {
       const previous = Buffer.alloc(1)
       const read = await file.read(previous, 0, 1, offset - 1)
@@ -139,6 +159,7 @@ export async function readNativeSessionWindow(input: {
         sequence++
         if (entry) lines.push({
           entry: entry as Record<string, unknown>,
+          boundaryHash: await hashAtBoundary(file, start),
           textFingerprint: createHash('sha256').update(text).digest('hex'),
           offset: start,
           sequence,
@@ -158,7 +179,10 @@ export async function readNativeSessionWindow(input: {
     return {
       state: 'available',
       lines,
-      nextCursor: { offset: start, sequence, fileIdentity },
+      nextCursor: {
+        offset: start, sequence, fileIdentity,
+        boundaryHash: await hashAtBoundary(file, start),
+      },
       hasMore: start < current.size && (lines.length >= limit || buffer.length > 0 || bytesReadInWindow >= MAX_WINDOW_BYTES),
       pendingTail: pendingTail || (start < current.size && lines.length < limit && bytesReadInWindow < MAX_WINDOW_BYTES),
     }
