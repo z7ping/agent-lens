@@ -82,7 +82,7 @@ const capturePolicy = {
 test('metadata-only Source history stage updates Catalog, never ingests SourceRecord/Observation/Evidence', async () => {
   const indexed: Array<{nativeSessionId:string;fileSize:number}> = []
   let reads = 0
-  let normalized = 0
+  let normalizeCalls = 0
   const source: SourceDefinition = {
     manifest: {
       pluginId:'test-catalog',pluginVersion:'1.0.0',apiVersion:'1.0',
@@ -102,7 +102,7 @@ test('metadata-only Source history stage updates Catalog, never ingests SourceRe
       }
     },
     async *ingestHistory(){ reads++;yield record('old','2026-10-25T00:00:00Z') },
-    async normalize(value){ normalized++; return normalized(value) },
+    async normalize(value){ normalizeCalls++; return normalized(value) },
   }
   const storage = {
     nativeSessionCatalog: {
@@ -127,7 +127,7 @@ test('metadata-only Source history stage updates Catalog, never ingests SourceRe
   assert.equal(result.nativeSessionsIndexed,1)
   assert.equal(result.records,0)
   assert.equal(reads,0)
-  assert.equal(normalized,0)
+  assert.equal(normalizeCalls,0)
 })
 
 test('后台来源处理达到时间预算后主动让出事件循环', async () => {
