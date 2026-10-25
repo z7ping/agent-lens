@@ -698,12 +698,18 @@ export async function handleNativeSessionWindowRequest(
         writeJson(response, 200, complete)
       } else {
         let dto = complete.dto
+        // A missing Hook reader is not evidence of an empty Hook archive:
+        // label the shared Review as incomplete rather than silently hiding
+        // the entire Hook-only lane when the worker/source is unavailable.
+        const hasHookLane=byId && ['codex','claude-code','hermes'].includes(sourceId)
+        if (hasHookLane && !reader.readArchivedHooks) {
+          dto={...dto,hookFactsPartial:true,hookEventsTruncated:true}
+        }
         // Only the Catalog-authenticated native Review deep-link may overlay
         // source-owned Hook facts. Raw Source identity windows stay unchanged.
         // Never merge Hook tool calls/results or prompts without strong
         // correlation; those remain on the standalone Hook evidence lane.
-        if (byId && reader.readArchivedHooks
-          && ['codex','claude-code','hermes'].includes(sourceId)) {
+        if (hasHookLane && reader.readArchivedHooks) {
           const hooks: ObservationCandidate[] = []
           const recordIds: string[] = []
           let hookBytes = 0
