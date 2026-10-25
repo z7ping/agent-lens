@@ -30,6 +30,7 @@ import {
   type ManagedAssetFilePreviewResponseDto,
   type ManagedAssetRoot,
   type NativeSessionCatalogResponseDto,
+  type NativeSessionSummaryDto,
   type NativeReviewWindowResponseDto,
   type ReviewDetailDirection,
   type ReviewDetailFilter,
@@ -360,6 +361,15 @@ export class AgentLensApi {
       `/api/v1/native-sessions${params.size ? `?${params}` : ''}`,
       options.signal ? { signal: options.signal } : {},
     )
+  }
+
+  /** Reload a native Session after a page refresh without a full Catalog scan. */
+  nativeSession(id: string, signal?: AbortSignal): Promise<NativeSessionSummaryDto | null> {
+    return requestJson<NativeSessionSummaryDto>(
+      `/api/v1/native-sessions/${encodeURIComponent(id)}`,
+      signal ? { signal } : {},
+    ).catch(error => error instanceof AgentLensRequestError && error.status === 404
+      ? null : Promise.reject(error))
   }
 
   /** Read one bounded native Review window through the existing Task DTO.
