@@ -133,6 +133,7 @@ function eventLabel(kind: TimelineItemDto['kind']): string {
 function reviewNodeSource(item: TimelineItemDto): ReviewNodeSourceDto {
   return {
     ...(item.nativeEventId ? { nativeEventId: item.nativeEventId } : {}),
+    ...(item.nativeCallId ? { nativeCallId: item.nativeCallId } : {}),
     ...(item.nativeParentEventId ? { nativeParentEventId: item.nativeParentEventId } : {}),
     ...(item.parentObservationId ? { parentObservationId: item.parentObservationId } : {}),
     ...(item.occurredAt ? { occurredAt: item.occurredAt } : {}),
