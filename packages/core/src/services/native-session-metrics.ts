@@ -44,6 +44,14 @@ export interface NativeSessionMetricOverview {
   toolsTruncated:boolean
 }
 
+/** Bounded, metadata-only candidate for lazy numerical repair. */
+export interface NativeSessionMetricRebuildCandidate {
+  reviewSessionId:string
+  sourceId:string
+  installationId:string
+  nativeSessionId:string
+}
+
 export interface NativeSessionMetricTool {
   nativeToolName: string
   callCount: number
@@ -92,6 +100,9 @@ export interface NativeSessionMetricsStore {
    * and native totals together for the same Source identity.
    */
   overview?(query:NativeSessionMetricOverviewQuery):Promise<NativeSessionMetricOverview>
+  /** Metadata-only candidates; does not read native sessions or scan at startup. */
+  findRebuildCandidates?(query:NativeSessionMetricOverviewQuery,limit:number):
+    Promise<NativeSessionMetricRebuildCandidate[]>
   /** Explicit invalidation on source/parse/policy change or user deletion. */
   invalidate(identity: {
     sourceId: string; installationId: string; nativeSessionId: string
