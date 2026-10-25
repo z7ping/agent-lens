@@ -40,6 +40,7 @@ import {
 } from '@agent-lens/runtime-cordis'
 import {
   archiveAcceptedHookInboxFile,
+  archivedHookInboxRecordPath,
   readArchivedHookInboxPage,
   isMissingPathError,
   watchSourceFiles,
