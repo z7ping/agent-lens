@@ -4,7 +4,7 @@ import { createHash } from 'node:crypto'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import test from 'node:test'
-import { archiveAcceptedHookInboxFile, archivedHookInboxRecordPath, nativeHookArchiveEnabled, readArchivedHookInboxPage, readArchivedHookInboxSession } from './runtime-hook-archive'
+import { archiveAcceptedHookInboxFile, archivedHookInboxRecordPath, nativeHookArchiveEnabled, prepareHookInboxArchive, readArchivedHookInboxPage, readArchivedHookInboxSession } from './runtime-hook-archive'
 
 test('archive accepted source Hook by hard link: original is single-copy and session-scoped',async()=>{
   const inbox=await mkdtemp(join(tmpdir(),'al-native-hook-'))
@@ -337,5 +337,28 @@ test('Hook archive recovery refuses a symlink substituted for a sealed original'
       readArchivedHookInboxPage({inbox,nativeSessionId,installationId}),
       /Hook archive contains invalid event file/,
     )
+  }finally{await rm(inbox,{recursive:true,force:true})}
+})
+
+test('prepared Hook archive stays one-copy and inbox remains pending until emitter acknowledgement',async()=>{
+  const inbox=await mkdtemp(join(tmpdir(),'al-hook-prepared-'))
+  const fileName='hook.json',nativeSessionId='S1',installationId='installation'
+  const original=JSON.stringify({hook:'permission',value:'approved'})
+  const expectedSha256=createHash('sha256').update(original).digest('hex')
+  try{
+    await writeFile(join(inbox,fileName),original)
+    const initial=await stat(join(inbox,fileName))
+    const input={inbox,fileName,nativeSessionId,installationId,expectedSha256}
+    const target=await prepareHookInboxArchive(input)
+    const verified=await readArchivedHookInboxPage({inbox,nativeSessionId,installationId})
+    assert.deepEqual(verified.items,[{fileName,content:original}])
+    assert.equal(await readFile(join(inbox,fileName),'utf8'),original,
+      'an unacknowledged Hook inbox entry must be available for retry')
+    assert.equal((await stat(target)).ino,initial.ino,
+      'preparation must hard-link the original inode, not copy the body')
+    await archiveAcceptedHookInboxFile(input)
+    await assert.rejects(lstat(join(inbox,fileName)),{code:'ENOENT'})
+    assert.equal((await readFile(target,'utf8')),original)
+    assert.equal(await readFile(`${target}.sha256`,'utf8'),expectedSha256)
   }finally{await rm(inbox,{recursive:true,force:true})}
 })
