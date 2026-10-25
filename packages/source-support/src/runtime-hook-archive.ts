@@ -334,3 +334,44 @@ export async function readArchivedHookInboxSession(input: {
 }): Promise<Array<{ fileName: string; content: string }>> {
   return (await readArchivedHookInboxPage(input)).items
 }
+
+
+/** A failed Hook original remains in the inbox for durable replay. Do not let
+ * one poisoned or temporarily unavailable event prevent later files from
+ * reaching the Source writer. In-memory cooldowns never acknowledge, delete,
+ * or rewrite the original, and are intentionally lost at process restart.
+ */
+export function createHookInboxRetryGate(options: {
+  now?: () => number
+  cooldownMs?: number
+  maxEntries?: number
+} = {}) {
+  const now = options.now ?? Date.now
+  const cooldownMs = options.cooldownMs ?? 5_000
+  const maxEntries = options.maxEntries ?? 1_024
+  if (!Number.isFinite(cooldownMs) || cooldownMs < 0
+    || !Number.isSafeInteger(maxEntries) || maxEntries < 1) {
+    throw new TypeError('Invalid Hook inbox retry bounds')
+  }
+  const failed = new Map<string, number>()
+  return {
+    shouldAttempt(fileName: string): boolean {
+      const retryAt = failed.get(fileName)
+      if (retryAt === undefined) return true
+      if (now() < retryAt) return false
+      failed.delete(fileName)
+      return true
+    },
+    markFailed(fileName: string): void {
+      failed.delete(fileName)
+      failed.set(fileName, now() + cooldownMs)
+      if (failed.size > maxEntries) {
+        const oldest = failed.keys().next().value
+        if (oldest !== undefined) failed.delete(oldest)
+      }
+    },
+    markDelivered(fileName: string): void {
+      failed.delete(fileName)
+    },
+  }
+}
