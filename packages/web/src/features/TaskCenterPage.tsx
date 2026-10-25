@@ -3,7 +3,7 @@ import type { TFunction } from 'i18next'
 import { useTranslation } from 'react-i18next'
 import { createPortal } from 'react-dom'
 import { useLocation, useNavigate } from 'react-router-dom'
-import type { HubReadAvailability, HubReviewSessionSummaryDto, LaunchableProjectDto, LaunchableProjectsResponseDto, LiveRuntimeRefDto } from '@agent-lens/protocol'
+import type { HubReadAvailability, HubReviewSessionSummaryDto, LaunchableProjectDto, LaunchableProjectsResponseDto, LiveRuntimeRefDto, NativeSessionSummaryDto } from '@agent-lens/protocol'
 import type { AgentLensClientModel } from '../client/model'
 import { fetchHubReviewSessions } from '../client/hub-review'
 import { cachedLaunchableProjects, fetchLaunchableProjects, prefetchLaunchableProjects } from '../client/launchable-projects'
@@ -17,7 +17,7 @@ import { UiIcon } from '../components/UiIcon'
 import { historyTaskPresentation, launchableTaskProjectOptions, sessionListTitle, sortProjectFacetsByActivity, normalizedSessionSources, sessionTimeFact, type TaskSessionListSummary } from './task-center'
 import { LiveNewTaskPanel } from './LiveNewTaskPanel'
 import { taskLiveRuntimeHref, taskLiveRuntimeStatus } from './task-live-runtime'
-import { mergeTaskCenterSessions, visibleTaskCenterSession } from './task-center-sessions'
+import { mergeTaskCenterSessions, nativeTaskCenterSummaries, visibleTaskCenterSession } from './task-center-sessions'
 import { useTaskCenterRuntimes } from './use-task-center-runtimes'
 import { TaskNotificationBell, TaskNotificationBanner } from './TaskNotificationCenter'
 
@@ -212,6 +212,10 @@ export function TaskCenterPage({ model, mode, sidebarHost }: { model: AgentLensC
   const location = useLocation()
   const navigate = useNavigate()
   const [hubSessions, setHubSessions] = useState<HubReviewSessionSummaryDto[]>([])
+  const [nativeSessions, setNativeSessions] = useState<NativeSessionSummaryDto[]>([])
+  const [nativeCursor, setNativeCursor] = useState<string | undefined>()
+  const [nativeLoadingMore, setNativeLoadingMore] = useState(false)
+  const nativeRequestKeyRef = useRef('')
   const [nowMs, setNowMs] = useState(() => Date.now())
   const [launchableProjects, setLaunchableProjects] = useState<LaunchableProjectDto[]>(() => cachedLaunchableProjects()?.items ?? [])
   const [launchablePage, setLaunchablePage] = useState<LaunchableProjectsResponseDto['meta'] | null>(() => cachedLaunchableProjects()?.meta ?? null)
@@ -250,6 +254,66 @@ export function TaskCenterPage({ model, mode, sidebarHost }: { model: AgentLensC
     }, 750)
     return () => window.clearTimeout(timer)
   }, [mode, model, review.loading, review.response])
+
+  // Native Catalog is the indexed session directory for Native-only writes.
+  const nativeScopeKey = JSON.stringify([
+    review.filters.sourceIds,review.filters.projectId,
+    review.filters.status,review.filters.search,
+  ])
+  useEffect(() => {
+    const filters=review.filters
+    const allowed=!filters.projectId && filters.status==='all'
+      && (filters.sourceIds===null || filters.sourceIds.length>0)
+    const changed=nativeRequestKeyRef.current!==nativeScopeKey
+    nativeRequestKeyRef.current=nativeScopeKey
+    if(!allowed){
+      setNativeSessions([])
+      setNativeCursor(undefined)
+      return
+    }
+    if(changed){
+      setNativeSessions([])
+      setNativeCursor(undefined)
+    }
+    const controller=new AbortController()
+    const sourceId=filters.sourceIds?.length===1?filters.sourceIds[0]:undefined
+    void model.nativeSessions({
+      ...(sourceId?{sourceId}:{}),
+      onlyWithoutLegacyReview:true,search:filters.search.trim(),
+      limit:100,signal:controller.signal,
+    }).then(page=>{
+      if(controller.signal.aborted)return
+      setNativeSessions(page.items)
+      setNativeCursor(page.hasMore?page.nextCursor:undefined)
+    },()=>{
+      // The current rail remains usable if the Native Catalog is offline.
+    })
+    return ()=>controller.abort()
+  },[nativeScopeKey,review.response?.meta.generatedAt,model])
+
+  const loadMoreNativeSessions=useCallback(async()=>{
+    if(!nativeCursor || nativeLoadingMore)return
+    const key=nativeRequestKeyRef.current
+    const filters=review.filters
+    const sourceId=filters.sourceIds?.length===1?filters.sourceIds[0]:undefined
+    setNativeLoadingMore(true)
+    try{
+      const page=await model.nativeSessions({
+        ...(sourceId?{sourceId}:{}),
+        onlyWithoutLegacyReview:true,search:filters.search.trim(),
+        limit:100,cursor:nativeCursor,
+      })
+      if(nativeRequestKeyRef.current!==key)return
+      setNativeSessions(current=>{
+        const rows=new Map(current.map(item=>[item.id,item]))
+        for(const item of page.items)rows.set(item.id,item)
+        return [...rows.values()]
+      })
+      setNativeCursor(page.hasMore?page.nextCursor:undefined)
+    }catch{
+      // A failed page never invents EOF or clears already-found sessions.
+    }finally{setNativeLoadingMore(false)}
+  },[nativeCursor,nativeLoadingMore,review.filters,model])
 
   useEffect(() => {
     if (!review.response) {
@@ -349,9 +413,13 @@ export function TaskCenterPage({ model, mode, sidebarHost }: { model: AgentLensC
     projectLoadingMore,
   ])
 
-  const localSessions = useMemo(() => mergeTaskCenterSessions(review.response?.items ?? [], runtimes, location.pathname)
-    .filter(row => visibleTaskCenterSession(row, review.filters, launchableProjects, nowMs)),
-  [review.response?.items, runtimes, review.filters, launchableProjects, nowMs, location.pathname])
+  const nativeHistory=useMemo(()=>nativeTaskCenterSummaries(nativeSessions,review.filters,nowMs),
+    [nativeSessions,review.filters,nowMs])
+  const localSessions = useMemo(() => mergeTaskCenterSessions(
+    // SQL wins if a Catalog refresh races an existing Legacy ownership claim.
+    [...nativeHistory,...(review.response?.items ?? [])],runtimes,location.pathname,
+  ).filter(row => visibleTaskCenterSession(row, review.filters, launchableProjects, nowMs)),
+  [nativeHistory,review.response?.items, runtimes, review.filters, launchableProjects, nowMs, location.pathname])
   const projectOptions = useMemo(() => launchableTaskProjectOptions(launchableProjects), [launchableProjects, locale])
   const visibleHub = useMemo(() => hubSessions.filter(item => remoteVisible(item, review, t, nowMs)), [hubSessions, review, t, nowMs])
   const historyGroups = useMemo(() => {
@@ -556,7 +624,7 @@ export function TaskCenterPage({ model, mode, sidebarHost }: { model: AgentLensC
       {review.loading && !review.response && !localSessions.length && <SessionListSkeleton/>}
 
       {historyGroups.map(group => <section className="task-center-group task-center-history-group" key={group.key}>
-        <div className="task-center-group-title"><span>{group.label}</span><span>{group.items.length}{group.key === 'earlier' && review.response?.meta.hasMore ? '+' : ''}</span></div>
+        <div className="task-center-group-title"><span>{group.label}</span><span>{group.items.length}{group.key === 'earlier' && (review.response?.meta.hasMore || nativeCursor) ? '+' : ''}</span></div>
         {group.items.map(entry => entry.kind === 'local'
           ? <HistoryTaskItem key={`local:${entry.id}`} item={entry.local} runtime={entry.runtime} nowMs={nowMs} active={entry.runtime ? location.pathname === taskLiveRuntimeHref(entry.runtime) : mode === 'history' && review.selectedId === entry.id} onClick={() => entry.runtime ? navigate(taskLiveRuntimeHref(entry.runtime)) : openHistoryTask(entry.id)}/>
           : <RemoteTaskItem key={`remote:${entry.id}`} item={entry.remote} nowMs={nowMs} active={mode === 'hub' && location.pathname === `/review/hub/${encodeURIComponent(entry.id)}`} onClick={() => navigate(`/review/hub/${encodeURIComponent(entry.id)}`)}/>)}
@@ -565,6 +633,10 @@ export function TaskCenterPage({ model, mode, sidebarHost }: { model: AgentLensC
       {review.response && !historyCount && !review.loading && <div className="task-center-empty">{t('center.history.empty')}</div>}
       {hubSessions.length > 0 && unsupportedRemoteFilters && <div className="task-center-empty" role="status">{t('center.history.remoteFilterLimitation')}</div>}
       {review.response?.meta.hasMore && <Button size="small" className="session-load-more" loading={review.loadingMore} onClick={() => void model.loadMoreReview()}>{t('center.history.loadMore')}</Button>}
+      {nativeCursor && <Button size="small" className="session-load-more"
+        loading={nativeLoadingMore} onClick={() => void loadMoreNativeSessions()}>
+        {t('center.history.loadMore')}
+      </Button>}
     </div>
   </aside>
 
