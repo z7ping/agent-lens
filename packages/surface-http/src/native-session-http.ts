@@ -49,6 +49,9 @@ async function readContiguousReviewPages(
   let observations = [...first.observations]
   let recordIds = [...first.observationRecordIds]
   let evidenceCandidates = [...first.evidenceCandidates]
+  if (evidenceCandidates.length > 512) {
+    return {state:'unsupported',reason:'native-review-evidence-budget'}
+  }
   let bytes: number
   try {
     bytes = Buffer.byteLength(JSON.stringify(observations), 'utf8')
@@ -81,9 +84,14 @@ async function readContiguousReviewPages(
       // The returned cursor still points to the last *included* page.
       break
     }
+    if (evidenceCandidates.length + next.evidenceCandidates.length > 512) {
+      // A bounded read must not claim a complete Evidence graph while
+      // silently dropping provenance just past the page-size limit.
+      return {state:'unsupported',reason:'native-review-evidence-budget'}
+    }
     observations = [...observations, ...next.observations]
     recordIds = [...recordIds, ...next.observationRecordIds]
-    evidenceCandidates = [...evidenceCandidates, ...next.evidenceCandidates].slice(0,512)
+    evidenceCandidates = [...evidenceCandidates, ...next.evidenceCandidates]
     bytes += nextBytes
     previousOffset = current.nextCursor.offset
     current = next
