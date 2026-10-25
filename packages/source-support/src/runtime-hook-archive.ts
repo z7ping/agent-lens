@@ -89,10 +89,23 @@ export async function archiveAcceptedHookInboxFile(input: {
   await unlink(sourcePath)
 }
 
-/** Lexicographic continuation bound to this one source-owned session.
- * A cursor never accepts a client-supplied path and contains no Hook payload.
+/** A cursor is bound to one installation+session AND to the exact ordered
+ * directory snapshot. A newly archived file can sort before a page cursor;
+ * resume MUST reject that drift instead of silently skipping the new event.
  */
-function decodeHookCursor(value: string | undefined, session: string): string | undefined {
+function hookArchiveSnapshot(names: readonly string[]): string {
+  return createHash('sha256').update(JSON.stringify(names)).digest('hex')
+}
+
+function hookArchiveFileKey(name: string): string {
+  return createHash('sha256').update(name).digest('hex')
+}
+
+function decodeHookCursor(
+  value: string | undefined,
+  session: string,
+  snapshot: string,
+): string | undefined {
   if (value === undefined) return undefined
   if (!value || value.length > 512 || !/^[A-Za-z0-9_-]+$/.test(value)) {
     throw new TypeError('Invalid archived Hook cursor')
@@ -101,17 +114,23 @@ function decodeHookCursor(value: string | undefined, session: string): string | 
     const parsed: unknown = JSON.parse(Buffer.from(value, 'base64url').toString('utf8'))
     if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw new TypeError()
     const parts = parsed as Record<string, unknown>
-    if (Object.keys(parts).length !== 3 || parts.version !== 1
-      || parts.session !== session || typeof parts.after !== 'string'
-      || !safeInboxName(parts.after)) throw new TypeError()
+    if (Object.keys(parts).length !== 4 || parts.version !== 2
+      || parts.session !== session || parts.snapshot !== snapshot
+      || typeof parts.after !== 'string' || !/^[0-9a-f]{64}$/.test(parts.after)) {
+      throw new TypeError()
+    }
     return parts.after
   } catch {
     throw new TypeError('Invalid archived Hook cursor')
   }
 }
 
-function encodeHookCursor(session: string, after: string): string {
-  return Buffer.from(JSON.stringify({ version: 1, session, after }), 'utf8').toString('base64url')
+function encodeHookCursor(session: string, after: string, snapshot: string): string {
+  // Hash the name instead of returning it: the client has neither host path
+  // nor inbox basename, and the token size is bounded even for long names.
+  return Buffer.from(JSON.stringify({
+    version: 2, session, snapshot, after: hookArchiveFileKey(after),
+  }), 'utf8').toString('base64url')
 }
 
 /** Bounded, stable archive pages. A page never silently drops files beyond its limit.
@@ -130,18 +149,26 @@ export async function readArchivedHookInboxPage(input: {
     throw new TypeError('Hook archive read limit out of range')
   }
   const session = opaqueSessionDirectory(input.nativeSessionId, input.installationId)
-  const after = decodeHookCursor(input.cursor, session)
   const directory = join(input.inbox, 'archive', session)
   let names: string[]
   try {
     names = (await readdir(directory)).filter(safeInboxName).sort()
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
-      return { items: [], hasMore: false }
+      names = []
+    } else {
+      throw error
     }
-    throw error
   }
-  const selected = names.filter(name => after === undefined || name > after).slice(0, limit + 1)
+  const snapshot = hookArchiveSnapshot(names)
+  const after = decodeHookCursor(input.cursor, session, snapshot)
+  const afterIndex = after === undefined
+    ? -1
+    : names.findIndex(name => hookArchiveFileKey(name) === after)
+  if (after !== undefined && afterIndex === -1) {
+    throw new TypeError('Invalid archived Hook cursor')
+  }
+  const selected = names.slice(afterIndex + 1, afterIndex + 1 + limit + 1)
   const hasMore = selected.length > limit
   const items: Array<{ fileName: string; content: string }> = []
   for (const name of selected.slice(0, limit)) {
@@ -158,7 +185,7 @@ export async function readArchivedHookInboxPage(input: {
     items,
     hasMore,
     ...(hasMore && items.length
-      ? { nextCursor: encodeHookCursor(session, items[items.length - 1]!.fileName) }
+      ? { nextCursor: encodeHookCursor(session, items[items.length - 1]!.fileName, snapshot) }
       : {}),
   }
 }
