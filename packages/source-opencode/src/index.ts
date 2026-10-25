@@ -926,12 +926,22 @@ export const openCodeSourceDefinition: SourceDefinition = {
     }
     const db = new DatabaseSync(authorized, { readOnly: true, timeout: 1_500 })
     let rows: OpenCodeRow[]
+    let boundaryDrifted = false
     try {
       db.exec('BEGIN')
       try {
-        // This is the existing part -> message -> session projection inside
-        // a consistent read-only SQLite snapshot, not a second parser.
-        rows = selectRows(db, fromRow, limit + 1, undefined, undefined, query.nativeSessionId)
+        // A SQLite read transaction is per page, not across HTTP requests.
+        // Validate the previously delivered row inside the new snapshot
+        // before trusting rowid as the next offset.
+        if (query.cursor?.boundaryHash) {
+          const previous = fromRow > 0
+            ? selectRows(db, fromRow - 1, 1, undefined, undefined, query.nativeSessionId)[0]
+            : undefined
+          boundaryDrifted = !previous || previous.row_id !== fromRow
+            || rowFingerprint(previous) !== query.cursor.boundaryHash
+        }
+        rows = boundaryDrifted
+          ? [] : selectRows(db, fromRow, limit + 1, undefined, undefined, query.nativeSessionId)
         ctx.abortSignal.throwIfAborted()
         db.exec('COMMIT')
       } catch (error) {
@@ -943,6 +953,9 @@ export const openCodeSourceDefinition: SourceDefinition = {
     }
     if ((await stat(authorized)).ino !== initial.ino) {
       return { state: 'drifted', reason: 'native-file-identity-changed' }
+    }
+    if (boundaryDrifted) {
+      return {state:'drifted',reason:'native-database-cursor-boundary-changed'}
     }
     const selected = rows.slice(0, limit)
     const records = selected.map(row => recordFromRow(row, ctx, 'history'))
@@ -956,7 +969,11 @@ export const openCodeSourceDefinition: SourceDefinition = {
       recordCursors: selected.map(row => ({
         offset: row.row_id - 1, sequence: row.row_id - 1, fileIdentity: identity,
       })),
-      nextCursor: { offset: endRow, sequence: endRow, fileIdentity: identity },
+      nextCursor: {
+        offset: endRow, sequence: endRow, fileIdentity: identity,
+        ...(selected.length ? {boundaryHash:rowFingerprint(selected[selected.length-1]!)}
+          : query.cursor?.boundaryHash ? {boundaryHash:query.cursor.boundaryHash} : {}),
+      },
       hasMore: rows.length > limit,
       pendingTail: false,
     }
