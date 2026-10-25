@@ -82,7 +82,7 @@ export async function nativeMetricContribution(
     const toolsTruncated=rawTools.length>256 || chunks.some(item=>item.toolsTruncated)
     return {
       state:'available',
-      coverage:eligible===ready && chunks.every(item=>!item.toolsTruncated)?'complete':'partial',
+      coverage:eligible===ready && !toolsTruncated?'complete':'partial',
       eligibleSessions:eligible,readySessions:ready,
       missingSessions:sum('missingSessions'),staleSessions:sum('staleSessions'),
       partialSessions:sum('partialSessions'),
