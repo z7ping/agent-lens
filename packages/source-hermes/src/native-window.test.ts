@@ -153,6 +153,28 @@ test('Hermes runtime Hook original is independently verifiable from its sealed a
     const normalized=await hermesSourceDefinition.normalize(archived[0]!,{host,installation})
     assert.equal(normalized.observations[0]?.kind,'permission.request')
     assert.equal(normalized.observations[0]?.nativeCallId,'call-1')
+    await writeFile(join(inbox,'turn-end.json'),JSON.stringify({
+      id:'H2',capturedAt:at,event:{
+        session_id:nativeSessionId,hook_event_name:'on_session_end',
+        completed:false,failed:true,interrupted:false,
+        turn_id:'T1',task_id:'TASK-1',turn_exit_reason:'model_error',
+      },
+    }))
+    await archiveAcceptedHookInboxFile({
+      inbox,fileName:'turn-end.json',nativeSessionId,installationId,
+    })
+    const readBack=await hermesSourceDefinition.readArchivedNativeHooks!(nativeSessionId,ctx)
+    const turnEnd=readBack.find(item=>item.nativeType==='hook/on_session_end')
+    assert.ok(turnEnd)
+    const turnNormalized=await hermesSourceDefinition.normalize(turnEnd!,{host,installation})
+    const turn=turnNormalized.observations[0]
+    assert.equal(turn?.kind,'session.lifecycle')
+    assert.deepEqual(turn?.payload,{
+      event:'turn.ended',completed:false,failed:true,interrupted:false,
+      turnId:'T1',taskId:'TASK-1',reason:'model_error',
+    })
+    assert.notEqual((turn?.payload as {event?:string})?.event,'session.ended',
+      'Hermes turn completion must not close a continuing chat identity')
     assert.equal((await hermesSourceDefinition.rawRecovery!.verify!(archived[0]!,ctx)).state,'verified')
     assert.equal((await hermesSourceDefinition.rawRecovery!.verify!(record,ctx)).state,'verified')
     assert.equal((await hermesSourceDefinition.rawRecovery!.verify!(
