@@ -20,6 +20,9 @@ export interface NativeReviewProjectionInput {
   nextCursor: string
   /** Present for all but the first native byte window. */
   hasPrevious: boolean
+  /** Provided only for complete user-turn window pagination. */
+  startingOrdinal?: number
+  completeBoundaries?: boolean
 }
 
 function stableId(parts: readonly (string | number)[]): string {
@@ -110,16 +113,18 @@ export function projectNativeReviewWindow(input: NativeReviewProjectionInput): N
     installationId: input.installationId,
     nativeSessionId: input.nativeSessionId,
     sessionId,
-    interactions: buildInteractions(items).map(interaction => ({
+    ...(input.completeBoundaries ? { pagingUnit: 'interaction' as const } : {}),
+    interactions: buildInteractions(items, input.startingOrdinal ?? 1).map(interaction => ({
       ...interaction,
-      // Ordinals are page-local until cross-page stitching is implemented.
-      // IDs must nevertheless be stable and unique across windows.
+      // Stable even if an interaction's global ordinal changes.
       id: `native-review:${stableId([sessionId, interaction.nodes[0]?.id ?? interaction.startedAt])}`,
     })),
     observationCount: items.length,
     hasMore: input.hasMore,
     pendingTail: input.pendingTail,
     nextCursor: input.nextCursor,
-    boundaryIntegrity: (input.hasPrevious || input.hasMore || input.pendingTail) ? 'partial' : 'complete',
+    boundaryIntegrity: input.completeBoundaries
+      ? 'complete'
+      : (input.hasPrevious || input.hasMore || input.pendingTail) ? 'partial' : 'complete',
   }
 }
