@@ -108,14 +108,17 @@ export async function handleNativeSessionMetricsRequest(
       if(!result.hasMore){exhausted=true;break}
     }
     if(abort.signal.aborted||response.destroyed)return true
-    // Runtime Hook-only facts are not yet proven complete, even at native EOF.
-    // Do not make the native session's successful parse imply 100% evidence.
-    const hookNotCertified=['codex','claude-code','hermes'].includes(entry.sourceId)
+    // Native EOF proves only that this bounded reader reached its current
+    // end. It does NOT prove full Tool/Error/Usage semantics for an adapter.
+    // In particular OpenCode's mutable SQLite needs stronger provenance and
+    // missing permission/Subagent facts; Codex/Claude/Hermes still need Hook
+    // merge guarantees. Pi is the only initially certified numerical Source.
+    const sourceCoverageCertified=entry.sourceId==='pi'
     const snapshot=accumulator.snapshot({
       ...identity,fileIdentity:entry.fileIdentity,fileSize:entry.fileSize,
       fileMtimeMs:entry.fileMtimeMs,parserVersion:source.manifest.parserVersion,
       projectionVersion:PROJECTION_VERSION,computedAt:new Date().toISOString(),
-      complete:exhausted&&!pendingTail&&!hookNotCertified,
+      complete:exhausted&&!pendingTail&&sourceCoverageCertified,
     })
     if(!await metrics.replace(snapshot)){
       writeJson(response,200,{state:'drifted',reason:'native-metrics-catalog-revision-changed'})
@@ -128,7 +131,7 @@ export async function handleNativeSessionMetricsRequest(
       scannedObservations:scannedRecords,
       reason:!exhausted?'native-metrics-page-budget'
         :pendingTail?'native-metrics-pending-tail'
-          :hookNotCertified?'native-hook-coverage-unverified':null,
+          :!sourceCoverageCertified?'native-source-coverage-unverified':null,
       snapshot,
     })
     return true
