@@ -383,9 +383,14 @@ test('complete-turn reader fails closed on pending tool across users and excessi
         payload:{callId:'open-tool',text:'data'},
       }
       const offset=n*64
+      const observations = mode==='pending-tool' && n===0
+        ? [{ ...observation, kind:'message.user' as const }, observation]
+        : [observation]
       return {
-        state:'available',observations:[observation],observationRecordIds:['r'+n],
-        ...(mode==='missing-rewind'?{}:{observationCursors:[{offset,sequence:n,fileIdentity:'1:2'}]}),
+        state:'available', observations, observationRecordIds:observations.map((_,i)=>'r'+n+'-'+i),
+        ...(mode==='missing-rewind'?{}:{
+          observationCursors: observations.map(()=>({offset,sequence:n,fileIdentity:'1:2'})),
+        }),
         evidenceCandidates:[],
         nextCursor:{offset:offset+64,sequence:n+1,fileIdentity:'1:2'},
         hasMore:mode==='budget'||(mode==='pending-tool'&&n===0),
