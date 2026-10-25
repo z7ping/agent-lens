@@ -42,7 +42,8 @@ export class NativeMetricsAutoRefresh {
 
   private async run():Promise<void> {
     const source=this.sources!.list().find(item=>item.manifest.sourceId==='pi')
-    if(!source?.readNativeSessionPage || !this.policy!.isSourceEnabled('pi'))return
+    if(!source?.readNativeSessionPage || source.nativeSessionCoverageComplete!==true
+      || !this.policy!.isSourceEnabled('pi'))return
     const candidates=await this.metrics!.findRebuildCandidates!({
       sourceId:'pi',parserVersion:source.manifest.parserVersion,
     },MAX_SESSIONS_PER_TRIGGER)

@@ -19,6 +19,7 @@ const catalog={
 } as unknown as NativeSessionCatalogStore
 const source={
   list:()=>[{manifest:{sourceId:'pi',parserVersion:'pi-v1'},
+    nativeSessionCoverageComplete:true,
     readNativeSessionPage:async()=>{throw Error('must use reader worker')}}],
 } as unknown as SourceService
 const policy={isSourceEnabled:(id:string)=>id==='pi'} as unknown as CapturePolicyService
@@ -83,4 +84,26 @@ test('disabled Source and disposal cannot start an opportunistic native scan',as
   refresh.dispose()
   refresh.schedule()
   assert.equal(selected,0)
+})
+
+test('withdrawing Source coverage attestation prevents background Native-only scans',async()=>{
+  let candidates=0
+  let reads=0
+  const uncertified={
+    list:()=>[{manifest:{sourceId:'pi',parserVersion:'pi-v1'},
+      nativeSessionCoverageComplete:false,
+      readNativeSessionPage:async()=>{throw Error('not used')}}],
+  } as unknown as SourceService
+  const metrics={
+    findRebuildCandidates:async()=>{candidates++;return []},
+  } as unknown as NativeSessionMetricsStore
+  const reader={read:async()=>{reads++;throw Error('not used')}}
+    as unknown as NativeSessionWindowReader
+  const refresh=new NativeMetricsAutoRefresh(catalog,metrics,reader,uncertified,policy)
+  try{
+    refresh.schedule()
+    await flush()
+    assert.equal(candidates,0)
+    assert.equal(reads,0)
+  }finally{refresh.dispose()}
 })
