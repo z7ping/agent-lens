@@ -415,7 +415,10 @@ export async function handleNativeSessionHookRequest(
     hasMore:false,pendingTail:false,nextCursor:'',hasPrevious:false,
     completeBoundaries:false,
   })
-  const responseDto={...dto,hookEventsTruncated:result.truncated}
+  // Hook records have no native user-turn boundary, even when the archive
+  // happens to reach EOF. Never label this supplementary evidence as a
+  // complete conversational interaction.
+  const responseDto={...dto,boundaryIntegrity:'partial' as const,hookEventsTruncated:result.truncated}
   if(Buffer.byteLength(JSON.stringify(responseDto),'utf8')>MAX_RESPONSE_BYTES){
     writeJson(response,413,{state:'unsupported',reason:'native-hook-response-too-large'})
   }else{
