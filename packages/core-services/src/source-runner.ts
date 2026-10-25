@@ -877,13 +877,14 @@ export class SourceHistoryRunner {
             || record.locator.path !== entry.filePath
             || !record.fingerprint
             || !source.rawRecovery.describe(record).canReread) continue
-          let proof: Awaited<ReturnType<NonNullable<SourceDefinition['rawRecovery']>['verify']>>
-          try { proof = await source.rawRecovery.verify(record, context) }
-          catch (error) {
+          let verified = false
+          try {
+            verified = (await source.rawRecovery.verify(record, context)).state === 'verified'
+          } catch (error) {
             if (abortSignal.aborted) throw error
             continue
           }
-          if (proof.state !== 'verified') continue
+          if (!verified) continue
           await catalog.upsert(entry)
           const key = { sourceId: entry.sourceId,
             installationId: entry.installationId,
