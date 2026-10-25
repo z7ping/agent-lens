@@ -113,6 +113,14 @@ test('opt-in native-only Writer skips SourceRecord / Observation / Evidence only
     assert.equal(rawWrites,0)
     assert.equal(normalizations,0)
     assert.equal(ownershipReads,1, 'durable selected mode must be cached for next native event')
+    // A preexisting experimental claim must not silently discard runtime-only
+    // events when the Source coverage attestation is withdrawn after upgrade.
+    source.nativeSessionCoverageComplete=false
+    await assert.rejects(
+      ()=>sourceRunnerInternals.processSourceRecordWithOwnership(...args),
+      /native-only-source-recovery-coverage-drift/,
+    )
+    assert.equal(rawWrites,0)
   }finally{
     if(oldEnv===undefined)delete process.env.AGENT_LENS_NATIVE_ONLY_NEW_SESSIONS
     else process.env.AGENT_LENS_NATIVE_ONLY_NEW_SESSIONS=oldEnv
