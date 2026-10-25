@@ -1,39 +1,44 @@
 import { realpath } from 'node:fs/promises'
 import { extname, isAbsolute, relative, isAbsolute as isAbsolutePath } from 'node:path'
-import type { SourceRawHydrationResult, SourceRecord, SourceRawRecoveryContext } from '@agent-lens/core'
-import { readVerifiedNativeJsonlObject } from './native-jsonl-read'
+import { readVerifiedNativeJsonlObject, type NativeJsonlReadResult } from './native-jsonl-read'
 
-export interface NativeSourceSessionEnvelope {
-  nativeSessionId: string
-  payload: unknown
+export interface NativeReference {
+  sourceId: string
+  installationId: string
+  parserVersion: string
+  locator: { kind: string; path?: string; offset?: number }
+  fingerprint?: string
 }
 
+export type AuthorizedNativeJsonlResult = NativeJsonlReadResult
+  | { state: 'incompatible'; reason: 'source-parser-version-changed' }
+  | { state: 'unsupported'; reason: 'source-installation-mismatch' | 'stable-jsonl-reference-required' | 'source-path-outside-authorized-roots' }
+
 /**
- * A Source adapter must pass only roots obtained from its own detected
- * installation. A stale or untrusted locator is never enough to grant access.
+ * A Source adapter supplies only roots of the detected installation. This
+ * helper is intentionally unaware of Core/Normalizer and never stores data.
  */
-export async function hydrateNativeJsonlSourceRecord(input: {
-  record: SourceRecord
-  ctx: SourceRawRecoveryContext
+export async function readAuthorizedNativeJsonlEntry(input: {
+  reference: NativeReference
+  installationId: string
   sourceId: string
   parserVersion: string
   allowedRoots: readonly string[]
-  envelope: (entry: Record<string, unknown>, filePath: string) => Promise<NativeSourceSessionEnvelope>
-}): Promise<SourceRawHydrationResult> {
-  const { record, ctx, sourceId, parserVersion, allowedRoots } = input
-  if (record.sourceId !== sourceId || record.installationId !== ctx.installation.id) {
+  abortSignal: AbortSignal
+}): Promise<AuthorizedNativeJsonlResult> {
+  const { reference, installationId, sourceId, parserVersion, allowedRoots, abortSignal } = input
+  if (reference.sourceId !== sourceId || reference.installationId !== installationId) {
     return { state: 'unsupported', reason: 'source-installation-mismatch' }
   }
-  if (record.parserVersion !== parserVersion) {
+  if (reference.parserVersion !== parserVersion) {
     return { state: 'incompatible', reason: 'source-parser-version-changed' }
   }
-
-  const filePath = record.locator.kind === 'file' ? record.locator.path : undefined
+  const filePath = reference.locator.kind === 'file' ? reference.locator.path : undefined
   if (!filePath || !isAbsolute(filePath) || extname(filePath).toLowerCase() !== '.jsonl'
-    || record.locator.offset === undefined || !record.fingerprint) {
+    || reference.locator.offset === undefined || !reference.fingerprint) {
     return { state: 'unsupported', reason: 'stable-jsonl-reference-required' }
   }
-  ctx.abortSignal.throwIfAborted()
+  abortSignal.throwIfAborted()
   let canonicalPath: string
   try {
     canonicalPath = await realpath(filePath)
@@ -45,7 +50,6 @@ export async function hydrateNativeJsonlSourceRecord(input: {
     }
     throw error
   }
-
   let authorized = false
   for (const root of allowedRoots) {
     if (!root || !isAbsolute(root)) continue
@@ -63,24 +67,11 @@ export async function hydrateNativeJsonlSourceRecord(input: {
   }
   if (!authorized) return { state: 'unsupported', reason: 'source-path-outside-authorized-roots' }
 
-  const result = await readVerifiedNativeJsonlObject({
+  // Hash and parse the same bytes from a single handle, not two opens.
+  return readVerifiedNativeJsonlObject({
     path: canonicalPath,
-    offset: record.locator.offset,
-    expectedFingerprint: record.fingerprint,
-    abortSignal: ctx.abortSignal,
+    offset: reference.locator.offset,
+    expectedFingerprint: reference.fingerprint,
+    abortSignal,
   })
-  if (result.state !== 'available') {
-    return {
-      state: result.state,
-      reason: result.reason,
-      ...(result.state === 'drifted' ? { currentFingerprint: result.currentFingerprint } : {}),
-    }
-  }
-
-  ctx.abortSignal.throwIfAborted()
-  const hydrated = await input.envelope(result.entry, canonicalPath)
-  if (record.sourceSessionNativeId && hydrated.nativeSessionId !== record.sourceSessionNativeId) {
-    return { state: 'drifted', reason: 'source-native-session-identity-changed' }
-  }
-  return { state: 'available', record: { ...record, payload: hydrated.payload } }
 }
