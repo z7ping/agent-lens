@@ -38,6 +38,7 @@ export const chineseReviewMessages: LocaleMessagesDto = {
         projectSession: '{{project}} 会话',
         agentSession: '{{agent}} 会话',
         noProject: '无项目',
+        nativeIndexed: '原生会话',
         unlinkedProject: '未关联项目',
         resumable: '支持尝试继续',
         remoteSource: '远程 · {{node}}',
