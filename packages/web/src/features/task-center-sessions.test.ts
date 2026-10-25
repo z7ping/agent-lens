@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import type { LiveRuntimeRefDto, ReviewSessionSummaryDto } from '@agent-lens/protocol'
-import { mergeTaskCenterSessions, visibleTaskCenterSession } from './task-center-sessions'
+import { mergeTaskCenterSessions, nativeTaskCenterSummaries, visibleTaskCenterSession } from './task-center-sessions'
 import { taskLiveRuntimeHref, taskLiveRuntimeStatus } from './task-live-runtime'
 
 const runtime: LiveRuntimeRefDto = {
@@ -43,4 +43,35 @@ test('统一筛选覆盖 Live 元数据，并保留服务端历史正文搜索�
   assert.equal(visibleTaskCenterSession(row, { ...filters, projectId: 'p1' }, [{ key: 'w1', projectId: 'p1', workspaceId: 'w1', workspacePath: '/work/Slowlight', lastSeenAt: runtime.startedAt! }], now), true)
   const indexed = mergeTaskCenterSessions([history], [{ ...runtime, historySessionId: history.id }])[0]!
   assert.equal(visibleTaskCenterSession(indexed, { ...filters, search: '只在正文出现的词' }, [], now), true)
+})
+
+test('Native-only Catalog sessions share Task Center list without a second body index',()=>{
+  const now=Date.parse('2026-10-25T15:00:00Z')
+  const native={
+    id:'native:0123456789abcdef0123456789abcdef',
+    sourceId:'pi',installationId:'pi-local',nativeSessionId:'native-1',
+    locationKind:'native' as const,
+    lastActivityAt:'2026-10-25T14:00:00Z',title:'Original Source title',
+  }
+  const filters={sourceIds:null,projectId:'',status:'all' as const,
+    range:'all' as const,search:''}
+  const rows=nativeTaskCenterSummaries([native],filters,now)
+  assert.equal(rows.length,1)
+  assert.equal(rows[0]?.id,native.id)
+  assert.equal(rows[0]?.title,native.title)
+  assert.equal(rows[0]?.startedAt,'','never invent source creation time')
+  assert.equal(rows[0]?.endedAt,native.lastActivityAt)
+  assert.equal(JSON.stringify(rows).includes('installationId'),false)
+  assert.equal(JSON.stringify(rows).includes('nativeSessionId'),false)
+  assert.equal(mergeTaskCenterSessions(rows,[])[0]?.item.id,native.id)
+  // Project/error conclusions cannot be inferred from directory metadata.
+  assert.deepEqual(nativeTaskCenterSummaries([native],{...filters,projectId:'project'},now),[])
+  assert.deepEqual(nativeTaskCenterSummaries([native],{...filters,status:'clean'},now),[])
+  assert.deepEqual(nativeTaskCenterSummaries([native],{...filters,status:'with-errors'},now),[])
+  assert.deepEqual(nativeTaskCenterSummaries([native],{...filters,sourceIds:['codex']},now),[])
+  assert.deepEqual(nativeTaskCenterSummaries([native],{...filters,sourceIds:[]},now),[])
+  assert.deepEqual(nativeTaskCenterSummaries([native],{...filters,range:'today'},Date.parse('2026-10-26T12:00:00Z')),[])
+  assert.deepEqual(nativeTaskCenterSummaries([{...native,locationKind:'archive'}],filters,now),[])
+  // Legacy entry wins a same-ID ownership race; never show duplicate rows.
+  assert.equal(mergeTaskCenterSessions([...rows,{...rows[0]!,title:'Legacy linked'}],[])[0]?.item.title,'Legacy linked')
 })
