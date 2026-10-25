@@ -30,6 +30,7 @@ test('native adapter keeps the shared Review interactions and labels statistics 
   assert.equal(first.id,id)
   assert.equal(first.title,'Native Pi task')
   assert.equal(first.statisticsCompleteness,'window')
+  assert.equal(nativeReviewDetail(summary,{...page(1,true),hookEventsTruncated:true}).nativeHookEventsTruncated,true)
   assert.equal(first.page.direction,'forward')
   assert.equal(first.page.nextCursor,'opaque-cursor-1')
   assert.deepEqual(first.interactions.map(x=>x.ordinal),[1])
@@ -38,6 +39,9 @@ test('native adapter keeps the shared Review interactions and labels statistics 
   const second=nativeReviewNextPage(first,page(2,false))
   assert.equal(second.page.hasMore,false)
   assert.deepEqual(second.interactions.map(x=>x.ordinal),[2])
+  assert.equal(nativeReviewNextPage(
+    {...first,nativeHookEventsTruncated:true},page(2,false),
+  ).nativeHookEventsTruncated,undefined,'per-page completeness must not be invented by adapter')
   assert.throws(()=>nativeReviewDetail(summary,{...page(1,true),sessionId:'different'}))
   assert.throws(()=>nativeReviewDetail(summary,{...page(1,true),boundaryIntegrity:'partial'}))
 })
