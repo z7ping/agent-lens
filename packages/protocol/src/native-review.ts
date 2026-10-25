@@ -45,6 +45,8 @@ export interface NativeReviewWindowDto {
    * A partial Hook lane is never a complete user-turn history.
    */
   hookEventsTruncated?: boolean
+  /** Some Hook facts were left on the standalone lane because exact turn identity is not proven. */
+  hookFactsPartial?: boolean
   hasMore: boolean
   pendingTail: boolean
   nextCursor: string
