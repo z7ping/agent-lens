@@ -942,7 +942,9 @@ async function readHermesArchivedHookPage(
   })
   const records = page.items.map(item => {
     const envelope = parseInboxEnvelope(item.content, item.fileName)
-    const path = join(inbox, 'archive', sha256(nativeSessionId), item.fileName)
+    const path = archivedHookInboxRecordPath({
+      inbox, fileName: item.fileName, nativeSessionId, installationId: ctx.installation.id,
+    })
     const record = hookRecord(envelope, path, ctx)
     if (record.sourceId !== SOURCE_ID
       || record.installationId !== ctx.installation.id
