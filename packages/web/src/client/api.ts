@@ -345,6 +345,7 @@ export class AgentLensApi {
     installationId?: string
     /** Exclude sessions that already have a persisted SQL Review stream. */
     onlyWithoutLegacyReview?: boolean
+    search?: string
     limit?: number
     cursor?: string
     signal?: AbortSignal
@@ -353,6 +354,7 @@ export class AgentLensApi {
     if (options.sourceId) params.set('sourceId', options.sourceId)
     if (options.installationId) params.set('installationId', options.installationId)
     if (options.onlyWithoutLegacyReview) params.set('onlyWithoutLegacyReview', '1')
+    if (options.search?.trim()) params.set('search', options.search.trim().slice(0,256))
     if (options.cursor) params.set('cursor', options.cursor)
     if (options.limit !== undefined) {
       params.set('limit', String(Math.max(1, Math.min(options.limit, 100))))
