@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import type { ObservationCandidate } from '@agent-lens/core'
-import { projectNativeReviewWindow, nativeReviewObservationId } from './native-window'
+import { projectNativeReviewWindow, overlayNativeHookEvents, nativeReviewObservationId } from './native-window'
 
 const at = '2026-10-25T04:00:00Z'
 const candidate = (kind: ObservationCandidate['kind'], sourceSequence: number,
@@ -159,3 +159,64 @@ test('native tool pairing uses normalized nativeCallId when payload has no alias
   assert.deepEqual(tool.observationIds.length, 2)
   assert.equal(tool.output, 'done')
 })
+
+test('native Hook overlay only merges attested permission/subagent facts within complete native user turns',()=>{
+  const earlier='2026-10-25T04:00:00Z'
+  const later='2026-10-25T04:00:03Z'
+  const native=projectNativeReviewWindow({
+    ...page, completeBoundaries:true,
+    observations:[
+      {...candidate('message.user',1,{text:'task'}),occurredAt:earlier},
+      {...candidate('message.assistant',2,{text:'done'}),occurredAt:later},
+    ],
+    observationRecordIds:['user-record','assistant-record'],
+  })
+  const hooks: ObservationCandidate[]=[
+    {...candidate('permission.request',5,{toolName:'shell'}),occurredAt:'2026-10-25T04:00:01Z'},
+    {...candidate('subagent.spawn',6,{nativeActorId:'A1'}),occurredAt:'2026-10-25T04:00:02Z'},
+    // Do not duplicate user messages or tool chains without stable event linkage.
+    {...candidate('message.user',7,{text:'task'}),occurredAt:earlier},
+    {...candidate('tool.call',8,{callId:'hook-tool'}),occurredAt:'2026-10-25T04:00:01Z'},
+    // A capture timestamp alone cannot locate a source fact in a user turn.
+    candidate('permission.response',9,{decision:'allow'}),
+    // Recorded after the complete turn: do not pull into a finished turn.
+    {...candidate('context.injected',10,{text:'late'}),occurredAt:'2026-10-25T04:00:04Z'},
+  ]
+  const merged=overlayNativeHookEvents({
+    window:native,observations:hooks,
+    observationRecordIds:hooks.map((_,index)=>'hook-record-'+index),
+    truncated:true,
+  })
+  const nodes=merged.interactions[0]?.nodes ?? []
+  assert.deepEqual(nodes.map(n=>n.type==='event'?n.kind:n.type),[
+    'message','permission.request','subagent.spawn','message',
+  ])
+  assert.equal(nodes[0]?.type,'message')
+  assert.equal(merged.boundaryIntegrity,'complete')
+  assert.equal(merged.observationCount,native.observationCount+2)
+  assert.equal(merged.hookEventsTruncated,true)
+  assert.equal(JSON.stringify(merged).includes('hook-tool'),false)
+  const again=overlayNativeHookEvents({
+    window:merged,observations:hooks,
+    observationRecordIds:hooks.map((_,index)=>'hook-record-'+index),
+    truncated:true,
+  })
+  assert.deepEqual(again.interactions,merged.interactions)
+  assert.equal(again.observationCount,merged.observationCount)
+})
+
+test('Hook overlay rejects partial native turns and inconsistent record provenance',()=>{
+  const observations=[candidate('permission.request',1,{decision:'prompt'})]
+  const native=projectNativeReviewWindow({
+    ...page,observations:[candidate('message.user',0,{text:'run'})],
+    observationRecordIds:['user'],completeBoundaries:true,
+  })
+  assert.throws(()=>overlayNativeHookEvents({
+    window:{...native,boundaryIntegrity:'partial'},
+    observations,observationRecordIds:['h1'],truncated:false,
+  }),/complete native user-turn/)
+  assert.throws(()=>overlayNativeHookEvents({
+    window:native,observations,observationRecordIds:[],truncated:false,
+  }),/exact source record provenance/)
+})
+
