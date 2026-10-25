@@ -102,11 +102,16 @@ test('Pi session page reads native messages by cursor without checkpoints or eve
     assert.equal(first.state, 'available')
     if (first.state !== 'available') return
     assert.equal(first.records.length, 2)
+    assert.deepEqual(first.recordCursors?.map(c => [c.offset,c.sequence]), [
+      [0,0], [Buffer.byteLength(header+'\\n'),1],
+    ])
     assert.equal(first.hasMore, true)
     const next = await read({ filePath: path, nativeSessionId: 'pi-page', cursor: first.nextCursor, limit: 2 }, ctx)
     assert.equal(next.state, 'available')
     if (next.state !== 'available') return
     assert.deepEqual(next.records.map(x => x.nativeId), ['msg-2'])
+    assert.equal(next.recordCursors?.[0]?.offset, first.nextCursor.offset)
+    assert.equal(next.recordCursors?.[0]?.sequence, first.nextCursor.sequence)
     assert.equal(next.hasMore, false)
     assert.equal(checkpointCalls, 0)
     const normalized = await piSourceDefinition.normalize(next.records[0]!, { host, installation })
