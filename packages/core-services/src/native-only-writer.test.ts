@@ -208,3 +208,77 @@ test('opt-in keeps mutable database records legacy even when native reader can v
     else process.env.AGENT_LENS_NATIVE_ONLY_NEW_SESSIONS=oldEnv
   }
 })
+
+test('a competing native-only claim never discards this writers unverified record',async()=>{
+  const previous=process.env.AGENT_LENS_NATIVE_ONLY_NEW_SESSIONS
+  delete process.env.AGENT_LENS_NATIVE_ONLY_NEW_SESSIONS
+  const host:Host={id:'host',name:'local',platform:'linux',arch:'x64',
+    createdAt:at,lastSeenAt:at}
+  const installation:AgentInstallation={id:'inst',hostId:host.id,productId:'pi',
+    dataRoot:'/native',firstSeenAt:at,lastSeenAt:at}
+  const original:SourceRecord={
+    id:'record',sourceId:'pi',installationId:'inst',sourceSessionNativeId:'S1',
+    nativeType:'message',capturedAt:at,locator:{kind:'file',path:'/native/original.jsonl',offset:0},
+    fingerprint:'sha256',payload:{text:'source owned'},parserVersion:'1',
+  }
+  const nativeCatalog:NativeSessionCatalogEntry={
+    sourceId:'pi',installationId:'inst',nativeSessionId:'S1',
+    locationKind:'native',filePath:'/native/original.jsonl',
+    fileIdentity:'1:9',fileSize:42,fileMtimeMs:10,
+    lastActivityAt:at,updatedAt:at,
+  }
+  let writes=0
+  let verifications=0
+  let verificationState:'verified'|'drifted'='verified'
+  const catalog={
+    async getSessionWriteMode(){return null},
+    async claimLegacyWrite(){return 'native-only' as const},
+    async get(){return nativeCatalog},
+  } as unknown as NativeSessionCatalogStore
+  const storage={
+    nativeSessionCatalog:catalog,
+    repositories:{sourceRecords:{async put(){writes++}}},
+    async transaction<T>(action:()=>Promise<T>){return action()},
+  } as unknown as StorageService
+  const observations={async commit(){throw Error('Must never write duplicate observations')}} as unknown as ObservationService
+  const coverage={async declare(){return {}}} as unknown as CoverageService
+  const policy={
+    sanitizeSourceRecord(value:SourceRecord){return value},
+    sanitizeNormalizedOutput(value:unknown){return value},
+  } as unknown as CapturePolicyService
+  const source={
+    manifest:{sourceId:'pi',productId:'pi',parserVersion:'1'},
+    nativeSessionCoverageComplete:true,
+    rawRecovery:{
+      describe(){return {
+        authority:'native-store',locatorStability:'stable',mutability:'append-oriented',
+        verification:'fingerprint',canReread:true,canReparse:true,replayable:true,
+        persistencePreference:'reference',
+      }},
+      async verify(){verifications++;return {state:verificationState,checkedAt:at}},
+    },
+    async normalize(){throw Error('No second normalizer on claimed native-only session')},
+  } as unknown as SourceDefinition
+  const run=(tracker=new NativeSessionCatalogTracker(catalog))=>
+    sourceRunnerInternals.processSourceRecordWithOwnership(
+      storage,observations,coverage,policy,tracker,
+      source,host,installation,undefined,original,new AbortController().signal,
+    )
+  try{
+    const done=await run()
+    assert.equal(done.observationsCreated,0)
+    assert.equal(verifications,1,'claimLegacyWrite reporting competing native-only must verify this record')
+    assert.equal(writes,0)
+    verificationState='drifted'
+    await assert.rejects(run(),/native-only-source-record-recovery-drift/)
+    assert.equal(verifications,2)
+    assert.equal(writes,0)
+    source.nativeSessionCoverageComplete=false
+    await assert.rejects(run(),/native-only-source-recovery-coverage-drift/)
+    assert.equal(writes,0)
+  }finally{
+    if(previous===undefined)delete process.env.AGENT_LENS_NATIVE_ONLY_NEW_SESSIONS
+    else process.env.AGENT_LENS_NATIVE_ONLY_NEW_SESSIONS=previous
+  }
+})
+
