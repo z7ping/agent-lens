@@ -84,14 +84,20 @@ function encode(value: SearchCursor): string {
 
 /** Search only source-projected text fields, not raw JSON, path locators or attachments. */
 function searchableText(value: unknown, depth = 0): string {
-  if (depth > 4) return ''
-  if (typeof value === 'string') return value.slice(0,8192)
-  if (Array.isArray(value)) return value.slice(0,16).map(item=>searchableText(item,depth+1)).join(' ').slice(0,8192)
+  if (depth > 6) throw new RangeError('native-search-text-budget')
+  if (typeof value === 'string') {
+    if (Buffer.byteLength(value,'utf8')>64*1024) throw new RangeError('native-search-text-budget')
+    return value
+  }
+  if (Array.isArray(value)) {
+    if(value.length>128) throw new RangeError('native-search-text-budget')
+    return value.map(item=>searchableText(item,depth+1)).join(' ')
+  }
   if (!value || typeof value !== 'object') return ''
   const record=value as Record<string,unknown>
   return ['text','content','message','summary','prompt','parts','output','result','errorMessage']
     .map(key=>record[key] === undefined ? '' : searchableText(record[key],depth+1))
-    .filter(Boolean).join(' ').slice(0,8192)
+    .filter(Boolean).join(' ')
 }
 
 function excerpt(text: string, index: number, length: number): string {
@@ -202,7 +208,11 @@ export async function handleNativeSessionBodySearchRequest(
       occurrences.set(id,ordinal+1)
       if (!observation.kind.startsWith('message.') && observation.kind!=='tool.result'
         && observation.kind!=='tool.call') continue
-      const text=searchableText(observation.payload)
+      let text:string
+      try {text=searchableText(observation.payload)} catch {
+        writeJson(response,200,{state:'unsupported',reason:'native-search-text-budget'})
+        return true
+      }
       inputBytes+=Buffer.byteLength(text,'utf8')
       if(inputBytes>MAX_PAGE_BYTES) {
         writeJson(response,200,{state:'unsupported',reason:'native-search-input-budget'})
@@ -241,7 +251,7 @@ export async function handleNativeSessionBodySearchRequest(
     }
     writeJson(response,200,{
       state:'available',coverage:'bounded',items,
-      scannedSessions:1,scannedObservations:scanned?.observations.length??0,
+      scannedSessions:authorized?1:0,scannedObservations:scanned?.observations.length??0,
       hasMore,pendingTail,...(nextCursor?{nextCursor}:{}),
     })
     return true
