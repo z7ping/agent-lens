@@ -745,6 +745,7 @@ export const openCodeManifest: SourcePluginManifest = {
 const databaseRawRecovery: NonNullable<SourceDefinition['rawRecovery']> = {
   describe(record) {
     const recoverable = record.locator.kind === 'database'
+      && record.locator.table === 'part'
       && Boolean(record.locator.path)
       && record.locator.rowId !== undefined
       && Boolean(record.fingerprint)
@@ -781,6 +782,7 @@ const databaseRawRecovery: NonNullable<SourceDefinition['rawRecovery']> = {
     const rowId = Number(record.locator.rowId)
     if (
       record.locator.kind !== 'database'
+      || record.locator.table !== 'part'
       || !path
       || !Number.isSafeInteger(rowId)
       || rowId <= 0
