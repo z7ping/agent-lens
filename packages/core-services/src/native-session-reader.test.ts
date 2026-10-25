@@ -1,0 +1,126 @@
+import assert from 'node:assert/strict'
+import test from 'node:test'
+import type {
+  CapturePolicyService,
+  NativeSessionCatalogEntry,
+  SourceDefinition,
+  SourceRecord,
+  SourceService,
+  StorageService,
+} from '@agent-lens/core'
+import { NativeSessionReader } from './native-session-reader'
+
+const at = '2026-10-25T00:00:00Z'
+const host = { id: 'host', name: 'local', platform: 'linux', arch: 'x64', createdAt: at, lastSeenAt: at }
+const installation = { id: 'install', hostId: host.id, productId: 'pi', dataRoot: '/sessions',
+  firstSeenAt: at, lastSeenAt: at }
+const catalog: NativeSessionCatalogEntry = {
+  sourceId: 'pi', installationId: 'install', nativeSessionId: 'S1',
+  locationKind: 'native', filePath: '/sessions/S1.jsonl', fileIdentity: '1:9',
+  fileSize: 250, fileMtimeMs: 4, lastActivityAt: at, updatedAt: at,
+}
+const raw: SourceRecord = {
+  id: 'record', sourceId: 'pi', installationId: 'install', sourceSessionNativeId: 'S1',
+  nativeType: 'history/message', sourceSequence: 1000, capturedAt: at,
+  locator: { kind: 'file', path: catalog.filePath, offset: 0 },
+  fingerprint: 'nativefingerprint', parserVersion: '1',
+  payload: { entry: { type: 'message', text: 'secret' }, session: { nativeSessionId: 'S1' } },
+}
+const sample = {
+  kind: 'message.user' as const,
+  sourceSequence: 1000,
+  capturedAt: at,
+  payload: { text: 'secret' },
+  identityHints: { nativeSessionId: 'S1' },
+}
+
+function fixture(opts: { enabled?: boolean; catalogEntry?: NativeSessionCatalogEntry | null;
+  identity?: string; sourceId?: string } = {}) {
+  const calls = { catalog: 0, source: 0, normalize: 0, sanitized: 0 }
+  const storage = {
+    nativeSessionCatalog: { async get() { calls.catalog++; return opts.catalogEntry === undefined ? catalog : opts.catalogEntry } },
+    repositories: {
+      installations: { async get() { return installation } },
+      hosts: { async get() { return host } },
+    },
+  } as unknown as StorageService
+  const source = {
+    manifest: { sourceId: 'pi', productId: 'pi' },
+    async readNativeSessionPage(query: { filePath: string; nativeSessionId: string },
+      ctx: { checkpoint: { set(key: string, value: unknown): Promise<void> } }) {
+      calls.source++
+      assert.equal(query.filePath, catalog.filePath)
+      assert.equal(query.nativeSessionId, 'S1')
+      // The renderer cannot mutate history checkpoints.
+      await assert.rejects(ctx.checkpoint.set('cursor', 123), /cannot persist/)
+      return {
+        state: 'available' as const,
+        records: [{ ...raw, ...(opts.sourceId ? { sourceId: opts.sourceId } : {}) }],
+        nextCursor: { offset: 50, sequence: 1, fileIdentity: opts.identity ?? '1:9' },
+        hasMore: true, pendingTail: false,
+      }
+    },
+    async normalize() {
+      calls.normalize++
+      return { observations: [sample], evidenceCandidates: [] }
+    },
+  } as unknown as SourceDefinition
+  const sources = { list: () => [source] } as unknown as SourceService
+  const policy = {
+    isSourceEnabled: () => opts.enabled !== false,
+    sanitizeNormalizedOutput(input: { observations: typeof sample[]; evidenceCandidates: unknown[] }) {
+      calls.sanitized++
+      return { ...input, observations: input.observations.map(observation => ({
+        ...observation, payload: { text: '[redacted]' },
+      })) }
+    },
+  } as unknown as CapturePolicyService
+  return { reader: new NativeSessionReader(storage, sources, policy), calls }
+}
+
+const query = { sourceId: 'pi', installationId: 'install', nativeSessionId: 'S1',
+  signal: new AbortController().signal }
+
+test('native reader resolves trusted Catalog path and sanitizes canonical candidates without persistence', async () => {
+  const { reader, calls } = fixture()
+  const output = await reader.read(query)
+  assert.equal(output.state, 'available')
+  if (output.state !== 'available') return
+  assert.equal(output.observations[0]?.kind, 'message.user')
+  assert.deepEqual(output.observations[0]?.payload, { text: '[redacted]' })
+  assert.equal(output.nextCursor.offset, 50)
+  assert.equal(output.hasMore, true)
+  assert.deepEqual(calls, { catalog: 1, source: 1, normalize: 1, sanitized: 1 })
+})
+
+test('native reader fails closed for disabled source, missing session, replaced file and foreign events', async () => {
+  const disabled = fixture({ enabled: false })
+  assert.deepEqual(await disabled.reader.read(query), { state: 'unsupported', reason: 'source-disabled' })
+  assert.equal(disabled.calls.catalog, 0)
+
+  const missing = fixture({ catalogEntry: null })
+  assert.deepEqual(await missing.reader.read(query),
+    { state: 'unavailable', reason: 'native-session-not-indexed' })
+  assert.equal(missing.calls.source, 0)
+
+  const drifted = fixture({ identity: '2:20' })
+  assert.deepEqual(await drifted.reader.read(query),
+    { state: 'drifted', reason: 'native-catalog-file-identity-changed' })
+  assert.equal(drifted.calls.normalize, 0)
+
+  const foreign = fixture({ sourceId: 'other' })
+  assert.deepEqual(await foreign.reader.read(query),
+    { state: 'drifted', reason: 'native-record-identity-changed' })
+  assert.equal(foreign.calls.sanitized, 0)
+
+  const invalid = fixture()
+  assert.deepEqual(await invalid.reader.read({ ...query, limit: 65 }),
+    { state: 'unsupported', reason: 'native-window-limit-invalid' })
+  assert.equal(invalid.calls.catalog, 0)
+
+  const signal = new AbortController()
+  signal.abort()
+  const cancelled = fixture()
+  await assert.rejects(cancelled.reader.read({ ...query, signal: signal.signal }))
+  assert.equal(cancelled.calls.catalog, 0)
+})
