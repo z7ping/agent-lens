@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import type { ObservationCandidate } from '@agent-lens/core'
-import { projectNativeReviewWindow } from './native-window'
+import { projectNativeReviewWindow, nativeReviewObservationId } from './native-window'
 
 const at = '2026-10-25T04:00:00Z'
 const candidate = (kind: ObservationCandidate['kind'], sourceSequence: number,
@@ -120,4 +120,24 @@ test('native Review file changes reuse mutation evidence projection without stor
   assert.equal(result.observedFileChanges?.[0]?.changeType,'unknown')
   assert.equal(result.fileChangesTruncated,undefined)
   assert.equal(JSON.stringify(result).includes('evidenceRefs'),false)
+})
+
+test('native attachment cursor binds to canonical observation ID without exposing image bytes in Review',()=>{
+  const c=candidate('message.user',1,{text:'image',attachments:[
+    {type:'image',mimeType:'image/png',data:'aGVsbG8='},
+  ]})
+  const result=projectNativeReviewWindow({
+    ...page,observations:[c],observationRecordIds:['record-id'],
+    observationCursors:['opaque-exact-record-cursor'],completeBoundaries:true,
+  })
+  const message=result.interactions[0]?.nodes.find(node=>node.type==='message')
+  assert.equal(message?.type,'message')
+  if(message?.type!=='message')return
+  assert.equal(message.id,nativeReviewObservationId('pi','pi-one','original-session',c,'record-id',0))
+  assert.equal(message.nativeAttachmentCursor,'opaque-exact-record-cursor')
+  assert.equal(message.attachments?.length,1)
+  assert.equal(JSON.stringify(result).includes('aGVsbG8='),false)
+  assert.throws(()=>projectNativeReviewWindow({
+    ...page,observations:[c],observationRecordIds:['record-id'],observationCursors:[],
+  }),/rewind cursor identity counts disagree/)
 })
