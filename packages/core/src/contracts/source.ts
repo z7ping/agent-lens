@@ -130,6 +130,12 @@ export interface SourceRawRecoveryCapability {
   canReparse: boolean
   replayable: boolean
   persistencePreference: SourceRawPersistencePreference
+  /** A mutable native database can be the authority for the CURRENT session
+   * state without promising that overwritten/deleted prior row versions remain.
+   * Must be explicitly declared for Source-native, session-scoped replay;
+   * an ordinary best-effort rowId is never sufficient for Native-only.
+   */
+  recoveryScope?: 'record-immutable' | 'session-current-state'
   reason?: string
 }
 
