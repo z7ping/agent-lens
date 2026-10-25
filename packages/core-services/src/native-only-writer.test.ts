@@ -187,17 +187,14 @@ test('default cutover preserves mutable SQLite legacy sessions even with a nativ
     sanitizeSourceRecord(value:SourceRecord){return value},
     sanitizeNormalizedOutput(value:unknown){return value},
   } as unknown as CapturePolicyService
-  try{
-    await sourceRunnerInternals.processSourceRecordWithOwnership(
-      storage,
+  await sourceRunnerInternals.processSourceRecordWithOwnership(
+    storage,
       {async commit(){throw Error('none')}} as unknown as ObservationService,
       {async declare(){return {}}} as unknown as CoverageService,
       policy,new NativeSessionCatalogTracker(undefined),
       source,host,installation,undefined,record,new AbortController().signal,
     )
-    assert.equal(persisted,1)
-  }finally{
-  }
+  assert.equal(persisted,1)
 })
 
 test('a competing native-only claim never discards this writers unverified record',async()=>{
@@ -253,7 +250,7 @@ test('a competing native-only claim never discards this writers unverified recor
       storage,observations,coverage,policy,tracker,
       source,host,installation,undefined,original,new AbortController().signal,
     )
-  try{
+  {
     const done=await run()
     assert.equal(done.observationsCreated,0)
     assert.equal(verifications,1,'claimLegacyWrite reporting competing native-only must verify this record')
@@ -265,7 +262,6 @@ test('a competing native-only claim never discards this writers unverified recor
     source.nativeSessionCoverageComplete=false
     await assert.rejects(run(),/native-only-source-recovery-coverage-drift/)
     assert.equal(writes,0)
-  }finally{
   }
 })
 
