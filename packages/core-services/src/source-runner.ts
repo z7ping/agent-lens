@@ -156,6 +156,8 @@ export interface SourceHistorySyncInput {
   historyWindow?: SourceHistoryWindow
   /** Explicit source metadata pass; never ingests or writes transcript events. */
   mode?: 'records' | 'native-catalog'
+  /** Release runtime capture only after Source-owned native file claims settle. */
+  onNativeCatalogReady?: () => void
   /** 历史导入在前台请求活跃时可在记录边界暂停。 */
   cooperate?: () => Promise<void>
   queuedStatus?: SourceRuntimeStatus
@@ -899,6 +901,9 @@ export class SourceHistoryRunner {
           await yieldForInteractivity()
         }
       }
+      // For experimental native-fast startup this separates short metadata
+      // ownership arbitration from the potentially long legacy ingest loop.
+      input.onNativeCatalogReady?.()
       let coverageFrom: string | undefined
       let coverageTo: string | undefined
       let coverageFromEvidence: EvidenceCandidate[] = []

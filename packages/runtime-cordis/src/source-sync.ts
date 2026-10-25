@@ -47,6 +47,8 @@ export interface ParserReplayExecutionOptions {
 
 export interface HistorySyncExecutionOptions {
   cooperate?: () => Promise<void>
+  /** Source-specific readiness signal before its normal event ingestion. */
+  onNativeCatalogReady?: (target: RegisteredSourceTarget) => void
 }
 
 export async function resolveRuntimeHost(ctx: AgentLensContext): Promise<Host> {
@@ -185,6 +187,8 @@ export async function syncRegisteredSourceHistory(
         onProgress: () => { ctx.emit?.('source/sync-progress', { sourceId: target.source.manifest.sourceId }) },
         ...(historyWindow ? { historyWindow } : {}),
         ...(options.cooperate ? { cooperate: options.cooperate } : {}),
+        ...(options.onNativeCatalogReady
+          ? { onNativeCatalogReady: () => options.onNativeCatalogReady?.(target) } : {}),
       }))
     } catch (error) {
       failures.push({ sourceId: target.source.manifest.sourceId, stage: 'history', error })
