@@ -141,7 +141,11 @@ export async function startCodexRuntimeCapture(
           const envelope = parseEnvelope(text, fileName)
           const record = sourceRecordFromEnvelope(envelope, filePath, ctx)
           await emitter.emit(record)
-          await unlink(filePath)
+          if (process.env.AGENT_LENS_NATIVE_HOOK_ARCHIVE === '1' && record.sourceSessionNativeId) {
+            await archiveAcceptedHookInboxFile({inbox,fileName,nativeSessionId:record.sourceSessionNativeId})
+          } else {
+            await unlink(filePath)
+          }
         } catch {
           // Durable inbox semantics: leave the file in place and retry later.
           break
