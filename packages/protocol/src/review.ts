@@ -169,6 +169,8 @@ export function reviewMessageAttachmentsFromPayload(
 
 export interface ReviewNodeSourceDto {
   nativeEventId?: string
+  /** Source-normalized tool call identity, shared by Hook and native tool facts. */
+  nativeCallId?: string
   nativeParentEventId?: string
   parentObservationId?: string
   occurredAt?: string
