@@ -63,11 +63,15 @@ function jsonValue(value: unknown, depth = 0, seen = new WeakSet<object>()): Jso
  * Window boundaries may cut through an interaction. Clients must not append
  * these partial interactions to the main Task Surface until stitching exists.
  */
+export function nativeReviewSessionId(sourceId: string, installationId: string, nativeSessionId: string): string {
+  return `native:${stableId([sourceId, installationId, nativeSessionId])}`
+}
+
 export function projectNativeReviewWindow(input: NativeReviewProjectionInput): NativeReviewWindowDto {
   if (input.observationRecordIds && input.observationRecordIds.length !== input.observations.length) {
     throw new Error('Native Review candidate and source record identity counts disagree')
   }
-  const sessionId = `native:${stableId([input.sourceId, input.installationId, input.nativeSessionId])}`
+  const sessionId = nativeReviewSessionId(input.sourceId, input.installationId, input.nativeSessionId)
   const sourceSessionId = `native-source:${stableId([input.sourceId, input.installationId, input.nativeSessionId])}`
   const candidateOccurrences = new Map<string, number>()
   const items: TimelineItemDto[] = input.observations.map((candidate, index) => {
