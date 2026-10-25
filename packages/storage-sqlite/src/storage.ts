@@ -14,6 +14,7 @@ import { SqliteCheckpointRepository } from './checkpoints'
 import { SqliteExecutor } from './executor'
 import { SqliteFacetScopeReader } from './facet-scope'
 import { SqliteLaunchableProjectReader } from './launchable-projects'
+import { SqliteNativeSessionCatalog } from './native-session-catalog'
 import { SqliteStorageMaintenance } from './maintenance'
 import { SqliteMaintenanceJobStore } from './maintenance-jobs'
 import { migrateDatabase } from './migrations'
@@ -162,6 +163,7 @@ export class SqliteStorageService implements StorageService {
   readonly sessionSummaries: SqliteSessionSummaryReader
   readonly sessionSummaryProjection: SqliteSessionSummaryReader
   readonly launchableProjects: SqliteLaunchableProjectReader
+  readonly nativeSessionCatalog: SqliteNativeSessionCatalog
   readonly taskFileChanges: SqliteTaskFileChangeProjectionStore
   readonly toolUsageObservations: SqliteToolUsageObservationReader
   readonly unknownObservationProjection: SqliteUnknownObservationProjection
@@ -225,6 +227,7 @@ export class SqliteStorageService implements StorageService {
     this.sessionSummaries = sessionSummaries
     this.sessionSummaryProjection = sessionSummaries
     this.launchableProjects = new SqliteLaunchableProjectReader(this.executor)
+    this.nativeSessionCatalog = new SqliteNativeSessionCatalog(this.executor)
     this.taskFileChanges = new SqliteTaskFileChangeProjectionStore(this.executor)
     this.toolUsageObservations = new SqliteToolUsageObservationReader(this.executor)
     this.unknownObservationProjection = new SqliteUnknownObservationProjection(this.executor)
