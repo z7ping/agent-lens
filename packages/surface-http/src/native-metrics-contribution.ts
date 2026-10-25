@@ -54,6 +54,7 @@ export async function nativeMetricContribution(
   try{
     const chunks=await Promise.all(defs.map(source=>metrics.overview!({
       sourceId:source.manifest.sourceId,parserVersion:source.manifest.parserVersion,
+      coverageCertified:source.nativeSessionCoverageComplete===true,
       ...(scope.installationId?{installationId:scope.installationId}:{}),
       ...(scope.from?{from:scope.from}:{}),...(scope.to?{to:scope.to}:{}),
     })))

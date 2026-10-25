@@ -61,7 +61,11 @@ export async function handleNativeSessionMetricsRequest(
   if(!rebuild){
     // Do not claim the persisted Parser projection is current until checked.
     const expected=sources?.list().find(x=>x.manifest.sourceId===entry.sourceId)?.manifest.parserVersion
-    if(existing.state==='available' && expected && existing.snapshot.parserVersion!==expected){
+    const source=sources?.list().find(x=>x.manifest.sourceId===entry.sourceId)
+    if(existing.state==='available' && existing.snapshot.coverage==='complete'
+      && source?.nativeSessionCoverageComplete!==true){
+      writeJson(response,200,{state:'stale',reason:'native-source-coverage-unverified'})
+    }else if(existing.state==='available' && expected && existing.snapshot.parserVersion!==expected){
       writeJson(response,200,{state:'stale',reason:'native-parser-version-changed'})
     }else if(existing.state==='available' && existing.snapshot.projectionVersion!==PROJECTION_VERSION){
       writeJson(response,200,{state:'stale',reason:'native-metrics-projection-version-changed'})

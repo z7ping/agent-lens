@@ -173,7 +173,8 @@ export class SqliteNativeSessionMetrics implements NativeSessionMetricsStore {
       || (input.installationId!==undefined && (!input.installationId || input.installationId.length>512))
       || (input.from!==undefined && !Number.isFinite(Date.parse(input.from)))
       || (input.to!==undefined && !Number.isFinite(Date.parse(input.to)))
-      || (input.from && input.to && Date.parse(input.from)>Date.parse(input.to))){
+      || (input.from && input.to && Date.parse(input.from)>Date.parse(input.to))
+      || (input.coverageCertified!==undefined && typeof input.coverageCertified!=='boolean')){
       throw new TypeError('Invalid Native-only metrics aggregate query')
     }
     return this.executor.run(()=>{
@@ -190,6 +191,7 @@ export class SqliteNativeSessionMetrics implements NativeSessionMetricsStore {
                      OR metrics.parser_version<>?
                      OR metrics.projection_version<>?
                    THEN 'stale'
+                   WHEN metrics.coverage='complete' AND ?<>1 THEN 'partial'
                    ELSE metrics.coverage
                  END AS metric_status
           FROM native_session_write_claims AS claim
@@ -209,7 +211,8 @@ export class SqliteNativeSessionMetrics implements NativeSessionMetricsStore {
         )
       `
       const params=[
-        input.parserVersion,NATIVE_SESSION_METRIC_PROJECTION_VERSION,input.sourceId,
+        input.parserVersion,NATIVE_SESSION_METRIC_PROJECTION_VERSION,
+        input.coverageCertified===true?1:0,input.sourceId,
         ...(input.installationId?[input.installationId]:[]),
         ...(input.from?[input.from]:[]),
         ...(input.to?[input.to]:[]),

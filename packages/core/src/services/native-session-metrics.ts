@@ -10,6 +10,8 @@ export interface NativeSessionMetricOverviewQuery {
   sourceId:string
   /** The current registered Source parser, not a remembered DB version. */
   parserVersion:string
+  /** Must be explicitly attested by the current Source. Missing means unverified. */
+  coverageCertified?:boolean
   installationId?:string
   from?:string
   to?:string

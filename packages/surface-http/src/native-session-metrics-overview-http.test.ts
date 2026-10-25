@@ -4,11 +4,11 @@ import type { CapturePolicyService, SourceService, StorageService } from '@agent
 import { startHttpSurface } from './server'
 
 test('native overview consults only bounded numerical cache, filters authorization and reports partial coverage',async()=>{
-  const captured:Array<{sourceId:string;parserVersion:string}>= []
+  const captured:Array<{sourceId:string;parserVersion:string;coverageCertified:boolean}>= []
   const storage={
     health:async()=>({ok:true}),
     nativeSessionMetrics:{
-      async overview(query:{sourceId:string;parserVersion:string}){
+      async overview(query:{sourceId:string;parserVersion:string;coverageCertified:boolean}){
         captured.push(query)
         return {
           sourceId:query.sourceId,eligibleSessions:3,readySessions:1,
@@ -23,7 +23,7 @@ test('native overview consults only bounded numerical cache, filters authorizati
     },
   } as unknown as StorageService
   const sources={list:()=>[
-    {manifest:{sourceId:'pi',parserVersion:'pi-v9'}},
+    {manifest:{sourceId:'pi',parserVersion:'pi-v9'},nativeSessionCoverageComplete:true},
     {manifest:{sourceId:'codex',parserVersion:'codex-v2'}},
   ]} as unknown as SourceService
   const policy={isSourceEnabled:(id:string)=>id==='pi'} as unknown as CapturePolicyService
@@ -41,7 +41,7 @@ test('native overview consults only bounded numerical cache, filters authorizati
     assert.equal(result.items[0]?.totals.inputTokens,null)
     assert.deepEqual(result.totals,{eligibleSessions:3,readySessions:1,
       missingSessions:1,staleSessions:1,partialSessions:0})
-    assert.deepEqual(captured,[{sourceId:'pi',parserVersion:'pi-v9'}])
+    assert.deepEqual(captured,[{sourceId:'pi',parserVersion:'pi-v9',coverageCertified:true}])
     assert.equal(JSON.stringify(result).includes('filePath'),false)
     assert.equal((await fetch(base+'?sourceId=codex')).status,200)
     assert.equal((await fetch(base+'?projectId=secret')).status,400)
