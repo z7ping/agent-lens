@@ -864,4 +864,8 @@ export * from './live-attachments'
 
 export * from './native-session-reader'
 export { NativeReaderWorkerClient, resolveNativeReaderWorkerUrl, type NativeReaderWorkerPort } from './native-reader-worker-client'
-export type { NativeWorkerReadInput, NativeWorkerReadResult, NativeWorkerRequest, NativeWorkerReply } from './native-reader-worker-protocol'
+export type {
+  NativeWorkerReadInput, NativeWorkerReadResult,
+  NativeWorkerHookReadInput, NativeWorkerHookReadResult,
+  NativeWorkerRequest, NativeWorkerReply,
+} from './native-reader-worker-protocol'

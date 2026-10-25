@@ -237,13 +237,13 @@ export function overlayNativeHookEvents(input: {
   const nativeFactKey = (kind: string, nativeEventId: string) =>
     JSON.stringify([kind, nativeEventId])
   const existingSourceFacts = new Set(window.interactions.flatMap(turn => turn.nodes)
-    .filter(node => node.type === 'event' && node.nativeEventId)
-    .map(node => nativeFactKey(node.kind, node.nativeEventId!)))
+    .flatMap(node => node.type === 'event' && node.nativeEventId
+      ? [nativeFactKey(node.kind, node.nativeEventId)] : []))
   const fingerprint = (kind: string, at: string, payload: unknown) =>
     JSON.stringify([kind, at, payload])
   const existingFacts = new Set(window.interactions.flatMap(turn => turn.nodes)
-    .filter(node => node.type === 'event')
-    .map(node => fingerprint(node.kind, node.at, node.payload)))
+    .flatMap(node => node.type === 'event'
+      ? [fingerprint(node.kind, node.at, node.payload)] : []))
   const added = new Map<string, typeof candidates>()
   for (const node of candidates) {
     if (seenIds.has(node.id)

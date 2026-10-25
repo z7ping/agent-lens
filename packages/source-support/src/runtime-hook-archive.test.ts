@@ -72,18 +72,18 @@ test('Hook sidecar pages preserve every source file, reject cross-session cursor
     assert.ok(first.nextCursor)
     assert.equal(first.nextCursor.includes(inbox),false)
     const second=await readArchivedHookInboxPage({
-      inbox,nativeSessionId:'S1',limit:2,cursor:first.nextCursor,
+      inbox,nativeSessionId:'S1',limit:2,cursor:first.nextCursor!,
     })
     assert.deepEqual(second.items.map(item=>item.fileName),['event-2.json','event-3.json'])
     assert.equal(second.hasMore,true)
     const third=await readArchivedHookInboxPage({
-      inbox,nativeSessionId:'S1',limit:2,cursor:second.nextCursor,
+      inbox,nativeSessionId:'S1',limit:2,cursor:second.nextCursor!,
     })
     assert.deepEqual(third.items.map(item=>item.fileName),['event-4.json'])
     assert.equal(third.hasMore,false)
     assert.equal(third.nextCursor,undefined)
     await assert.rejects(
-      readArchivedHookInboxPage({inbox,nativeSessionId:'S2',limit:2,cursor:first.nextCursor}),
+      readArchivedHookInboxPage({inbox,nativeSessionId:'S2',limit:2,cursor:first.nextCursor!}),
       /Invalid archived Hook cursor/,
     )
     await assert.rejects(
