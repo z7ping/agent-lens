@@ -126,6 +126,16 @@ async function readCompleteNativeTurn(
   let lastRecordStart: SourceNativeSessionCursor | undefined
 
   const finish = (nextCursor: SourceNativeSessionCursor, hasMore: boolean): NativeTurnReadResult => {
+    // A source page can end while a model tool is still running; this is NOT a
+    // completed user turn, even when the file has no further full records yet.
+    if (pendingTools.size > 0) {
+      return { state: 'unsupported', reason: 'native-review-turn-tool-pending' }
+    }
+    // Metadata-only native sessions and leading background records are not
+    // permission to fabricate a finished user turn or advance its ordinal.
+    if (!sawUser) {
+      return { state: 'unsupported', reason: 'native-review-no-user-turn' }
+    }
     const base = projectNativeReviewWindow({
       sourceId: query.sourceId,
       installationId: query.installationId,
