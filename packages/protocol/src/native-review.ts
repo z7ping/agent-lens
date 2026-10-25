@@ -102,6 +102,16 @@ export type NativeMetricContributionDto =
       errorCount:number
       inputTokens:number|null
       outputTokens:number|null
+      /** Optional bounded, per-Source numerical tool totals for Usage UI. */
+      tools?:Array<{
+        sourceId:string
+        nativeToolName:string
+        callCount:number
+        resultCount:number
+        errorCount:number
+        sessionCount:number
+      }>
+      toolsTruncated?:boolean
     }
   | {state:'unavailable'|'unsupported';reason:string}
 
