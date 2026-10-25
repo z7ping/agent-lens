@@ -9,3 +9,5 @@ export * from './watch-source-files'
 export * from './managed-files'
 
 export * from './raw-recovery'
+
+export * from './runtime-hook-archive'
