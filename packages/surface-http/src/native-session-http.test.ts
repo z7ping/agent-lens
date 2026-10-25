@@ -19,23 +19,24 @@ test('native session HTTP reads via identities only, supports opaque cursor and 
         limit: query.limit,
         hasAbortSignal: typeof query.signal?.addEventListener === 'function',
       })
+      const followup = query.cursor?.offset === 128 && calls.length === 3
       return {
         state: 'available',
         observations: [{
-          kind: 'message.user',
+          kind: followup ? 'message.assistant' : 'message.user',
           capturedAt: '2026-10-25T00:00:00Z',
           identityHints: { nativeSessionId: 'session 1' },
           payload: { text: '[redacted]' },
         }],
-        observationRecordIds: ['record-1'],
+        observationRecordIds: [followup ? 'record-2' : 'record-1'],
         evidenceCandidates: [{
           captureMethod: 'native-log',
           derivation: 'observed',
           capturedAt: '2026-10-25T00:00:00Z',
           sourceLocator: { kind: 'file', path: '/sensitive/work/secret.jsonl' },
         }],
-        nextCursor: { offset: 128, sequence: 1, fileIdentity: '1:2' },
-        hasMore: true,
+        nextCursor: { offset: followup ? 256 : 128, sequence: followup ? 2 : 1, fileIdentity: '1:2' },
+        hasMore: !followup,
         pendingTail: false,
       }
     },
@@ -63,9 +64,10 @@ test('native session HTTP reads via identities only, supports opaque cursor and 
       interactions: Array<{nodes: Array<{type:string; text?:string}>}>
     }
     assert.equal(rendered.state, 'available')
-    assert.equal(rendered.boundaryIntegrity, 'partial')
+    assert.equal(rendered.boundaryIntegrity, 'complete')
     assert.equal(rendered.interactions[0]?.nodes[0]?.type, 'message')
     assert.equal(rendered.interactions[0]?.nodes[0]?.text, '[redacted]')
+    assert.equal(rendered.interactions[0]?.nodes[1]?.type, 'message')
     assert.equal(JSON.stringify(rendered).includes('/sensitive/work'), false)
 
     const second = await fetch(`${endpoint}?sourceId=pi&installationId=inst&nativeSessionId=session%201&limit=2&cursor=${body.nextCursor}`)
@@ -74,6 +76,9 @@ test('native session HTTP reads via identities only, supports opaque cursor and 
       sourceId: 'pi', installationId: 'inst', nativeSessionId: 'session 1', limit: 8, hasAbortSignal: true,
     }, {
       sourceId: 'pi', installationId: 'inst', nativeSessionId: 'session 1', limit: 8, hasAbortSignal: true,
+    }, {
+      sourceId: 'pi', installationId: 'inst', nativeSessionId: 'session 1', limit: 8,
+      cursor: { offset: 128, sequence: 1, fileIdentity: '1:2' }, hasAbortSignal: true,
     }, {
       sourceId: 'pi', installationId: 'inst', nativeSessionId: 'session 1', limit: 2,
       cursor: { offset: 128, sequence: 1, fileIdentity: '1:2' }, hasAbortSignal: true,
