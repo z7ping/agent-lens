@@ -536,7 +536,9 @@ export async function* ingestCodexHistory(ctx: SourceHistoryExecutionContext): A
   for (const filePath of files) {
     if (ctx.abortSignal.aborted) return
     await ctx.reportProgress?.({ phase: 'processing', currentUnit: filePath })
-    yield* ingestCodexFileWithThreadNames(ctx, filePath, threadNames, rememberSession)
+    if (!ctx.skipNativeSessionFile?.(filePath)) {
+      yield* ingestCodexFileWithThreadNames(ctx, filePath, threadNames, rememberSession)
+    }
     if (!ctx.abortSignal.aborted) await ctx.reportProgress?.({ phase: 'processing', processedUnits: ++processedUnits })
   }
 
