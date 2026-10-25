@@ -12,7 +12,7 @@ import {
   defineAgentLensPlugin,
   type AgentLensContext,
 } from '@agent-lens/runtime-cordis'
-import { readArchivedHookInboxPage, readAuthorizedNativeJsonlEntry, readNativeSessionWindow, verifyJsonlLineSha256 } from '@agent-lens/source-support'
+import { archivedHookInboxRecordPath, readArchivedHookInboxPage, readAuthorizedNativeJsonlEntry, readNativeSessionWindow, verifyJsonlLineSha256 } from '@agent-lens/source-support'
 import { discoverCodexAssets } from './assets'
 import {
   CODEX_CURRENT_PARSER_VERSION,
