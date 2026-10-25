@@ -41,6 +41,36 @@ function nativeTitle(record: SourceRecord): string | undefined {
  */
 export class NativeSessionCatalogTracker {
   private readonly inspected = new Map<string, { checkedAt: number; activityMs: number; title?: string }>()
+  // Chosen write ownership is immutable in SQLite; cache only decided modes,
+  // never null/unclaimed. Old-file scans must not do a DB read per event.
+  private readonly writeModes = new Map<string, 'legacy' | 'native-only'>()
+
+  private writeModeKey(input: { sourceId: string; installationId: string; nativeSessionId: string }): string {
+    return JSON.stringify([input.sourceId, input.installationId, input.nativeSessionId])
+  }
+
+  rememberWriteMode(
+    input: { sourceId: string; installationId: string; nativeSessionId: string },
+    mode: 'legacy' | 'native-only',
+  ): void {
+    const key = this.writeModeKey(input)
+    if (this.writeModes.has(key)) this.writeModes.delete(key)
+    if (this.writeModes.size >= 1024) {
+      const oldest = this.writeModes.keys().next().value
+      if (oldest !== undefined) this.writeModes.delete(oldest)
+    }
+    this.writeModes.set(key, mode)
+  }
+
+  async getWriteMode(
+    input: { sourceId: string; installationId: string; nativeSessionId: string },
+  ): Promise<'legacy' | 'native-only' | null> {
+    const cached = this.writeModes.get(this.writeModeKey(input))
+    if (cached) return cached
+    const mode = await this.catalog?.getSessionWriteMode(input) ?? null
+    if (mode) this.rememberWriteMode(input, mode)
+    return mode
+  }
 
   constructor(
     private readonly catalog?: NativeSessionCatalogStore,

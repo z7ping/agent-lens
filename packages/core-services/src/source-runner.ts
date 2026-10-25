@@ -487,9 +487,13 @@ async function shouldReadNativeOnly(
   }
   // Two independent runners may race for the same session. Every path must
   // claim an immutable owner BEFORE persisting legacy events or skipping them.
-  const established = await catalog.getSessionWriteMode(key)
+  const established = await tracker.getWriteMode(key)
   if (established) return established === 'native-only'
-  const claimLegacy = async () => (await catalog.claimLegacyWrite(key)) === 'native-only'
+  const claimLegacy = async () => {
+    const mode = await catalog.claimLegacyWrite(key)
+    tracker.rememberWriteMode(key, mode)
+    return mode === 'native-only'
+  }
   if (process.env[NATIVE_ONLY_WRITER_OPT_IN] !== '1'
     || !source.readNativeSessionPage || !source.rawRecovery?.verify
     || !source.rawRecovery.describe(record).canReread
@@ -529,6 +533,7 @@ async function shouldReadNativeOnly(
   const nativeOnly = await catalog.claimNativeOnlyWrite({
     ...key, filePath: native.filePath, fileIdentity: native.fileIdentity,
   })
+  if (nativeOnly) tracker.rememberWriteMode(key, 'native-only')
   // If the competing legacy writer claimed this session while Source proof
   // was in flight, honor its decision instead of mixing the two histories.
   return nativeOnly || claimLegacy()
