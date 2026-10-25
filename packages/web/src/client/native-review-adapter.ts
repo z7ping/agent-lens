@@ -4,7 +4,42 @@ import {
   type NativeReviewWindowDto,
   type NativeSessionSummaryDto,
   type ReviewSessionDetailDto,
+  type ReviewInteractionDto,
 } from '@agent-lens/protocol'
+
+/** Rebuild statistics only from the bounded visible native Review nodes.
+ * Original Source candidates can include lifecycle metadata that does not
+ * produce a visible node; never promote these counts to full-session SQL totals.
+ */
+export function nativeVisibleWindowStatistics(interactions: readonly ReviewInteractionDto[]) {
+  const sourceObservations = new Set<string>()
+  let toolCount = 0
+  let errorCount = 0
+  for (const interaction of interactions) {
+    for (const node of interaction.nodes) {
+      for (const id of node.observationIds) sourceObservations.add(id)
+      if (node.type === 'tool') {
+        toolCount += 1
+        if (node.status === 'error') errorCount += 1
+      } else if (node.type === 'event' && node.kind === 'session.lifecycle') {
+        const payload = node.payload
+        if (payload && typeof payload === 'object' && !Array.isArray(payload)) {
+          const action = payload.event ?? payload.action
+          if (action === 'turn.error' || action === 'assistant.error' || action === 'turn.failed') {
+            errorCount += 1
+          }
+        }
+      }
+    }
+  }
+  return {
+    observationCount: sourceObservations.size,
+    interactionCount: interactions.filter(item => item.trigger === 'user').length,
+    toolCount,
+    errorCount,
+    hasErrors: errorCount > 0,
+  }
+}
 
 /**
  * Adapter into the ONE Task Surface Review DTO. This is a bounded page, not a
@@ -23,10 +58,7 @@ export function nativeReviewDetail(
     throw new Error('Native Review identity or complete-turn contract changed')
   }
   const interactions = window.interactions
-  const toolCount = interactions.reduce((count, item) =>
-    count + item.nodes.filter(node => node.type === 'tool').length, 0)
-  const errorCount = interactions.reduce((count, item) =>
-    count + item.nodes.filter(node => node.type === 'tool' && node.status === 'error').length, 0)
+  const statistics = nativeVisibleWindowStatistics(interactions)
   const first = interactions[0]?.startedAt ?? summary.lastActivityAt
   const end = summary.lastActivityAt
   const duration = Date.parse(end) - Date.parse(first)
@@ -40,11 +72,7 @@ export function nativeReviewDetail(
     startedAt: first,
     endedAt: end,
     durationMs: Number.isFinite(duration) ? Math.max(0, duration) : 0,
-    observationCount: window.observationCount,
-    interactionCount: interactions.filter(item => item.trigger === 'user').length,
-    toolCount,
-    errorCount,
-    hasErrors: errorCount > 0,
+    ...statistics,
     // Deliberately not a full SQL SessionSummary. Counts and duration reflect
     // only visible native observations; the header hides total metrics.
     statisticsCompleteness: 'window',

@@ -3,7 +3,7 @@ import { type QueryFilters, type ReviewFilters } from './api'
 import { AgentLensIntegrationModel } from './model-integration'
 import { INITIAL_REVIEW_LIMIT } from './model-base'
 import { translateProduct } from '../i18n/runtime'
-import { nativeReviewDetail, nativeReviewNextPage, nativeReviewObservedFileChanges } from './native-review-adapter'
+import { nativeReviewDetail, nativeReviewNextPage, nativeReviewObservedFileChanges, nativeVisibleWindowStatistics } from './native-review-adapter'
 
 const REVIEW_PAGE_SIZE = 20
 const REVIEW_DETAIL_PAGE_SIZE = 10
@@ -20,6 +20,10 @@ function mergeReviewDetail(current: ReviewSessionDetailDto, next: ReviewSessionD
       : ordered.slice(-REVIEW_DETAIL_WINDOW_SIZE)
   return {
     ...current,
+    // Native pagination never invokes SQL aggregates. Recount exactly the
+    // bounded Task Surface window after deduplication and window eviction.
+    ...(current.statisticsCompleteness === 'window'
+      ? nativeVisibleWindowStatistics(windowed) : {}),
     ...(next.nativeHookEventsTruncated ? {nativeHookEventsTruncated:true} : {}),
     interactions: windowed,
     page: next.page,

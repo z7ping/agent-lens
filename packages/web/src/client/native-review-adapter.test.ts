@@ -3,7 +3,7 @@ import test from 'node:test'
 import type { AgentLensApi } from './api'
 import type { NativeReviewWindowDto, NativeSessionSummaryDto } from '@agent-lens/protocol'
 import { AgentLensClientModel } from './model'
-import { nativeReviewDetail, nativeReviewNextPage, nativeReviewObservedFileChanges } from './native-review-adapter'
+import { nativeReviewDetail, nativeReviewNextPage, nativeReviewObservedFileChanges, nativeVisibleWindowStatistics } from './native-review-adapter'
 
 const id='native:1234567890abcdef1234567890abcdef'
 const at='2026-10-25T00:00:00Z'
@@ -110,3 +110,84 @@ test('native loaded file changes are evidence-only and incremental without SQL r
   assert.deepEqual(second.items.map(item=>item.path),['src/service.ts','src/new.ts'])
   assert.equal(second.meta.truncated,undefined)
 })
+
+
+test('native visible statistics count each source fact once and include terminal lifecycle errors',()=>{
+  const turn=page(1,true).interactions[0]!
+  const nodes=[
+    ...turn.nodes,
+    {
+      type:'tool' as const,id:'shell-1',at,sourceId:'pi',capturedAt:at,
+      name:'shell',status:'error' as const,startedAt:at,endedAt:at,
+      payload:{exitCode:1},evidence:[],observationIds:['call-1','result-1'],
+    },
+    {
+      type:'event' as const,id:'turn-error',at,sourceId:'pi',capturedAt:at,
+      kind:'session.lifecycle' as const,category:'lifecycle' as const,
+      label:'Turn failed',payload:{event:'turn.error'},evidence:[],
+      observationIds:['turn-failure'],
+    },
+  ]
+  const statistics=nativeVisibleWindowStatistics([{...turn,nodes}])
+  assert.deepEqual(statistics,{
+    observationCount:4,interactionCount:1,toolCount:1,errorCount:2,hasErrors:true,
+  })
+  const detail=nativeReviewDetail(summary,{...page(1,true),interactions:[{...turn,nodes}]})
+  assert.equal(detail.errorCount,2)
+  assert.equal(detail.observationCount,4)
+  assert.equal(detail.statisticsCompleteness,'window')
+})
+
+test('native Review pagination rebuilds bounded statistics without SQL totals',async()=>{
+  const firstPage=page(1,true)
+  const secondPage=page(2,false)
+  const firstTurn=firstPage.interactions[0]!
+  const secondTurn=secondPage.interactions[0]!
+  const loadedFirst:NativeReviewWindowDto={
+    ...firstPage,hookEventsTruncated:true,
+    interactions:[{...firstTurn,nodes:[
+      ...firstTurn.nodes,{
+        type:'tool' as const,id:'tool-1',at,sourceId:'pi',capturedAt:at,
+        name:'read',status:'error' as const,startedAt:at,
+        payload:{},evidence:[],observationIds:['call-1','result-1'],
+      },
+    ]}],
+  }
+  const loadedSecond:NativeReviewWindowDto={
+    ...secondPage,interactions:[{...secondTurn,nodes:[
+      ...secondTurn.nodes,{
+        type:'tool' as const,id:'tool-2',at,sourceId:'pi',capturedAt:at,
+        name:'read',status:'success' as const,startedAt:at,endedAt:at,
+        payload:{},evidence:[],observationIds:['call-2','result-2'],
+      },
+    ]}],
+  }
+  const api={
+    async nativeSession(){return summary},
+    async nativeReviewById(_id:string,options:{cursor?:string}){
+      return options.cursor?loadedSecond:loadedFirst
+    },
+    reviewDetail(){throw Error('Native review must not read legacy SQL aggregates')},
+    reviewFileChanges(){throw Error('Native review must not read legacy SQL changes')},
+    relationships(){throw Error('Native review must not read legacy SQL relationships')},
+  } as unknown as AgentLensApi
+  const model=new AgentLensClientModel(api)
+  try{
+    await model.selectReviewSession(id)
+    const first=model.getSnapshot().review.detail
+    assert.equal(first?.toolCount,1)
+    assert.equal(first?.errorCount,1)
+    assert.equal(first?.observationCount,3)
+    await model.loadMoreReviewDetail()
+    const next=model.getSnapshot().review.detail
+    assert.deepEqual(next?.interactions.map(item=>item.ordinal),[1,2])
+    assert.equal(next?.interactionCount,2)
+    assert.equal(next?.toolCount,2)
+    assert.equal(next?.errorCount,1)
+    assert.equal(next?.hasErrors,true)
+    assert.equal(next?.observationCount,6)
+    assert.equal(next?.nativeHookEventsTruncated,true)
+    assert.equal(next?.statisticsCompleteness,'window')
+  } finally { model.stop() }
+})
+
