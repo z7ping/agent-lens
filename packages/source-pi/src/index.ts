@@ -8,13 +8,14 @@ import {
   defineAgentLensPlugin,
   type AgentLensContext,
 } from '@agent-lens/runtime-cordis'
-import { verifyJsonlLineSha256 } from '@agent-lens/source-support'
+import { readAuthorizedNativeJsonlEntry, verifyJsonlLineSha256 } from '@agent-lens/source-support'
 import { discoverPiAssets, piAssetInternals } from './assets'
 import { PI_PARSER_VERSION, PI_SOURCE_ID } from './constants'
 import { normalizePiRecord } from './normalize'
 import {
   detectPi,
   ingestPiHistory,
+  readPiSessionMetadata,
   piSessionInternals,
   startPiRuntimeCapture,
 } from './session'
@@ -87,6 +88,24 @@ const jsonlRawRecovery: NonNullable<SourceDefinition['rawRecovery']> = {
             ? 'runtime-hook source is consumed from an ephemeral inbox'
             : 'record does not expose a stable JSONL path+offset+fingerprint locator',
         }
+  },
+  async hydrate(record, ctx) {
+    const read = await readAuthorizedNativeJsonlEntry({
+      reference: record,
+      installationId: ctx.installation.id,
+      sourceId: PI_SOURCE_ID,
+      parserVersion: PI_PARSER_VERSION,
+      allowedRoots: ctx.installation.dataRoot ? [ctx.installation.dataRoot] : [],
+      abortSignal: ctx.abortSignal,
+    })
+    if (read.state !== 'available') return read
+    ctx.abortSignal.throwIfAborted()
+    const session = await readPiSessionMetadata(read.canonicalPath)
+    if (record.sourceSessionNativeId && session.nativeSessionId !== record.sourceSessionNativeId) {
+      return { state: 'drifted', reason: 'source-native-session-identity-changed' }
+    }
+    // Transient payload: only the existing Source normalizer receives it.
+    return { state: 'available', record: { ...record, payload: { entry: read.entry, session } } }
   },
   async verify(record) {
     const result = await verifyJsonlLineSha256({

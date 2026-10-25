@@ -198,7 +198,7 @@ async function readThreadNames(codexHome: string | undefined): Promise<Map<strin
   return result
 }
 
-async function readSessionMetadata(
+export async function readSessionMetadata(
   filePath: string,
   indexedTitle?: CodexThreadName,
 ): Promise<CodexSessionMetadata> {

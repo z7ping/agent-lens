@@ -1,6 +1,13 @@
-import type { CanonicalObservation, SourceService, StorageService } from '@agent-lens/core'
+import type { CanonicalObservation, SourceCheckpointService, SourceRecord, SourceService, StorageService } from '@agent-lens/core'
 import { reviewMessageAttachmentSourcesFromPayload } from '@agent-lens/protocol'
 import { asRecord, readVerifiedNativeJsonlObject } from '@agent-lens/source-support'
+
+/** Prevent transient source hydration from mutating history checkpoints. */
+const readOnlyCheckpoint: SourceCheckpointService = {
+  async get() { return null },
+  async set() { throw new Error('Native read cannot write source checkpoints') },
+  async clear() { throw new Error('Native read cannot clear source checkpoints') },
+}
 
 /** 只通过已有 Evidence 和 Source Adapter 恢复资源位置，不恢复或返回脱敏前正文。 */
 export async function reviewAttachmentSources(
@@ -16,27 +23,38 @@ export async function reviewAttachmentSources(
     if (!item.sourceRecordId) continue
     const record = await storage.repositories.sourceRecords.get(item.sourceRecordId)
     const definition = record ? sources?.list().find(value => value.manifest.sourceId === record.sourceId) : null
-    if (!record || !definition?.rawRecovery?.verify || !record.fingerprint || record.locator.kind !== 'file'
+    if (!record || !definition?.rawRecovery || !(definition.rawRecovery.hydrate || definition.rawRecovery.verify)
+      || !record.fingerprint || record.locator.kind !== 'file'
       || !record.locator.path || record.locator.offset === undefined
       || !definition.rawRecovery.describe(record).canReread
       || !definition.rawRecovery.describe(record).canReparse) continue
     try {
-      // Hydrate from exactly the same bounded bytes used for fingerprint verification.
-      // The old verify-then-reopen flow had a TOCTOU gap and read the record twice.
-      const native = await readVerifiedNativeJsonlObject({
-        path: record.locator.path,
-        offset: record.locator.offset,
-        expectedFingerprint: record.fingerprint,
-      })
-      if (native.state !== 'available') continue
       const [host, installation] = await Promise.all([
         storage.repositories.hosts.get(observation.hostId),
         storage.repositories.installations.get(observation.installationId),
       ])
       if (!host || !installation) continue
-      const recovered = await definition.normalize({
-        ...record, payload: { ...asRecord(record.payload), entry: native.entry },
-      }, { host, installation })
+      let nativeRecord: SourceRecord
+      if (definition.rawRecovery.hydrate) {
+        // The adapter supplies its own authorized Source roots and reconstructs
+        // the envelope even if SourceRecord.payload is no longer persisted.
+        const hydrated = await definition.rawRecovery.hydrate(
+          { ...record, payload: null },
+          { host, installation, abortSignal: new AbortController().signal, checkpoint: readOnlyCheckpoint },
+        )
+        if (hydrated.state !== 'available') continue
+        nativeRecord = hydrated.record
+      } else {
+        // Legacy Source fallback until all adapters implement the read-only contract.
+        const native = await readVerifiedNativeJsonlObject({
+          path: record.locator.path,
+          offset: record.locator.offset,
+          expectedFingerprint: record.fingerprint,
+        })
+        if (native.state !== 'available') continue
+        nativeRecord = { ...record, payload: { ...asRecord(record.payload), entry: native.entry } }
+      }
+      const recovered = await definition.normalize(nativeRecord, { host, installation })
       const candidate = recovered.observations.find(value => value.kind === observation.kind
         && value.nativeEventId === observation.nativeEventId)
       if (!candidate) continue

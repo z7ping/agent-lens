@@ -285,7 +285,7 @@ async function readSessionHeader(filePath: string): Promise<Record<string, unkno
   }
 }
 
-async function sessionMetadata(filePath: string): Promise<PiSessionMetadata> {
+export async function readPiSessionMetadata(filePath: string): Promise<PiSessionMetadata> {
   const header = await readSessionHeader(filePath)
   const fallback = basename(filePath, extname(filePath))
   if (!header) return { nativeSessionId: fallback }
@@ -341,7 +341,7 @@ export async function listPiProjectCwds(ctx: SourceExecutionContext): Promise<st
   const values = new Map<string, string>()
   for (const filePath of await listJsonlFiles(sessionsDir)) {
     if (ctx.abortSignal.aborted) break
-    const session = await sessionMetadata(filePath)
+    const session = await readPiSessionMetadata(filePath)
     const raw = session.cwd?.trim()
     if (!raw || !isAbsolute(raw)) continue
     const cwd = resolve(raw)
@@ -402,7 +402,7 @@ export async function* ingestPiFile(
   let offset = reset ? 0 : previous.offset
   let sequence = reset ? 0 : previous.sequence
   let incompleteTail = false
-  const session = await sessionMetadata(filePath)
+  const session = await readPiSessionMetadata(filePath)
   await onSession?.(session)
   if (diagnostics) diagnostics.parsedFiles += 1
 
