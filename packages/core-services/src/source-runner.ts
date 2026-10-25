@@ -453,8 +453,6 @@ async function processSourceRecord(
   return result
 }
 
-const NATIVE_ONLY_WRITER_OPT_IN = 'AGENT_LENS_NATIVE_ONLY_NEW_SESSIONS'
-
 function noPersistedObservations(): ProcessResult {
   return {
     observationsCreated: 0,
@@ -469,9 +467,9 @@ function noPersistedObservations(): ProcessResult {
  * runtime. A durable native-only claim must never fall back into the legacy
  * SourceRecord/Observation/Evidence pipeline, even if the opt-in is removed.
  *
- * New claims are opt-in while unsupported historical consumers are being
- * converted. The original record must be verifiable and the original session
- * reader must independently authorize the Catalog location.
+ * Certified append-oriented Sources select Native-only by default for
+ * unclaimed sessions. Existing Legacy claims remain immutable, and uncertain
+ * records use the legacy pipeline. The Source reader must authorize the file.
  */
 /** Only append-oriented, fingerprint-stable original sources may replace
  * durable SQL events. Mutable SQLite rowIds cannot guarantee recovery after
@@ -550,8 +548,7 @@ async function shouldReadNativeOnly(
     // *session* claim as proof of *this event's* durable recoverability.
     return mode === 'native-only' ? verifyClaimedNativeRecord() : false
   }
-  if (process.env[NATIVE_ONLY_WRITER_OPT_IN] !== '1'
-    || !source.readNativeSessionPage || !source.rawRecovery?.verify
+  if (!source.readNativeSessionPage || !source.rawRecovery?.verify
     || !isDurablyNativeRecoverable(source, record)
     || record.sourceId !== source.manifest.sourceId
     || record.installationId !== installation.id
@@ -613,8 +610,7 @@ async function processSourceRecordWithOwnership(
     // duplicate raw SourceRecords. Read-time Source normalization owns this.
     return noPersistedObservations()
   }
-  // Legacy behavior is unchanged for existing SQL sessions, sources without
-  // verified native storage, and users who have not enabled the cutover.
+  // Legacy remains for existing SQL sessions and any unverified Source facts.
   return processSourceRecord(storage, observations, coverage, capturePolicy,
     source, host, installation, runtimeProfile, record)
 }
@@ -882,12 +878,9 @@ export class SourceHistoryRunner {
         checkpointScope(source.manifest.sourceId, installation.id, runtimeProfile),
       )
       const verifiedNativePaths = new Set<string>()
-      // Explicit experimental mode: a verified native file is the single
-      // authority for new sessions. Existing SQL sessions refuse the claim and
-      // keep their original ingest path. Every source parser is still the
-      // source of truth for the first record used for fingerprint verification.
-      if (process.env.AGENT_LENS_NATIVE_ONLY_NEW_SESSIONS === '1'
-        && process.env.AGENT_LENS_NATIVE_CATALOG_FAST_SCAN === '1'
+      // Certified Sources claim only after original Source verification.
+      // Existing SQL sessions refuse the claim and preserve Legacy ownership.
+      if (source.nativeSessionCoverageComplete === true
         && source.discoverNativeSessions && source.readNativeSessionPage
         && source.rawRecovery?.verify && this.storage.nativeSessionCatalog) {
         const catalog = this.storage.nativeSessionCatalog
@@ -951,8 +944,7 @@ export class SourceHistoryRunner {
           await yieldForInteractivity()
         }
       }
-      // For experimental native-fast startup this separates short metadata
-      // ownership arbitration from the potentially long legacy ingest loop.
+      // Metadata ownership arbitration precedes legacy-only ingestion.
       input.onNativeCatalogReady?.()
       let coverageFrom: string | undefined
       let coverageTo: string | undefined
