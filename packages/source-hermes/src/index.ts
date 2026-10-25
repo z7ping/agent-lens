@@ -997,7 +997,11 @@ async function readHermesArchivedHookPage(
     const path = archivedHookInboxRecordPath({
       inbox, fileName: item.fileName, nativeSessionId, installationId: ctx.installation.id,
     })
-    const record = hookRecord(envelope, path, ctx)
+    const rawRecord = hookRecord(envelope, path, ctx)
+    // Source archive returned already verified bytes; keep exact original
+    // SHA so the RawRecovery verifier can prove this event later by reference.
+    const record = {...rawRecord,
+      fingerprint:createHash('sha256').update(item.content,'utf8').digest('hex')}
     if (record.sourceId !== SOURCE_ID
       || record.installationId !== ctx.installation.id
       || record.sourceSessionNativeId !== nativeSessionId
