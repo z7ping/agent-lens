@@ -964,6 +964,8 @@ export class SourceHistoryRunner {
         ...(input.historyWindow ? { historyWindow: input.historyWindow } : {}),
         ...(verifiedNativePaths.size
           ? { skipNativeSessionFile: (filePath: string) => verifiedNativePaths.has(filePath) } : {}),
+        ...(verifiedNativeSessionIds.size
+          ? { skipNativeSessionId: (id: string) => verifiedNativeSessionIds.has(id) } : {}),
         reportProgress: update => progress.report(update),
       })) {
         if (input.cooperate) await input.cooperate()
