@@ -203,6 +203,19 @@ export const codexSourceDefinition: SourceDefinition = {
     if (session.nativeSessionId !== query.nativeSessionId) {
       return { state: 'drifted', reason: 'native-session-identity-changed' }
     }
+    // Session metadata uses a second file open. Do not attach new-inode
+    // metadata to a page read from the prior original Source inode.
+    let current: Awaited<ReturnType<typeof stat>>
+    try { current = await stat(query.filePath) }
+    catch (error) {
+      if (['ENOENT','ENOTDIR'].includes((error as NodeJS.ErrnoException).code ?? '')) {
+        return { state: 'drifted', reason: 'native-file-disappeared-after-page-read' }
+      }
+      throw error
+    }
+    if (!current.isFile() || `${current.dev}:${current.ino}` !== page.nextCursor.fileIdentity) {
+      return { state: 'drifted', reason: 'native-file-identity-changed' }
+    }
     const records = page.lines.map(line => {
       const entry = line.entry
       const nativeId = nativeIdForEntry(entry)
