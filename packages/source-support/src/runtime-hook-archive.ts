@@ -49,15 +49,12 @@ export function archivedHookInboxRecordPath(input: {
 }
 
 /**
- * Move the one original source Hook inbox inode into a durable, per-session
- * namespace AFTER the legacy emitter acknowledged it. No content copy, no
- * reserialization, no replacement of a conflicting event.
- *
- * Linking into a same-filesystem archive before unlinking the inbox entry
- * preserves recoverability across interruption, including after a crash
- * between the two filesystem operations.
+ * Prepare the ONE original Hook inode in a verified, session-scoped archive
+ * before Source delivery. The inbox name is intentionally retained until the
+ * event owner acknowledges delivery; crash/retry reuses the same inode.
+ * This is not a second payload copy.
  */
-export async function archiveAcceptedHookInboxFile(input: {
+export async function prepareHookInboxArchive(input: {
   inbox: string
   fileName: string
   nativeSessionId: string
@@ -65,7 +62,7 @@ export async function archiveAcceptedHookInboxFile(input: {
   installationId?: string
   /** SHA-256 of the exact inbox bytes parsed before emitter acknowledgement. */
   expectedSha256?: string
-}): Promise<void> {
+}): Promise<string> {
   const { inbox, fileName, nativeSessionId, installationId, expectedSha256 } = input
   if (expectedSha256 !== undefined && !/^[a-f0-9]{64}$/.test(expectedSha256)) {
     throw new TypeError('Invalid Hook source-original SHA-256')
@@ -126,7 +123,19 @@ export async function archiveAcceptedHookInboxFile(input: {
       if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
     }
   }
-  await unlink(sourcePath)
+  return targetPath
+}
+
+/** After a Source emitter acknowledges the already-verified event, release
+ * only the pending inbox directory entry. Safe for existing Legacy callers.
+ * Native-only adapters can separately prepare before delivery and then call
+ * this function to acknowledge without duplicating the Hook payload.
+ */
+export async function archiveAcceptedHookInboxFile(
+  input: Parameters<typeof prepareHookInboxArchive>[0],
+): Promise<void> {
+  await prepareHookInboxArchive(input)
+  await unlink(join(input.inbox,input.fileName))
 }
 
 /** A cursor is bound to one installation+session AND to the exact ordered
