@@ -49,6 +49,9 @@ export function ReviewPage({ model, embedded = false, latestRequest = 0 }: { mod
     visibleNativeSessions,
     nativeHasMore,
     nativeLoadingMore,
+    nativeBodySearchActive,
+    nativeBodyPartial,
+    nativeBodyError,
     loadMoreNativeSessions,
     sessionGroups,
     loadOlder,
@@ -160,6 +163,15 @@ export function ReviewPage({ model, embedded = false, latestRequest = 0 }: { mod
             })())}
           </section>)}
           {review.response?.meta.hasMore && <button ref={sessionLoadSentinelRef} className="session-load-more" disabled={review.loadingMore} onClick={() => void model.loadMoreReview()}>{review.loadingMore ? t('local.list.loadMoreLoading') : review.error ? t('local.list.loadMoreFailed') : t('local.list.loadMoreAuto')}</button>}
+          {nativeBodySearchActive && <div className="session-load-more" aria-live="polite">
+            {nativeBodyError
+              ? t('local.list.nativeBodySearchError', { reason: nativeBodyError })
+              : nativeLoadingMore
+                ? t('local.list.nativeBodySearchScanning')
+                : nativeBodyPartial
+                  ? t('local.list.nativeBodySearchPartial')
+                  : t('local.list.nativeBodySearchComplete')}
+          </div>}
           {nativeHasMore && <button className="session-load-more" disabled={nativeLoadingMore}
             onClick={() => void loadMoreNativeSessions()}>
             {nativeLoadingMore ? t('local.list.loadMoreLoading') : t('local.list.loadMoreNative')}

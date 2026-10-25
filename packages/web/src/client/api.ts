@@ -29,6 +29,7 @@ import {
   type ManagedAssetDirectoryResponseDto,
   type ManagedAssetFilePreviewResponseDto,
   type ManagedAssetRoot,
+  type NativeBodySearchResponseDto,
   type NativeSessionCatalogResponseDto,
   type NativeSessionSummaryDto,
   type NativeReviewWindowResponseDto,
@@ -362,6 +363,24 @@ export class AgentLensApi {
     return requestJson<NativeSessionCatalogResponseDto>(
       `/api/v1/native-sessions${params.size ? `?${params}` : ''}`,
       options.signal ? { signal: options.signal } : {},
+    )
+  }
+
+  /** Bounded Source-owned body text search, complementary to SQL legacy Review.
+   * Every result is one catalog session / one native page. Keep paging through
+   * empty pages until hasMore=false; no content is saved in a local SQL index.
+   */
+  nativeBodySearch(query: string, options: {
+    sourceId?: string
+    cursor?: string
+    signal?: AbortSignal
+  } = {}): Promise<NativeBodySearchResponseDto> {
+    const params=new URLSearchParams({q:query.trim()})
+    if(options.sourceId)params.set('sourceId',options.sourceId)
+    if(options.cursor)params.set('cursor',options.cursor)
+    return requestJson<NativeBodySearchResponseDto>(
+      `/api/v1/native-sessions/search?${params}`,
+      options.signal ? {signal:options.signal} : {},
     )
   }
 

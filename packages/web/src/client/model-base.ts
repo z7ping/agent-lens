@@ -226,6 +226,9 @@ export abstract class AgentLensModelBase {
   nativeSessions = (options: Parameters<AgentLensApi['nativeSessions']>[0] = {}): Promise<NativeSessionCatalogResponseDto> =>
     this.api.nativeSessions(options)
 
+  nativeBodySearch = (query: string, options: Parameters<AgentLensApi['nativeBodySearch']>[1] = {}) =>
+    this.api.nativeBodySearch(query,options)
+
   reviewAttachments = (observationId: string): Promise<ReviewMessageAttachmentDto[]> => {
     const detail=this.snapshot.review.detail
     if (detail?.statisticsCompleteness === 'window') {
