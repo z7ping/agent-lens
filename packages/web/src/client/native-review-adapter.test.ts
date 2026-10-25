@@ -31,6 +31,7 @@ test('native adapter keeps the shared Review interactions and labels statistics 
   assert.equal(first.title,'Native Pi task')
   assert.equal(first.statisticsCompleteness,'window')
   assert.equal(nativeReviewDetail(summary,{...page(1,true),hookEventsTruncated:true}).nativeHookEventsTruncated,true)
+  assert.equal(nativeReviewDetail(summary,{...page(1,true),hookFactsPartial:true}).nativeHookEventsTruncated,true)
   assert.equal(first.page.direction,'forward')
   assert.equal(first.page.nextCursor,'opaque-cursor-1')
   assert.deepEqual(first.interactions.map(x=>x.ordinal),[1])
