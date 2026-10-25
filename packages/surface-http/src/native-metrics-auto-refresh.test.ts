@@ -98,8 +98,7 @@ test('withdrawing Source coverage attestation prevents background Native-only sc
   const metrics={
     findRebuildCandidates:async()=>{candidates++;return []},
   } as unknown as NativeSessionMetricsStore
-  const reader={read:async()=>{reads++;throw Error('not used')}}
-    as unknown as NativeSessionWindowReader
+  const reader={read:async()=>{reads++;throw Error('not used')}} as unknown as NativeSessionWindowReader
   const refresh=new NativeMetricsAutoRefresh(catalog,metrics,reader,uncertified,policy)
   try{
     refresh.schedule()
@@ -282,8 +281,7 @@ test('lazy native metrics schedules all certified Sources fairly, never hardcodi
       readNativeSessionPage:async()=>{throw Error('Mutable DB must never be read')}},
   ]
   const sources={list:()=>definitions} as unknown as SourceService
-  const enabled={isSourceEnabled:(sourceId:string)=>sourceId!=='opencode'}
-    as unknown as CapturePolicyService
+  const enabled={isSourceEnabled:(sourceId:string)=>sourceId!=='opencode'} as unknown as CapturePolicyService
   const metrics={
     async findRebuildCandidates(query:{sourceId:string;parserVersion:string}){
       picked.push(query.sourceId)
