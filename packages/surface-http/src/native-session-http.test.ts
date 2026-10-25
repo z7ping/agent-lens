@@ -457,3 +457,76 @@ test('native complete-turn at EOF never certifies unresolved tool calls or metad
     }
   }
 })
+
+test('native Review batching returns contiguous complete turns with one rewind cursor',async()=>{
+  const at='2026-10-25T00:00:00Z'
+  const records=[
+    {kind:'message.user' as const,payload:{text:'first'}},
+    {kind:'message.assistant' as const,payload:{text:'reply-one'}},
+    {kind:'message.user' as const,payload:{text:'second'}},
+    {kind:'tool.call' as const,payload:{callId:'t2',nativeToolName:'shell'}},
+    {kind:'tool.result' as const,payload:{callId:'t2',success:true}},
+    {kind:'message.assistant' as const,payload:{text:'reply-two'}},
+    {kind:'message.user' as const,payload:{text:'third'}},
+    {kind:'message.assistant' as const,payload:{text:'reply-three'}},
+  ]
+  let pages=0
+  const reader:NativeSessionWindowReader={
+    async read(query){
+      pages++
+      const start=query.cursor?.offset??0
+      const from=start/64
+      const selected=records.slice(from,from+2)
+      const nextOffset=start+selected.length*64
+      return {
+        state:'available',observations:selected.map((row,i)=>({
+          ...row,capturedAt:at,identityHints:{nativeSessionId:'S1'},sourceSequence:from+i,
+        })),
+        observationRecordIds:selected.map((_,i)=>'record-'+(from+i)),
+        observationCursors:selected.map((_,i)=>({
+          offset:start+i*64,sequence:from+i,fileIdentity:'native-file',
+        })),
+        evidenceCandidates:[],nextCursor:{
+          offset:nextOffset,sequence:nextOffset/64,fileIdentity:'native-file',
+        },
+        hasMore:nextOffset<records.length*64,pendingTail:false,
+      }
+    },
+  }
+  const http=await startHttpSurface(noopStorage,{port:0,nativeSessionReader:reader})
+  const url=`http://${http.host}:${http.port}/api/v1/native-sessions/window?sourceId=pi&installationId=inst&nativeSessionId=S1&format=review-turns`
+  try{
+    const first=await fetch(url+'&turnLimit=2')
+    assert.equal(first.status,200)
+    const two=await first.json() as {
+      state:string;pagingUnit:string;boundaryIntegrity:string;observationCount:number;
+      interactions:Array<{ordinal:number;nodes:Array<{type:string;text?:string;status?:string}>}>;
+      nextCursor:string;hasMore:boolean;
+    }
+    assert.equal(two.state,'available')
+    assert.equal(two.pagingUnit,'interaction')
+    assert.equal(two.boundaryIntegrity,'complete')
+    assert.deepEqual(two.interactions.map(x=>x.ordinal),[1,2])
+    assert.equal(two.interactions[1]?.nodes.find(x=>x.type==='tool')?.status,'success')
+    assert.equal(two.observationCount,6)
+    assert.equal(two.hasMore,true)
+    const rewind=JSON.parse(Buffer.from(two.nextCursor,'base64url').toString('utf8')) as {
+      offset:number;turnOrdinal:number
+    }
+    assert.equal(rewind.offset,384)
+    assert.equal(rewind.turnOrdinal,3)
+    const third=await fetch(url+'&turnLimit=2&cursor='+encodeURIComponent(two.nextCursor))
+    assert.equal(third.status,200)
+    const last=await third.json() as typeof two
+    assert.deepEqual(last.interactions.map(x=>x.ordinal),[3])
+    assert.equal(last.interactions[0]?.nodes.find(x=>x.text==='reply-three')?.type,'message')
+    assert.equal(last.hasMore,false)
+    assert.ok(pages<=16)
+    for(const suffix of ['&turnLimit=0','&turnLimit=5','&turnLimit=abc','&turnLimit=1&turnLimit=2']){
+      const invalid=await fetch(url+suffix)
+      assert.equal(invalid.status,400,suffix)
+    }
+    const invalidFormat=await fetch(url.replace('&format=review-turns','&format=review')+'&turnLimit=2')
+    assert.equal(invalidFormat.status,400)
+  }finally{await http.dispose()}
+})

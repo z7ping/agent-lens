@@ -16,6 +16,8 @@ const MAX_CURSOR_BYTES = 512
 const MAX_LIMIT = 16
 const MAX_RESPONSE_BYTES = 4 * 1024 * 1024
 const MAX_REVIEW_PAGES = 8
+const MAX_REVIEW_TURNS_PER_REQUEST = 4
+const MAX_REVIEW_PAGES_PER_REQUEST = 16
 const MAX_REVIEW_OBSERVATIONS = 128
 // Bound the aggregate *before* allocating a projected Review DTO.
 const MAX_REVIEW_INPUT_BYTES = 2 * 1024 * 1024
@@ -236,6 +238,70 @@ async function readCompleteNativeTurn(
   return { state: 'unsupported', reason: 'native-review-turn-exceeds-budget' }
 }
 
+/**
+ * One HTTP request may hydrate several *complete* consecutive turns, but never
+ * create a new grouping implementation or keep a complete session in memory.
+ * Source calls (including the initial read) are bounded across the whole
+ * request: per-turn budgets alone are not a sufficient overall bound.
+ */
+async function readCompleteNativeTurns(
+  reader: NativeSessionWindowReader,
+  query: NativeSessionReadQuery,
+  first: AvailableNativePage,
+  startingOrdinal: number,
+  turnLimit: number,
+): Promise<NativeTurnReadResult> {
+  let sourcePages = 1
+  const boundedReader: NativeSessionWindowReader = {
+    async read(input) {
+      if (sourcePages >= MAX_REVIEW_PAGES_PER_REQUEST) {
+        return { state: 'unsupported', reason: 'native-review-request-page-budget' }
+      }
+      sourcePages += 1
+      return reader.read(input)
+    },
+  }
+  let page = first
+  let queryAt = query
+  let ordinal = startingOrdinal
+  let assembled: NativeReviewWindowDto | undefined
+  for (let turn = 0; turn < turnLimit; turn++) {
+    const next = await readCompleteNativeTurn(boundedReader, queryAt, page, ordinal)
+    if (next.state !== 'available') return next
+    const value = next.dto
+    assembled = assembled
+      ? {
+          ...assembled,
+          interactions: [...assembled.interactions, ...value.interactions],
+          observationCount: assembled.observationCount + value.observationCount,
+          hasMore: value.hasMore,
+          nextCursor: value.nextCursor,
+          boundaryIntegrity: 'complete',
+        }
+      : value
+    if (!value.hasMore) break
+    if (turn === turnLimit - 1) break
+    const cursor = decodeCursor(value.nextCursor)
+    if (!cursor || cursor.mode !== 'review-turns'
+      || cursor.turnOrdinal === undefined
+      || cursor.turnOrdinal <= ordinal
+      || cursor.fileIdentity !== page.nextCursor.fileIdentity) {
+      return { state: 'unsupported', reason: 'native-review-next-turn-cursor-invalid' }
+    }
+    ordinal = cursor.turnOrdinal
+    queryAt = { ...query, cursor }
+    const incoming = await boundedReader.read(queryAt)
+    if (incoming.state !== 'available') return incoming
+    if (incoming.nextCursor.fileIdentity !== cursor.fileIdentity) {
+      return { state: 'drifted', reason: 'native-review-file-identity-changed' }
+    }
+    page = incoming
+  }
+  return assembled
+    ? { state: 'available', dto: assembled }
+    : { state: 'unsupported', reason: 'native-review-no-user-turn' }
+}
+
 function identifier(params: URLSearchParams, key: string): string {
   const values = params.getAll(key)
   if (values.length !== 1 || !values[0] || values[0]!.length > MAX_IDENTIFIER) {
@@ -331,6 +397,13 @@ export async function handleNativeSessionWindowRequest(
   }
   const cursor = decodeCursor(url.searchParams.get('cursor'))
   const turnMode = formatValues[0] === 'review-turns'
+  const turnLimitValues = url.searchParams.getAll('turnLimit')
+  const turnLimit = turnLimitValues.length === 0 ? 1 : Number(turnLimitValues[0])
+  if (turnLimitValues.length > 1 || (turnLimitValues.length && !turnMode)
+    || !Number.isSafeInteger(turnLimit) || turnLimit < 1
+    || turnLimit > MAX_REVIEW_TURNS_PER_REQUEST) {
+    throw badRequest('Invalid native complete-turn request limit')
+  }
   if ((turnMode && cursor && cursor.mode !== 'review-turns')
     || (!turnMode && cursor?.mode === 'review-turns')) {
     throw badRequest('Native session cursor does not match the requested format')
@@ -353,7 +426,7 @@ export async function handleNativeSessionWindowRequest(
     const first = await reader.read(readQuery)
     if (turnMode) {
       const complete = first.state === 'available'
-        ? await readCompleteNativeTurn(reader, readQuery, first, cursor?.turnOrdinal ?? 1)
+        ? await readCompleteNativeTurns(reader, readQuery, first, cursor?.turnOrdinal ?? 1, turnLimit)
         : first
       if (abort.signal.aborted || response.destroyed) return true
       if (complete.state !== 'available') {
