@@ -83,7 +83,7 @@ export function useReviewSession(model: AgentLensClientModel, embedded: boolean)
   useEffect(() => {
     const filters = review.filters
     const allowed = !embedded && !filters.projectId
-      && filters.status === 'all' && !filters.search.trim()
+      && filters.status === 'all'
       && (filters.sourceIds === null || filters.sourceIds.length > 0)
     const filterChanged = nativeRequestKeyRef.current !== nativeFilterKey
     nativeRequestKeyRef.current = nativeFilterKey
@@ -103,7 +103,7 @@ export function useReviewSession(model: AgentLensClientModel, embedded: boolean)
     const sourceId = filters.sourceIds?.length === 1 ? filters.sourceIds[0] : undefined
     void model.nativeSessions({
       ...(sourceId ? { sourceId } : {}),
-      onlyWithoutLegacyReview: true, limit: 100, signal: controller.signal,
+      onlyWithoutLegacyReview: true, search: filters.search.trim(), limit: 100, signal: controller.signal,
     }).then(page => {
       if (controller.signal.aborted) return
       setNativeSessions(page.items)
@@ -126,7 +126,7 @@ export function useReviewSession(model: AgentLensClientModel, embedded: boolean)
       const selected = review.filters.sourceIds
       const page = await model.nativeSessions({
         ...(selected?.length === 1 && selected[0] ? { sourceId: selected[0] } : {}),
-        onlyWithoutLegacyReview: true, limit: 100, cursor: nativeCursor,
+        onlyWithoutLegacyReview: true, search: review.filters.search.trim(), limit: 100, cursor: nativeCursor,
       })
       if (nativeRequestKeyRef.current !== requestKey) return
       setNativeSessions(current => {
