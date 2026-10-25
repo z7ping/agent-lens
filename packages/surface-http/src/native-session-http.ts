@@ -131,6 +131,7 @@ async function readCompleteNativeTurn(
   const observationCursors: string[] = []
   const pendingTools = new Set<string>()
   let unidentifiableToolCall = false
+  let unpairedToolResult = false
   let current = initial
   let pages = 0
   let bytes = 0
@@ -141,8 +142,14 @@ async function readCompleteNativeTurn(
   const finish = (nextCursor: SourceNativeSessionCursor, hasMore: boolean): NativeTurnReadResult => {
     // A source page can end while a model tool is still running; this is NOT a
     // completed user turn, even when the file has no further full records yet.
-    if (unidentifiableToolCall) {
+    // The next SOURCE-OWNED user record explicitly closes the preceding
+    // turn. Anonymous calls/results can remain unknown/unpaired but must not
+    // hide the finished conversation. EOF alone is NOT such a boundary.
+    if (unidentifiableToolCall && !hasMore) {
       return { state: 'unsupported', reason: 'native-review-turn-tool-id-missing' }
+    }
+    if (unpairedToolResult && !hasMore) {
+      return { state: 'unsupported', reason: 'native-review-turn-orphan-tool-result' }
     }
     if (pendingTools.size > 0) {
       return { state: 'unsupported', reason: 'native-review-turn-tool-pending' }
@@ -230,12 +237,12 @@ async function readCompleteNativeTurn(
         else unidentifiableToolCall = true
       }
       if (observation.kind === 'tool.result') {
-        // A result without a matching in-turn call cannot prove a complete
-        // boundary, even when the original file reached EOF.
-        if (!callId || !pendingTools.has(callId)) {
-          return { state: 'unsupported', reason: 'native-review-turn-orphan-tool-result' }
-        }
-        pendingTools.delete(callId)
+        // Retain source-visible orphan results as standalone Review events;
+        // NEVER invent a tool call ID, success status or cross-turn pairing.
+        // An explicit later user record can close the turn safely, but EOF
+        // cannot prove the anonymous tool chain has settled.
+        if (!callId || !pendingTools.has(callId)) unpairedToolResult = true
+        else pendingTools.delete(callId)
       }
       lastRecordStart = recordCursor
     }

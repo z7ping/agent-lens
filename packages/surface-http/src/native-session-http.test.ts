@@ -969,3 +969,59 @@ test('Catalog native Review shares one Task DTO with bounded Hook-exclusive fact
   }
 })
 
+test('native Hermes-style anonymous tool facts remain visible when a later native user boundary is proven',async()=>{
+  const at='2026-10-25T04:00:00Z'
+  const events=[
+    {kind:'message.user' as const,payload:{text:'first task'}},
+    {kind:'tool.call' as const,payload:{nativeToolName:'shell',input:{command:'pwd'}}},
+    {kind:'tool.result' as const,payload:{output:'result without call id'}},
+    {kind:'message.assistant' as const,payload:{text:'finished first'}},
+    {kind:'message.user' as const,payload:{text:'second task'}},
+    {kind:'message.assistant' as const,payload:{text:'finished second'}},
+  ]
+  const reader:NativeSessionWindowReader={
+    async read(query){
+      const begin=(query.cursor?.offset??0)/64
+      const selected=events.slice(begin)
+      return {
+        state:'available',observations:selected.map((e,i)=>({
+          ...e,capturedAt:at,sourceSequence:begin+i,
+          identityHints:{nativeSessionId:'S-anonymous'},
+        })),
+        observationRecordIds:selected.map((_,i)=>'r-'+(begin+i)),
+        observationCursors:selected.map((_,i)=>({
+          offset:64*(begin+i),sequence:begin+i,fileIdentity:'1:2',
+        })),
+        evidenceCandidates:[],
+        nextCursor:{offset:events.length*64,sequence:events.length,fileIdentity:'1:2'},
+        hasMore:false,pendingTail:false,
+      }
+    },
+  }
+  const app=await startHttpSurface(noopStorage,{port:0,nativeSessionReader:reader})
+  const url=`http://${app.host}:${app.port}/api/v1/native-sessions/window?sourceId=hermes&installationId=inst&nativeSessionId=S-anonymous&format=review-turns`
+  try{
+    const first=await fetch(url)
+    assert.equal(first.status,200)
+    const body=await first.json() as {
+      state:string;boundaryIntegrity:string;hasMore:boolean;nextCursor:string;
+      interactions:Array<{nodes:Array<{type:string;kind?:string;status?:string;callId?:string}>}>
+    }
+    assert.equal(body.state,'available')
+    assert.equal(body.boundaryIntegrity,'complete')
+    assert.equal(body.hasMore,true)
+    assert.deepEqual(body.interactions[0]?.nodes.map(n=>n.kind??n.type),[
+      'message','tool','tool.result','message',
+    ])
+    const tool=body.interactions[0]?.nodes.find(n=>n.type==='tool')
+    assert.equal(tool?.status,'unknown')
+    assert.equal(tool?.callId,undefined)
+    const next=await fetch(url+'&cursor='+encodeURIComponent(body.nextCursor))
+    const rest=await next.json() as typeof body
+    assert.equal(rest.state,'available')
+    assert.equal(rest.boundaryIntegrity,'complete')
+    assert.equal(rest.hasMore,false)
+    assert.deepEqual(rest.interactions[0]?.nodes.map(n=>n.type),['message','message'])
+  } finally {await app.dispose()}
+})
+
