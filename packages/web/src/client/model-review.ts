@@ -677,6 +677,19 @@ export abstract class AgentLensReviewModel extends AgentLensIntegrationModel {
    * Unknown aggregate statistics and unsupported SQL-only operations stay
    * unavailable rather than fabricated.
    */
+  /** Lazy, best-effort numerical refresh; never blocks the Review timeline. */
+  protected async refreshSelectedNativeMetrics(id: string, signal: AbortSignal): Promise<void> {
+    try {
+      const status = await this.api.nativeMetricStatus(id, signal)
+      if (!signal.aborted && (status.state === 'missing' || status.state === 'stale')) {
+        await this.api.rebuildNativeMetric(id, signal)
+      }
+    } catch {
+      // Native Review remains readable if metrics are unavailable or cancelled.
+      // The existing Usage/Insights coverage indicator retains missing/stale.
+    }
+  }
+
   protected async selectNativeReviewSession(id: string): Promise<void> {
     this.reviewSelectionAbort?.abort()
     const controller = new AbortController()
@@ -707,6 +720,11 @@ export abstract class AgentLensReviewModel extends AgentLensIntegrationModel {
         ...this.snapshot,
         review: { ...this.snapshot.review, detail, fileChanges: observedFiles, detailLoading: false, error: '' },
       })
+      // Pi is the only currently certified numerical Source. Backend also
+      // requires a durable Native-only claim; older SQL sessions are skipped.
+      if (summary.sourceId === 'pi' && summary.locationKind === 'native') {
+        void this.refreshSelectedNativeMetrics(id, controller.signal)
+      }
     } catch (error) {
       if (controller.signal.aborted || generation !== this.detailGeneration
         || this.snapshot.review.selectedId !== id) return
