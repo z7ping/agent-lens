@@ -113,7 +113,7 @@ export async function rebuildNativeSessionMetrics(
   reader:NativeSessionWindowReader,
   source:SourceDefinition,
   signal:AbortSignal,
-  incremental?:{progress?:NativeMetricRebuildProgress},
+  incremental?:{enabled:true;progress?:NativeMetricRebuildProgress},
 ){
   const identity={
     sourceId:entry.sourceId,installationId:entry.installationId,
@@ -127,11 +127,11 @@ export async function rebuildNativeSessionMetrics(
     && prior.fileSize===entry.fileSize
     && prior.fileMtimeMs===entry.fileMtimeMs
     && prior.parserVersion===source.manifest.parserVersion
-  const accumulator=reusable?prior.accumulator:new NativeSessionMetricAccumulator()
-  let cursor:SourceNativeSessionCursor|undefined=reusable?prior.cursor:undefined
+  const accumulator=reusable && prior?prior.accumulator:new NativeSessionMetricAccumulator()
+  let cursor:SourceNativeSessionCursor|undefined=reusable && prior?prior.cursor:undefined
   let exhausted=false
   let pendingTail=false
-  let scannedRecords=reusable?prior.scannedRecords:0
+  let scannedRecords=reusable && prior?prior.scannedRecords:0
   for(let pageIndex=0;pageIndex<MAX_PAGES;pageIndex++){
     signal.throwIfAborted()
     const result=await reader.read({
