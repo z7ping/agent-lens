@@ -2,8 +2,8 @@ import {
   AGENT_LENS_PROTOCOL_VERSION,
   type TaskFileChangesResponseDto,
   type NativeReviewWindowDto,
-  NativeSessionSummaryDto,
-  ReviewSessionDetailDto,
+  type NativeSessionSummaryDto,
+  type ReviewSessionDetailDto,
 } from '@agent-lens/protocol'
 
 /**
