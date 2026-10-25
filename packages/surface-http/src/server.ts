@@ -274,7 +274,7 @@ export async function startHttpSurface(
       const url = new URL(request.url ?? '/', `http://${AGENT_LENS_HTTP_HOST}`)
       route = httpRouteLabel(url.pathname)
       if (await handleNativeSessionCatalogRequest(request, response, url, storage.nativeSessionCatalog, options.capturePolicy)) return
-      if (await handleNativeSessionWindowRequest(request, response, url, options.nativeSessionReader)) return
+      if (await handleNativeSessionWindowRequest(request, response, url, options.nativeSessionReader, storage.nativeSessionCatalog)) return
       if (await handleLiveAttachmentRequest(request, response, url, options.liveAttachments)) return
       if (await handleLiveRequest(request, response, url, options.lives, options.selectProjectDirectory, { storage, sources: options.sources })) return
       if (await handlePiLiveRequest(request, response, url, options.piLive, storage, options.lives, options.selectProjectDirectory)) return
