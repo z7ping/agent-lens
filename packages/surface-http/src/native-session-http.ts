@@ -11,9 +11,9 @@ export interface NativeSessionWindowReader {
   /** Source-authorized, one-record native media hydration (never public raw DTO). */
   readUnpersistedMediaPage?(query: NativeSessionReadQuery): Promise<NativeSessionReadResult>
   readArchivedHooks?(query: {
-    sourceId:string; installationId:string; nativeSessionId:string; signal:AbortSignal
+    sourceId:string; installationId:string; nativeSessionId:string; signal:AbortSignal; cursor?:string
   }): Promise<
-    | {state:'available';observations:ObservationCandidate[];observationRecordIds:string[];truncated:boolean}
+    | {state:'available';observations:ObservationCandidate[];observationRecordIds:string[];truncated:boolean;nextCursor?:string}
     | {state:'unavailable' | 'drifted' | 'unsupported';reason:string}
   >
 }
@@ -404,7 +404,12 @@ export async function handleNativeSessionHookRequest(
     writeJson(response,503,{state:'unavailable',reason:'native-hook-reader-unavailable'})
     return true
   }
-  if([...url.searchParams.keys()].length) throw badRequest('Native Hook reader does not accept file paths or query overrides')
+  const cursors=url.searchParams.getAll('cursor')
+  if([...url.searchParams.keys()].some(key=>key!=='cursor') || cursors.length>1
+    || (cursors.length===1 && (!cursors[0] || cursors[0].length>512
+      || !/^[A-Za-z0-9_-]+$/.test(cursors[0])))) {
+    throw badRequest('Invalid native Hook pagination cursor or request parameters')
+  }
   const nativeId=(()=>{try{return decodeURIComponent(match[1]!)}catch{return ''}})()
   if(!/^native:[0-9a-f]{32}$/.test(nativeId)){
     writeJson(response,404,{error:'not_found'})
@@ -418,6 +423,7 @@ export async function handleNativeSessionHookRequest(
   const result=await reader.readArchivedHooks({
     sourceId:entry.sourceId,installationId:entry.installationId,
     nativeSessionId:entry.nativeSessionId,signal:AbortSignal.timeout(10_000),
+    ...(cursors[0] ? {cursor:cursors[0]} : {}),
   })
   if(result.state!=='available'){
     writeJson(response,200,result)
@@ -433,7 +439,12 @@ export async function handleNativeSessionHookRequest(
   // Hook records have no native user-turn boundary, even when the archive
   // happens to reach EOF. Never label this supplementary evidence as a
   // complete conversational interaction.
-  const responseDto={...dto,boundaryIntegrity:'partial' as const,hookEventsTruncated:result.truncated}
+  const responseDto={
+    ...dto,boundaryIntegrity:'partial' as const,
+    hasMore:Boolean(result.nextCursor),
+    nextCursor:result.nextCursor ?? '',
+    hookEventsTruncated:result.truncated,
+  }
   if(Buffer.byteLength(JSON.stringify(responseDto),'utf8')>MAX_RESPONSE_BYTES){
     writeJson(response,413,{state:'unsupported',reason:'native-hook-response-too-large'})
   }else{

@@ -236,5 +236,10 @@ export interface SourceDefinition {
    * integrated with the shared native TaskSurface projection.
    */
   readArchivedNativeHooks?(nativeSessionId: string, ctx: SourceExecutionContext): Promise<SourceRecord[]>
+  /** Paged single-copy Hook archive reader. The cursor is Source-owned,
+   * session-bound and never a filesystem path or a persisted event payload.
+   */
+  readArchivedNativeHooksPage?(nativeSessionId: string, ctx: SourceExecutionContext, cursor?: string):
+    Promise<{ records: SourceRecord[]; hasMore: boolean; nextCursor?: string }>
   normalize(record: SourceRecord, ctx: SourceNormalizationContext): Promise<NormalizedSourceOutput>
 }

@@ -753,3 +753,63 @@ test('native complete-turn boundaries honor source nativeCallId and reject unpai
     } finally { await surface.dispose() }
   }
 })
+
+test('native Hook Review preserves bounded cursor and rejects attempts to override source identity',async()=>{
+  const at='2026-10-25T00:00:00Z'
+  const entry:NativeSessionCatalogEntry={
+    sourceId:'claude-code',installationId:'c1',nativeSessionId:'S-hooks',
+    locationKind:'native',filePath:'/private/native.jsonl',
+    fileIdentity:'3:4',fileSize:2048,fileMtimeMs:1,lastActivityAt:at,updatedAt:at,
+  }
+  const id=nativeReviewSessionId(entry.sourceId,entry.installationId,entry.nativeSessionId)
+  const storage={...noopStorage,nativeSessionCatalog:{
+    async getByReviewSessionId(value:string){return value===id?entry:null},
+  }} as unknown as StorageService
+  const cursor=Buffer.from('source-owned-continuation','utf8').toString('base64url')
+  const requested:string[]=[]
+  const reader:NativeSessionWindowReader={
+    async read(){throw Error('Hook-only request must not read main transcript')},
+    async readArchivedHooks(query){
+      assert.equal(query.sourceId,entry.sourceId)
+      assert.equal(query.nativeSessionId,entry.nativeSessionId)
+      requested.push(query.cursor??'')
+      return {
+        state:'available',observations:[{
+          kind:'permission.request' as const,capturedAt:at,
+          payload:{toolName:'Read',requestId:query.cursor?'second':'first'},
+          identityHints:{nativeSessionId:entry.nativeSessionId},
+        }],
+        observationRecordIds:[query.cursor?'event-2':'event-1'],
+        truncated:!query.cursor,
+        ...(query.cursor?{}:{nextCursor:cursor}),
+      }
+    },
+  }
+  const app=await startHttpSurface(storage,{port:0,nativeSessionReader:reader})
+  try{
+    const base=`http://${app.host}:${app.port}/api/v1/native-sessions/${id}/hooks`
+    const first=await fetch(base)
+    assert.equal(first.status,200)
+    const page1=await first.json() as {
+      state:string;boundaryIntegrity:string;nextCursor:string;
+      hasMore:boolean;hookEventsTruncated:boolean;interactions:unknown[]
+    }
+    assert.equal(page1.state,'available')
+    assert.equal(page1.boundaryIntegrity,'partial')
+    assert.equal(page1.hasMore,true)
+    assert.equal(page1.nextCursor,cursor)
+    assert.equal(page1.hookEventsTruncated,true)
+    const second=await fetch(base+'?cursor='+encodeURIComponent(page1.nextCursor))
+    assert.equal(second.status,200)
+    const page2=await second.json() as typeof page1
+    assert.equal(page2.hasMore,false)
+    assert.equal(page2.hookEventsTruncated,false)
+    assert.equal(page2.boundaryIntegrity,'partial')
+    assert.deepEqual(requested,['',cursor])
+    assert.equal(JSON.stringify([page1,page2]).includes('/private'),false)
+    assert.equal((await fetch(base+'?cursor='+cursor+'&sourceId=pi')).status,400)
+    assert.equal((await fetch(base+'?cursor='+cursor+'&cursor='+cursor)).status,400)
+    assert.equal((await fetch(base+'?cursor=../../etc/passwd')).status,400)
+  }finally{await app.dispose()}
+})
+

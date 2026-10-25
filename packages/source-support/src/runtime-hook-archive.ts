@@ -55,26 +55,61 @@ export async function archiveAcceptedHookInboxFile(input: {
   await unlink(sourcePath)
 }
 
-/** Read one source-owned archived session without returning host filesystem paths. */
-export async function readArchivedHookInboxSession(input: {
+/** Lexicographic continuation bound to this one source-owned session.
+ * A cursor never accepts a client-supplied path and contains no Hook payload.
+ */
+function decodeHookCursor(value: string | undefined, session: string): string | undefined {
+  if (value === undefined) return undefined
+  if (!value || value.length > 512 || !/^[A-Za-z0-9_-]+$/.test(value)) {
+    throw new TypeError('Invalid archived Hook cursor')
+  }
+  try {
+    const parsed: unknown = JSON.parse(Buffer.from(value, 'base64url').toString('utf8'))
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw new TypeError()
+    const parts = parsed as Record<string, unknown>
+    if (Object.keys(parts).length !== 3 || parts.version !== 1
+      || parts.session !== session || typeof parts.after !== 'string'
+      || !safeInboxName(parts.after)) throw new TypeError()
+    return parts.after
+  } catch {
+    throw new TypeError('Invalid archived Hook cursor')
+  }
+}
+
+function encodeHookCursor(session: string, after: string): string {
+  return Buffer.from(JSON.stringify({ version: 1, session, after }), 'utf8').toString('base64url')
+}
+
+/** Bounded, stable archive pages. A page never silently drops files beyond its limit.
+ * Old callers retain the original array API through readArchivedHookInboxSession.
+ */
+export async function readArchivedHookInboxPage(input: {
   inbox: string
   nativeSessionId: string
   limit?: number
-}): Promise<Array<{ fileName: string; content: string }>> {
+  cursor?: string
+}): Promise<{ items: Array<{ fileName: string; content: string }>;
+  hasMore: boolean; nextCursor?: string }> {
   const limit = input.limit ?? MAX_FILES_PER_READ
   if (!Number.isSafeInteger(limit) || limit < 1 || limit > MAX_FILES_PER_READ) {
     throw new TypeError('Hook archive read limit out of range')
   }
-  const directory = join(input.inbox, 'archive', opaqueSessionDirectory(input.nativeSessionId))
+  const session = opaqueSessionDirectory(input.nativeSessionId)
+  const after = decodeHookCursor(input.cursor, session)
+  const directory = join(input.inbox, 'archive', session)
   let names: string[]
   try {
-    names = (await readdir(directory)).filter(safeInboxName).sort().slice(0, limit)
+    names = (await readdir(directory)).filter(safeInboxName).sort()
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return []
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+      return { items: [], hasMore: false }
+    }
     throw error
   }
+  const selected = names.filter(name => after === undefined || name > after).slice(0, limit + 1)
+  const hasMore = selected.length > limit
   const items: Array<{ fileName: string; content: string }> = []
-  for (const name of names) {
+  for (const name of selected.slice(0, limit)) {
     const filePath = join(directory, name)
     const info = await lstat(filePath)
     if (!info.isFile() || info.isSymbolicLink() || info.size <= 0 || info.size > MAX_EVENT_BYTES) {
@@ -82,7 +117,22 @@ export async function readArchivedHookInboxSession(input: {
     }
     const data = await readFile(filePath)
     if (data.length !== info.size) throw new Error('Hook archive event changed during read')
-    items.push({fileName:name,content:data.toString('utf8')})
+    items.push({ fileName: name, content: data.toString('utf8') })
   }
-  return items
+  return {
+    items,
+    hasMore,
+    ...(hasMore && items.length
+      ? { nextCursor: encodeHookCursor(session, items[items.length - 1]!.fileName) }
+      : {}),
+  }
+}
+
+/** Compatibility first-page reader; callers requiring exact completeness must use page API. */
+export async function readArchivedHookInboxSession(input: {
+  inbox: string
+  nativeSessionId: string
+  limit?: number
+}): Promise<Array<{ fileName: string; content: string }>> {
+  return (await readArchivedHookInboxPage(input)).items
 }

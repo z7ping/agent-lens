@@ -47,7 +47,7 @@ import {
 } from '@agent-lens/runtime-cordis'
 import {
   archiveAcceptedHookInboxFile,
-  readArchivedHookInboxSession,
+  readArchivedHookInboxPage,
   isCompleteJson,
   isMissingPathError,
   readJsonlLines,
@@ -1044,28 +1044,38 @@ const jsonlRawRecovery: NonNullable<SourceDefinition['rawRecovery']> = {
   },
 }
 
+async function readClaudeArchivedHookPage(
+  nativeSessionId: string, ctx: SourceExecutionContext, cursor?: string,
+) {
+  ctx.abortSignal.throwIfAborted()
+  const inbox = runtimeInboxDirectory()
+  const archive = await readArchivedHookInboxPage({ inbox, nativeSessionId, limit: 16, ...(cursor ? {cursor} : {}) })
+  const records = archive.items.map(item => {
+    const envelope = parseRuntimeEnvelope(item.content, item.fileName)
+    const archivePath = join(inbox, 'archive', sha256(nativeSessionId), item.fileName)
+    const record = runtimeRecord(envelope, archivePath, ctx)
+    if (record.sourceSessionNativeId !== nativeSessionId
+      || record.sourceId !== SOURCE_ID || record.installationId !== ctx.installation.id) {
+      throw new Error('Archived Claude Hook does not belong to requested native session')
+    }
+    return record
+  })
+  return {
+    records,
+    hasMore: archive.hasMore,
+    ...(archive.nextCursor ? {nextCursor: archive.nextCursor} : {}),
+  }
+}
+
 export const claudeSourceDefinition: SourceDefinition = {
   manifest: claudeManifest,
   detect: detectClaudeCode,
   declareCapabilities: declareClaudeCapabilities,
   rawRecovery: jsonlRawRecovery,
   async readArchivedNativeHooks(nativeSessionId, ctx) {
-    ctx.abortSignal.throwIfAborted()
-    const inbox = runtimeInboxDirectory()
-    const archive = await readArchivedHookInboxSession({ inbox, nativeSessionId, limit: 16 })
-    const records = archive.map(item => {
-      const envelope = parseRuntimeEnvelope(item.content, item.fileName)
-      const archivePath = join(inbox, 'archive', sha256(nativeSessionId), item.fileName)
-      const record = runtimeRecord(envelope, archivePath, ctx)
-      if (record.sourceSessionNativeId !== nativeSessionId
-        || record.sourceId !== SOURCE_ID || record.installationId !== ctx.installation.id) {
-        throw new Error('Archived Claude Hook does not belong to requested native session')
-      }
-      return record
-    })
-    ctx.abortSignal.throwIfAborted()
-    return records
+    return (await readClaudeArchivedHookPage(nativeSessionId, ctx)).records
   },
+  readArchivedNativeHooksPage: readClaudeArchivedHookPage,
   async *discoverNativeSessions(ctx) {
     const root = ctx.installation.dataRoot
       ?? (ctx.installation.configRoot ? join(ctx.installation.configRoot, 'projects') : undefined)

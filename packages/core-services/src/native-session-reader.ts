@@ -50,7 +50,7 @@ export type NativeSessionReadResult =
 
 export type NativeArchivedHookReadResult =
   | { state: 'available'; observations: ObservationCandidate[];
-      observationRecordIds: string[]; truncated: boolean }
+      observationRecordIds: string[]; truncated: boolean; nextCursor?: string }
   | { state: 'unavailable' | 'drifted' | 'unsupported'; reason: string }
 
 /**
@@ -73,7 +73,7 @@ export class NativeSessionReader {
    */
   async readArchivedHooks(query: {
     sourceId: string; installationId: string; nativeSessionId: string;
-    signal: AbortSignal
+    signal: AbortSignal; cursor?: string
   }): Promise<NativeArchivedHookReadResult> {
     if (!this.capturePolicy.isSourceEnabled(query.sourceId)) {
       return { state: 'unsupported', reason: 'source-disabled' }
@@ -86,7 +86,7 @@ export class NativeSessionReader {
     if (!catalog) return { state: 'unavailable', reason: 'native-session-not-indexed' }
     const source = this.sources.list().find(definition =>
       definition.manifest.sourceId === query.sourceId)
-    if (!source?.readArchivedNativeHooks) {
+    if (!source?.readArchivedNativeHooksPage && !source?.readArchivedNativeHooks) {
       return { state: 'unsupported', reason: 'native-hook-archive-source-unavailable' }
     }
     const installation = await this.storage.repositories.installations.get(query.installationId)
@@ -95,9 +95,19 @@ export class NativeSessionReader {
     }
     const host = await this.storage.repositories.hosts.get(installation.hostId)
     if (!host) return { state: 'unavailable', reason: 'native-source-host-unavailable' }
-    const records = await source.readArchivedNativeHooks(query.nativeSessionId, {
-      host, installation, abortSignal: query.signal, checkpoint: readOnlyCheckpoint,
-    })
+    let page: { records: import('@agent-lens/core').SourceRecord[]; hasMore: boolean; nextCursor?: string }
+    try {
+      const context = { host, installation, abortSignal: query.signal, checkpoint: readOnlyCheckpoint }
+      page = source.readArchivedNativeHooksPage
+        ? await source.readArchivedNativeHooksPage(query.nativeSessionId, context, query.cursor)
+        : { records: await source.readArchivedNativeHooks!(query.nativeSessionId, context), hasMore: false }
+    } catch (error) {
+      if (error instanceof TypeError && error.message === 'Invalid archived Hook cursor') {
+        return { state:'unsupported', reason:'native-hook-cursor-invalid' }
+      }
+      throw error
+    }
+    const records = page.records
     // A Source can emit at most sixteen bounded Hook records for one page.
     if (records.length > 16) {
       return {state:'unsupported',reason:'native-hook-archive-page-too-large'}
@@ -127,7 +137,8 @@ export class NativeSessionReader {
     }
     return {
       state: 'available', observations, observationRecordIds,
-      truncated: records.length === 16,
+      truncated: page.hasMore || (!source.readArchivedNativeHooksPage && records.length === 16),
+      ...(page.nextCursor ? { nextCursor: page.nextCursor } : {}),
     }
   }
 
