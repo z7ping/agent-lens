@@ -1,5 +1,8 @@
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import type { NativeSessionReadQuery, NativeSessionReadResult } from '@agent-lens/core-services'
+import type { ObservationCandidate, SourceNativeSessionCursor } from '@agent-lens/core'
+import type { NativeReviewWindowDto } from '@agent-lens/protocol'
+
 import { projectNativeReviewWindow } from '@agent-lens/projection-review'
 import { badRequest, writeJson } from './http-utils'
 
@@ -84,6 +87,145 @@ async function readContiguousReviewPages(
   }
 }
 
+
+type AvailableNativePage = Extract<NativeSessionReadResult, { state: 'available' }>
+type NativeTurnReadResult =
+  | { state: 'available'; dto: NativeReviewWindowDto }
+  | Extract<NativeSessionReadResult, { state: 'unsupported' | 'unavailable' | 'drifted' }>
+
+function toolCallId(observation: ObservationCandidate): string | undefined {
+  const payload = observation.payload
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) return undefined
+  const fields = payload as Record<string, unknown>
+  for (const key of ['callId', 'call_id', 'toolUseId', 'tool_use_id']) {
+    if (typeof fields[key] === 'string' && fields[key]) return fields[key] as string
+  }
+  return undefined
+}
+
+/**
+ * Explicit opt-in turn pagination. Do not publish a partial user turn as complete:
+ * return a boundary-aligned cursor at the *next* user record, not after the
+ * already-read native page. Both the cursor and source lines are still verified
+ * by the normal NativeSessionReader/isolated Source Worker path.
+ */
+async function readCompleteNativeTurn(
+  reader: NativeSessionWindowReader,
+  query: NativeSessionReadQuery,
+  initial: AvailableNativePage,
+  startingOrdinal: number,
+): Promise<NativeTurnReadResult> {
+  const observations: ObservationCandidate[] = []
+  const observationRecordIds: string[] = []
+  const pendingTools = new Set<string>()
+  let current = initial
+  let pages = 0
+  let bytes = 0
+  let previousOffset = query.cursor?.offset ?? 0
+  let sawUser = false
+  let lastRecordStart: SourceNativeSessionCursor | undefined
+
+  const finish = (nextCursor: SourceNativeSessionCursor, hasMore: boolean): NativeTurnReadResult => {
+    const base = projectNativeReviewWindow({
+      sourceId: query.sourceId,
+      installationId: query.installationId,
+      nativeSessionId: query.nativeSessionId,
+      observations, observationRecordIds,
+      hasMore, pendingTail: false,
+      hasPrevious: query.cursor !== undefined,
+      nextCursor: '',
+      startingOrdinal,
+      completeBoundaries: true,
+    })
+    return {
+      state: 'available',
+      dto: {
+        ...base,
+        nextCursor: encodeNativeSessionCursor({
+          ...nextCursor,
+          mode: 'review-turns',
+          turnOrdinal: startingOrdinal + base.interactions.length,
+        }),
+      },
+    }
+  }
+
+  while (pages < MAX_REVIEW_PAGES) {
+    query.signal.throwIfAborted()
+    // Other Source adapters have not proved rewind-point support. Fail closed
+    // rather than fabricate an "exact" turn boundary.
+    if (!current.observationCursors
+      || current.observationCursors.length !== current.observations.length
+      || current.observationRecordIds.length !== current.observations.length) {
+      return { state: 'unsupported', reason: 'native-review-record-boundaries-unavailable' }
+    }
+    let pageBytes: number
+    try {
+      pageBytes = Buffer.byteLength(JSON.stringify(current.observations), 'utf8')
+    } catch {
+      return { state: 'unsupported', reason: 'native-review-input-not-serializable' }
+    }
+    if (bytes + pageBytes > MAX_REVIEW_INPUT_BYTES
+      || observations.length + current.observations.length > MAX_REVIEW_OBSERVATIONS) {
+      return { state: 'unsupported', reason: 'native-review-turn-exceeds-budget' }
+    }
+    bytes += pageBytes
+    for (let index = 0; index < current.observations.length; index++) {
+      const observation = current.observations[index]!
+      const recordCursor = current.observationCursors[index]!
+      if (recordCursor.fileIdentity !== current.nextCursor.fileIdentity
+        || !Number.isSafeInteger(recordCursor.offset)
+        || recordCursor.offset < previousOffset
+        || recordCursor.offset >= current.nextCursor.offset
+        || !Number.isSafeInteger(recordCursor.sequence) || recordCursor.sequence < 0
+        || (lastRecordStart && recordCursor.offset < lastRecordStart.offset)) {
+        return { state: 'drifted', reason: 'native-review-record-boundary-drifted' }
+      }
+      if (query.cursor && observations.length === 0 && index === 0
+        && (observation.kind !== 'message.user' || recordCursor.offset !== query.cursor.offset)) {
+        return { state: 'unsupported', reason: 'native-review-cursor-not-turn-boundary' }
+      }
+      const isNewRecord = !lastRecordStart || recordCursor.offset !== lastRecordStart.offset
+      if (sawUser && observation.kind === 'message.user' && isNewRecord) {
+        // An unresolved tool could return after this user message. The
+        // existing per-interaction tool grouping cannot safely pair it.
+        if (pendingTools.size > 0) {
+          return { state: 'unsupported', reason: 'native-review-cross-turn-tool-pending' }
+        }
+        return finish(recordCursor, true)
+      }
+      observations.push(observation)
+      observationRecordIds.push(current.observationRecordIds[index]!)
+      if (observation.kind === 'message.user') sawUser = true
+      const callId = toolCallId(observation)
+      if (callId && observation.kind === 'tool.call') pendingTools.add(callId)
+      if (callId && observation.kind === 'tool.result') pendingTools.delete(callId)
+      lastRecordStart = recordCursor
+    }
+    pages++
+    if (current.pendingTail) {
+      return { state: 'unsupported', reason: 'native-review-turn-pending-tail' }
+    }
+    if (!current.hasMore) return finish(current.nextCursor, false)
+    if (pages >= MAX_REVIEW_PAGES
+      || observations.length >= MAX_REVIEW_OBSERVATIONS
+      || bytes >= MAX_REVIEW_INPUT_BYTES) {
+      return { state: 'unsupported', reason: 'native-review-turn-exceeds-budget' }
+    }
+    if (current.nextCursor.offset <= previousOffset) {
+      return { state: 'unsupported', reason: 'native-review-cursor-not-advancing' }
+    }
+    previousOffset = current.nextCursor.offset
+    const next = await reader.read({ ...query, cursor: current.nextCursor })
+    if (next.state !== 'available') return next
+    if (next.nextCursor.fileIdentity !== current.nextCursor.fileIdentity) {
+      return { state: 'drifted', reason: 'native-review-file-identity-changed' }
+    }
+    current = next
+  }
+  return { state: 'unsupported', reason: 'native-review-turn-exceeds-budget' }
+}
+
 function identifier(params: URLSearchParams, key: string): string {
   const values = params.getAll(key)
   if (values.length !== 1 || !values[0] || values[0]!.length > MAX_IDENTIFIER) {
@@ -92,7 +234,12 @@ function identifier(params: URLSearchParams, key: string): string {
   return values[0]!
 }
 
-function decodeCursor(value: string | null): NativeSessionReadQuery['cursor'] {
+type EncodedNativeCursor = SourceNativeSessionCursor & {
+  mode?: 'review-turns'
+  turnOrdinal?: number
+}
+
+function decodeCursor(value: string | null): EncodedNativeCursor | undefined {
   if (value === null) return undefined
   if (!value || value.length > MAX_CURSOR_BYTES || !/^[A-Za-z0-9_-]+$/.test(value)) {
     throw badRequest('Invalid native session cursor')
@@ -107,16 +254,27 @@ function decodeCursor(value: string | null): NativeSessionReadQuery['cursor'] {
       || !Number.isSafeInteger(cursor.sequence) || (cursor.sequence as number) < 0
       || typeof cursor.fileIdentity !== 'string'
       || !cursor.fileIdentity || cursor.fileIdentity.length > 128
-      || Object.keys(cursor).length !== 3) {
+      || !(Object.keys(cursor).length === 3
+        || (Object.keys(cursor).length === 5
+          && cursor.mode === 'review-turns'
+          && Number.isSafeInteger(cursor.turnOrdinal)
+          && (cursor.turnOrdinal as number) >= 1))) {
       throw badRequest('Invalid native session cursor')
     }
-    return { offset: cursor.offset as number, sequence: cursor.sequence as number, fileIdentity: cursor.fileIdentity }
+    return {
+      offset: cursor.offset as number,
+      sequence: cursor.sequence as number,
+      fileIdentity: cursor.fileIdentity,
+      ...(cursor.mode === 'review-turns'
+        ? { mode: 'review-turns' as const, turnOrdinal: cursor.turnOrdinal as number }
+        : {}),
+    }
   } catch {
     throw badRequest('Invalid native session cursor')
   }
 }
 
-export function encodeNativeSessionCursor(cursor: NonNullable<NativeSessionReadQuery['cursor']>): string {
+export function encodeNativeSessionCursor(cursor: EncodedNativeCursor): string {
   return Buffer.from(JSON.stringify(cursor), 'utf8').toString('base64url')
 }
 
@@ -157,10 +315,16 @@ export async function handleNativeSessionWindowRequest(
     throw badRequest('Duplicate native window parameters')
   }
   const formatValues = url.searchParams.getAll('format')
-  if (formatValues.length > 1 || (formatValues.length === 1 && formatValues[0] !== 'review')) {
+  if (formatValues.length > 1
+    || (formatValues.length === 1 && !['review', 'review-turns'].includes(formatValues[0]!))) {
     throw badRequest('Unsupported native window format')
   }
   const cursor = decodeCursor(url.searchParams.get('cursor'))
+  const turnMode = formatValues[0] === 'review-turns'
+  if ((turnMode && cursor && cursor.mode !== 'review-turns')
+    || (!turnMode && cursor?.mode === 'review-turns')) {
+    throw badRequest('Native session cursor does not match the requested format')
+  }
 
   const abort = new AbortController()
   const close = () => {
@@ -177,6 +341,20 @@ export async function handleNativeSessionWindowRequest(
       signal: abort.signal,
     }
     const first = await reader.read(readQuery)
+    if (turnMode) {
+      const complete = first.state === 'available'
+        ? await readCompleteNativeTurn(reader, readQuery, first, cursor?.turnOrdinal ?? 1)
+        : first
+      if (abort.signal.aborted || response.destroyed) return true
+      if (complete.state !== 'available') {
+        writeJson(response, 200, complete)
+      } else if (Buffer.byteLength(JSON.stringify(complete.dto), 'utf8') > MAX_RESPONSE_BYTES) {
+        writeJson(response, 413, { state: 'unsupported', reason: 'native-window-response-too-large' })
+      } else {
+        writeJson(response, 200, complete.dto)
+      }
+      return true
+    }
     const result = formatValues[0] === 'review' && first.state === 'available'
       ? await readContiguousReviewPages(reader, readQuery, first)
       : first
