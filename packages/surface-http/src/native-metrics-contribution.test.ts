@@ -21,8 +21,7 @@ const sources={
     {manifest:{sourceId:'codex',parserVersion:'codex-v2'}},
   ],
 } as unknown as SourceService
-const policy={isSourceEnabled:(sourceId:string)=>sourceId==='pi'}
-  as unknown as CapturePolicyService
+const policy={isSourceEnabled:(sourceId:string)=>sourceId==='pi'} as unknown as CapturePolicyService
 
 test('Native-only totals are returned separately with incomplete/unknown coverage',async()=>{
   const called:string[]=[]
