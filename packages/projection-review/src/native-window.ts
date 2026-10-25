@@ -192,7 +192,14 @@ export function projectNativeReviewWindow(input: NativeReviewProjectionInput): N
       nodes: interaction.nodes.map(node => {
         const cursor = node.type === 'message' && node.attachments?.length
           ? attachmentCursors.get(node.id) : undefined
-        return cursor ? { ...node, nativeAttachmentCursor: cursor } : node
+        // A tool result may share the same original SourceRecord provenance
+        // as its call. Retain one evidence edge per stable evidence ID.
+        const evidence = [...new Map(node.evidence.map(item => [item.id, item])).values()]
+        return {
+          ...node,
+          evidence,
+          ...(cursor ? { nativeAttachmentCursor: cursor } : {}),
+        }
       }),
     })),
     observationCount: items.length,
