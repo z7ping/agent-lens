@@ -950,6 +950,7 @@ test('Catalog native Review shares one Task DTO with bounded Hook-exclusive fact
     assert.equal(dto.state,'available')
     assert.equal(dto.boundaryIntegrity,'complete')
     assert.equal(dto.hookEventsTruncated,undefined)
+    assert.equal(dto.hookFactsPartial,true,'tool hooks remain on standalone evidence lane')
     assert.equal(hookReads,2)
     assert.deepEqual(dto.interactions[0]?.nodes.map(node=>node.kind??node.type),[
       'message','permission.request','subagent.spawn','message',
