@@ -227,7 +227,7 @@ test('Hook native Worker isolates Hermes per-session archive and preserves bound
         event:{hook_event_name:'pre_approval_request',session_id:'H-original',
           tool_name:'shell',timestamp:now},
       }))
-      await archiveAcceptedHookInboxFile({inbox,fileName,nativeSessionId:'H-original'})
+      await archiveAcceptedHookInboxFile({inbox,fileName,nativeSessionId:'H-original',installationId:'hermes-install'})
     }
     const input={
       sourceId:'hermes',parserVersion:hermesManifest.parserVersion,
