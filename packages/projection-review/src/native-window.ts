@@ -205,7 +205,12 @@ export function overlayNativeHookEvents(input: {
   // Require a true native occurrence time. A processing/capture timestamp is
   // not evidence that a Hook belongs to the nearby user turn.
   const selected = observations.flatMap((observation, index) => {
-    const millis = observation.occurredAt ? Date.parse(observation.occurredAt) : NaN
+    // Source runtimes may fill occurredAt from Hook capture time when the
+    // original event has no clock. Equal values are therefore insufficient
+    // evidence for cross-source placement (even if some are truly equal).
+    const attested = observation.occurredAt
+      && observation.occurredAt !== observation.capturedAt
+    const millis = attested ? Date.parse(observation.occurredAt!) : NaN
     return kinds.has(observation.kind) && Number.isFinite(millis)
       ? [{ observation, recordId: observationRecordIds[index]! }]
       : []
