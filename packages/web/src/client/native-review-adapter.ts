@@ -48,6 +48,7 @@ export function nativeReviewDetail(
     // Deliberately not a full SQL SessionSummary. Counts and duration reflect
     // only visible native observations; the header hides total metrics.
     statisticsCompleteness: 'window',
+    ...(window.hookEventsTruncated ? {nativeHookEventsTruncated:true} : {}),
     interactions,
     page: {
       count: interactions.length,
