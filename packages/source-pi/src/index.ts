@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto'
+import { stat } from 'node:fs/promises'
 import type {
   DetectedSource,
   ObservationCapability,
@@ -16,6 +17,7 @@ import { normalizePiRecord } from './normalize'
 import {
   detectPi,
   ingestPiHistory,
+  listJsonlFiles,
   readPiSessionMetadata,
   piSessionInternals,
   startPiRuntimeCapture,
@@ -126,6 +128,37 @@ export const piSourceDefinition: SourceDefinition = {
   detect: detectPi,
   declareCapabilities: declarePiCapabilities,
   rawRecovery: jsonlRawRecovery,
+  async *discoverNativeSessions(ctx) {
+    const root = ctx.installation.dataRoot
+    if (!root) return
+    const paths = await listJsonlFiles(root, ctx.historyWindow)
+    for (const filePath of paths) {
+      ctx.abortSignal.throwIfAborted()
+      try {
+        const before = await stat(filePath)
+        if (!before.isFile()) continue
+        const session = await readPiSessionMetadata(filePath)
+        const after = await stat(filePath)
+        if (!after.isFile() || before.dev !== after.dev || before.ino !== after.ino
+          || before.size !== after.size || before.mtimeMs !== after.mtimeMs) continue
+        yield {
+          sourceId: PI_SOURCE_ID,
+          installationId: ctx.installation.id,
+          nativeSessionId: session.nativeSessionId,
+          locationKind: 'native' as const,
+          filePath,
+          fileIdentity: `${after.dev}:${after.ino}`,
+          fileSize: after.size,
+          fileMtimeMs: after.mtimeMs,
+          lastActivityAt: new Date(after.mtimeMs).toISOString(),
+          updatedAt: new Date().toISOString(),
+        }
+      } catch (error) {
+        const code = (error as NodeJS.ErrnoException).code
+        if (code !== 'ENOENT' && code !== 'ENOTDIR') throw error
+      }
+    }
+  },
   async readNativeSessionPage(query, ctx) {
     const page = await readNativeSessionWindow({
       path: query.filePath,

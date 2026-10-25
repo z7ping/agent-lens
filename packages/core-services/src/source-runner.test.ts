@@ -78,6 +78,58 @@ const capturePolicy = {
   sanitizeNormalizedOutput(value: NormalizedSourceOutput) { return value },
 } as unknown as CapturePolicyService
 
+
+test('metadata-only Source history stage updates Catalog, never ingests SourceRecord/Observation/Evidence', async () => {
+  const indexed: Array<{nativeSessionId:string;fileSize:number}> = []
+  let reads = 0
+  let normalizeCalls = 0
+  const source: SourceDefinition = {
+    manifest: {
+      pluginId:'test-catalog',pluginVersion:'1.0.0',apiVersion:'1.0',
+      pluginType:'source',displayName:'Metadata only',
+      sourceId:'test-source',productId:'test-product',parserVersion:'1',
+    },
+    async detect(){ return [detected] },
+    async declareCapabilities(){ return [] },
+    async *discoverNativeSessions(ctx) {
+      assert.equal(ctx.historyWindow?.sessionLimit,2)
+      yield {
+        sourceId:'test-source', installationId:installation.id,
+        nativeSessionId:'native-1',locationKind:'native',
+        filePath:'/tmp/native-1.jsonl',fileIdentity:'10:20',fileSize:900,
+        fileMtimeMs:100,lastActivityAt:'2026-10-25T00:00:00Z',
+        updatedAt:'2026-10-25T00:00:00Z',
+      }
+    },
+    async *ingestHistory(){ reads++;yield record('old','2026-10-25T00:00:00Z') },
+    async normalize(value){ normalizeCalls++; return normalized(value) },
+  }
+  const storage = {
+    nativeSessionCatalog: {
+      async upsert(entry: {nativeSessionId:string;fileSize:number}) {
+        indexed.push({nativeSessionId:entry.nativeSessionId,fileSize:entry.fileSize})
+      },
+    },
+    checkpoints: {async get(){return null},async set(){},async clear(){}},
+  } as unknown as StorageService
+  const runner = new SourceHistoryRunner(storage,
+    { async resolveInstallation(){ return installation } } as unknown as IdentityService,
+    { async commit(){ throw Error('no event commit') } } as unknown as ObservationService,
+    { registerSourceCapabilities(){ return {dispose(){}} } } as unknown as CapabilityService,
+    { async declare(){ throw Error('no coverage write') } } as unknown as CoverageService,
+    capturePolicy,
+  )
+  const result = await runner.sync({
+    source,host,detected,abortSignal:new AbortController().signal,
+    mode:'native-catalog',historyWindow:{sessionLimit:2},
+  })
+  assert.deepEqual(indexed,[{nativeSessionId:'native-1',fileSize:900}])
+  assert.equal(result.nativeSessionsIndexed,1)
+  assert.equal(result.records,0)
+  assert.equal(reads,0)
+  assert.equal(normalizeCalls,0)
+})
+
 test('后台来源处理达到时间预算后主动让出事件循环', async () => {
   let currentTime = 0
   let yields = 0

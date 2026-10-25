@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto'
+import { stat } from 'node:fs/promises'
 import type {
   DetectedSource,
   ObservationCapability,
@@ -16,7 +17,7 @@ import {
   normalizeCurrentCodexRecord,
 } from './current-protocol'
 import { detectCodex } from './detect'
-import { codexHistoryRoots, ingestCodexHistory, readSessionMetadata } from './history'
+import { codexHistoryRoots, ingestCodexHistory, listCodexHistoryFiles, readSessionMetadata } from './history'
 import { nativeIdForEntry, nativeTypeForEntry } from './format'
 import { startCodexRuntimeCapture } from './runtime'
 import { normalizeCodexSessionAttribution } from './session-attribution'
@@ -126,6 +127,36 @@ export const codexSourceDefinition: SourceDefinition = {
   detect: detectCodex,
   declareCapabilities: declareCodexCapabilities,
   rawRecovery: jsonlRawRecovery,
+  async *discoverNativeSessions(ctx) {
+    const paths = await listCodexHistoryFiles(ctx.installation, ctx.historyWindow)
+    for (const filePath of paths) {
+      ctx.abortSignal.throwIfAborted()
+      try {
+        const before = await stat(filePath)
+        if (!before.isFile()) continue
+        const session = await readSessionMetadata(filePath)
+        const after = await stat(filePath)
+        if (!after.isFile() || before.dev !== after.dev || before.ino !== after.ino
+          || before.size !== after.size || before.mtimeMs !== after.mtimeMs) continue
+        yield {
+          sourceId: 'codex',
+          installationId: ctx.installation.id,
+          nativeSessionId: session.nativeSessionId,
+          locationKind: 'native' as const,
+          filePath,
+          fileIdentity: `${after.dev}:${after.ino}`,
+          fileSize: after.size,
+          fileMtimeMs: after.mtimeMs,
+          lastActivityAt: new Date(after.mtimeMs).toISOString(),
+          ...(session.title ? { title: session.title } : {}),
+          updatedAt: new Date().toISOString(),
+        }
+      } catch (error) {
+        const code = (error as NodeJS.ErrnoException).code
+        if (code !== 'ENOENT' && code !== 'ENOTDIR') throw error
+      }
+    }
+  },
   async readNativeSessionPage(query, ctx) {
     const page = await readNativeSessionWindow({
       path: query.filePath,

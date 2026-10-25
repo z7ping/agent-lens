@@ -233,15 +233,21 @@ export async function listJsonlFiles(
   const paths: string[] = []
   for await (const file of walkJsonlFiles(root)) paths.push(file)
   if (diagnostics) diagnostics.enumeratedFiles += paths.length
-  const candidates = (await Promise.all(paths.map(async path => {
-    try {
-      if (diagnostics) diagnostics.statFiles += 1
-      return { path, mtimeMs: (await stat(path)).mtimeMs }
-    } catch (error) {
-      if (isMissingPathError(error)) return null
-      throw error
-    }
-  }))).filter((candidate): candidate is { path: string; mtimeMs: number } => candidate !== null)
+  // Keep filesystem pressure bounded on large session trees. The metadata
+  // index must not flood the event loop with thousands of parallel stat calls.
+  const candidates: Array<{ path: string; mtimeMs: number }> = []
+  for (let offset = 0; offset < paths.length; offset += 256) {
+    const batch = await Promise.all(paths.slice(offset, offset + 256).map(async path => {
+      try {
+        if (diagnostics) diagnostics.statFiles += 1
+        return { path, mtimeMs: (await stat(path)).mtimeMs }
+      } catch (error) {
+        if (isMissingPathError(error)) return null
+        throw error
+      }
+    }))
+    for (const item of batch) if (item) candidates.push(item)
+  }
 
   const activeSince = historyWindow?.activeSince ? Date.parse(historyWindow.activeSince) : Number.NaN
   const filtered = Number.isFinite(activeSince)
