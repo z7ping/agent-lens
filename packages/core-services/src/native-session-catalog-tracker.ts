@@ -46,7 +46,7 @@ export class NativeSessionCatalogTracker {
   private readonly writeModes = new Map<string, 'legacy' | 'native-only'>()
 
   private writeModeKey(input: { sourceId: string; installationId: string; nativeSessionId: string }): string {
-    return `${input.sourceId}\\u0000${input.installationId}\\u0000${input.nativeSessionId}`
+    return JSON.stringify([input.sourceId, input.installationId, input.nativeSessionId])
   }
 
   rememberWriteMode(
