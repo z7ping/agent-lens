@@ -165,6 +165,7 @@ function storageRootAllowed(path: readonly string[]): boolean {
     'assetInventory',
     'launchableProjects',
     'nativeSessionCatalog',
+    'nativeSessionMetrics',
     'taskFileChanges',
     'sessionSummaries',
     'sessionSummaryProjection',
