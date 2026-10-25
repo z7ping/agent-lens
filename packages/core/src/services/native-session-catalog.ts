@@ -19,6 +19,10 @@ export interface NativeSessionCatalogQuery {
   sourceId?: string
   installationId?: string
   locationKind?: NativeSessionLocationKind
+  /** Only Catalog sessions without any historical SQL Review observations.
+   * Filter in SQL before pagination, not in the client after LIMIT.
+   */
+  onlyWithoutLegacyReview?: boolean
   limit?: number
   before?: {
     lastActivityAt: string

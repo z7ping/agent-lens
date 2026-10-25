@@ -106,6 +106,22 @@ export class SqliteNativeSessionCatalog {
       if (input.sourceId) { predicates.push('source_id=?'); values.push(input.sourceId) }
       if (input.installationId) { predicates.push('installation_id=?'); values.push(input.installationId) }
       if (input.locationKind) { predicates.push('location_kind=?'); values.push(input.locationKind) }
+      if (input.onlyWithoutLegacyReview) {
+        // The existing SourceSession unique triple is the authoritative
+        // association between source-native and legacy logical identities.
+        // EXISTS uses the existing observations logical-session index, with
+        // no payload reads and no scan of unbounded Source records.
+        predicates.push(`NOT EXISTS (
+          SELECT 1 FROM source_sessions AS linked
+          WHERE linked.source_id = native_session_catalog.source_id
+            AND linked.installation_id = native_session_catalog.installation_id
+            AND linked.native_session_id = native_session_catalog.native_session_id
+            AND EXISTS (
+              SELECT 1 FROM observations AS stored
+              WHERE stored.logical_session_id = linked.logical_session_id
+            )
+        )`)
+      }
       if (input.before) {
         predicates.push(`(last_activity_at,source_id,installation_id,native_session_id,location_kind) < (?,?,?,?,?)`)
         values.push(input.before.lastActivityAt,input.before.sourceId,input.before.installationId,

@@ -55,6 +55,42 @@ test('native session catalog remains metadata-only, stable and independently pag
     assert.equal((await catalog.get({sourceId:'pi',installationId:'local-pi',nativeSessionId:'b'}))?.locationKind,'native')
     assert.equal((await catalog.get({sourceId:'pi',installationId:'local-pi',nativeSessionId:'b',locationKind:'archive'}))?.locationKind,'archive')
 
+    // Match old sessions by Source/Installation/native ID only, not by
+    // identical names or approximate activity timestamps. Only an actual
+    // persisted logical session with observations suppresses the native row.
+    storage.db.prepare(`INSERT INTO hosts
+      (id,name,platform,arch,created_at,last_seen_at) VALUES (?,?,?,?,?,?)`)
+      .run('host','local','linux','x64',now,now)
+    storage.db.prepare(`INSERT INTO agent_products(id,name) VALUES (?,?)`).run('pi','Pi')
+    storage.db.prepare(`INSERT INTO agent_installations
+      (id,host_id,product_id,first_seen_at,last_seen_at) VALUES (?,?,?,?,?)`)
+      .run('local-pi','host','pi',now,now)
+    for (const id of ['b','c']) {
+      storage.db.prepare('INSERT INTO logical_sessions(id,installation_id) VALUES (?,?)')
+        .run('logical-'+id,'local-pi')
+      storage.db.prepare(`INSERT INTO source_sessions
+        (id,source_id,installation_id,native_session_id,logical_session_id)
+        VALUES (?,?,?,?,?)`).run('source-'+id,'pi','local-pi',id,'logical-'+id)
+    }
+    // A SourceSession relationship alone does NOT mean Review has content.
+    const partial = await catalog.query({onlyWithoutLegacyReview:true,limit:2,locationKind:'native'})
+    assert.deepEqual(partial.items.map(x=>x.nativeSessionId),['c','b'])
+    for (const id of ['b','c']) {
+      storage.db.prepare(`INSERT INTO observations
+        (id,host_id,installation_id,logical_session_id,source_session_id,kind,captured_at,payload_json)
+        VALUES (?,?,?,?,?,?,?,?)`)
+        .run('observation-'+id,'host','local-pi','logical-'+id,'source-'+id,
+          'message.user',now,'{"text":"never included in catalog output"}')
+    }
+    // SQL excludes c and b *before* its LIMIT, so a is still reachable.
+    const unmatched = await catalog.query({onlyWithoutLegacyReview:true,limit:1,locationKind:'native'})
+    assert.deepEqual(unmatched.items.map(x=>x.nativeSessionId),['a'])
+    assert.equal(unmatched.hasMore,false)
+    // Unfiltered view still exposes all original catalog entries.
+    const allNative = await catalog.query({locationKind:'native',limit:3})
+    assert.deepEqual(allNative.items.map(x=>x.nativeSessionId),['c','b','a'])
+    assert.equal(JSON.stringify(unmatched).includes('never included'),false)
+
     const columns = storage.db.prepare('PRAGMA table_info(native_session_catalog)').all() as Array<{name:string}>
     assert.equal(columns.some(x=>x.name==='payload' || x.name==='payload_json' || x.name==='observation_id'),false)
     const rows = storage.db.prepare('SELECT COUNT(*) AS count FROM native_session_catalog').get() as {count:number}

@@ -52,10 +52,13 @@ test('native Catalog HTTP exposes only authorized session identities, no physica
       before:{lastActivityAt:now,sourceId:'codex',installationId:'installation',
         nativeSessionId:'B',locationKind:'native'},
     })
+    const onlyNative = await fetch(`${base}?onlyWithoutLegacyReview=1&limit=2`)
+    assert.equal(onlyNative.status,200)
+    assert.equal(seen[2]?.onlyWithoutLegacyReview,true)
     const filtered=await fetch(`${base}?sourceId=codex`)
     assert.equal(filtered.status,200)
     assert.deepEqual(await filtered.json(),{items:[],hasMore:false})
-    assert.equal(seen.length,2)
+    assert.equal(seen.length,3)
   } finally { await http.dispose() }
 })
 
@@ -70,7 +73,7 @@ test('native Catalog HTTP rejects invalid cursors and parameters before accessin
   const base=`http://${http.host}:${http.port}/api/v1/native-sessions`
   try{
     for(const suffix of ['?limit=0','?limit=101','?limit=abc','?sourceId=pi&sourceId=codex',
-      '?installationId=', '?cursor=not-valid',
+      '?installationId=', '?cursor=not-valid', '?onlyWithoutLegacyReview=0', '?onlyWithoutLegacyReview=2', '?onlyWithoutLegacyReview=1&onlyWithoutLegacyReview=1',
       '?cursor='+Buffer.from(JSON.stringify(['x','y','z'])).toString('base64url')]){
       const response=await fetch(base+suffix)
       assert.equal(response.status,400,suffix)
