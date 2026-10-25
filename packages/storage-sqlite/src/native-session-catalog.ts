@@ -1,30 +1,7 @@
 import { isAbsolute } from 'node:path'
 import type { SqliteExecutor } from './executor'
 
-export type NativeSessionLocationKind = 'native' | 'archive'
-
-export interface NativeSessionCatalogEntry {
-  sourceId: string
-  installationId: string
-  nativeSessionId: string
-  locationKind: NativeSessionLocationKind
-  filePath: string
-  fileIdentity: string
-  fileSize: number
-  fileMtimeMs: number
-  lastActivityAt: string
-  title?: string
-  updatedAt: string
-}
-
-export interface NativeSessionCatalogQuery {
-  sourceId?: string
-  installationId?: string
-  locationKind?: NativeSessionLocationKind
-  limit?: number
-  /** The catalog is a lightweight directory; no opaque SourceRecord contents. */
-  before?: { lastActivityAt: string; sourceId: string; installationId: string; nativeSessionId: string; locationKind: NativeSessionLocationKind }
-}
+import type { NativeSessionCatalogEntry, NativeSessionCatalogQuery } from '@agent-lens/core'
 
 function row(row: {
   source_id: string
