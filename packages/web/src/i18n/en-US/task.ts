@@ -408,7 +408,7 @@ export const englishTaskMessages: LocaleMessagesDto = {
         clearFilters: 'Clear',
         remoteFilterLimitation: 'Remote tasks cannot be filtered by agent, project, or status and are hidden for the current filter.',
         nativeSearchScanning: 'Searching original agent session content…',
-        nativeSearchPartial: 'Native content search is incomplete. Load more results to continue.',
+        nativeSearchPartial: 'Native content search is incomplete; current results may be partial.',
         nativeSearchError: 'Native content search is unavailable; only catalog matches are displayed.',
         empty: 'No historical tasks in the current filter range.',
         loadMore: 'Load more historical tasks',
