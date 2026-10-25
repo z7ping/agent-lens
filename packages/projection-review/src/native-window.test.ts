@@ -314,3 +314,30 @@ test('native Review Evidence attaches only exact SourceRecord provenance without
   assert.equal(serialized.includes('another-native-record'),false)
 })
 
+
+test('Hook at overlapping user-turn boundary is never assigned by first-match timestamp',()=>{
+  const native=projectNativeReviewWindow({
+    ...page,completeBoundaries:true,
+    observations:[
+      {...candidate('message.user',1,{text:'first'}),occurredAt:'2026-10-25T04:00:00Z'},
+      {...candidate('message.assistant',2,{text:'first done'}),occurredAt:'2026-10-25T04:00:03Z'},
+      {...candidate('message.user',3,{text:'second'}),occurredAt:'2026-10-25T04:00:03Z'},
+      {...candidate('message.assistant',4,{text:'second done'}),occurredAt:'2026-10-25T04:00:05Z'},
+    ],
+    observationRecordIds:['user-1','reply-1','user-2','reply-2'],
+  })
+  assert.equal(native.interactions.length,2)
+  const hooks:ObservationCandidate[]=[
+    {...candidate('permission.request',5,{decision:'ambiguous'}),occurredAt:'2026-10-25T04:00:03Z'},
+    {...candidate('permission.request',6,{decision:'uniquely-second'}),occurredAt:'2026-10-25T04:00:04Z'},
+  ]
+  const result=overlayNativeHookEvents({
+    window:native,observations:hooks,
+    observationRecordIds:['ambiguous-hook','unique-hook'],truncated:false,
+  })
+  assert.equal(result.hookFactsPartial,true)
+  assert.equal(result.observationCount,native.observationCount+1)
+  assert.equal(JSON.stringify(result).includes('ambiguous'),false)
+  assert.equal(JSON.stringify(result.interactions[0]).includes('uniquely-second'),false)
+  assert.equal(JSON.stringify(result.interactions[1]).includes('uniquely-second'),true)
+})
