@@ -58,7 +58,7 @@ import { parseDataRuntimeHealth } from './data-runtime-health'
 import type { HttpEventHub } from './events'
 import { badRequest, statusCodeForError, writeJson } from './http-utils'
 import { handleLiveAttachmentRequest } from './live-attachments-http'
-import { handleNativeSessionWindowRequest, handleNativeSessionAttachmentRequest, type NativeSessionWindowReader } from './native-session-http'
+import { handleNativeSessionWindowRequest, handleNativeSessionAttachmentRequest, handleNativeSessionHookRequest, type NativeSessionWindowReader } from './native-session-http'
 import { handleNativeSessionCatalogRequest } from './native-session-catalog-http'
 import { reviewAttachmentSources } from './review-attachments'
 import { handleLiveRequest } from './live-http'
@@ -275,6 +275,7 @@ export async function startHttpSurface(
       route = httpRouteLabel(url.pathname)
       if (await handleNativeSessionCatalogRequest(request, response, url, storage.nativeSessionCatalog, options.capturePolicy)) return
       if (await handleNativeSessionAttachmentRequest(request, response, url, options.nativeSessionReader, storage.nativeSessionCatalog)) return
+      if (await handleNativeSessionHookRequest(request, response, url, options.nativeSessionReader, storage.nativeSessionCatalog)) return
       if (await handleNativeSessionWindowRequest(request, response, url, options.nativeSessionReader, storage.nativeSessionCatalog)) return
       if (await handleLiveAttachmentRequest(request, response, url, options.liveAttachments)) return
       if (await handleLiveRequest(request, response, url, options.lives, options.selectProjectDirectory, { storage, sources: options.sources })) return
