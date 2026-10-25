@@ -31,6 +31,18 @@ test('OpenCode native SQLite reads only one session with an exact rowid rewind c
       id:'opencode-inst',hostId:host.id,productId:'opencode',dataRoot:root,
       firstSeenAt:at,lastSeenAt:at,
     }
+    const catalogRows=[]
+    for await (const entry of openCodeSourceDefinition.discoverNativeSessions!({
+      host,installation,abortSignal:new AbortController().signal,
+      checkpoint:{async get(){return null},async set(){throw Error('No catalog checkpoint write')},async clear(){}},
+      historyWindow:{sessionLimit:1},
+    })) catalogRows.push(entry)
+    assert.equal(catalogRows.length,1)
+    assert.equal(catalogRows[0]?.nativeSessionId,'S1')
+    assert.equal(catalogRows[0]?.title,'Test')
+    assert.equal(catalogRows[0]?.filePath,path)
+    assert.equal(catalogRows[0]?.fileSize,(await stat(path)).size)
+    assert.equal(JSON.stringify(catalogRows).includes('first'),false)
     let writes=0
     const ctx:SourceRawRecoveryContext={
       host,installation,abortSignal:new AbortController().signal,
