@@ -1,5 +1,7 @@
-import type {
-  NativeReviewWindowDto,
+import {
+  AGENT_LENS_PROTOCOL_VERSION,
+  type TaskFileChangesResponseDto,
+  type NativeReviewWindowDto,
   NativeSessionSummaryDto,
   ReviewSessionDetailDto,
 } from '@agent-lens/protocol'
@@ -73,4 +75,38 @@ export function nativeReviewNextPage(
     lastActivityAt: current.endedAt,
     ...(current.title ? { title: current.title } : {}),
   }, window)
+}
+
+/** Reconstruct evidence-based changes from native pages without an SQL Event. */
+export function nativeReviewObservedFileChanges(
+  window: NativeReviewWindowDto,
+  prior?: TaskFileChangesResponseDto | null,
+): TaskFileChangesResponseDto {
+  const byPath = new Map((prior?.items ?? []).map(item => [item.path, item]))
+  for (const item of window.observedFileChanges ?? []) {
+    const previous = byPath.get(item.path)
+    byPath.set(item.path, previous ? {
+      ...item,
+      firstChangedAt: previous.firstChangedAt < item.firstChangedAt ? previous.firstChangedAt : item.firstChangedAt,
+      lastChangedAt: previous.lastChangedAt > item.lastChangedAt ? previous.lastChangedAt : item.lastChangedAt,
+      evidence: [...new Set([...previous.evidence, ...item.evidence])],
+    } : item)
+  }
+  // Evidence-only, not an exact Git tree diff; bounded memory even for long sessions.
+  const items = [...byPath.values()].slice(0, 64)
+  return {
+    logicalSessionId: window.sessionId,
+    items,
+    summary: {
+      count: items.length,
+      exactCount: 0,
+      observedCount: items.length,
+    },
+    meta: {
+      protocolVersion: AGENT_LENS_PROTOCOL_VERSION,
+      generatedAt: new Date().toISOString(),
+      ...(window.hasMore || window.fileChangesTruncated || byPath.size > items.length
+        ? { truncated: true } : {}),
+    },
+  }
 }
