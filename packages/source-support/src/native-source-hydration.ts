@@ -10,7 +10,8 @@ export interface NativeReference {
   fingerprint?: string
 }
 
-export type AuthorizedNativeJsonlResult = NativeJsonlReadResult
+export type AuthorizedNativeJsonlResult = Exclude<NativeJsonlReadResult, { state: 'available' }>
+  | (Extract<NativeJsonlReadResult, { state: 'available' }> & { canonicalPath: string })
   | { state: 'incompatible'; reason: 'source-parser-version-changed' }
   | { state: 'unsupported'; reason: 'source-installation-mismatch' | 'stable-jsonl-reference-required' | 'source-path-outside-authorized-roots' }
 
@@ -68,10 +69,11 @@ export async function readAuthorizedNativeJsonlEntry(input: {
   if (!authorized) return { state: 'unsupported', reason: 'source-path-outside-authorized-roots' }
 
   // Hash and parse the same bytes from a single handle, not two opens.
-  return readVerifiedNativeJsonlObject({
+  const result = await readVerifiedNativeJsonlObject({
     path: canonicalPath,
     offset: reference.locator.offset,
     expectedFingerprint: reference.fingerprint,
     abortSignal,
   })
+  return result.state === 'available' ? { ...result, canonicalPath } : result
 }
