@@ -249,7 +249,11 @@ export function overlayNativeHookEvents(input: {
     const attested = observation.occurredAt
       && observation.occurredAt !== observation.capturedAt
     const millis = attested ? Date.parse(observation.occurredAt!) : NaN
-    return kinds.has(observation.kind) && Number.isFinite(millis)
+    // A unique native parent event or tool call is stronger than a Hook
+    // capture clock. Keep unmatched identities off the turn rather than
+    // treating the capture time as evidence of ownership.
+    const hasNativeCorrelation = Boolean(observation.nativeParentEventId || observation.nativeCallId)
+    return kinds.has(observation.kind) && (Number.isFinite(millis) || hasNativeCorrelation)
       ? [{ observation, recordId: observationRecordIds[index]! }]
       : []
   })
@@ -285,26 +289,54 @@ export function overlayNativeHookEvents(input: {
   const existingFacts = new Set(window.interactions.flatMap(turn => turn.nodes)
     .flatMap(node => node.type === 'event'
       ? [fingerprint(node.kind, node.at, node.payload)] : []))
+  const explicitOwners = new Map<string, Set<string>>()
+  const identityKey = (kind: 'event' | 'call', id: string) => JSON.stringify([kind, id])
+  for (const turn of window.interactions.filter(item => item.trigger === 'user')) {
+    for (const native of turn.nodes) {
+      const keys = [
+        ...(native.nativeEventId ? [identityKey('event', native.nativeEventId)] : []),
+        ...(native.type === 'tool' && native.callId ? [identityKey('call', native.callId)] : []),
+      ]
+      for (const key of keys) {
+        const owners = explicitOwners.get(key) ?? new Set<string>()
+        owners.add(turn.id)
+        explicitOwners.set(key, owners)
+      }
+    }
+  }
   const added = new Map<string, typeof candidates>()
   for (const node of candidates) {
     if (seenIds.has(node.id)
       || (node.nativeEventId && existingSourceFacts.has(nativeFactKey(node.kind, node.nativeEventId)))
       || existingFacts.has(fingerprint(node.kind, node.at, node.payload))) continue
-    const at = Date.parse(node.at)
-    // The last turn is bounded by its last *observed* native fact, not by
-    // the Catalog's wall-clock activity or the Hook capture time.
-    const possibleTurns = window.interactions.filter(turn => {
-      const start = Date.parse(turn.startedAt)
-      const end = Date.parse(turn.endedAt)
-      return turn.trigger === 'user' && Number.isFinite(start)
-        && Number.isFinite(end) && at >= start && at <= end
-    })
-    // Adjacent user turns can share an exact timestamp; choosing the first
-    // would silently assign a permission or subagent fact to the wrong turn.
-    // Keep ambiguous facts on the standalone Hook lane until an exact
-    // Source-native correlation key proves the owner.
-    if (possibleTurns.length !== 1) continue
-    const matching = possibleTurns[0]!
+    const correlationKeys = [
+      ...(node.nativeParentEventId ? [identityKey('event', node.nativeParentEventId)] : []),
+      ...(node.nativeCallId ? [identityKey('call', node.nativeCallId)] : []),
+    ]
+    let matching: typeof window.interactions[number] | undefined
+    if (correlationKeys.length) {
+      // Every supplied identity must independently resolve to the SAME
+      // single native user turn. Unknown, reused or conflicting IDs fail
+      // closed: time proximity cannot override explicit source evidence.
+      const owners = correlationKeys.map(key => explicitOwners.get(key))
+      if (owners.some(value => value?.size !== 1)) continue
+      const ownerId = owners[0]!.values().next().value
+      if (owners.some(value => !value!.has(ownerId!))) continue
+      matching = window.interactions.find(turn => turn.id === ownerId)
+    } else {
+      const at = Date.parse(node.at)
+      // Without a Source-native ID, the timestamp must identify precisely
+      // one complete turn; simultaneous turn boundaries are ambiguous.
+      const possibleTurns = window.interactions.filter(turn => {
+        const start = Date.parse(turn.startedAt)
+        const end = Date.parse(turn.endedAt)
+        return turn.trigger === 'user' && Number.isFinite(start)
+          && Number.isFinite(end) && at >= start && at <= end
+      })
+      if (possibleTurns.length !== 1) continue
+      matching = possibleTurns[0]
+    }
+    if (!matching) continue
     const events = added.get(matching.id) ?? []
     events.push(node)
     added.set(matching.id, events)
