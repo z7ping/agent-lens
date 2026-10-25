@@ -107,6 +107,7 @@ export class NativeSessionReader {
       const result = await this.nativeWorker.read({
         sourceId: query.sourceId,
         parserVersion: source.manifest.parserVersion,
+        expectedFileIdentity: catalog.fileIdentity,
         query: sourceQuery,
         host,
         installation,
@@ -122,6 +123,9 @@ export class NativeSessionReader {
         host, installation, abortSignal: query.signal, checkpoint: readOnlyCheckpoint,
       })
       if (result.state !== 'available') return result
+      if (result.nextCursor.fileIdentity !== catalog.fileIdentity) {
+        return { state: 'drifted', reason: 'native-catalog-file-identity-changed' }
+      }
       nextCursor = result.nextCursor
       hasMore = result.hasMore
       pendingTail = result.pendingTail
