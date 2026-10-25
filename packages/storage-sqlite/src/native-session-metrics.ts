@@ -2,7 +2,10 @@ import type {
   NativeSessionMetricReadResult,
   NativeSessionMetricSnapshot,
   NativeSessionMetricsStore,
+  NativeSessionMetricOverview,
+  NativeSessionMetricOverviewQuery,
 } from '@agent-lens/core'
+import { NATIVE_SESSION_METRIC_PROJECTION_VERSION } from '@agent-lens/core'
 import type { SqliteExecutor } from './executor'
 
 type Identity = Pick<NativeSessionMetricSnapshot,'sourceId'|'installationId'|'nativeSessionId'>
@@ -152,6 +155,117 @@ export class SqliteNativeSessionMetrics implements NativeSessionMetricsStore {
             totalDurationMs:tool.total_duration_ms,
           })),
         },
+      }
+    })
+  }
+
+
+  /**
+   * Global numerical projection: ONLY durable Native-only writer claims,
+   * no legacy SourceRecord/Observation joins that could double-count facts.
+   * Never load event bodies and never scan native files during aggregation.
+   */
+  overview(input:NativeSessionMetricOverviewQuery):Promise<NativeSessionMetricOverview>{
+    if(!input.sourceId || input.sourceId.length>128 || !input.parserVersion
+      || input.parserVersion.length>512
+      || (input.installationId!==undefined && (!input.installationId || input.installationId.length>512))
+      || (input.from!==undefined && !Number.isFinite(Date.parse(input.from)))
+      || (input.to!==undefined && !Number.isFinite(Date.parse(input.to)))
+      || (input.from && input.to && Date.parse(input.from)>Date.parse(input.to))){
+      throw new TypeError('Invalid Native-only metrics aggregate query')
+    }
+    return this.executor.run(()=>{
+      const cte=`
+        WITH selected AS (
+          SELECT catalog.source_id,catalog.installation_id,catalog.native_session_id,
+                 metrics.interaction_count,metrics.tool_call_count,metrics.tool_result_count,
+                 metrics.tool_error_count,metrics.error_count,metrics.input_tokens,metrics.output_tokens,
+                 CASE
+                   WHEN metrics.source_id IS NULL THEN 'missing'
+                   WHEN metrics.file_identity<>catalog.file_identity
+                     OR metrics.file_size<>catalog.file_size
+                     OR metrics.file_mtime_ms<>catalog.file_mtime_ms
+                     OR metrics.parser_version<>?
+                     OR metrics.projection_version<>?
+                   THEN 'stale'
+                   ELSE metrics.coverage
+                 END AS metric_status
+          FROM native_session_write_claims AS claim
+          JOIN native_session_catalog AS catalog
+            ON catalog.source_id=claim.source_id
+           AND catalog.installation_id=claim.installation_id
+           AND catalog.native_session_id=claim.native_session_id
+           AND catalog.location_kind='native'
+          LEFT JOIN native_session_metrics AS metrics
+            ON metrics.source_id=catalog.source_id
+           AND metrics.installation_id=catalog.installation_id
+           AND metrics.native_session_id=catalog.native_session_id
+          WHERE claim.mode='native-only' AND claim.source_id=?
+            ${input.installationId?"AND claim.installation_id=?":""}
+            ${input.from?"AND catalog.last_activity_at>=?":""}
+            ${input.to?"AND catalog.last_activity_at<=?":""}
+        )
+      `
+      const params=[
+        input.parserVersion,NATIVE_SESSION_METRIC_PROJECTION_VERSION,input.sourceId,
+        ...(input.installationId?[input.installationId]:[]),
+        ...(input.from?[input.from]:[]),
+        ...(input.to?[input.to]:[]),
+      ]
+      const row=this.executor.db.prepare(`${cte}
+        SELECT COUNT(*) AS eligibleSessions,
+          COALESCE(SUM(CASE WHEN metric_status='complete' THEN 1 ELSE 0 END),0) AS readySessions,
+          COALESCE(SUM(CASE WHEN metric_status='missing' THEN 1 ELSE 0 END),0) AS missingSessions,
+          COALESCE(SUM(CASE WHEN metric_status='stale' THEN 1 ELSE 0 END),0) AS staleSessions,
+          COALESCE(SUM(CASE WHEN metric_status='partial' THEN 1 ELSE 0 END),0) AS partialSessions,
+          COALESCE(SUM(CASE WHEN metric_status='complete' THEN interaction_count ELSE 0 END),0) AS interactionCount,
+          COALESCE(SUM(CASE WHEN metric_status='complete' THEN tool_call_count ELSE 0 END),0) AS toolCallCount,
+          COALESCE(SUM(CASE WHEN metric_status='complete' THEN tool_result_count ELSE 0 END),0) AS toolResultCount,
+          COALESCE(SUM(CASE WHEN metric_status='complete' THEN tool_error_count ELSE 0 END),0) AS toolErrorCount,
+          COALESCE(SUM(CASE WHEN metric_status='complete' THEN error_count ELSE 0 END),0) AS errorCount,
+          CASE WHEN SUM(CASE WHEN metric_status='complete' THEN 1 ELSE 0 END)=0
+             OR SUM(CASE WHEN metric_status='complete' AND input_tokens IS NULL THEN 1 ELSE 0 END)>0
+               THEN NULL
+               ELSE SUM(CASE WHEN metric_status='complete' THEN input_tokens ELSE 0 END)
+          END AS inputTokens,
+          CASE WHEN SUM(CASE WHEN metric_status='complete' THEN 1 ELSE 0 END)=0
+             OR SUM(CASE WHEN metric_status='complete' AND output_tokens IS NULL THEN 1 ELSE 0 END)>0
+               THEN NULL
+               ELSE SUM(CASE WHEN metric_status='complete' THEN output_tokens ELSE 0 END)
+          END AS outputTokens
+        FROM selected
+      `).get(...params) as Omit<NativeSessionMetricOverview,'sourceId'|'totals'|'tools'|'toolsTruncated'> & {
+        interactionCount:number;toolCallCount:number;toolResultCount:number;
+        toolErrorCount:number;errorCount:number;inputTokens:number|null;outputTokens:number|null
+      }
+      const rows=this.executor.db.prepare(`${cte}
+        SELECT tool.native_tool_name AS nativeToolName,
+          SUM(tool.call_count) AS callCount,
+          SUM(tool.result_count) AS resultCount,
+          SUM(tool.error_count) AS errorCount,
+          SUM(tool.total_duration_ms) AS totalDurationMs,
+          COUNT(*) AS sessionCount
+        FROM selected
+        JOIN native_session_tool_metrics AS tool
+          ON tool.source_id=selected.source_id
+         AND tool.installation_id=selected.installation_id
+         AND tool.native_session_id=selected.native_session_id
+        WHERE selected.metric_status='complete'
+        GROUP BY tool.native_tool_name
+        ORDER BY callCount DESC,tool.native_tool_name ASC LIMIT 257
+      `).all(...params) as NativeSessionMetricOverview['tools']
+      return {
+        sourceId:input.sourceId,
+        eligibleSessions:row.eligibleSessions,readySessions:row.readySessions,
+        missingSessions:row.missingSessions,staleSessions:row.staleSessions,
+        partialSessions:row.partialSessions,
+        totals:{
+          interactionCount:row.interactionCount,toolCallCount:row.toolCallCount,
+          toolResultCount:row.toolResultCount,toolErrorCount:row.toolErrorCount,
+          errorCount:row.errorCount,inputTokens:row.inputTokens,outputTokens:row.outputTokens,
+        },
+        tools:rows.slice(0,256),
+        toolsTruncated:rows.length>256,
       }
     })
   }
