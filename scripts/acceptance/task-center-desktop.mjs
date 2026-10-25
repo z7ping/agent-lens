@@ -302,7 +302,15 @@ async function inspect(win, viewport, theme) {
       presentation: {
         toolGroupCount: toolGroups.length,
         expandedToolCallCount: toolFacts.filter(item => item instanceof HTMLDetailsElement && item.open).length,
-        invalidToolSections: toolFacts.filter(item => item.querySelectorAll('[data-tool-section="input"]').length !== 1 || item.querySelectorAll('[data-tool-section="output"]').length !== 1).length,
+        // Compact ToolRow mounts input/output lazily only after disclosure.
+        // Absent sections are valid while closed; an expanded row must have both.
+        invalidToolSections: toolFacts.filter(item => {
+          const inputCount = item.querySelectorAll('[data-tool-section="input"]').length
+          const outputCount = item.querySelectorAll('[data-tool-section="output"]').length
+          return !(item instanceof HTMLDetailsElement && !item.open
+            && inputCount === 0 && outputCount === 0)
+            && (inputCount !== 1 || outputCount !== 1)
+        }).length,
         closedToolGroupCount: toolGroups.filter(group => group.tagName === 'DETAILS' && !group.open).length,
         toolFactCount: toolFacts.length,
         hiddenToolFactCount: toolFacts.filter(item => !visible(item)).length,
@@ -355,7 +363,8 @@ async function inspect(win, viewport, theme) {
   if (p.toolGroupCount > 0 && p.closedToolGroupCount > 0) errors.push(`初始 Tool Group 有 ${p.closedToolGroupCount}/${p.toolGroupCount} 个被额外折叠`)
   if (p.toolFactCount > 0 && p.hiddenToolFactCount > 0) errors.push(`初始状态存在 ${p.hiddenToolFactCount}/${p.toolFactCount} 条 Tool Call 事实不可见`)
   for (const [index, row] of p.toolRowsLayout.entries()) {
-    const expectedColumns = 4
+    // Current ToolRow: kind glyph + name + preview + status + disclosure.
+    const expectedColumns = 5
     if (row.columnCount !== expectedColumns) {
       errors.push(`Tool Row #${index + 1} ${row.kind} 单行摘要应为 ${expectedColumns} 列：${row.columns}`)
     }
@@ -377,6 +386,36 @@ async function inspect(win, viewport, theme) {
   if (p.liveOutputCount > 0 && Number.isFinite(liveMax) && liveMax > 420) errors.push(`Tool 输出局部高度过高：${p.toolOutputMaxHeight}`)
   if (p.expandedErrorToolCount > 0) errors.push(`失败的 Tool 也必须默认收起：${p.expandedErrorToolCount}`)
   return { viewport, theme, value, errors, ok: errors.length === 0 }
+}
+
+async function verifyToolDisclosureSections(win) {
+  // This must test real lazy-rendered sections, not relax the acceptance
+  // contract just because a compact Tool is collapsed by default.
+  const result = await withTimeout(win.webContents.executeJavaScript(`(async () => {
+    const row = document.querySelector('[data-tool-fact="true"]')
+    if (!(row instanceof HTMLDetailsElement)) {
+      return { checked:false, expanded:false, inputs:0, outputs:0, restored:false }
+    }
+    const initiallyClosed = !row.open
+    if (initiallyClosed) row.querySelector(':scope > summary')?.click()
+    for(let i=0;i<20 && !row.querySelector('[data-tool-section="input"]');i++){
+      await new Promise(resolve => setTimeout(resolve,25))
+    }
+    const inputs = row.querySelectorAll('[data-tool-section="input"]').length
+    const outputs = row.querySelectorAll('[data-tool-section="output"]').length
+    const expanded = row.open
+    if (initiallyClosed) row.querySelector(':scope > summary')?.click()
+    await new Promise(resolve => requestAnimationFrame(resolve))
+    return { checked:true, initiallyClosed, expanded, inputs, outputs, restored:!row.open }
+  })()`),3_000,'Tool Row 展开后真实入参/出参分区')
+  const errors = []
+  if (!result.checked) errors.push('缺少可展开 Tool Row')
+  if (result.checked && !result.initiallyClosed) errors.push('Tool Row 初始未默认收起')
+  if (result.checked && (!result.expanded || result.inputs !== 1 || result.outputs !== 1)) {
+    errors.push('Tool Row 展开后缺少唯一的入参或出参分区')
+  }
+  if (result.checked && !result.restored) errors.push('Tool Row 检查后未恢复折叠')
+  return {...result,errors,ok:errors.length===0}
 }
 
 async function runInspectorReturn(win) {
@@ -667,6 +706,11 @@ try {
         if (!report.sidebarRailToggle.ok) report.ok = false
         await persistReport()
         for (const error of report.sidebarRailToggle.errors) console.error(`  - ${error}`)
+        diagnostic.phase = 'tool-disclosure'
+        report.toolDisclosure = await verifyToolDisclosureSections(win)
+        if (!report.toolDisclosure.ok) report.ok = false
+        await persistReport()
+        for (const error of report.toolDisclosure.errors) console.error(`  - ${error}`)
         diagnostic.phase = 'inspector-return'
         report.inspectorReturn = await withTimeout(runInspectorReturn(win), 10_000, 'Inspector 返回位置与焦点验收')
         if (!report.inspectorReturn.ok) report.ok = false
