@@ -41,6 +41,13 @@ test('native session catalog remains metadata-only, stable and independently pag
     assert.equal((await catalog.get({sourceId:'pi',installationId:'local-pi',nativeSessionId:'b'}))?.lastActivityAt,
       '2026-10-22T00:00:00Z')
 
+    assert.deepEqual((await catalog.query({search:'generated SESSION',locationKind:'native'}))
+      .items.map(item=>item.nativeSessionId),['b'])
+    assert.deepEqual((await catalog.query({search:'no-such-private-body'})).items,[])
+    assert.deepEqual((await catalog.query({search:'%' })).items,[])
+    assert.deepEqual((await catalog.query({search:'a', locationKind:'native'}))
+      .items.map(item=>item.nativeSessionId),['a'])
+
     const byNativeId = await catalog.getByReviewSessionId(
       nativeReviewSessionId('pi','local-pi','b'),
     )
