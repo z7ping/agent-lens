@@ -103,7 +103,7 @@ export interface NativeSessionMetricsStore {
    */
   overview?(query:NativeSessionMetricOverviewQuery):Promise<NativeSessionMetricOverview>
   /** SQL-only bounded work discovery. Never fetch or persist Source payloads. */
-  nextPending?(query:{sourceId:string;parserVersion:string}):Promise<NativeMetricPendingSession|null>
+  listPending?(query:{sourceId:string;parserVersion:string}):Promise<NativeMetricPendingSession[]>
   /** Explicit invalidation on source/parse/policy change or user deletion. */
   invalidate(identity: {
     sourceId: string; installationId: string; nativeSessionId: string
