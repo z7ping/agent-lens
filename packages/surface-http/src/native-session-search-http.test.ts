@@ -130,3 +130,41 @@ test('native body search fails closed on drift and never claims a completed scan
     assert.equal((await fetch(url,{method:'POST'})).status,405)
   }finally{await app.dispose()}
 })
+
+test('native body search reports budgets instead of silently omitting matches',async()=>{
+  let overflow:'hits'|'text'='hits'
+  const catalog={
+    async query(){return {items:[entry('A')],hasMore:false}},
+  } as unknown as NativeSessionCatalogStore
+  const reader:NativeSessionWindowReader={
+    async read(){
+      const count=overflow==='hits'?65:1
+      return {
+        state:'available',
+        observations:Array.from({length:count},(_,i)=>({
+          kind:'message.assistant' as const,capturedAt:at,
+          payload:{text:overflow==='hits'?('hello #'+i):('x'.repeat(70*1024)+' hello')},
+          identityHints:{nativeSessionId:'A'},
+        })),
+        observationRecordIds:Array.from({length:count},(_,i)=>'r-'+i),
+        evidenceCandidates:[],
+        nextCursor:{offset:64,sequence:1,fileIdentity:'inode-A'},
+        hasMore:false,pendingTail:false,
+      }
+    },
+  }
+  const storage={health:async()=>({ok:true}),nativeSessionCatalog:catalog} as unknown as StorageService
+  const policy={isSourceEnabled:()=>true} as CapturePolicyService
+  const app=await startHttpSurface(storage,{port:0,nativeSessionReader:reader,capturePolicy:policy})
+  try{
+    const url=`http://${app.host}:${app.port}/api/v1/native-sessions/search?q=hello`
+    assert.deepEqual(await (await fetch(url)).json(),{
+      state:'unsupported',reason:'native-search-matches-budget',
+    })
+    overflow='text'
+    assert.deepEqual(await (await fetch(url)).json(),{
+      state:'unsupported',reason:'native-search-text-budget',
+    })
+  }finally{await app.dispose()}
+})
+
