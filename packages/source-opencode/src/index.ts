@@ -832,6 +832,10 @@ export const openCodeSourceDefinition: SourceDefinition = {
   detect: detectOpenCode,
   declareCapabilities: declareOpenCodeCapabilities,
   rawRecovery: databaseRawRecovery,
+  // OpenCode history and Runtime Tail both originate from its own SQLite
+  // part/message/session state. No Hook-only inbox events are claimed here.
+  // The contract covers current Source state, not deleted/rewritten row history.
+  nativeSessionCoverageComplete: true,
   async *discoverNativeSessions(ctx) {
     const root = ctx.installation.dataRoot ?? ctx.installation.configRoot
     if (!root || ctx.abortSignal.aborted) return
