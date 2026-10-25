@@ -44,6 +44,21 @@ test('native metric aggregation reuses normalized Tool/Usage semantics across pa
   }
 })
 
+test('partial Token usage does not misreport a sum as fully observed',()=>{
+  const a=new NativeSessionMetricAccumulator()
+  a.add(candidate('usage',{inputTokens:10,outputTokens:20}))
+  a.add(candidate('usage',{outputTokens:30}))
+  const snapshot=a.snapshot(input)
+  assert.equal(snapshot.inputTokens,null,'missing input in any usage record means unknown')
+  assert.equal(snapshot.outputTokens,50)
+  const overflow=new NativeSessionMetricAccumulator()
+  overflow.add(candidate('usage',{inputTokens:Number.MAX_SAFE_INTEGER,outputTokens:1}))
+  overflow.add(candidate('usage',{inputTokens:1,outputTokens:2}))
+  const result=overflow.snapshot(input)
+  assert.equal(result.inputTokens,null,'overflow must never persist an imprecise integer')
+  assert.equal(result.outputTokens,3)
+})
+
 test('native coverage is explicitly partial when source tool attribution is missing',()=>{
   const a=new NativeSessionMetricAccumulator()
   a.add(candidate('tool.call',{input:'private secret'}))
