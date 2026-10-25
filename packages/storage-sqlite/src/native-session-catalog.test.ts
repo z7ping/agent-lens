@@ -180,3 +180,42 @@ test('native session catalog remains metadata-only, stable and independently pag
     storage.close()
   }
 })
+
+test('Native-only rail excludes a durable Legacy owner even before any Review Observation exists',async()=>{
+  const storage=new SqliteStorageService({path:':memory:'})
+  await storage.migrate()
+  try{
+    const catalog=storage.nativeSessionCatalog
+    const legacy=location('legacy-without-observation','2026-10-25T15:00:00Z')
+    const native=location('native-verified','2026-10-25T14:00:00Z')
+    const unclaimed=location('unclaimed-catalog-only','2026-10-25T13:00:00Z')
+    for(const row of [legacy,native,unclaimed])await catalog.upsert(row)
+    assert.equal(await catalog.claimLegacyWrite(legacy),'legacy')
+    assert.equal(await catalog.claimNativeOnlyWrite(native),true)
+    // A metadata-only empty Review is not proof that a Legacy claim can be
+    // replaced by a synthetic Native-only Task Center/search result.
+    const visible=await catalog.query({
+      locationKind:'native',onlyWithoutLegacyReview:true,limit:1,
+    })
+    assert.deepEqual(visible.items.map(row=>row.nativeSessionId),['native-verified'])
+    assert.equal(visible.hasMore,true)
+    const rest=await catalog.query({
+      locationKind:'native',onlyWithoutLegacyReview:true,limit:2,
+      before: {
+        sourceId:visible.items[0]!.sourceId,
+        installationId:visible.items[0]!.installationId,
+        nativeSessionId:visible.items[0]!.nativeSessionId,
+        locationKind:'native',
+        lastActivityAt:visible.items[0]!.lastActivityAt,
+      },
+    })
+    assert.deepEqual(rest.items.map(row=>row.nativeSessionId),['unclaimed-catalog-only'])
+    const raw=await catalog.query({locationKind:'native'})
+    assert.deepEqual(raw.items.map(row=>row.nativeSessionId),[
+      'legacy-without-observation','native-verified','unclaimed-catalog-only',
+    ])
+    assert.equal(await catalog.getByReviewSessionId(nativeReviewSessionId(
+      legacy.sourceId,legacy.installationId,legacy.nativeSessionId,
+    ))?.then(row=>row?.nativeSessionId),'legacy-without-observation')
+  }finally{await storage.close()}
+})
