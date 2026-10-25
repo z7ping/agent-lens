@@ -126,6 +126,9 @@ export class NativeSessionReader {
         }
         throw error
       }
+      if (page.records.length > 16) {
+        return {state:'unsupported',reason:'native-hook-archive-page-too-large'}
+      }
       hasMore = page.hasMore
       nextCursor = page.nextCursor
       legacySinglePage = !source.readArchivedNativeHooksPage
