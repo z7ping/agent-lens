@@ -47,6 +47,7 @@ import {
 } from '@agent-lens/runtime-cordis'
 import {
   archiveAcceptedHookInboxFile,
+  prepareHookInboxArchive,
   nativeHookArchiveEnabled,
   archivedHookInboxRecordPath,
   readArchivedHookInboxPage,
@@ -581,16 +582,20 @@ export async function startClaudeRuntimeCapture(
           const originalBytes = await readFile(filePath)
           const envelope = parseRuntimeEnvelope(originalBytes.toString('utf8'), fileName)
           const record = runtimeRecord(envelope, filePath, ctx)
+          // Seal the SAME original Hook bytes before any writer can accept
+          // or reject this event. Failed delivery keeps inbox for retry and
+          // still leaves a verified Source-owned single-copy archive.
+          const archiveInput = nativeHookArchiveEnabled() && record.sourceSessionNativeId
+            ? {
+                inbox,fileName,nativeSessionId:record.sourceSessionNativeId,
+                installationId:ctx.installation.id,
+                expectedSha256:createHash('sha256').update(originalBytes).digest('hex'),
+              }
+            : null
+          if (archiveInput) await prepareHookInboxArchive(archiveInput)
           await emitter.emit(record)
-          if (nativeHookArchiveEnabled() && record.sourceSessionNativeId) {
-            await archiveAcceptedHookInboxFile({
-              inbox,fileName,nativeSessionId:record.sourceSessionNativeId,
-              installationId:ctx.installation.id,
-              expectedSha256:createHash('sha256').update(originalBytes).digest('hex'),
-            })
-          } else {
-            await unlink(filePath)
-          }
+          if (archiveInput) await archiveAcceptedHookInboxFile(archiveInput)
+          else await unlink(filePath)
         } catch {
           break
         }

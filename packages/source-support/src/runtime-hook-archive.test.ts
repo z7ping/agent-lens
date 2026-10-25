@@ -362,3 +362,29 @@ test('prepared Hook archive stays one-copy and inbox remains pending until emitt
     assert.equal(await readFile(`${target}.sha256`,'utf8'),expectedSha256)
   }finally{await rm(inbox,{recursive:true,force:true})}
 })
+
+test('Hook emitter failure after preparation leaves replayable original; retry acknowledges exactly once',async()=>{
+  const inbox=await mkdtemp(join(tmpdir(),'al-hook-delivery-retry-'))
+  const input={inbox,fileName:'hook.json',nativeSessionId:'S1',installationId:'i1'}
+  const payload=JSON.stringify({id:'H1',event:{session_id:'S1',action:'approve'}})
+  try{
+    await writeFile(join(inbox,input.fileName),payload)
+    const prepared=await prepareHookInboxArchive(input)
+    await assert.rejects(async()=>{
+      await prepareHookInboxArchive(input)
+      // The runtime emitter may fail after accepting no new SQL event.
+      throw Error('emitter unavailable')
+    },/emitter unavailable/)
+    assert.equal(await readFile(join(inbox,input.fileName),'utf8'),payload)
+    assert.equal(await readFile(prepared,'utf8'),payload)
+    assert.deepEqual((await readArchivedHookInboxPage({
+      inbox,nativeSessionId:input.nativeSessionId,installationId:input.installationId,
+    })).items,[{fileName:input.fileName,content:payload}])
+    // A subsequent successful emitter run may acknowledge the same original
+    // after verifying it again, without storing any second Hook payload.
+    await prepareHookInboxArchive(input)
+    await archiveAcceptedHookInboxFile(input)
+    await assert.rejects(lstat(join(inbox,input.fileName)),{code:'ENOENT'})
+    assert.equal(await readFile(prepared,'utf8'),payload)
+  }finally{await rm(inbox,{recursive:true,force:true})}
+})
