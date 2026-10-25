@@ -65,14 +65,17 @@ test('前台让出点在取消后立即结束', async () => {
   assert.equal(controller.signal.aborted, true)
 })
 
-test('native fast capture waits on independent source/installation ownership gates', () => {
-  const a={sourceId:'pi',installationId:'install-a'}
-  const b={sourceId:'pi',installationId:'install-b'}
-  const c={sourceId:'codex',installationId:'install-c'}
-  const targets=[a,b,c]
-  assert.deepEqual(nativeCaptureStartupBatches(targets,false),[targets])
-  assert.deepEqual(nativeCaptureStartupBatches(targets,true),[[a],[b],[c]])
-  assert.notEqual(nativeCaptureStartupBatches(targets,true)[0]?.[0]?.installationId,
-    nativeCaptureStartupBatches(targets,true)[1]?.[0]?.installationId)
-  assert.deepEqual(targets,[a,b,c],'source ordering is unchanged')
+test('native certified installations get individual ownership gates; Legacy targets stay batched',()=>{
+  const a={sourceId:'pi',installationId:'install-a',certified:true}
+  const b={sourceId:'pi',installationId:'install-b',certified:true}
+  const c={sourceId:'codex',installationId:'install-c',certified:false}
+  const d={sourceId:'claude',installationId:'install-d',certified:false}
+  const e={sourceId:'pi',installationId:'install-e',certified:true}
+  const f={sourceId:'hermes',installationId:'install-f',certified:false}
+  const targets=[a,b,c,d,e,f]
+  assert.deepEqual(nativeCaptureStartupBatches(targets,()=>false),[targets])
+  assert.deepEqual(nativeCaptureStartupBatches(targets,target=>target.certified),
+    [[a],[b],[c,d],[e],[f]])
+  assert.deepEqual(nativeCaptureStartupBatches([] as typeof targets,()=>true),[])
+  assert.deepEqual(targets,[a,b,c,d,e,f],'Source order and inputs are immutable')
 })
