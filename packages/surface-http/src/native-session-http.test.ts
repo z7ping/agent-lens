@@ -268,3 +268,144 @@ test('native session HTTP bounds serialized payloads even when normalization is 
     await surface.dispose()
   }
 })
+
+
+test('native complete-turn pagination never skips a user boundary and keeps global ordinals', async () => {
+  const at = '2026-10-25T00:00:00Z'
+  const rows = [
+    {kind:'session.lifecycle',payload:{event:'session.started'}},
+    {kind:'message.user',payload:{text:'first'}},
+    {kind:'tool.call',payload:{callId:'tool-1',nativeToolName:'shell'}},
+    {kind:'tool.result',payload:{callId:'tool-1',success:true,output:'ok'}},
+    {kind:'message.assistant',payload:{text:'completed first'}},
+    {kind:'message.user',payload:{text:'second'}},
+    {kind:'message.assistant',payload:{text:'completed second'}},
+  ] as const
+  const calls: number[] = []
+  const reader: NativeSessionWindowReader = {
+    async read(query) {
+      const start = query.cursor?.offset ?? 0
+      calls.push(start)
+      const current = rows.slice(start/64, start/64+2)
+      const nextOffset = start+current.length*64
+      return {
+        state:'available', observations:current.map((row,index)=>({
+          kind: row.kind, capturedAt:at, sourceSequence: start/64 + index,
+          identityHints:{nativeSessionId:'S1'},payload:row.payload,
+        })),
+        observationRecordIds:current.map((_,index)=>'r'+(start/64+index)),
+        observationCursors:current.map((_,index)=>({
+          offset:start+index*64,sequence:start/64+index,fileIdentity:'1:2',
+        })),
+        evidenceCandidates:[],nextCursor:{offset:nextOffset,sequence:nextOffset/64,fileIdentity:'1:2'},
+        hasMore:nextOffset<rows.length*64,pendingTail:false,
+      }
+    },
+  }
+  const surface=await startHttpSurface(noopStorage,{port:0,nativeSessionReader:reader})
+  const base=`http://${surface.host}:${surface.port}/api/v1/native-sessions/window?sourceId=pi&installationId=inst&nativeSessionId=S1&format=review-turns`
+  try {
+    const first=await fetch(base)
+    assert.equal(first.status,200)
+    const one=await first.json() as {
+      state:string;pagingUnit:string;boundaryIntegrity:string;hasMore:boolean;nextCursor:string;
+      interactions:Array<{ordinal:number;nodes:Array<{type:string;text?:string;status?:string;observationIds:string[]}>}>
+    }
+    assert.equal(one.state,'available')
+    assert.equal(one.pagingUnit,'interaction')
+    assert.equal(one.boundaryIntegrity,'complete')
+    assert.equal(one.hasMore,true)
+    assert.equal(one.interactions.length,1)
+    assert.equal(one.interactions[0]?.ordinal,1)
+    const tool=one.interactions[0]?.nodes.find(node=>node.type==='tool')
+    assert.equal(tool?.status,'success')
+    assert.equal(tool?.observationIds.length,2)
+    assert.equal(one.interactions[0]?.nodes.find(node=>node.text==='second'),undefined)
+    const nextCursor=JSON.parse(Buffer.from(one.nextCursor,'base64url').toString('utf8')) as {
+      offset:number;sequence:number;turnOrdinal:number;mode:string
+    }
+    assert.deepEqual(nextCursor,{offset:320,sequence:5,fileIdentity:'1:2',mode:'review-turns',turnOrdinal:2})
+    const second=await fetch(`${base}&cursor=${one.nextCursor}`)
+    const two=await second.json() as typeof one
+    assert.equal(second.status,200)
+    assert.equal(two.boundaryIntegrity,'complete')
+    assert.equal(two.hasMore,false)
+    assert.equal(two.interactions.length,1)
+    assert.equal(two.interactions[0]?.ordinal,2)
+    assert.equal(two.interactions[0]?.nodes.find(node=>node.text==='second')?.type,'message')
+    assert.equal(two.interactions[0]?.nodes.find(node=>node.text==='first'),undefined)
+    assert.deepEqual(calls,[0,128,256,320])
+  } finally { await surface.dispose() }
+})
+
+test('complete-turn cursor refuses mismatched mode and an arbitrary mid-turn offset', async () => {
+  const reader: NativeSessionWindowReader = { async read(query) {
+    const start=query.cursor?.offset ?? 0
+    return {
+      state:'available',
+      observations:[{kind: start===0?'message.user' as const:'tool.result' as const,
+        capturedAt:'2026-10-25T00:00:00Z',payload:{text:'test'},identityHints:{nativeSessionId:'S1'}}],
+      observationRecordIds:['r'+start],
+      observationCursors:[{offset:start,sequence:start/64,fileIdentity:'1:2'}],
+      evidenceCandidates:[],nextCursor:{offset:start+64,sequence:start/64+1,fileIdentity:'1:2'},
+      hasMore:false,pendingTail:false,
+    }
+  }}
+  const surface=await startHttpSurface(noopStorage,{port:0,nativeSessionReader:reader})
+  const base=`http://${surface.host}:${surface.port}/api/v1/native-sessions/window?sourceId=pi&installationId=inst&nativeSessionId=S1`
+  try {
+    const rawCursor=encodeNativeSessionCursor({offset:64,sequence:1,fileIdentity:'1:2'})
+    const turnCursor=encodeNativeSessionCursor({
+      offset:64,sequence:1,fileIdentity:'1:2',mode:'review-turns',turnOrdinal:2,
+    })
+    assert.equal((await fetch(`${base}&format=review-turns&cursor=${rawCursor}`)).status,400)
+    assert.equal((await fetch(`${base}&format=review&cursor=${turnCursor}`)).status,400)
+    const invalid=await fetch(`${base}&format=review-turns&cursor=${turnCursor}`)
+    assert.equal(invalid.status,200)
+    assert.deepEqual(await invalid.json(),{
+      state:'unsupported',reason:'native-review-cursor-not-turn-boundary',
+    })
+  } finally { await surface.dispose() }
+})
+
+test('complete-turn reader fails closed on pending tool across users and excessive turn length', async () => {
+  for (const mode of ['pending-tool','budget','tail','missing-rewind'] as const) {
+    let calls=0
+    const reader: NativeSessionWindowReader={async read(query){
+      calls++
+      const n=query.cursor?.sequence ?? 0
+      const isSecond=mode==='pending-tool' && n>0
+      const kind=isSecond?'message.user' as const:n===0?'message.user' as const:'tool.call' as const
+      const observation={
+        kind:mode==='pending-tool' && n===0?'tool.call' as const:kind,
+        capturedAt:'2026-10-25T00:00:00Z',
+        identityHints:{nativeSessionId:'S1'},
+        payload:{callId:'open-tool',text:'data'},
+      }
+      const offset=n*64
+      return {
+        state:'available',observations:[observation],observationRecordIds:['r'+n],
+        ...(mode==='missing-rewind'?{}:{observationCursors:[{offset,sequence:n,fileIdentity:'1:2'}]}),
+        evidenceCandidates:[],
+        nextCursor:{offset:offset+64,sequence:n+1,fileIdentity:'1:2'},
+        hasMore:mode==='budget'||(mode==='pending-tool'&&n===0),
+        pendingTail:mode==='tail',
+      }
+    }}
+    const surface=await startHttpSurface(noopStorage,{port:0,nativeSessionReader:reader})
+    try {
+      const response=await fetch(`http://${surface.host}:${surface.port}/api/v1/native-sessions/window?sourceId=pi&installationId=inst&nativeSessionId=S1&format=review-turns`)
+      assert.equal(response.status,200)
+      const payload=await response.json() as {state:string;reason?:string;interactions?:unknown[]}
+      assert.equal(payload.state,'unsupported')
+      assert.equal(payload.reason,({
+        'pending-tool':'native-review-cross-turn-tool-pending',
+        budget:'native-review-turn-exceeds-budget',
+        tail:'native-review-turn-pending-tail',
+        'missing-rewind':'native-review-record-boundaries-unavailable',
+      })[mode])
+      assert.equal(payload.interactions,undefined)
+      if(mode==='budget') assert.equal(calls,8)
+    } finally { await surface.dispose() }
+  }
+})
