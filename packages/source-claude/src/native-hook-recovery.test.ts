@@ -40,6 +40,13 @@ test('claude retrieves only its matching durable original Hook sidecar records',
     },ctx)).state,'drifted')
     const normalized=await claudeSourceDefinition.normalize(rows[0]!,{host,installation})
     assert.ok(Array.isArray(normalized.observations))
+    const permission=await claudeSourceDefinition.normalize({
+      ...rows[0]!,payload:{runtimeEvent:{hook_event_name:'PermissionRequest',
+        session_id:'S1',tool_use_id:'call-1',tool_name:'Read'},
+        session:{nativeSessionId:'S1'}},
+    },{host,installation})
+    assert.equal(permission.observations[0]?.kind,'permission.request')
+    assert.equal(permission.observations[0]?.nativeCallId,'call-1')
     assert.deepEqual(await claudeSourceDefinition.readArchivedNativeHooks!('other-session',ctx),[])
     await writeFile(join(inbox,'wrong.json'),JSON.stringify({id:'wrong-hook',capturedAt:at,
       event:{session_id:'S2',hook_event_name:'PreToolUse'}}))

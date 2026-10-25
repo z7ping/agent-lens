@@ -856,7 +856,7 @@ function normalizeRuntime(record: SourceRecord): ObservationCandidate | null {
       nativeToolName: toolName,
       input: event.tool_input ?? {},
       ...(turnId ? { turnId } : {}),
-    }, { identity })
+    }, { identity, ...(callId ? { nativeCallId: callId } : {}) })
   }
   if (hookName === 'PreCompact' || hookName === 'PostCompact') {
     return candidate(record, envelope, 'context.compaction', {
