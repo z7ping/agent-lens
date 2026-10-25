@@ -769,7 +769,20 @@ function normalizeHookEnvelope(record: SourceRecord, envelope: HermesHookEnvelop
     return [candidate(record, envelope, 'session.lifecycle', { event: 'session.started' })]
   }
   if (eventName === 'on_session_end' || eventName === 'session_end') {
-    return [candidate(record, envelope, 'session.lifecycle', { event: 'session.ended' })]
+    // Hermes emits on_session_end at the end of EVERY run_conversation call,
+    // not exclusively when the chat identity is finalized. Treating this
+    // observer Hook as session.ended would misreport an active chat as closed.
+    return [candidate(record, envelope, 'session.lifecycle', {
+      event: event.failed === true ? 'turn.failed'
+        : event.interrupted === true ? 'turn.interrupted' : 'turn.ended',
+      ...(typeof event.completed === 'boolean' ? {completed:event.completed} : {}),
+      ...(typeof event.failed === 'boolean' ? {failed:event.failed} : {}),
+      ...(typeof event.interrupted === 'boolean' ? {interrupted:event.interrupted} : {}),
+      ...(stringField(event, 'turn_id') ? {turnId:stringField(event, 'turn_id')} : {}),
+      ...(stringField(event, 'task_id') ? {taskId:stringField(event, 'task_id')} : {}),
+      ...(stringField(event, 'turn_exit_reason', 'reason')
+        ? {reason:stringField(event, 'turn_exit_reason', 'reason')} : {}),
+    })]
   }
   if (eventName === 'on_session_finalize' || eventName === 'on_session_reset') {
     return [candidate(record, envelope, 'session.lifecycle', {
