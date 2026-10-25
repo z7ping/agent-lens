@@ -118,6 +118,7 @@ export function projectNativeReviewWindow(input: NativeReviewProjectionInput): N
       logicalSessionId: sessionId,
       sourceSessionId,
       ...(candidate.nativeEventId ? { nativeEventId: candidate.nativeEventId } : {}),
+      ...(candidate.nativeCallId ? { nativeCallId: candidate.nativeCallId } : {}),
       ...(candidate.nativeParentEventId ? { nativeParentEventId: candidate.nativeParentEventId } : {}),
       ...(candidate.sourceSequence === undefined ? {} : { sourceSequence: candidate.sourceSequence }),
       ...(candidate.occurredAt ? { occurredAt: candidate.occurredAt } : {}),
