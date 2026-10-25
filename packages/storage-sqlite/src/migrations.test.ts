@@ -11,8 +11,8 @@ test('storage migrations keep heavy indexes out of startup and maintenance creat
     const migrations = storage.db.prepare(
       'SELECT version, name FROM schema_migrations ORDER BY version',
     ).all() as Array<{ version: number; name: string }>
-    assert.equal(migrations.at(-1)?.version, 35)
-    assert.equal(migrations.at(-1)?.name, 'native-review-identity-index')
+    assert.equal(migrations.at(-1)?.version, 36)
+    assert.equal(migrations.at(-1)?.name, 'native-session-write-claims')
 
     const indexesBefore = storage.db.prepare("PRAGMA index_list('observations')").all() as Array<{ name: string }>
     const namesBefore = new Set(indexesBefore.map(item => item.name))
@@ -259,7 +259,7 @@ test('v27 从已有 v26 journal 回填 first/latest Entity Head 并补全 18 Roo
     await storage.migrate()
     assert.equal(
       (storage.db.prepare('SELECT COALESCE(MAX(version), 0) AS version FROM schema_migrations').get() as { version: number }).version,
-      35,
+      36,
     )
 
     const head = storage.db.prepare(`

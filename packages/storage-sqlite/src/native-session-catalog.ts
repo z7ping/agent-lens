@@ -111,6 +111,73 @@ export class SqliteNativeSessionCatalog {
     })
   }
 
+  async hasNativeOnlyWriteClaim(input: {
+    sourceId: string; installationId: string; nativeSessionId: string
+  }): Promise<boolean> {
+    return this.executor.run(() => Boolean(this.executor.db.prepare(`
+      SELECT 1 FROM native_session_write_claims
+      WHERE source_id=? AND installation_id=? AND native_session_id=?
+    `).get(input.sourceId,input.installationId,input.nativeSessionId)))
+  }
+
+  /**
+   * Atomic read/write eligibility check. Never claim sessions with existing
+   * event copies, even if their source_sessions row has no observations.
+   * This only records ownership: it deliberately does not skip Source writes
+   * before runtime consumers are audited and switched.
+   */
+  async claimNativeOnlyWrite(input: {
+    sourceId: string; installationId: string; nativeSessionId: string
+    filePath: string; fileIdentity: string
+  }): Promise<boolean> {
+    if (!input.sourceId || !input.installationId || !input.nativeSessionId
+      || !isAbsolute(input.filePath) || !input.fileIdentity) {
+      throw new Error('Invalid native write ownership identity')
+    }
+    return this.executor.run(() => {
+      this.executor.db.prepare(`
+        INSERT OR IGNORE INTO native_session_write_claims
+          (source_id,installation_id,native_session_id,claimed_at)
+        SELECT ?,?,?,?
+        WHERE EXISTS (
+          SELECT 1 FROM native_session_catalog AS catalog
+          WHERE catalog.source_id=?
+            AND catalog.installation_id=?
+            AND catalog.native_session_id=?
+            AND catalog.location_kind='native'
+            AND catalog.file_path=?
+            AND catalog.file_identity=?
+            AND catalog.review_session_id IS NOT NULL
+        )
+        AND NOT EXISTS (
+          SELECT 1 FROM source_records AS old
+          WHERE old.source_id=?
+            AND old.installation_id=?
+            AND old.source_session_native_id=?
+        )
+        AND NOT EXISTS (
+          SELECT 1 FROM source_sessions AS source_session
+          JOIN observations AS observation
+            ON observation.source_session_id=source_session.id
+          WHERE source_session.source_id=?
+            AND source_session.installation_id=?
+            AND source_session.native_session_id=?
+        )
+      `).run(
+        input.sourceId,input.installationId,input.nativeSessionId,new Date().toISOString(),
+        input.sourceId,input.installationId,input.nativeSessionId,
+        input.filePath,input.fileIdentity,
+        input.sourceId,input.installationId,input.nativeSessionId,
+        input.sourceId,input.installationId,input.nativeSessionId,
+      )
+      const row = this.executor.db.prepare(`
+        SELECT 1 FROM native_session_write_claims
+        WHERE source_id=? AND installation_id=? AND native_session_id=?
+      `).get(input.sourceId,input.installationId,input.nativeSessionId)
+      return Boolean(row)
+    })
+  }
+
   async query(input: NativeSessionCatalogQuery = {}): Promise<{
     items: NativeSessionCatalogEntry[]
     hasMore: boolean
