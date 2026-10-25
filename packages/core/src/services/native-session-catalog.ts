@@ -23,6 +23,8 @@ export interface NativeSessionCatalogQuery {
    * Filter in SQL before pagination, not in the client after LIMIT.
    */
   onlyWithoutLegacyReview?: boolean
+  /** Metadata-only title/source/native ID matching; never searches message bodies. */
+  search?: string
   limit?: number
   before?: {
     lastActivityAt: string
