@@ -96,6 +96,7 @@ export async function handleNativeSessionMetricsRequest(
 /** Resume state is memory-only and scoped to one verified source revision.
  * Tool call IDs used by the accumulator never enter SQLite or HTTP DTOs. */
 export interface NativeMetricRebuildProgress {
+  reviewSessionId:string
   sourceId:string; installationId:string; nativeSessionId:string
   fileIdentity:string; fileSize:number; fileMtimeMs:number; parserVersion:string
   accumulator:NativeSessionMetricAccumulator
@@ -166,6 +167,7 @@ export async function rebuildNativeSessionMetrics(
     if(!cursor) return {state:'unsupported' as const,
       reason:'native-metrics-resume-cursor-missing'}
     return {state:'in_progress' as const,progress:{
+      reviewSessionId:entry.reviewSessionId,
       ...identity,fileIdentity:entry.fileIdentity,fileSize:entry.fileSize,
       fileMtimeMs:entry.fileMtimeMs,parserVersion:source.manifest.parserVersion,
       accumulator,cursor,scannedRecords,
