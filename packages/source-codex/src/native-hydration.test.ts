@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { createHash } from 'node:crypto'
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, rename, rm, stat, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import test from 'node:test'
@@ -109,6 +109,13 @@ test('Codex session page reads native events from active and archived roots with
       assert.equal(second.hasMore, false)
       assert.deepEqual(await read({ filePath: path, nativeSessionId: 'wrong' }, ctx),
         { state: 'drifted', reason: 'native-session-identity-changed' })
+      const original=await stat(path)
+      assert.equal(first.nextCursor.fileIdentity,`${original.dev}:${original.ino}`)
+      const replacement=join(folder,'replacement.jsonl')
+      await writeFile(replacement,[header,message(1),message(2)].join('\n')+'\n')
+      await rename(replacement,path)
+      assert.deepEqual(await read({filePath:path,nativeSessionId:'codex-page',cursor:first.nextCursor},ctx),
+        {state:'drifted',reason:'native-file-identity-changed'})
     }
     assert.equal(checkpointCalls, 0)
   } finally {
