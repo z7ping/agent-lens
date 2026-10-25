@@ -574,11 +574,16 @@ export async function startHermesRuntimeCapture(
         if (stopped || ctx.abortSignal.aborted) break
         const filePath = join(inbox, fileName)
         try {
-          const envelope = parseInboxEnvelope(await readFile(filePath, 'utf8'), fileName)
+          const originalBytes = await readFile(filePath)
+          const envelope = parseInboxEnvelope(originalBytes.toString('utf8'), fileName)
           const record = hookRecord(envelope, filePath, ctx)
           await emitter.emit(record)
           if (nativeHookArchiveEnabled() && record.sourceSessionNativeId) {
-            await archiveAcceptedHookInboxFile({ inbox, fileName, nativeSessionId: record.sourceSessionNativeId, installationId: ctx.installation.id })
+            await archiveAcceptedHookInboxFile({
+              inbox,fileName,nativeSessionId:record.sourceSessionNativeId,
+              installationId:ctx.installation.id,
+              expectedSha256:createHash('sha256').update(originalBytes).digest('hex'),
+            })
           } else {
             await unlink(filePath)
           }
