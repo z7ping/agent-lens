@@ -3,7 +3,7 @@ import { type QueryFilters, type ReviewFilters } from './api'
 import { AgentLensIntegrationModel } from './model-integration'
 import { INITIAL_REVIEW_LIMIT } from './model-base'
 import { translateProduct } from '../i18n/runtime'
-import { nativeReviewDetail, nativeReviewNextPage } from './native-review-adapter'
+import { nativeReviewDetail, nativeReviewNextPage, nativeReviewObservedFileChanges } from './native-review-adapter'
 
 const REVIEW_PAGE_SIZE = 20
 const REVIEW_DETAIL_PAGE_SIZE = 10
@@ -275,6 +275,7 @@ export abstract class AgentLensReviewModel extends AgentLensIntegrationModel {
       review: { ...current, detailLoadingMore: true, error: '' },
     })
     try {
+      let nativeChanges: ReturnType<typeof nativeReviewObservedFileChanges> | undefined
       const next = detail.statisticsCompleteness === 'window'
         ? await (async () => {
             const window = await this.api.nativeReviewById(selectedId, {
@@ -282,6 +283,7 @@ export abstract class AgentLensReviewModel extends AgentLensIntegrationModel {
               turnLimit: 4,
             })
             if (window.state !== 'available') throw new Error(translateProduct('review:local.session.nativeReadUnavailable', { reason: window.reason }))
+            nativeChanges = nativeReviewObservedFileChanges(window, current.fileChanges)
             return nativeReviewNextPage(detail, window)
           })()
         : await this.api.reviewDetail(selectedId, {
@@ -299,6 +301,7 @@ export abstract class AgentLensReviewModel extends AgentLensIntegrationModel {
         review: {
           ...latest,
           detail: mergeReviewDetail(latest.detail, next),
+          ...(nativeChanges ? { fileChanges: nativeChanges } : {}),
           detailLoadingMore: false,
           error: '',
         },
@@ -694,9 +697,10 @@ export abstract class AgentLensReviewModel extends AgentLensIntegrationModel {
       if (!summary) throw new Error(translateProduct('review:local.session.nativeIdentityUnavailable'))
       if (window.state !== 'available') throw new Error(translateProduct('review:local.session.nativeReadUnavailable', { reason: window.reason }))
       const detail = nativeReviewDetail(summary, window)
+      const observedFiles = nativeReviewObservedFileChanges(window)
       this.publish({
         ...this.snapshot,
-        review: { ...this.snapshot.review, detail, detailLoading: false, error: '' },
+        review: { ...this.snapshot.review, detail, fileChanges: observedFiles, detailLoading: false, error: '' },
       })
     } catch (error) {
       if (controller.signal.aborted || generation !== this.detailGeneration
