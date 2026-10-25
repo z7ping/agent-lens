@@ -216,7 +216,11 @@ export function overlayNativeHookEvents(input: {
       : []
   })
   if (!selected.length || !window.interactions.length) {
-    return { ...window, ...(input.truncated ? { hookEventsTruncated: true } : {}) }
+    return {
+      ...window,
+      ...(input.truncated ? { hookEventsTruncated: true } : {}),
+      ...(observations.length ? { hookFactsPartial: true } : {}),
+    }
   }
   const projected = projectNativeReviewWindow({
     sourceId: window.sourceId,
