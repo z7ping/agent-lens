@@ -1,5 +1,27 @@
 import type { ReviewInteractionDto } from './review'
 
+/** Metadata-only native catalog records; never expose Source-owned file locators. */
+export interface NativeSessionSummaryDto {
+  id: string
+  sourceId: string
+  installationId: string
+  nativeSessionId: string
+  locationKind: 'native' | 'archive'
+  lastActivityAt: string
+  title?: string
+}
+
+export interface NativeSessionCatalogResponseDto {
+  items: NativeSessionSummaryDto[]
+  hasMore: boolean
+  nextCursor?: string
+}
+
+export type NativeReviewWindowResponseDto =
+  | NativeReviewWindowDto
+  | { state: 'unavailable' | 'drifted' | 'unsupported'; reason: string }
+
+
 /**
  * Review-format view of an original Agent session page. No SQL observation
  * IDs, source file locators or persisted Evidence relationships are implied.
