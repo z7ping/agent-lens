@@ -85,6 +85,7 @@ export function useReviewSession(model: AgentLensClientModel, embedded: boolean)
     const allowed = !embedded && !filters.projectId
       && filters.status === 'all' && !filters.search.trim()
       && (filters.sourceIds === null || filters.sourceIds.length > 0)
+    const filterChanged = nativeRequestKeyRef.current !== nativeFilterKey
     nativeRequestKeyRef.current = nativeFilterKey
     if (!allowed) {
       setNativeSessions([])
@@ -92,8 +93,13 @@ export function useReviewSession(model: AgentLensClientModel, embedded: boolean)
       return
     }
     const controller = new AbortController()
-    setNativeSessions([])
-    setNativeCursor(undefined)
+    // Ordinary Review/SSE refresh preserves existing rows until new metadata
+    // is ready. Clear only on a genuine filter switch, so read position and
+    // native selection do not flash during foreground/background refresh.
+    if (filterChanged) {
+      setNativeSessions([])
+      setNativeCursor(undefined)
+    }
     const sourceId = filters.sourceIds?.length === 1 ? filters.sourceIds[0] : undefined
     void model.nativeSessions({
       ...(sourceId ? { sourceId } : {}),
@@ -106,8 +112,8 @@ export function useReviewSession(model: AgentLensClientModel, embedded: boolean)
       if (controller.signal.aborted) return
       // Native Reader is an additive capability. It must not suppress the
       // existing persisted Review when catalog is temporarily unavailable.
-      setNativeSessions([])
-      setNativeCursor(undefined)
+      // A temporary Catalog outage must not blank already visible sessions.
+      // New selections still fail closed on the actual Reader when clicked.
     })
     return () => controller.abort()
   }, [embedded, nativeFilterKey, review.response?.meta.generatedAt, model])
