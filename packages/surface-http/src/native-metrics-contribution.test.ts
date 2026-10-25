@@ -129,3 +129,26 @@ test('overbudget native tools are bounded and partial, never silently called com
   assert.equal(response.toolsTruncated,true)
   assert.equal(response.coverage,'partial')
 })
+
+
+test('cross-Source aggregate cap reports partial even when individual Source rows are complete',async()=>{
+  const bothEnabled={isSourceEnabled:()=>true} as unknown as CapturePolicyService
+  const metrics={
+    overview:async(q:{sourceId:string})=>({
+      ...overview(q.sourceId,2),eligibleSessions:2,readySessions:2,missingSessions:0,
+      tools:Array.from({length:150},(_,i)=>({
+        nativeToolName:'tool-'+i,callCount:1,resultCount:1,errorCount:0,
+        totalDurationMs:0,sessionCount:1,
+      })),
+      toolsTruncated:false,
+    }),
+  } as unknown as NativeSessionMetricsStore
+  const response=await nativeMetricContribution(metrics,sources,bothEnabled,{includeTools:true})
+  if(response.state!=='available')assert.fail('Expected available native contribution')
+  assert.equal(response.readySessions,4)
+  assert.equal(response.tools?.length,256)
+  assert.equal(response.toolsTruncated,true)
+  assert.equal(response.coverage,'partial')
+  assert.equal(response.tools?.some(tool=>tool.sourceId==='pi'),true)
+  assert.equal(response.tools?.some(tool=>tool.sourceId==='codex'),true)
+})
