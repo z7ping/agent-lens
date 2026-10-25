@@ -52,6 +52,9 @@ async function read(input: NativeWorkerReadInput, signal: AbortSignal): Promise<
   }
   const page = await source.readNativeSessionPage(input.query, ctx)
   if (page.state !== 'available') return page
+  if (page.nextCursor.fileIdentity !== input.expectedFileIdentity) {
+    return { state: 'drifted', reason: 'native-catalog-file-identity-changed' }
+  }
   if (page.records.length > 64) {
     return { state: 'unsupported', reason: 'native-worker-record-limit' }
   }
