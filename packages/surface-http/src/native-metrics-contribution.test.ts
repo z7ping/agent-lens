@@ -82,3 +82,50 @@ test('Native-only metrics provider failure cannot silently become zero',async()=
     state:'unavailable',reason:'native-metrics-contribution-query-failed',
   })
 })
+
+
+test('Usage tool contribution retains source identity and bounded verified numbers only',async()=>{
+  const metrics={
+    overview:async()=>({
+      ...overview('pi',2),
+      eligibleSessions:2,readySessions:2,missingSessions:0,
+      tools:[
+        {nativeToolName:'shell',callCount:3,resultCount:2,
+          errorCount:1,totalDurationMs:120,sessionCount:2},
+        {nativeToolName:'read',callCount:1,resultCount:1,
+          errorCount:0,totalDurationMs:0,sessionCount:1},
+      ],
+    }),
+  } as unknown as NativeSessionMetricsStore
+  const response=await nativeMetricContribution(metrics,sources,policy,{includeTools:true})
+  if(response.state!=='available')assert.fail('Expected available native contribution')
+  assert.equal(response.coverage,'complete')
+  assert.deepEqual(response.tools,[
+    {sourceId:'pi',nativeToolName:'shell',callCount:3,
+      resultCount:2,errorCount:1,sessionCount:2},
+    {sourceId:'pi',nativeToolName:'read',callCount:1,
+      resultCount:1,errorCount:0,sessionCount:1},
+  ])
+  assert.equal(response.toolsTruncated,false)
+  assert.equal(JSON.stringify(response).includes('totalDurationMs'),false)
+  assert.equal(JSON.stringify(response).includes('observationIds'),false)
+})
+
+test('overbudget native tools are bounded and partial, never silently called complete',async()=>{
+  const metrics={
+    overview:async()=>({
+      ...overview('pi',2),eligibleSessions:2,readySessions:2,
+      missingSessions:0,
+      tools:Array.from({length:257},(_,index)=>({
+        nativeToolName:'tool-'+index,callCount:1,resultCount:1,
+        errorCount:0,totalDurationMs:0,sessionCount:1,
+      })),
+      toolsTruncated:true,
+    }),
+  } as unknown as NativeSessionMetricsStore
+  const response=await nativeMetricContribution(metrics,sources,policy,{includeTools:true})
+  if(response.state!=='available')assert.fail('Expected available native contribution')
+  assert.equal(response.tools?.length,256)
+  assert.equal(response.toolsTruncated,true)
+  assert.equal(response.coverage,'partial')
+})
