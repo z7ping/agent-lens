@@ -19,6 +19,7 @@ const catalog={
 } as unknown as NativeSessionCatalogStore
 const source={
   list:()=>[{manifest:{sourceId:'pi',parserVersion:'pi-v1'},
+    nativeSessionCoverageComplete:true,
     readNativeSessionPage:async()=>{throw Error('must use reader worker')}}],
 } as unknown as SourceService
 const policy={isSourceEnabled:(id:string)=>id==='pi'} as unknown as CapturePolicyService
