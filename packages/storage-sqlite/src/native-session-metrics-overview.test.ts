@@ -93,3 +93,39 @@ test('native overview excludes legacy claim even when a numerical cache row exis
     assert.deepEqual(overview.tools,[])
   }finally{await storage.close()}
 })
+
+
+test('lazy metrics pending list is bounded, native-only and revision aware',async()=>{
+  const storage=new SqliteStorageService({path:':memory:'})
+  await storage.migrate()
+  try{
+    for(const id of ['ready','stale','missing','partial','legacy']){
+      const row=location(id)
+      await storage.nativeSessionCatalog.upsert(row)
+      if(id==='legacy')assert.equal(await storage.nativeSessionCatalog.claimLegacyWrite(row),'legacy')
+      else assert.equal(await storage.nativeSessionCatalog.claimNativeOnlyWrite(row),true)
+    }
+    const metrics=storage.nativeSessionMetrics
+    assert.equal(await metrics.replace(metric('ready')),true)
+    assert.equal(await metrics.replace(metric('stale')),true)
+    assert.equal(await metrics.replace(metric('partial','partial')),true)
+    assert.equal(await metrics.replace(metric('legacy')),true)
+    await storage.nativeSessionCatalog.upsert(location('stale',999))
+    const pending=await metrics.listPending({sourceId:source,parserVersion})
+    assert.deepEqual(pending.map(item=>item.nativeSessionId),['missing','stale'])
+    assert.equal(pending[1]?.fileSize,999)
+    assert.equal(pending.some(item=>item.nativeSessionId==='legacy'),false)
+    assert.equal(pending.some(item=>item.nativeSessionId==='partial'),false)
+    assert.equal(pending.some(item=>item.nativeSessionId==='ready'),false)
+    assert.deepEqual(await metrics.listPending({sourceId:'other',parserVersion}),[])
+    await assert.rejects(metrics.listPending({sourceId:source,parserVersion:''}),/Invalid pending/)
+    for(let index=0;index<20;index++){
+      const row=location('extra-'+index)
+      await storage.nativeSessionCatalog.upsert(row)
+      await storage.nativeSessionCatalog.claimNativeOnlyWrite(row)
+    }
+    assert.equal((await metrics.listPending({sourceId:source,parserVersion})).length,16,
+      'one lazy read cannot enumerate the entire session catalog')
+  }finally{await storage.close()}
+})
+
