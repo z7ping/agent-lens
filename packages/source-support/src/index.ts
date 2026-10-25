@@ -1,6 +1,7 @@
 export * from './source-fs'
 export * from './source-jsonl'
 export * from './native-jsonl-read'
+export * from './native-session-window'
 export * from './native-source-hydration'
 export * from './value'
 export * from './source-history-watch'
