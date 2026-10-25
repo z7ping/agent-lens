@@ -43,6 +43,7 @@ import {
   nativeHookArchiveEnabled,
   archivedHookInboxRecordPath,
   readArchivedHookInboxPage,
+  nativeSqliteRevision,
   isMissingPathError,
   watchSourceFiles,
   type SourceFileWatchHandle,
