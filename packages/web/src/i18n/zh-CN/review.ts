@@ -39,6 +39,8 @@ export const chineseReviewMessages: LocaleMessagesDto = {
         agentSession: '{{agent}} 会话',
         noProject: '无项目',
         nativeIndexed: '原生会话',
+        nativeReadUnavailable: '原生会话读取不可用：{{reason}}',
+        nativeIdentityUnavailable: '原生会话目录不存在或尚未建立可读取的稳定身份',
         unlinkedProject: '未关联项目',
         resumable: '支持尝试继续',
         remoteSource: '远程 · {{node}}',
