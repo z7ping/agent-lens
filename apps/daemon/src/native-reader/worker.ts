@@ -2,6 +2,7 @@ import { parentPort } from 'node:worker_threads'
 import type { SourceCheckpointService, SourceDefinition } from '@agent-lens/core'
 import { piSourceDefinition } from '@agent-lens/source-pi'
 import { codexSourceDefinition } from '@agent-lens/source-codex'
+import { claudeSourceDefinition } from '@agent-lens/source-claude'
 import type {
   NativeWorkerReadInput,
   NativeWorkerReadResult,
@@ -16,6 +17,7 @@ const MAX_RESPONSE_BYTES = 16 * 1024 * 1024
 const sources = new Map<string, SourceDefinition>([
   [piSourceDefinition.manifest.sourceId, piSourceDefinition],
   [codexSourceDefinition.manifest.sourceId, codexSourceDefinition],
+  [claudeSourceDefinition.manifest.sourceId, claudeSourceDefinition],
 ])
 const aborts = new Map<number, AbortController>()
 const checkpoint: SourceCheckpointService = {
