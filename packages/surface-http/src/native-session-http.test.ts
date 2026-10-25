@@ -27,6 +27,7 @@ test('native session HTTP reads via identities only, supports opaque cursor and 
           identityHints: { nativeSessionId: 'session 1' },
           payload: { text: '[redacted]' },
         }],
+        observationRecordIds: ['record-1'],
         evidenceCandidates: [{
           captureMethod: 'native-log',
           derivation: 'observed',
@@ -55,9 +56,23 @@ test('native session HTTP reads via identities only, supports opaque cursor and 
     assert.equal(JSON.stringify(body).includes('/sensitive/work'), false)
     assert.equal(JSON.stringify(body).includes('evidenceCandidates'), false)
 
+    const review = await fetch(`${endpoint}?sourceId=pi&installationId=inst&nativeSessionId=session%201&format=review`)
+    assert.equal(review.status, 200)
+    const rendered = await review.json() as {
+      state: string; boundaryIntegrity: string;
+      interactions: Array<{nodes: Array<{type:string; text?:string}>}>
+    }
+    assert.equal(rendered.state, 'available')
+    assert.equal(rendered.boundaryIntegrity, 'partial')
+    assert.equal(rendered.interactions[0]?.nodes[0]?.type, 'message')
+    assert.equal(rendered.interactions[0]?.nodes[0]?.text, '[redacted]')
+    assert.equal(JSON.stringify(rendered).includes('/sensitive/work'), false)
+
     const second = await fetch(`${endpoint}?sourceId=pi&installationId=inst&nativeSessionId=session%201&limit=2&cursor=${body.nextCursor}`)
     assert.equal(second.status, 200)
     assert.deepEqual(calls, [{
+      sourceId: 'pi', installationId: 'inst', nativeSessionId: 'session 1', limit: 8, hasAbortSignal: true,
+    }, {
       sourceId: 'pi', installationId: 'inst', nativeSessionId: 'session 1', limit: 8, hasAbortSignal: true,
     }, {
       sourceId: 'pi', installationId: 'inst', nativeSessionId: 'session 1', limit: 2,
@@ -86,6 +101,8 @@ test('native session HTTP fails closed for paths, malformed cursors, oversized p
       `${base}&limit=65`,
       `${base}&limit=1&limit=2`,
       `${base}&cursor=illegal`,
+      `${base}&format=unknown`,
+      `${base}&format=review&format=review`,
       `${base}&cursor=${encodeNativeSessionCursor({ offset: -1, sequence: 0, fileIdentity: '1:2' })}`,
       `${base}&cursor=${encodeNativeSessionCursor({ offset: 0.5, sequence: 0, fileIdentity: '1:2' })}`,
       `${base}&cursor=${encodeNativeSessionCursor({ offset: 0, sequence: 0, fileIdentity: '' })}`,
@@ -130,6 +147,7 @@ test('native session HTTP bounds serialized payloads even when normalization is 
           identityHints: { nativeSessionId: 'S1' },
           payload: { text: 'x'.repeat(5 * 1024 * 1024) },
         }],
+        observationRecordIds: ['record-large'],
         evidenceCandidates: [],
         nextCursor: { offset: 100, sequence: 1, fileIdentity: '1:2' },
         hasMore: false, pendingTail: false,

@@ -1,5 +1,6 @@
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import type { NativeSessionReadQuery, NativeSessionReadResult } from '@agent-lens/core-services'
+import { projectNativeReviewWindow } from '@agent-lens/projection-review'
 import { badRequest, writeJson } from './http-utils'
 
 export interface NativeSessionWindowReader {
@@ -84,6 +85,10 @@ export async function handleNativeSessionWindowRequest(
   if (url.searchParams.getAll('cursor').length > 1 || url.searchParams.getAll('limit').length > 1) {
     throw badRequest('Duplicate native window parameters')
   }
+  const formatValues = url.searchParams.getAll('format')
+  if (formatValues.length > 1 || (formatValues.length === 1 && formatValues[0] !== 'review')) {
+    throw badRequest('Unsupported native window format')
+  }
   const cursor = decodeCursor(url.searchParams.get('cursor'))
 
   const abort = new AbortController()
@@ -107,7 +112,15 @@ export async function handleNativeSessionWindowRequest(
     }
     // Source reader has already enforced CapturePolicy. Never forward raw
     // EvidenceCandidate.sourceLocator.path or SourceRecord payloads.
-    const safeResponse = {
+    const safeResponse = formatValues[0] === 'review' ? projectNativeReviewWindow({
+      sourceId, installationId, nativeSessionId,
+      observations: result.observations,
+      ...(result.observationRecordIds ? { observationRecordIds: result.observationRecordIds } : {}),
+      hasMore: result.hasMore,
+      pendingTail: result.pendingTail,
+      hasPrevious: cursor !== undefined,
+      nextCursor: encodeNativeSessionCursor(result.nextCursor),
+    }) : {
       state: 'available' as const,
       observations: result.observations,
       nextCursor: encodeNativeSessionCursor(result.nextCursor),

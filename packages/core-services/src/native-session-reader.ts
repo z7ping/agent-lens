@@ -32,6 +32,8 @@ export type NativeSessionReadResult =
   | {
       state: 'available'
       observations: ObservationCandidate[]
+      /** Ordered native record provenance per candidate, used for stable ephemeral DTO IDs. */
+      observationRecordIds: string[]
       evidenceCandidates: EvidenceCandidate[]
       nextCursor: SourceNativeSessionCursor
       hasMore: boolean
@@ -108,6 +110,7 @@ export class NativeSessionReader {
     }
 
     const observations: ObservationCandidate[] = []
+    const observationRecordIds: string[] = []
     const evidenceCandidates: EvidenceCandidate[] = []
     for (const record of result.records) {
       query.signal.throwIfAborted()
@@ -120,12 +123,14 @@ export class NativeSessionReader {
       const normalized = await source.normalize(record, { host, installation })
       const sanitized = this.capturePolicy.sanitizeNormalizedOutput(normalized)
       observations.push(...sanitized.observations)
+      observationRecordIds.push(...sanitized.observations.map(() => record.id))
       evidenceCandidates.push(...sanitized.evidenceCandidates)
     }
 
     return {
       state: 'available',
       observations,
+      observationRecordIds,
       evidenceCandidates,
       nextCursor: result.nextCursor,
       hasMore: result.hasMore,
