@@ -231,5 +231,10 @@ export interface SourceDefinition {
    * separate nonduplicate sidecar has its own verified read/recovery path.
    */
   nativeSessionCoverageComplete?: boolean
+  /** Read source-owned, per-session original Hook inbox archives only. Caller
+   * never supplies a file path. Optional until source/runtime recovery is
+   * integrated with the shared native TaskSurface projection.
+   */
+  readArchivedNativeHooks?(nativeSessionId: string, ctx: SourceExecutionContext): Promise<SourceRecord[]>
   normalize(record: SourceRecord, ctx: SourceNormalizationContext): Promise<NormalizedSourceOutput>
 }
