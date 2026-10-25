@@ -673,10 +673,6 @@ export abstract class AgentLensReviewModel extends AgentLensIntegrationModel {
     }
   }
 
-  /** Deep-linked native sessions use the SAME Task Surface, not a second UI.
-   * Unknown aggregate statistics and unsupported SQL-only operations stay
-   * unavailable rather than fabricated.
-   */
   /** Lazy, best-effort numerical refresh; never blocks the Review timeline. */
   protected async refreshSelectedNativeMetrics(id: string, signal: AbortSignal): Promise<void> {
     try {
@@ -690,6 +686,10 @@ export abstract class AgentLensReviewModel extends AgentLensIntegrationModel {
     }
   }
 
+  /** Deep-linked native sessions use the SAME Task Surface, not a second UI.
+   * Unknown aggregate statistics and unsupported SQL-only operations stay
+   * unavailable rather than fabricated.
+   */
   protected async selectNativeReviewSession(id: string): Promise<void> {
     this.reviewSelectionAbort?.abort()
     const controller = new AbortController()
