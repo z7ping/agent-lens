@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { resolve } from 'node:path'
+import { nativeReviewSessionId } from '@agent-lens/core'
 import { SqliteStorageService } from './storage'
 
 const now = '2026-10-25T00:00:00.000Z'
@@ -36,6 +37,12 @@ test('native session catalog remains metadata-only, stable and independently pag
     assert.equal((await catalog.get({sourceId:'pi',installationId:'local-pi',nativeSessionId:'b'}))?.lastActivityAt,
       '2026-10-22T00:00:00Z')
 
+    const byNativeId = await catalog.getByReviewSessionId(
+      nativeReviewSessionId('pi','local-pi','b'),
+    )
+    assert.equal(byNativeId?.nativeSessionId,'b')
+    assert.equal(byNativeId?.title,'Generated session title')
+    assert.equal(await catalog.getByReviewSessionId('invalid'),null)
     const first = await catalog.query({ limit: 2 })
     assert.deepEqual(first.items.map(x => x.nativeSessionId), ['c','b'])
     assert.equal(first.hasMore,true)
