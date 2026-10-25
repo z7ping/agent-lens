@@ -5,6 +5,7 @@ import type {
   SourceService, SourceNativeSessionCursor, NativeSessionCatalogEntry, SourceDefinition,
 } from '@agent-lens/core'
 import { NativeSessionMetricAccumulator } from '@agent-lens/projection-usage'
+import { nativeSqliteRevision } from '@agent-lens/source-support'
 import { badRequest, writeJson } from './http-utils'
 import type { NativeSessionWindowReader } from './native-session-http'
 
@@ -176,6 +177,23 @@ export async function rebuildNativeSessionMetrics(
       fileMtimeMs:entry.fileMtimeMs,parserVersion:source.manifest.parserVersion,
       accumulator,cursor,scannedRecords,
     } satisfies NativeMetricRebuildProgress}
+  }
+  // Native SQLite can change entirely in -wal while the main database
+  // mtime/size and inode remain unchanged. A reader cursor proves a local
+  // snapshot, not that the entire multi-page scan came from one revision.
+  // Check the actual source revision before publishing numerical totals.
+  if (/\\.(?:db|sqlite)$/i.test(entry.filePath)) {
+    let current: Awaited<ReturnType<typeof nativeSqliteRevision>>
+    try { current=await nativeSqliteRevision(entry.filePath) }
+    catch {
+      return {state:'unavailable' as const,reason:'native-metrics-source-revision-unavailable'}
+    }
+    signal.throwIfAborted()
+    if (current.fileIdentity!==entry.fileIdentity
+      || current.fileSize!==entry.fileSize
+      || current.fileMtimeMs!==entry.fileMtimeMs) {
+      return {state:'drifted' as const,reason:'native-metrics-source-revision-changed'}
+    }
   }
   // EOF proves a bounded native read, not complete runtime facts. The Source
   // owns its recoverability attestation; never infer it from the agent name.
