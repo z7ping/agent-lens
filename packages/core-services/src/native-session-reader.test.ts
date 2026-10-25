@@ -265,3 +265,48 @@ test('Hook archive reader uses Catalog Source authority, sanitizes and forbids f
   assert.deepEqual(await r.readArchivedHooks(query),
     {state:'drifted',reason:'native-hook-record-identity-drifted'})
 })
+
+test('Hook source pagination never reports success for unresumable or stagnant continuations',async()=>{
+  const cursor=Buffer.from('old').toString('base64url')
+  const next=Buffer.from('new').toString('base64url')
+  let mode:'valid'|'missing'|'stalled'|'finished-with-cursor'='valid'
+  const source={
+    manifest:{sourceId:'pi',productId:'pi'},
+    async readArchivedNativeHooksPage(_id:string, _ctx:unknown, after?:string){
+      assert.equal(after,cursor)
+      const records=[{...raw,locator:{kind:'runtime-hook' as const,hookEventId:'hook-1'}}]
+      if(mode==='missing')return {records,hasMore:true}
+      if(mode==='stalled')return {records,hasMore:true,nextCursor:cursor}
+      if(mode==='finished-with-cursor')return {records,hasMore:false,nextCursor:next}
+      return {records,hasMore:true,nextCursor:next}
+    },
+    async normalize(){return {observations:[sample],evidenceCandidates:[]}},
+  } as unknown as SourceDefinition
+  const storage={
+    nativeSessionCatalog:{async get(){return catalog}},
+    repositories:{installations:{async get(){return installation}},hosts:{async get(){return host}}},
+  } as unknown as StorageService
+  const policy={
+    isSourceEnabled(){return true},
+    sanitizeNormalizedOutput(){return {observations:[{...sample,payload:{text:'[redacted]'}}],evidenceCandidates:[]}},
+  } as unknown as CapturePolicyService
+  const reader=new NativeSessionReader(storage,{list:()=>[source]} as unknown as SourceService,policy)
+  const request={...query,cursor}
+  const good=await reader.readArchivedHooks(request)
+  assert.equal(good.state,'available')
+  if(good.state==='available'){
+    assert.equal(good.nextCursor,next)
+    assert.equal(good.truncated,true)
+    assert.deepEqual(good.observations[0]?.payload,{text:'[redacted]'})
+  }
+  mode='missing'
+  assert.deepEqual(await reader.readArchivedHooks(request),
+    {state:'unsupported',reason:'native-hook-next-cursor-invalid'})
+  mode='stalled'
+  assert.deepEqual(await reader.readArchivedHooks(request),
+    {state:'unsupported',reason:'native-hook-next-cursor-invalid'})
+  mode='finished-with-cursor'
+  assert.deepEqual(await reader.readArchivedHooks(request),
+    {state:'unsupported',reason:'native-hook-next-cursor-unexpected'})
+})
+

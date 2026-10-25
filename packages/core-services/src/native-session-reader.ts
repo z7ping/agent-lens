@@ -108,6 +108,16 @@ export class NativeSessionReader {
       throw error
     }
     const records = page.records
+    // A source's continuation contract must prove progress. Do not return a
+    // seemingly usable page when remaining Hook events are unreachable.
+    if (page.hasMore && (!records.length || !page.nextCursor
+      || page.nextCursor === query.cursor || page.nextCursor.length > 512
+      || !/^[A-Za-z0-9_-]+$/.test(page.nextCursor))) {
+      return {state:'unsupported',reason:'native-hook-next-cursor-invalid'}
+    }
+    if (!page.hasMore && page.nextCursor) {
+      return {state:'unsupported',reason:'native-hook-next-cursor-unexpected'}
+    }
     // A Source can emit at most sixteen bounded Hook records for one page.
     if (records.length > 16) {
       return {state:'unsupported',reason:'native-hook-archive-page-too-large'}
