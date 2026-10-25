@@ -162,7 +162,7 @@ export function ReviewPage({ model, embedded = false, latestRequest = 0 }: { mod
           {review.response?.meta.hasMore && <button ref={sessionLoadSentinelRef} className="session-load-more" disabled={review.loadingMore} onClick={() => void model.loadMoreReview()}>{review.loadingMore ? t('local.list.loadMoreLoading') : review.error ? t('local.list.loadMoreFailed') : t('local.list.loadMoreAuto')}</button>}
           {nativeHasMore && <button className="session-load-more" disabled={nativeLoadingMore}
             onClick={() => void loadMoreNativeSessions()}>
-            {nativeLoadingMore ? t('local.list.loadMoreLoading') : t('local.list.loadMoreAuto')}
+            {nativeLoadingMore ? t('local.list.loadMoreLoading') : t('local.list.loadMoreNative')}
           </button>}
           {review.response && !review.response.meta.hasMore && !nativeHasMore
             && (review.response.items.length > 0 || visibleNativeSessions.length > 0)
