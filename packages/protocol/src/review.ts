@@ -315,6 +315,8 @@ export interface ReviewDetailPageDto {
 }
 
 export interface ReviewSessionDetailDto extends ReviewSessionSummaryDto {
+  /** Native windows supply only loaded facts; never treat their counts as session totals. */
+  statisticsCompleteness?: 'window'
   interactions: ReviewInteractionDto[]
   interactionIndex?: ReviewInteractionIndexDto[]
   page: ReviewDetailPageDto
