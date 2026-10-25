@@ -829,6 +829,76 @@ export class SourceHistoryRunner {
         this.storage,
         checkpointScope(source.manifest.sourceId, installation.id, runtimeProfile),
       )
+      const verifiedNativePaths = new Set<string>()
+      // Explicit experimental mode: a verified native file is the single
+      // authority for new sessions. Existing SQL sessions refuse the claim and
+      // keep their original ingest path. Every source parser is still the
+      // source of truth for the first record used for fingerprint verification.
+      if (process.env.AGENT_LENS_NATIVE_ONLY_NEW_SESSIONS === '1'
+        && process.env.AGENT_LENS_NATIVE_CATALOG_FAST_SCAN === '1'
+        && source.discoverNativeSessions && source.readNativeSessionPage
+        && source.rawRecovery?.verify && this.storage.nativeSessionCatalog) {
+        const catalog = this.storage.nativeSessionCatalog
+        const context = {
+          host, installation,
+          ...(runtimeProfile ? { runtimeProfile } : {}),
+          abortSignal, checkpoint,
+        }
+        for await (const entry of source.discoverNativeSessions({
+          ...context,
+          ...(input.historyWindow ? { historyWindow: input.historyWindow } : {}),
+        })) {
+          if (abortSignal.aborted) break
+          if (entry.sourceId !== source.manifest.sourceId
+            || entry.installationId !== installation.id
+            || entry.locationKind !== 'native') {
+            throw new Error('Native Catalog fast scan returned a foreign Source identity')
+          }
+          // No blind claims from filename/mtime: the source-owned reader must
+          // prove matching native session + physical identity and first-row
+          // fingerprint before skipping the original history parser.
+          let first: Awaited<ReturnType<NonNullable<SourceDefinition['readNativeSessionPage']>>>
+          try {
+            first = await source.readNativeSessionPage({
+              filePath: entry.filePath, nativeSessionId: entry.nativeSessionId, limit: 1,
+            }, context)
+          } catch (error) {
+            if (abortSignal.aborted) throw error
+            // A transient file/path failure must leave ingestion in legacy
+            // mode, not turn a metadata row into an unverified native claim.
+            continue
+          }
+          if (first.state !== 'available' || !first.records.length
+            || first.nextCursor.fileIdentity !== entry.fileIdentity) continue
+          const record = first.records[0]!
+          if (record.sourceId !== entry.sourceId
+            || record.installationId !== entry.installationId
+            || record.sourceSessionNativeId !== entry.nativeSessionId
+            || record.locator.path !== entry.filePath
+            || !record.fingerprint
+            || !source.rawRecovery.describe(record).canReread) continue
+          let verified = false
+          try {
+            verified = (await source.rawRecovery.verify(record, context)).state === 'verified'
+          } catch (error) {
+            if (abortSignal.aborted) throw error
+            continue
+          }
+          if (!verified) continue
+          await catalog.upsert(entry)
+          const key = { sourceId: entry.sourceId,
+            installationId: entry.installationId,
+            nativeSessionId: entry.nativeSessionId }
+          if (await catalog.claimNativeOnlyWrite({
+            ...key, filePath: entry.filePath, fileIdentity: entry.fileIdentity,
+          })) {
+            verifiedNativePaths.add(entry.filePath)
+            this.nativeCatalogTracker.rememberWriteMode(key, 'native-only')
+          }
+          if (input.cooperate) await input.cooperate()
+          await yieldForInteractivity()
+        }
+      }
       let coverageFrom: string | undefined
       let coverageTo: string | undefined
       let coverageFromEvidence: EvidenceCandidate[] = []
@@ -841,6 +911,8 @@ export class SourceHistoryRunner {
         abortSignal,
         checkpoint,
         ...(input.historyWindow ? { historyWindow: input.historyWindow } : {}),
+        ...(verifiedNativePaths.size
+          ? { skipNativeSessionFile: (filePath: string) => verifiedNativePaths.has(filePath) } : {}),
         reportProgress: update => progress.report(update),
       })) {
         if (input.cooperate) await input.cooperate()

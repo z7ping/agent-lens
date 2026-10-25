@@ -521,7 +521,9 @@ export async function* ingestPiHistory(ctx: SourceHistoryExecutionContext): Asyn
     for (const filePath of files) {
       if (ctx.abortSignal.aborted) return
       await ctx.reportProgress?.({ phase: 'processing', currentUnit: filePath })
-      yield* ingestPiFile(ctx, filePath, rememberSession, diagnostics)
+      if (!ctx.skipNativeSessionFile?.(filePath)) {
+        yield* ingestPiFile(ctx, filePath, rememberSession, diagnostics)
+      }
       if (!ctx.abortSignal.aborted) await ctx.reportProgress?.({ phase: 'processing', processedUnits: ++processedUnits })
     }
     if (!ctx.abortSignal.aborted) {
