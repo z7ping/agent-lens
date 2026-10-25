@@ -29,6 +29,8 @@ test('opt-in native-only Writer skips SourceRecord / Observation / Evidence only
   let rawWrites=0
   let normalizations=0
   let ownershipReads=0
+  let verificationCalls=0
+  let verificationState:'verified'|'drifted'='verified'
   const claims:NativeSessionCatalogStore={
     async upsert(value){catalog=value},
     async get(){return catalog??null},
@@ -67,7 +69,10 @@ test('opt-in native-only Writer skips SourceRecord / Observation / Evidence only
         mutability:'append-oriented',verification:'fingerprint',
         canReparse:true,replayable:true,persistencePreference:'reference',
       }},
-      async verify(){return {state:'verified',checkedAt:at}},
+      async verify(){
+        verificationCalls++
+        return {state:verificationState,checkedAt:at}
+      },
     },
     async normalize(){
       normalizations++
@@ -113,6 +118,27 @@ test('opt-in native-only Writer skips SourceRecord / Observation / Evidence only
     assert.equal(rawWrites,0)
     assert.equal(normalizations,0)
     assert.equal(ownershipReads,1, 'durable selected mode must be cached for next native event')
+    assert.equal(verificationCalls,2,'each claimed record must still be verified against its original file')
+
+    // An immutable native-only claim cannot silently swallow a changed,
+    // truncated or replaced original even when its coverage flag remains true.
+    verificationState='drifted'
+    await assert.rejects(
+      ()=>sourceRunnerInternals.processSourceRecordWithOwnership(...args),
+      /native-only-source-record-recovery-drift/,
+    )
+    assert.equal(rawWrites,0)
+    assert.equal(committed,0)
+    verificationState='verified'
+    await assert.rejects(
+      ()=>sourceRunnerInternals.processSourceRecordWithOwnership(
+        storage, observations, coverage, policy, tracker,
+        source, host, installation, undefined,
+        {...record,locator:{...record.locator,path:join(root,'other.jsonl')}},
+        new AbortController().signal,
+      ),
+      /native-only-source-record-location-drift/,
+    )
     // A preexisting experimental claim must not silently discard runtime-only
     // events when the Source coverage attestation is withdrawn after upgrade.
     source.nativeSessionCoverageComplete=false
