@@ -1,3 +1,5 @@
+export { NativeSessionMetricAccumulator } from './native-session-metrics'
+
 import type {
   AgentInstallation,
   CanonicalObservation,

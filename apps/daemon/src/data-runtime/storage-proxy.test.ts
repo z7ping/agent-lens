@@ -78,6 +78,16 @@ test('真实 Data Runtime Worker 暴露任务文件变更读写，保留空 Git 
   }
 })
 
+test('native metric store reaches the real Data Runtime SQLite worker',async()=>{
+  const runtime=await fixture()
+  try{
+    assert.ok(runtime.storage.nativeSessionMetrics)
+    assert.deepEqual(await runtime.storage.nativeSessionMetrics.get({
+      sourceId:'pi',installationId:'pi-local',nativeSessionId:'never-indexed',
+    }),{state:'missing'})
+  }finally{await runtime.dispose()}
+})
+
 test('Data Runtime routes analytics reads to foreground pool and maintenance scans separately', () => {
   assert.equal(dataRuntimeStorageInternals.READ_TIMEOUT_MS, 20_000)
   assert.equal(dataRuntimeStorageInternals.isReadPath(['toolUsageObservations', 'aggregate']), true)

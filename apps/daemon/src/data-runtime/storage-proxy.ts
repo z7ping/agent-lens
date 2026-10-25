@@ -552,6 +552,7 @@ export class DataRuntimeStorageService implements StorageService {
   readonly assetInventory: AssetInventoryReader
   readonly launchableProjects: LaunchableProjectReader
   readonly nativeSessionCatalog: SqliteStorageService['nativeSessionCatalog']
+  readonly nativeSessionMetrics: SqliteStorageService['nativeSessionMetrics']
   readonly taskFileChanges: SqliteStorageService['taskFileChanges']
   readonly sessionSummaries: SessionSummaryProjectionStore
   readonly sessionSummaryProjection: SessionSummaryProjectionStore
@@ -590,6 +591,7 @@ export class DataRuntimeStorageService implements StorageService {
     this.assetInventory = namespaceProxy(executor, ['assetInventory'])
     this.launchableProjects = namespaceProxy(executor, ['launchableProjects'])
     this.nativeSessionCatalog = namespaceProxy(executor, ['nativeSessionCatalog'])
+    this.nativeSessionMetrics = namespaceProxy(executor, ['nativeSessionMetrics'])
     this.taskFileChanges = namespaceProxy(executor, ['taskFileChanges'])
     const summaries = sessionSummaryProxy(executor)
     this.sessionSummaries = summaries

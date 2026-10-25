@@ -24,6 +24,13 @@ test('Tool Fact readiness stays foreground while maintenance coverage and cursor
   assert.equal(dataRuntimeStorageInternals.timeoutFor(backfillPath, false), 120_000)
 })
 
+test('native metrics are wired to reader/writer RPC by method semantics',()=>{
+  assert.equal(dataRuntimeStorageInternals.isReadPath(['nativeSessionMetrics','get']),true)
+  assert.equal(dataRuntimeStorageInternals.isReadPath(['nativeSessionMetrics','replace']),false)
+  assert.equal(dataRuntimeStorageInternals.isReadPath(['nativeSessionMetrics','invalidate']),false)
+  assert.equal(dataRuntimeStorageInternals.isMaintenanceOperation(['nativeSessionMetrics','replace']),false)
+})
+
 test('only background maintenance writes are excluded from foreground Writer backlog', () => {
   const maintenanceWrites = [
     ['maintenanceJobs', 'ensure'],
