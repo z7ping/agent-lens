@@ -49,6 +49,7 @@ import {
   archiveAcceptedHookInboxFile,
   prepareHookInboxArchive,
   nativeHookArchiveEnabled,
+  createHookInboxRetryGate,
   archivedHookInboxRecordPath,
   readArchivedHookInboxPage,
   verifyPreparedHookInboxOriginal,
@@ -565,6 +566,7 @@ export async function startClaudeRuntimeCapture(
   const inbox = runtimeInboxDirectory()
   await mkdir(inbox, { recursive: true })
   let stopped = false
+  const hookRetry = createHookInboxRetryGate()
 
   const task = (async () => {
     while (!stopped && !ctx.abortSignal.aborted) {
@@ -578,6 +580,7 @@ export async function startClaudeRuntimeCapture(
 
       for (const fileName of files) {
         if (stopped || ctx.abortSignal.aborted) break
+        if (!hookRetry.shouldAttempt(fileName)) continue
         const filePath = join(inbox, fileName)
         try {
           const originalBytes = await readFile(filePath)
@@ -605,8 +608,11 @@ export async function startClaudeRuntimeCapture(
           await emitter.emit(deliveredRecord)
           if (archiveInput) await archiveAcceptedHookInboxFile(archiveInput)
           else await unlink(filePath)
+          hookRetry.markDelivered(fileName)
         } catch {
-          break
+          // Keep the failed original for a bounded retry, never block
+          // another Hook from a different concurrent source session.
+          hookRetry.markFailed(fileName)
         }
       }
       if (!stopped && !ctx.abortSignal.aborted) await abortableDelay(RUNTIME_POLL_MS, ctx.abortSignal)
