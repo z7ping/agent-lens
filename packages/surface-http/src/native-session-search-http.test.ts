@@ -27,6 +27,7 @@ test('native full-text search pages original Source records and Catalog sessions
       assert.equal(q.onlyWithoutLegacyReview,true)
       assert.equal(q.limit,1)
       assert.equal(q.search,undefined,'body search must never pretend Catalog metadata search covers body')
+      assert.equal(q.locationKind,'native')
       const offset=q.before?.nativeSessionId==='A'?1:0
       return {items:entries.slice(offset,offset+1),hasMore:offset+1<entries.length}
     },
