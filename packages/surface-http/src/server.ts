@@ -62,6 +62,7 @@ import { handleNativeSessionWindowRequest, handleNativeSessionAttachmentRequest,
 import { handleNativeSessionCatalogRequest } from './native-session-catalog-http'
 import { handleNativeSessionBodySearchRequest } from './native-session-search-http'
 import { handleNativeSessionMetricsRequest } from './native-session-metrics-http'
+import { NativeMetricsDemandRefresh } from './native-session-metrics-refresh'
 import { handleNativeSessionMetricsOverviewRequest } from './native-session-metrics-overview-http'
 import { nativeMetricContribution } from './native-metrics-contribution'
 import { reviewAttachmentSources } from './review-attachments'
@@ -189,6 +190,10 @@ export async function startHttpSurface(
   const usage = new ToolAssetUsageProjection(storage)
   const insights = new UsageInsightsProjection(storage)
   const review = new ReviewProjection(storage)
+  const lazyNativeMetrics=new NativeMetricsDemandRefresh(
+    storage.nativeSessionCatalog,storage.nativeSessionMetrics,
+    options.nativeSessionReader,options.sources,options.capturePolicy,
+  )
   const facets = new FacetProjection(storage, options.sources, options.capturePolicy, options.sourceDetection)
   const agents = new AgentOverviewProjection(
     storage,
@@ -909,6 +914,13 @@ export async function startHttpSurface(
         writeJson(response,200,{
           ...legacy,meta:{...legacy.meta,...(native?{native}:{})},
         })
+        lazyNativeMetrics.request({
+          ...(query.sourceIds?.length?{sourceIds:query.sourceIds}:
+            query.sourceId?{sourceIds:[query.sourceId]}:{}),
+          ...(query.projectId?{projectId:query.projectId}:{}),
+          ...(query.logicalSessionId?{logicalSessionId:query.logicalSessionId}:{}),
+          ...(query.toolName?{toolName:query.toolName}:{}),
+        })
         return
       }
       if (url.pathname === '/api/v1/insights') {
@@ -919,6 +931,11 @@ export async function startHttpSurface(
           : undefined
         writeJson(response,200,{
           ...legacy,meta:{...legacy.meta,...(native?{native}:{})},
+        })
+        lazyNativeMetrics.request({
+          ...(query.sourceIds?.length?{sourceIds:query.sourceIds}:
+            query.sourceId?{sourceIds:[query.sourceId]}:{}),
+          ...(query.projectId?{projectId:query.projectId}:{}),
         })
         return
       }
@@ -961,6 +978,7 @@ export async function startHttpSurface(
       return { dispose: () => { staticMounts.delete(mount.id) } }
     },
     async dispose() {
+      lazyNativeMetrics.dispose()
       options.eventHub?.close()
       await new Promise<void>((resolvePromise, reject) => {
         server.close(error => error ? reject(error) : resolvePromise())
