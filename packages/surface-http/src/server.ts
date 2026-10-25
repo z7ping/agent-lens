@@ -58,6 +58,7 @@ import { parseDataRuntimeHealth } from './data-runtime-health'
 import type { HttpEventHub } from './events'
 import { badRequest, statusCodeForError, writeJson } from './http-utils'
 import { handleLiveAttachmentRequest } from './live-attachments-http'
+import { handleNativeSessionWindowRequest, type NativeSessionWindowReader } from './native-session-http'
 import { reviewAttachmentSources } from './review-attachments'
 import { handleLiveRequest } from './live-http'
 import { handleManagedAssetFilesRequest } from './managed-asset-files'
@@ -106,6 +107,8 @@ export interface HttpSurfaceOptions {
   staticDir?: string
   eventHub?: HttpEventHub
   sources?: SourceService
+  /** B: opt-in read-only native window; legacy Review remains unchanged. */
+  nativeSessionReader?: NativeSessionWindowReader
   capabilities?: CapabilityService
   capturePolicy?: CapturePolicyService
   backup?: BackupService
@@ -269,6 +272,7 @@ export async function startHttpSurface(
     try {
       const url = new URL(request.url ?? '/', `http://${AGENT_LENS_HTTP_HOST}`)
       route = httpRouteLabel(url.pathname)
+      if (await handleNativeSessionWindowRequest(request, response, url, options.nativeSessionReader)) return
       if (await handleLiveAttachmentRequest(request, response, url, options.liveAttachments)) return
       if (await handleLiveRequest(request, response, url, options.lives, options.selectProjectDirectory, { storage, sources: options.sources })) return
       if (await handlePiLiveRequest(request, response, url, options.piLive, storage, options.lives, options.selectProjectDirectory)) return
