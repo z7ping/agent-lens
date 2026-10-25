@@ -146,6 +146,10 @@ test('Hermes runtime Hook original is independently verifiable from its sealed a
       sourceSessionNativeId:nativeSessionId,nativeType:'hook/permission',
       capturedAt:at,locator:{kind:'runtime-hook',path,hookEventId:'H1'},fingerprint,
       payload:{},parserVersion:hermesSourceDefinition.manifest.parserVersion}
+    const archived=await hermesSourceDefinition.readArchivedNativeHooks!(nativeSessionId,ctx)
+    assert.equal(archived.length,1)
+    assert.equal(archived[0]?.fingerprint,fingerprint)
+    assert.equal((await hermesSourceDefinition.rawRecovery!.verify!(archived[0]!,ctx)).state,'verified')
     assert.equal((await hermesSourceDefinition.rawRecovery!.verify!(record,ctx)).state,'verified')
     assert.equal((await hermesSourceDefinition.rawRecovery!.verify!(
       {...record,fingerprint:'0'.repeat(64)},ctx)).state,'drifted')

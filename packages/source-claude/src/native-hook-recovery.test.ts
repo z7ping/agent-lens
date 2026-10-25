@@ -31,7 +31,9 @@ test('claude retrieves only its matching durable original Hook sidecar records',
     assert.ok(rows[0]?.locator.path)
     const originalBytes=await readFile(rows[0]!.locator.path!)
     const fingerprint=createHash('sha256').update(originalBytes).digest('hex')
-    const archived={...rows[0]!,fingerprint}
+    assert.equal(rows[0]?.fingerprint,fingerprint,
+      'the Source-owned archived Hook must retain recoverable original provenance')
+    const archived=rows[0]!
     assert.equal((await claudeSourceDefinition.rawRecovery!.verify!(archived,ctx)).state,'verified')
     assert.equal((await claudeSourceDefinition.rawRecovery!.verify!({
       ...archived,fingerprint:'0'.repeat(64),

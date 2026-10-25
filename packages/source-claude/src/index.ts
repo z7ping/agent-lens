@@ -1098,7 +1098,11 @@ async function readClaudeArchivedHookPage(
     const archivePath = archivedHookInboxRecordPath({
       inbox, fileName: item.fileName, nativeSessionId, installationId: ctx.installation.id,
     })
-    const record = runtimeRecord(envelope, archivePath, ctx)
+    const rawRecord = runtimeRecord(envelope, archivePath, ctx)
+    // Source archive returned already verified bytes; keep exact original
+    // SHA so the RawRecovery verifier can prove this event later by reference.
+    const record = {...rawRecord,
+      fingerprint:createHash('sha256').update(item.content,'utf8').digest('hex')}
     if (record.sourceSessionNativeId !== nativeSessionId
       || record.sourceId !== SOURCE_ID || record.installationId !== ctx.installation.id) {
       throw new Error('Archived Claude Hook does not belong to requested native session')
