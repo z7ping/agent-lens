@@ -8,7 +8,7 @@ test('native overview consults only bounded numerical cache, filters authorizati
   const storage={
     health:async()=>({ok:true}),
     nativeSessionMetrics:{
-      async overview(query:{sourceId:string;parserVersion:string}){
+      async overview(query:{sourceId:string;parserVersion:string;coverageCertified:boolean}){
         captured.push(query)
         return {
           sourceId:query.sourceId,eligibleSessions:3,readySessions:1,
