@@ -59,7 +59,7 @@ await build({
 
 await build({
   ...common,
-  entryPoints: [resolve(root, 'packages/core-services/src/native-reader-worker.ts')],
+  entryPoints: [resolve(root, 'apps/daemon/src/native-reader/worker.ts')],
   outfile: resolve(dist, 'native-reader-worker.mjs'),
 })
 
