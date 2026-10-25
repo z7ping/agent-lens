@@ -1,12 +1,17 @@
 import { isAbsolute } from 'node:path'
+import { createHash } from 'node:crypto'
 import type { SqliteExecutor } from './executor'
 
 import {
-  nativeReviewSessionId,
   type NativeSessionCatalogEntry,
   type NativeSessionCatalogQuery,
   type NativeSessionLocationKind,
 } from '@agent-lens/core'
+
+/** Must exactly match projection-review native session identity (same SHA256 tuple). */
+function nativeReviewSessionId(sourceId: string, installationId: string, nativeSessionId: string): string {
+  return `native:${createHash('sha256').update(JSON.stringify([sourceId, installationId, nativeSessionId])).digest('hex').slice(0, 32)}`
+}
 
 function row(row: {
   source_id: string
