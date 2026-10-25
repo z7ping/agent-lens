@@ -74,7 +74,9 @@ function lightweightMessagePayload(value: JsonValue): JsonValue {
 }
 
 function toolCallId(item: TimelineItemDto): string | undefined {
-  return stringField(asRecord(item.payload), 'callId', 'call_id', 'toolUseId', 'tool_use_id')
+  // Normalize once at Source; payload aliases are only a compatibility fallback.
+  return item.nativeCallId
+    ?? stringField(asRecord(item.payload), 'callId', 'call_id', 'toolUseId', 'tool_use_id')
 }
 
 /** Only explicit native tool metadata is authoritative; user input is not registration metadata. */
