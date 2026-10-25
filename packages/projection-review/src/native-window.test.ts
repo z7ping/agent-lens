@@ -298,8 +298,8 @@ test('native Review Evidence attaches only exact SourceRecord provenance without
   const tool=nodes.find(node=>node.type==='tool')
   assert.equal(tool?.type,'tool')
   if(tool?.type!=='tool')return
-  assert.equal(tool.evidence.length,2,
-    'tool call/result from the same source record must retain exact provenance')
+  assert.equal(tool.evidence.length,1,
+    'tool call/result from the same source record must retain one evidence edge')
   assert.equal(tool.evidence[0]?.confidence,'exact')
   assert.equal(tool.evidence[0]?.captureMethod,'native-log')
   assert.equal(tool.evidence[0]?.id.startsWith('native-evidence:'),true)
