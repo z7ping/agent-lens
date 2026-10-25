@@ -47,6 +47,7 @@ import {
 } from '@agent-lens/runtime-cordis'
 import {
   archiveAcceptedHookInboxFile,
+  readArchivedHookInboxSession,
   isCompleteJson,
   isMissingPathError,
   readJsonlLines,
@@ -1048,6 +1049,23 @@ export const claudeSourceDefinition: SourceDefinition = {
   detect: detectClaudeCode,
   declareCapabilities: declareClaudeCapabilities,
   rawRecovery: jsonlRawRecovery,
+  async readArchivedNativeHooks(nativeSessionId, ctx) {
+    ctx.abortSignal.throwIfAborted()
+    const inbox = runtimeInboxDirectory()
+    const archive = await readArchivedHookInboxSession({ inbox, nativeSessionId })
+    const records = archive.map(item => {
+      const envelope = parseRuntimeEnvelope(item.content, item.fileName)
+      const archivePath = join(inbox, 'archive', sha256(nativeSessionId), item.fileName)
+      const record = runtimeRecord(envelope, archivePath, ctx)
+      if (record.sourceSessionNativeId !== nativeSessionId
+        || record.sourceId !== SOURCE_ID || record.installationId !== ctx.installation.id) {
+        throw new Error('Archived Claude Hook does not belong to requested native session')
+      }
+      return record
+    })
+    ctx.abortSignal.throwIfAborted()
+    return records
+  },
   async *discoverNativeSessions(ctx) {
     const root = ctx.installation.dataRoot
       ?? (ctx.installation.configRoot ? join(ctx.installation.configRoot, 'projects') : undefined)
