@@ -28,13 +28,14 @@ test('opt-in native-only Writer skips SourceRecord / Observation / Evidence only
   let committed=0
   let rawWrites=0
   let normalizations=0
+  let ownershipReads=0
   const claims:NativeSessionCatalogStore={
     async upsert(value){catalog=value},
     async get(){return catalog??null},
     async getByReviewSessionId(){return catalog??null},
     async query(){return {items:catalog?[catalog]:[],hasMore:false}},
     async hasNativeOnlyWriteClaim(){return claimed},
-    async getSessionWriteMode(){return claimed ? 'native-only' : null},
+    async getSessionWriteMode(){ownershipReads++;return claimed ? 'native-only' : null},
     async claimLegacyWrite(){return claimed ? 'native-only' : 'legacy'},
     async claimNativeOnlyWrite(value){
       assert.equal(value.sourceId,nativeKey.sourceId)
@@ -106,6 +107,7 @@ test('opt-in native-only Writer skips SourceRecord / Observation / Evidence only
     await sourceRunnerInternals.processSourceRecordWithOwnership(...args)
     assert.equal(rawWrites,0)
     assert.equal(normalizations,0)
+    assert.equal(ownershipReads,1, 'durable selected mode must be cached for next native event')
   }finally{
     if(oldEnv===undefined)delete process.env.AGENT_LENS_NATIVE_ONLY_NEW_SESSIONS
     else process.env.AGENT_LENS_NATIVE_ONLY_NEW_SESSIONS=oldEnv
