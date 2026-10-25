@@ -361,22 +361,25 @@ test('Hook identity binds to a unique native tool even when neighboring turns sh
     {...candidate('permission.request',8,{decision:'identity-only'}),nativeCallId:'call-first'},
     {...candidate('permission.request',9,{decision:'unknown'}),nativeCallId:'missing-call',occurredAt:'2026-10-25T04:00:04Z'},
     {...candidate('permission.response',10,{decision:'conflict'}),nativeCallId:'call-first',nativeParentEventId:'second-event',occurredAt:'2026-10-25T04:00:04Z'},
+    {...candidate('permission.request',11,{decision:'outside-turn'}),nativeCallId:'call-first',occurredAt:'2026-10-25T04:00:06Z'},
   ]
   const result=overlayNativeHookEvents({
     window:native,observations:hooks,
-    observationRecordIds:['hook-1','hook-2','hook-3','hook-4'],truncated:false,
+    observationRecordIds:['hook-1','hook-2','hook-3','hook-4','hook-5'],truncated:false,
   })
-  assert.equal(result.observationCount,native.observationCount+2)
+  assert.equal(result.observationCount,native.observationCount+1)
   const first=JSON.stringify(result.interactions[0])
   const second=JSON.stringify(result.interactions[1])
   assert.equal(first.includes('decision":"first"'),true)
-  assert.equal(first.includes('identity-only'),true,
-    'exact native ID may prove ownership without a trustworthy Hook clock')
+  assert.equal(first.includes('identity-only'),false,
+    'a page-local unique call ID cannot replace an attested native event time')
   assert.equal(second.includes('identity-only'),false)
   assert.equal(JSON.stringify(result).includes('missing-call'),false,
     'unknown native ID must never fall back to timestamp')
   assert.equal(JSON.stringify(result).includes('decision":"conflict"'),false,
     'contradictory event and tool ownership must remain unassigned')
+  assert.equal(JSON.stringify(result).includes('outside-turn'),false,
+    'an ID reused in another native page must not override attested turn bounds')
   assert.equal(result.hookFactsPartial,true)
 })
 
