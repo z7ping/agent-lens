@@ -874,12 +874,13 @@ export const openCodeSourceDefinition: SourceDefinition = {
             throw new Error('OpenCode native database changed identity during catalog scan')
           }
           const title=row.session_title?.trim()
+          const revision=await nativeSqliteRevision(dbPath,current)
           yield {
             sourceId: SOURCE_ID, installationId:ctx.installation.id,
             nativeSessionId:row.native_session_id,
             locationKind:'native' as const,
             filePath:dbPath, fileIdentity:identity,
-            fileSize:current.size, fileMtimeMs:current.mtimeMs,
+            fileSize:revision.fileSize, fileMtimeMs:revision.fileMtimeMs,
             lastActivityAt:observedAt,
             ...(title ? {title} : {}),
             updatedAt:new Date().toISOString(),
