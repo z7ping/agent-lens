@@ -581,7 +581,7 @@ export async function startClaudeRuntimeCapture(
           const record = runtimeRecord(envelope, filePath, ctx)
           await emitter.emit(record)
           if (process.env.AGENT_LENS_NATIVE_HOOK_ARCHIVE === '1' && record.sourceSessionNativeId) {
-            await archiveAcceptedHookInboxFile({inbox,fileName,nativeSessionId:record.sourceSessionNativeId})
+            await archiveAcceptedHookInboxFile({inbox,fileName,nativeSessionId:record.sourceSessionNativeId,installationId:ctx.installation.id})
           } else {
             await unlink(filePath)
           }
