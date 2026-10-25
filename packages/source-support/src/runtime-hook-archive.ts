@@ -63,8 +63,13 @@ export async function archiveAcceptedHookInboxFile(input: {
   nativeSessionId: string
   /** New sources must supply the Installation scope. Omitted only for legacy testing/read. */
   installationId?: string
+  /** SHA-256 of the exact inbox bytes parsed before emitter acknowledgement. */
+  expectedSha256?: string
 }): Promise<void> {
-  const { inbox, fileName, nativeSessionId, installationId } = input
+  const { inbox, fileName, nativeSessionId, installationId, expectedSha256 } = input
+  if (expectedSha256 !== undefined && !/^[a-f0-9]{64}$/.test(expectedSha256)) {
+    throw new TypeError('Invalid Hook source-original SHA-256')
+  }
   if (!safeInboxName(fileName) || basename(fileName) !== fileName) {
     throw new TypeError('Invalid original Hook inbox filename')
   }
@@ -77,8 +82,10 @@ export async function archiveAcceptedHookInboxFile(input: {
   const directory = join(inbox, 'archive', opaqueSessionDirectory(nativeSessionId, installationId))
   await mkdir(directory, { recursive: true, mode: 0o700 })
   const targetPath = join(directory, fileName)
+  let createdTarget = false
   try {
     await link(sourcePath, targetPath)
+    createdTarget = true
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error
     const [existing, current] = await Promise.all([readFile(targetPath), readFile(sourcePath)])
@@ -94,6 +101,13 @@ export async function archiveAcceptedHookInboxFile(input: {
     throw new Error('Hook archive event changed during sealing')
   }
   const digest = createHash('sha256').update(eventBytes).digest('hex')
+  if (expectedSha256 !== undefined && digest !== expectedSha256) {
+    // A Hook inbox record can be rewritten between Source parse/emit and
+    // archive acknowledgement. Never seal and unlink different evidence.
+    // Only clean up the hard link created by this attempt, not older archives.
+    if (createdTarget) await unlink(targetPath)
+    throw new Error('Hook archive original bytes changed after capture')
+  }
   const checksumPath = `${targetPath}.sha256`
   const temporaryPath = `${checksumPath}.${randomUUID()}.tmp`
   try {
