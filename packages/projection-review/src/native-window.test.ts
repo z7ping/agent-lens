@@ -98,3 +98,26 @@ test('native Review nodes use source record identity rather than page-local indi
   })
   assert.equal(JSON.stringify(safe).includes('[circular]'), true)
 })
+
+test('native Review file changes reuse mutation evidence projection without stored SQL events', () => {
+  const result = projectNativeReviewWindow({
+    ...page,
+    completeBoundaries: true,
+    observations: [
+      candidate('message.user', 1, { text:'Edit file' }),
+      candidate('tool.call', 2, {callId:'write-1',nativeToolName:'write_file',input:{path:'src/main.ts',content:'hello'}}),
+      candidate('tool.result',3, {callId:'write-1',status:'success'}),
+      candidate('tool.call',4, {callId:'shell-1',nativeToolName:'shell',input:{command:'rm src/secret.ts'}}),
+      candidate('tool.result',5, {callId:'shell-1',status:'success'}),
+      candidate('tool.call',6, {callId:'delete-1',nativeToolName:'delete_file',input:{path:'src/unused.ts'}}),
+      candidate('tool.result',7, {callId:'delete-1',status:'error'}),
+    ],
+    observationRecordIds:['a','b','c','d','e','f','g'],
+  })
+  assert.equal(result.pagingUnit,'interaction')
+  assert.deepEqual(result.observedFileChanges?.map(item=>item.path),['src/main.ts'])
+  assert.equal(result.observedFileChanges?.[0]?.confidence,'medium')
+  assert.equal(result.observedFileChanges?.[0]?.changeType,'unknown')
+  assert.equal(result.fileChangesTruncated,undefined)
+  assert.equal(JSON.stringify(result).includes('evidenceRefs'),false)
+})
