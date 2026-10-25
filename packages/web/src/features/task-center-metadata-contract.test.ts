@@ -95,3 +95,12 @@ test('会话列表本地/远程均保留两层信息且完整标题键盘可读�
   assert.match(page, /task-center-quick-filters/)
   assert.match(page, /task-center-active-filter-list/)
 })
+
+test('Task Center directly indexes Native-only sessions without forcing a Legacy SQL event copy',()=>{
+  assert.match(page,/model\.nativeSessions\(\{/)
+  assert.match(page,/onlyWithoutLegacyReview:true/)
+  assert.match(page,/nativeTaskCenterSummaries\(nativeSessions,review\.filters,nowMs\)/)
+  assert.match(page,/loadMoreNativeSessions/)
+  assert.match(page,/nativeCursor && <Button/)
+  assert.match(page,/openHistoryTask\(entry\.id\)/)
+})

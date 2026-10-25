@@ -1,4 +1,4 @@
-import type { LiveRuntimeRefDto, LaunchableProjectDto, ReviewSessionSummaryDto } from '@agent-lens/protocol'
+import type { LiveRuntimeRefDto, LaunchableProjectDto, NativeSessionSummaryDto } from '@agent-lens/protocol'
 import type { ReviewFilters } from '../client/api'
 import type { TaskSessionListSummary } from './task-center'
 import { taskLiveRuntimeHref } from './task-live-runtime'
@@ -10,7 +10,7 @@ export interface TaskCenterSession {
 }
 
 export function mergeTaskCenterSessions(
-  history: readonly ReviewSessionSummaryDto[],
+  history: readonly TaskSessionListSummary[],
   runtimes: readonly LiveRuntimeRefDto[],
   selectedHref = '',
 ): TaskCenterSession[] {
@@ -60,4 +60,27 @@ export function visibleTaskCenterSession(
     if (Number.isFinite(at) && at < from.getTime()) return false
   }
   return true
+}
+
+/** Native-only Catalog carries metadata, never an inferred project, first
+ * message, error verdict, or a second copy of the original session body.
+ * Unsupported SQL-only project/error filters must not pretend to match. */
+export function nativeTaskCenterSummaries(
+  entries:readonly NativeSessionSummaryDto[],filters:ReviewFilters,nowMs:number,
+):TaskSessionListSummary[]{
+  if(filters.projectId || filters.status!=='all' || filters.sourceIds?.length===0)return []
+  const from=filters.range==='all'?Number.NEGATIVE_INFINITY
+    :filters.range==='today'
+      ?new Date(new Date(nowMs).setHours(0,0,0,0)).getTime()
+      :nowMs-(filters.range==='7d'?7:30)*86_400_000
+  return entries.filter(entry=>{
+    const when=Date.parse(entry.lastActivityAt)
+    return entry.locationKind==='native'
+      && (filters.sourceIds===null || filters.sourceIds.includes(entry.sourceId))
+      && Number.isFinite(when) && when>=from
+  }).map(entry=>({
+    id:entry.id,productId:entry.sourceId,sourceIds:[entry.sourceId],
+    startedAt:'',endedAt:entry.lastActivityAt,hasErrors:false,
+    ...(entry.title?{title:entry.title}:{}),
+  }))
 }
