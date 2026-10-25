@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict'
-import { mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { createHash } from 'node:crypto'
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import test from 'node:test'
@@ -27,6 +28,14 @@ test('codex retrieves only its matching durable original Hook sidecar records',a
     assert.equal(rows[0]?.sourceSessionNativeId,'S1')
     assert.equal(rows[0]?.installationId,'install')
     assert.equal(rows[0]?.locator.kind,'runtime-hook')
+    assert.ok(rows[0]?.locator.path)
+    const originalBytes=await readFile(rows[0]!.locator.path!)
+    const fingerprint=createHash('sha256').update(originalBytes).digest('hex')
+    const archived={...rows[0]!,fingerprint}
+    assert.equal((await codexSourceDefinition.rawRecovery!.verify!(archived,ctx)).state,'verified')
+    assert.equal((await codexSourceDefinition.rawRecovery!.verify!({
+      ...archived,fingerprint:'0'.repeat(64),
+    },ctx)).state,'drifted')
     const normalized=await codexSourceDefinition.normalize(rows[0]!,{host,installation})
     assert.ok(Array.isArray(normalized.observations))
     assert.deepEqual(await codexSourceDefinition.readArchivedNativeHooks!('other-session',ctx),[])

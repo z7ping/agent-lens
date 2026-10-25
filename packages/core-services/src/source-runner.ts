@@ -524,13 +524,24 @@ async function shouldReadNativeOnly(
     // A competing history/runtime writer may have claimed native-only between
     // our ownership read and claimLegacyWrite(). Its claim is NOT permission to
     // skip this particular record without verifying the original bytes.
-    if (!isDurablyNativeRecoverable(source, record)
-      || !source.rawRecovery?.verify || !record.locator.path || !record.fingerprint) {
+    const preparedHook=record.locator.kind==='runtime-hook'
+    // Runtime-only facts are not part of the native JSONL/SQLite catalog
+    // path. They may skip SQL only after the Source proves the separate
+    // single-copy, installation/session-scoped Hook archive is already sealed.
+    // An unclaimed Hook can NEVER establish Native-only ownership by itself.
+    const recoverable=preparedHook
+      ? Boolean(source.nativeSessionCoverageComplete===true
+        && (source.readArchivedNativeHooksPage || source.readArchivedNativeHooks))
+      : isDurablyNativeRecoverable(source,record)
+    if (!recoverable || !source.rawRecovery?.verify
+      || record.sourceId!==source.manifest.sourceId
+      || record.installationId!==installation.id
+      || !record.locator.path || !record.fingerprint) {
       throw new Error('native-only-source-recovery-coverage-drift')
     }
     signal.throwIfAborted()
     const registered = await catalog.get({ ...key, locationKind: 'native' })
-    if (!registered || registered.filePath !== record.locator.path) {
+    if (!registered || (!preparedHook && registered.filePath!==record.locator.path)) {
       throw new Error('native-only-source-record-location-drift')
     }
     const verification = await source.rawRecovery.verify(record, {

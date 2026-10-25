@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto'
 import { stat } from 'node:fs/promises'
-import { join } from 'node:path'
+import { basename, join } from 'node:path'
 import type {
   DetectedSource,
   ObservationCapability,
@@ -12,7 +12,7 @@ import {
   defineAgentLensPlugin,
   type AgentLensContext,
 } from '@agent-lens/runtime-cordis'
-import { archivedHookInboxRecordPath, readArchivedHookInboxPage, readAuthorizedNativeJsonlEntry, readNativeSessionWindow, verifyJsonlLineSha256 } from '@agent-lens/source-support'
+import { archivedHookInboxRecordPath, readArchivedHookInboxPage, readAuthorizedNativeJsonlEntry, readNativeSessionWindow, verifyJsonlLineSha256, verifyPreparedHookInboxOriginal } from '@agent-lens/source-support'
 import { discoverCodexAssets } from './assets'
 import {
   CODEX_CURRENT_PARSER_VERSION,
@@ -111,7 +111,29 @@ const jsonlRawRecovery: NonNullable<SourceDefinition['rawRecovery']> = {
     // Ignore catalog title here: Source normalizer only needs native session context.
     return { state: 'available', record: { ...record, payload: { entry: read.entry, session } } }
   },
-  async verify(record) {
+  async verify(record, ctx) {
+    if(record.locator.kind==='runtime-hook'){
+      const checkedAt=new Date().toISOString()
+      if(!ctx || record.sourceId!=='codex'
+        || record.installationId!==ctx.installation.id
+        || !record.sourceSessionNativeId || !record.locator.path
+        || !record.fingerprint){
+        return {state:'unsupported' as const,checkedAt,
+          reason:'native-hook-scoped-original-required'}
+      }
+      const proof={
+        inbox:codexRuntimeInternals.inboxDirectory(),
+        fileName:basename(record.locator.path),
+        nativeSessionId:record.sourceSessionNativeId,
+        installationId:ctx.installation.id,
+        expectedSha256:record.fingerprint,
+      }
+      if(archivedHookInboxRecordPath(proof)!==record.locator.path){
+        return {state:'drifted' as const,checkedAt,
+          reason:'native-hook-archive-location-changed'}
+      }
+      return {state:await verifyPreparedHookInboxOriginal(proof),checkedAt}
+    }
     const result = await verifyJsonlLineSha256({
       ...(record.locator.path === undefined ? {} : { path: record.locator.path }),
       ...(record.locator.offset === undefined ? {} : { offset: record.locator.offset }),

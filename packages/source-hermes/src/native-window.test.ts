@@ -1,10 +1,12 @@
 import assert from 'node:assert/strict'
-import { mkdtemp, rm, stat } from 'node:fs/promises'
+import { createHash } from 'node:crypto'
+import { mkdtemp, rm, stat, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
 import test from 'node:test'
-import type { SourceRawRecoveryContext } from '@agent-lens/core'
+import type { SourceRawRecoveryContext, SourceRecord } from '@agent-lens/core'
+import { archiveAcceptedHookInboxFile, archivedHookInboxRecordPath } from '@agent-lens/source-support'
 import { HERMES_STATE_DB_NAME } from '@agent-lens/runtime-cordis'
 import { hermesSourceDefinition } from './index'
 
@@ -116,4 +118,42 @@ test('Hermes native SQLite pages isolate session rows and normalize with no chec
         .includes('edited current Hermes state'),true)
     }
   }finally{db.close();await rm(root,{recursive:true,force:true})}
+})
+
+test('Hermes runtime Hook original is independently verifiable from its sealed archive',async()=>{
+  const inbox=await mkdtemp(join(tmpdir(),'al-hermes-hook-verify-'))
+  const oldInbox=process.env.AGENT_LENS_HERMES_INBOX
+  process.env.AGENT_LENS_HERMES_INBOX=inbox
+  const fileName='hook.json',nativeSessionId='S1',installationId='hermes-inst'
+  const original=JSON.stringify({id:'H1',event:{session_id:nativeSessionId,event:'permission'}})
+  const fingerprint=createHash('sha256').update(original).digest('hex')
+  try{
+    await writeFile(join(inbox,fileName),original)
+    await archiveAcceptedHookInboxFile({inbox,fileName,nativeSessionId,installationId,
+      expectedSha256:fingerprint})
+    const path=archivedHookInboxRecordPath({inbox,fileName,nativeSessionId,installationId})
+    const host:SourceRawRecoveryContext['host']={id:'host',name:'local',platform:process.platform,
+      arch:process.arch,createdAt:at,lastSeenAt:at}
+    const installation:SourceRawRecoveryContext['installation']={
+      id:installationId,hostId:host.id,productId:'hermes',dataRoot:inbox,
+      firstSeenAt:at,lastSeenAt:at,
+    }
+    const ctx:SourceRawRecoveryContext={host,installation,
+      abortSignal:new AbortController().signal,
+      checkpoint:{async get(){return null},async set(){throw Error('read-only')},
+        async clear(){throw Error('read-only')}}}
+    const record:SourceRecord={id:'H1',sourceId:'hermes',installationId,
+      sourceSessionNativeId:nativeSessionId,nativeType:'hook/permission',
+      capturedAt:at,locator:{kind:'runtime-hook',path,hookEventId:'H1'},fingerprint,
+      payload:{},parserVersion:hermesSourceDefinition.manifest.parserVersion}
+    assert.equal((await hermesSourceDefinition.rawRecovery!.verify!(record,ctx)).state,'verified')
+    assert.equal((await hermesSourceDefinition.rawRecovery!.verify!(
+      {...record,fingerprint:'0'.repeat(64)},ctx)).state,'drifted')
+    assert.equal((await hermesSourceDefinition.rawRecovery!.verify!(
+      {...record,sourceSessionNativeId:'OTHER'},ctx)).state,'drifted')
+  }finally{
+    if(oldInbox===undefined)delete process.env.AGENT_LENS_HERMES_INBOX
+    else process.env.AGENT_LENS_HERMES_INBOX=oldInbox
+    await rm(inbox,{recursive:true,force:true})
+  }
 })
