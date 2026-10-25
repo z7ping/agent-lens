@@ -60,6 +60,7 @@ import { badRequest, statusCodeForError, writeJson } from './http-utils'
 import { handleLiveAttachmentRequest } from './live-attachments-http'
 import { handleNativeSessionWindowRequest, handleNativeSessionAttachmentRequest, handleNativeSessionHookRequest, type NativeSessionWindowReader } from './native-session-http'
 import { handleNativeSessionCatalogRequest } from './native-session-catalog-http'
+import { handleNativeSessionBodySearchRequest } from './native-session-search-http'
 import { reviewAttachmentSources } from './review-attachments'
 import { handleLiveRequest } from './live-http'
 import { handleManagedAssetFilesRequest } from './managed-asset-files'
@@ -273,6 +274,8 @@ export async function startHttpSurface(
     try {
       const url = new URL(request.url ?? '/', `http://${AGENT_LENS_HTTP_HOST}`)
       route = httpRouteLabel(url.pathname)
+      if (await handleNativeSessionBodySearchRequest(request, response, url,
+        storage.nativeSessionCatalog, options.nativeSessionReader, options.capturePolicy)) return
       if (await handleNativeSessionCatalogRequest(request, response, url, storage.nativeSessionCatalog, options.capturePolicy)) return
       if (await handleNativeSessionAttachmentRequest(request, response, url, options.nativeSessionReader, storage.nativeSessionCatalog)) return
       if (await handleNativeSessionHookRequest(request, response, url, options.nativeSessionReader, storage.nativeSessionCatalog)) return
