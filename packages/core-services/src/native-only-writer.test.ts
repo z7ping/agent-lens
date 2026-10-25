@@ -119,7 +119,7 @@ test('opt-in native-only Writer skips SourceRecord / Observation / Evidence only
   }
 })
 
-test('opt-in native writer retains the legacy path when no Catalog or native claim exists',async()=>{
+test('opt-in keeps mutable database records legacy even when native reader can verify a row',async()=>{
   const oldEnv=process.env.AGENT_LENS_NATIVE_ONLY_NEW_SESSIONS
   process.env.AGENT_LENS_NATIVE_ONLY_NEW_SESSIONS='1'
   const host:Host={id:'host',name:'local',platform:'linux',arch:'x64',createdAt:at,lastSeenAt:at}
@@ -129,15 +129,30 @@ test('opt-in native writer retains the legacy path when no Catalog or native cla
   const record:SourceRecord={
     id:'legacy',sourceId:'test',installationId:'inst',
     sourceSessionNativeId:'old',nativeType:'message',capturedAt:at,
-    locator:{kind:'runtime-hook',hookEventId:'hook'},payload:{text:'legacy'},parserVersion:'1',
+    locator:{kind:'database',path:'/tmp/state.db',table:'messages',rowId:'1'},
+    fingerprint:'row-fingerprint',payload:{text:'legacy'},parserVersion:'1',
   }
   let persisted=0
   const storage={
+    nativeSessionCatalog:{
+      async getSessionWriteMode(){return null},
+      async claimLegacyWrite(){return 'legacy'},
+      async claimNativeOnlyWrite(){throw Error('Mutable database cannot be native-only')},
+    },
     repositories:{sourceRecords:{async put(){persisted++}}},
     async transaction<T>(op:()=>Promise<T>){return op()},
   } as unknown as StorageService
   const source={
     manifest:{sourceId:'test'},
+    rawRecovery:{
+      describe(){return {
+        authority:'native-store',canReread:true,locatorStability:'best-effort',
+        mutability:'mutable',verification:'fingerprint',canReparse:true,
+        replayable:true,persistencePreference:'preserve',
+      }},
+      async verify(){throw Error('Should never verify mutable SQLite as native-only')},
+    },
+    async readNativeSessionPage(){throw Error('Should never probe mutable SQLite')},
     async normalize(){return {observations:[],evidenceCandidates:[]}},
   } as unknown as SourceDefinition
   const policy={
