@@ -125,7 +125,8 @@ test('Hermes runtime Hook original is independently verifiable from its sealed a
   const oldInbox=process.env.AGENT_LENS_HERMES_INBOX
   process.env.AGENT_LENS_HERMES_INBOX=inbox
   const fileName='hook.json',nativeSessionId='S1',installationId='hermes-inst'
-  const original=JSON.stringify({id:'H1',event:{session_id:nativeSessionId,event:'permission'}})
+  const original=JSON.stringify({id:'H1',event:{session_id:nativeSessionId,
+    hook_event_name:'pre_approval_request',tool_call_id:'call-1',timestamp:at}})
   const fingerprint=createHash('sha256').update(original).digest('hex')
   try{
     await writeFile(join(inbox,fileName),original)
@@ -149,6 +150,9 @@ test('Hermes runtime Hook original is independently verifiable from its sealed a
     const archived=await hermesSourceDefinition.readArchivedNativeHooks!(nativeSessionId,ctx)
     assert.equal(archived.length,1)
     assert.equal(archived[0]?.fingerprint,fingerprint)
+    const normalized=await hermesSourceDefinition.normalize(archived[0]!,{host,installation})
+    assert.equal(normalized.observations[0]?.kind,'permission.request')
+    assert.equal(normalized.observations[0]?.nativeCallId,'call-1')
     assert.equal((await hermesSourceDefinition.rawRecovery!.verify!(archived[0]!,ctx)).state,'verified')
     assert.equal((await hermesSourceDefinition.rawRecovery!.verify!(record,ctx)).state,'verified')
     assert.equal((await hermesSourceDefinition.rawRecovery!.verify!(
