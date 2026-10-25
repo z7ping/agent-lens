@@ -1,4 +1,4 @@
-import type { HubReadAvailability, HubReviewSessionSummaryDto, ReviewSessionSummaryDto } from '@agent-lens/protocol'
+import type { HubReadAvailability, HubReviewSessionSummaryDto, NativeSessionSummaryDto, ReviewSessionSummaryDto } from '@agent-lens/protocol'
 import type { AgentLensClientModel } from '../client/model'
 import { agentLensI18n } from '../i18n/runtime'
 
@@ -126,5 +126,6 @@ export function hubSessionVisibility(item: HubReviewSessionSummaryDto, review: R
 
 export type UnifiedReviewSessionListEntry =
   | { origin: 'local'; id: string; activityAt: string; local: ReviewSessionSummaryDto }
+  | { origin: 'native'; id: string; activityAt: string; native: NativeSessionSummaryDto }
   | { origin: 'remote'; id: string; activityAt: string; remote: HubReviewSessionSummaryDto }
 
