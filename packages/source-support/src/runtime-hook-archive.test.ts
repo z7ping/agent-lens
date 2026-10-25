@@ -77,7 +77,7 @@ test('Hook sidecar pages preserve every source file, reject cross-session cursor
     assert.deepEqual(second.items.map(item=>item.fileName),['event-2.json','event-3.json'])
     assert.equal(second.hasMore,true)
     const third=await readArchivedHookInboxPage({
-      inbox,nativeSessionId:'S1',limit:2,cursor:second.nextCursor,
+      inbox,nativeSessionId:'S1',limit:2,cursor:second.nextCursor!,
     })
     assert.deepEqual(third.items.map(item=>item.fileName),['event-4.json'])
     assert.equal(third.hasMore,false)
