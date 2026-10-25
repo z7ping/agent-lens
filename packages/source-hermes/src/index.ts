@@ -42,6 +42,7 @@ import {
   archiveAcceptedHookInboxFile,
   prepareHookInboxArchive,
   nativeHookArchiveEnabled,
+  createHookInboxRetryGate,
   archivedHookInboxRecordPath,
   readArchivedHookInboxPage,
   verifyPreparedHookInboxOriginal,
@@ -563,6 +564,7 @@ export async function startHermesRuntimeCapture(
     })
   }
 
+  const hookRetry = createHookInboxRetryGate()
   const inboxTask = (async () => {
     while (!stopped && !ctx.abortSignal.aborted) {
       let files: string[] = []
@@ -574,6 +576,7 @@ export async function startHermesRuntimeCapture(
       }
       for (const fileName of files) {
         if (stopped || ctx.abortSignal.aborted) break
+        if (!hookRetry.shouldAttempt(fileName)) continue
         const filePath = join(inbox, fileName)
         try {
           const originalBytes = await readFile(filePath)
@@ -601,8 +604,10 @@ export async function startHermesRuntimeCapture(
           await emitter.emit(deliveredRecord)
           if (archiveInput) await archiveAcceptedHookInboxFile(archiveInput)
           else await unlink(filePath)
+          hookRetry.markDelivered(fileName)
         } catch {
-          break
+          // Preserve the failing original; later files must not starve.
+          hookRetry.markFailed(fileName)
         }
       }
       await abortableDelay(INBOX_POLL_MS, ctx.abortSignal)
