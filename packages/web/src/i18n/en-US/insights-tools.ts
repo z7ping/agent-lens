@@ -54,6 +54,8 @@ export const englishInsightsToolsMessages: LocaleMessagesDto = {
       nativePartialCoverage: 'Partial',
       nativeCompleteCoverage: 'Verified',
       nativeSeparateNote: 'Native-only sessions are shown separately from legacy KPIs until safe reconciliation prevents double counting.',
+      nativeOnlyEmptyTitle: 'Native session metrics are available',
+      nativeOnlyEmptyDescription: 'No legacy Insights records match this scope, but native session metrics are shown above. They are not yet combined; an empty legacy result does not mean there is no native data.',
       statisticsRange: 'Statistics range',
       sessionSample: 'Session sample',
       sessionCount: '{{count}} sessions',

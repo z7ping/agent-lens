@@ -54,6 +54,8 @@ export const chineseInsightsToolsMessages: LocaleMessagesDto = {
       nativePartialCoverage: '部分可用',
       nativeCompleteCoverage: '已校验',
       nativeSeparateNote: '这部分只统计原生 Native-only 会话，尚未合入旧会话的 KPI，以免重复计算。',
+      nativeOnlyEmptyTitle: '已有原生会话统计',
+      nativeOnlyEmptyDescription: '当前筛选范围没有旧存储的洞察记录，但上方仍有原生会话统计。两套口径尚未合并，请勿将旧指标为空视为无数据。',
       statisticsRange: '统计范围',
       sessionSample: '会话样本',
       sessionCount: '{{count}} 个',

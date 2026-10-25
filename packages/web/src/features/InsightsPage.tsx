@@ -225,8 +225,12 @@ export function InsightsPage({ model, toolbarHost }: { model: AgentLensClientMod
           </Disclosure>}
         </> : <div className="insight-empty-wrap"><EmptyStatePanel
           icon={<UiIcon name="trend" size={20}/>}
-          title={t('page.emptyTitle')}
-          description={t('page.emptyDescription')}
+          title={data?.meta.native?.state === 'available'
+            && data.meta.native.eligibleSessions > 0
+            ? t('page.nativeOnlyEmptyTitle') : t('page.emptyTitle')}
+          description={data?.meta.native?.state === 'available'
+            && data.meta.native.eligibleSessions > 0
+            ? t('page.nativeOnlyEmptyDescription') : t('page.emptyDescription')}
           action={canRelaxFilters ? { label: t('page.relaxFilters'), onClick: relaxFilters } : { label: t('page.refresh'), onClick: () => void insightsModel.refresh() }}
         /></div>}
       </div>
