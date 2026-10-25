@@ -86,14 +86,18 @@ test('watchSourceFiles observes unlink and recreated files without duplicate sto
   )
 
   await writeFile(filePath, 'rebuilt', 'utf8')
+  // Chokidar can legally coalesce a rapid remove/recreate into a 'change',
+  // especially on Linux's native fs.watch backend. Consumers rescan on both
+  // 'add' and 'change'; the contract is one useful refresh, not an exact verb.
   await waitFor(
-    () => seen.some(item => item.path === filePath && item.event === 'add'),
-    'watchSourceFiles did not observe recreated file',
+    () => seen.some(item => item.path === filePath
+      && (item.event === 'add' || item.event === 'change')),
+    'watchSourceFiles did not observe recreated file as add or change',
   )
 
   const relevant = seen.filter(item => item.path === filePath)
   assert.equal(relevant.filter(item => item.event === 'unlink').length, 1)
-  assert.equal(relevant.filter(item => item.event === 'add').length, 1)
+  assert.equal(relevant.filter(item => item.event === 'add' || item.event === 'change').length, 1)
 
   await handle.dispose()
 })
