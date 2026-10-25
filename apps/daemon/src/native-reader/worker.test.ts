@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises'
+import { mkdtemp, mkdir, rm, stat, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import test from 'node:test'
@@ -30,8 +30,10 @@ test('isolated Pi native Worker reads and normalizes actual JSONL without a data
       JSON.stringify({ type: 'message', id: 'message-1',
         message: { role: 'user', content: 'test native worker' } }),
     ].join('\n') + '\n')
+    const fileStat = await stat(filePath)
+    const fileIdentity = `${fileStat.dev}:${fileStat.ino}`
     const result = await worker.read({
-      sourceId: 'pi', parserVersion: piManifest.parserVersion,
+      sourceId: 'pi', parserVersion: piManifest.parserVersion, expectedFileIdentity: fileIdentity,
       host, installation: installation('pi', root),
       query: { filePath, nativeSessionId: 'native-session', limit: 10 },
     }, new AbortController().signal)
@@ -45,7 +47,7 @@ test('isolated Pi native Worker reads and normalizes actual JSONL without a data
     assert.equal(result.pendingTail, false)
 
     const bad = await worker.read({
-      sourceId: 'pi', parserVersion: 'outdated',
+      sourceId: 'pi', parserVersion: 'outdated', expectedFileIdentity: fileIdentity,
       host, installation: installation('pi', root),
       query: { filePath, nativeSessionId: 'native-session' },
     }, new AbortController().signal)
@@ -69,8 +71,10 @@ test('isolated Codex native Worker reads original archived_sessions and validate
         payload: { type: 'message', role: 'assistant',
           content: [{ type: 'output_text', text: 'worker output' }] } }),
     ].join('\n') + '\n')
+    const fileStat = await stat(filePath)
+    const fileIdentity = `${fileStat.dev}:${fileStat.ino}`
     const result = await worker.read({
-      sourceId: 'codex', parserVersion: codexManifest.parserVersion,
+      sourceId: 'codex', parserVersion: codexManifest.parserVersion, expectedFileIdentity: fileIdentity,
       host, installation: installation('codex', root),
       query: { filePath, nativeSessionId: 'codex-original', limit: 16 },
     }, new AbortController().signal)
@@ -79,7 +83,7 @@ test('isolated Codex native Worker reads original archived_sessions and validate
       assert.ok(result.entries.some(row => row.normalized.observations.some(x => x.kind === 'message.assistant')))
     }
     const escaped = await worker.read({
-      sourceId: 'codex', parserVersion: codexManifest.parserVersion,
+      sourceId: 'codex', parserVersion: codexManifest.parserVersion, expectedFileIdentity: fileIdentity,
       host, installation: installation('codex', join(root, 'another-root')),
       query: { filePath, nativeSessionId: 'codex-original' },
     }, new AbortController().signal)
