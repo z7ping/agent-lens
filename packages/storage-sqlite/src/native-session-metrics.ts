@@ -4,6 +4,7 @@ import type {
   NativeSessionMetricsStore,
   NativeSessionMetricOverview,
   NativeSessionMetricOverviewQuery,
+  NativeSessionMetricRebuildCandidate,
 } from '@agent-lens/core'
 import { NATIVE_SESSION_METRIC_PROJECTION_VERSION } from '@agent-lens/core'
 import type { SqliteExecutor } from './executor'
@@ -267,6 +268,47 @@ export class SqliteNativeSessionMetrics implements NativeSessionMetricsStore {
         tools:rows.slice(0,256),
         toolsTruncated:rows.length>256,
       }
+    })
+  }
+
+  /** Only NEW Native-only sessions needing (re)projection. No event reads. */
+  findRebuildCandidates(
+    input:NativeSessionMetricOverviewQuery,limit:number,
+  ):Promise<NativeSessionMetricRebuildCandidate[]>{
+    if(!input.sourceId || !input.parserVersion
+      || input.sourceId.length>128 || input.parserVersion.length>512
+      || !Number.isSafeInteger(limit) || limit<1 || limit>4){
+      throw new TypeError('Invalid native metric refresh scope')
+    }
+    return this.executor.run(()=>{
+      const rows=this.executor.db.prepare(`
+        SELECT catalog.review_session_id AS reviewSessionId,
+          catalog.source_id AS sourceId,
+          catalog.installation_id AS installationId,
+          catalog.native_session_id AS nativeSessionId
+        FROM native_session_write_claims AS claim
+        JOIN native_session_catalog AS catalog
+          ON catalog.source_id=claim.source_id
+          AND catalog.installation_id=claim.installation_id
+          AND catalog.native_session_id=claim.native_session_id
+          AND catalog.location_kind='native'
+        LEFT JOIN native_session_metrics AS metrics
+          ON metrics.source_id=catalog.source_id
+          AND metrics.installation_id=catalog.installation_id
+          AND metrics.native_session_id=catalog.native_session_id
+        WHERE claim.mode='native-only' AND claim.source_id=?
+          AND catalog.review_session_id IS NOT NULL
+          AND (metrics.source_id IS NULL
+            OR metrics.file_identity<>catalog.file_identity
+            OR metrics.file_size<>catalog.file_size
+            OR metrics.file_mtime_ms<>catalog.file_mtime_ms
+            OR metrics.parser_version<>?
+            OR metrics.projection_version<>?)
+        ORDER BY catalog.last_activity_at DESC
+        LIMIT ?
+      `).all(input.sourceId,input.parserVersion,
+        NATIVE_SESSION_METRIC_PROJECTION_VERSION,limit) as NativeSessionMetricRebuildCandidate[]
+      return rows
     })
   }
 
