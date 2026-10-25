@@ -60,6 +60,7 @@ test('opt-in native-only Writer skips SourceRecord / Observation / Evidence only
   } as unknown as CapturePolicyService
   const source={
     manifest:{sourceId:'pi',productId:'pi',parserVersion:'1'},
+    nativeSessionCoverageComplete:true,
     rawRecovery:{
       describe(){return {
         canReread:true,authority:'native-store',locatorStability:'stable',
