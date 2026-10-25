@@ -64,6 +64,7 @@ import { handleNativeSessionBodySearchRequest } from './native-session-search-ht
 import { handleNativeSessionMetricsRequest } from './native-session-metrics-http'
 import { handleNativeSessionMetricsOverviewRequest } from './native-session-metrics-overview-http'
 import { nativeMetricContribution } from './native-metrics-contribution'
+import { NativeMetricsAutoRefresh } from './native-metrics-auto-refresh'
 import { reviewAttachmentSources } from './review-attachments'
 import { handleLiveRequest } from './live-http'
 import { handleManagedAssetFilesRequest } from './managed-asset-files'
@@ -200,6 +201,10 @@ export async function startHttpSurface(
   )
   const relationships = new SessionRelationshipProjection(storage)
   const staticMounts = new Map<string, HttpStaticMount>()
+  const nativeMetricsRefresh=new NativeMetricsAutoRefresh(
+    storage.nativeSessionCatalog,storage.nativeSessionMetrics,
+    options.nativeSessionReader,options.sources,options.capturePolicy,
+  )
   type StorageHealth = Awaited<ReturnType<StorageService['health']>>
   let cachedStorageHealth: StorageHealth | null = null
   let cachedStorageHealthAt = 0
@@ -277,6 +282,12 @@ export async function startHttpSurface(
     try {
       const url = new URL(request.url ?? '/', `http://${AGENT_LENS_HTTP_HOST}`)
       route = httpRouteLabel(url.pathname)
+      // Request-triggered, single-flight background repair; the current
+      // response stays SQL-only and never blocks on Source body reads.
+      if(request.method==='GET' && [
+        '/api/v1/usage','/api/v1/insights',
+        '/api/v1/native-sessions/metrics/overview',
+      ].includes(url.pathname))nativeMetricsRefresh.schedule()
       if (await handleNativeSessionMetricsOverviewRequest(request,response,url,
         storage.nativeSessionMetrics,options.sources,options.capturePolicy)) return
       if (await handleNativeSessionMetricsRequest(request,response,url,
@@ -961,6 +972,7 @@ export async function startHttpSurface(
       return { dispose: () => { staticMounts.delete(mount.id) } }
     },
     async dispose() {
+      nativeMetricsRefresh.dispose()
       options.eventHub?.close()
       await new Promise<void>((resolvePromise, reject) => {
         server.close(error => error ? reject(error) : resolvePromise())

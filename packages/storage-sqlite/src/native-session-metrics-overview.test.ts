@@ -52,6 +52,19 @@ test('native metrics overview counts only complete, current Native-only owned se
     assert.equal(await metrics.replace(metric('stale')),true)
     assert.equal(await metrics.replace(metric('legacy')),true)
     await storage.nativeSessionCatalog.upsert(location('stale',121))
+    // Only durable Native-only missing/stale revisions are selected.
+    const pending=await metrics.findRebuildCandidates({
+      sourceId:source,parserVersion,
+    },4)
+    assert.deepEqual(pending.map(row=>row.nativeSessionId).sort(),['missing','stale'])
+    assert.ok(pending.every(row=>/^native:[a-f0-9]{32}$/.test(row.reviewSessionId)))
+    assert.deepEqual(await metrics.findRebuildCandidates({
+      sourceId:'unregistered',parserVersion,
+    },4),[])
+    await assert.rejects(()=>metrics.findRebuildCandidates({
+      sourceId:source,parserVersion,
+    },100),/Invalid native metric refresh scope/)
+
     const overview=await metrics.overview({sourceId:source,parserVersion})
     assert.equal(overview.eligibleSessions,4)
     assert.deepEqual([
