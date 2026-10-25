@@ -139,7 +139,7 @@ test('native metric materialization never marks unverified Hook coverage complet
     }
     assert.equal(body.state,'available')
     assert.equal(body.coverage,'partial')
-    assert.equal(body.reason,'native-hook-coverage-unverified')
+    assert.equal(body.reason,'native-source-coverage-unverified')
     assert.equal((recorded as NativeSessionMetricSnapshot | null)?.coverage,'partial')
   }finally{await app.dispose()}
 })
