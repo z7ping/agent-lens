@@ -1,6 +1,6 @@
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import type { NativeSessionReadQuery, NativeSessionReadResult } from '@agent-lens/core-services'
-import type { ObservationCandidate, SourceNativeSessionCursor } from '@agent-lens/core'
+import type { NativeSessionCatalogStore, ObservationCandidate, SourceNativeSessionCursor } from '@agent-lens/core'
 import type { NativeReviewWindowDto } from '@agent-lens/protocol'
 
 import { projectNativeReviewWindow } from '@agent-lens/projection-review'
@@ -364,8 +364,10 @@ export async function handleNativeSessionWindowRequest(
   response: ServerResponse,
   url: URL,
   reader?: NativeSessionWindowReader,
+  catalog?: NativeSessionCatalogStore,
 ): Promise<boolean> {
-  if (url.pathname !== PATH) return false
+  const byId = url.pathname.match(/^\/api\/v1\/native-sessions\/([^/]+)\/review$/)
+  if (url.pathname !== PATH && !byId) return false
   if (request.method !== 'GET') {
     response.setHeader('allow', 'GET')
     writeJson(response, 405, { error: 'method_not_allowed' })
@@ -376,28 +378,63 @@ export async function handleNativeSessionWindowRequest(
     return true
   }
 
-  const sourceId = identifier(url.searchParams, 'sourceId')
-  const installationId = identifier(url.searchParams, 'installationId')
-  const nativeSessionId = identifier(url.searchParams, 'nativeSessionId')
-  if (url.searchParams.has('filePath') || url.searchParams.has('path') || url.searchParams.has('root')) {
+  let requestedUrl = url
+  if (byId) {
+    if (!catalog) {
+      writeJson(response, 503, { state: 'unavailable', reason: 'native-session-catalog-unavailable' })
+      return true
+    }
+    const nativeReviewId = (() => {
+      try { return decodeURIComponent(byId[1]!) }
+      catch { return '' }
+    })()
+    if (!/^native:[0-9a-f]{32}$/.test(nativeReviewId)) {
+      writeJson(response, 404, { error: 'not_found' })
+      return true
+    }
+    // A stable ID has exactly one Catalog-owned Source triple; callers cannot
+    // override it or ask a direct-link handler for incomplete raw windows.
+    if (['sourceId', 'installationId', 'nativeSessionId', 'filePath', 'path', 'root'].some(key =>
+      url.searchParams.has(key))
+      || (url.searchParams.has('format')
+        && url.searchParams.get('format') !== 'review-turns')) {
+      throw badRequest('Native Review by ID only accepts its own cursor, turnLimit and review-turns format')
+    }
+    const entry = await catalog.getByReviewSessionId(nativeReviewId)
+    if (!entry || entry.locationKind !== 'native') {
+      writeJson(response, 404, { error: 'not_found' })
+      return true
+    }
+    requestedUrl = new URL(url)
+    requestedUrl.pathname = PATH
+    requestedUrl.searchParams.set('sourceId', entry.sourceId)
+    requestedUrl.searchParams.set('installationId', entry.installationId)
+    requestedUrl.searchParams.set('nativeSessionId', entry.nativeSessionId)
+    requestedUrl.searchParams.set('format', 'review-turns')
+  }
+
+  const sourceId = identifier(requestedUrl.searchParams, 'sourceId')
+  const installationId = identifier(requestedUrl.searchParams, 'installationId')
+  const nativeSessionId = identifier(requestedUrl.searchParams, 'nativeSessionId')
+  if (requestedUrl.searchParams.has('filePath') || requestedUrl.searchParams.has('path') || requestedUrl.searchParams.has('root')) {
     throw badRequest('Raw file paths are not accepted by native window requests')
   }
-  const rawLimit = url.searchParams.get('limit')
+  const rawLimit = requestedUrl.searchParams.get('limit')
   const limit = rawLimit === null ? 8 : Number(rawLimit)
   if (!Number.isSafeInteger(limit) || limit < 1 || limit > MAX_LIMIT) {
     throw badRequest(`Native window limit must be between 1 and ${MAX_LIMIT}`)
   }
-  if (url.searchParams.getAll('cursor').length > 1 || url.searchParams.getAll('limit').length > 1) {
+  if (requestedUrl.searchParams.getAll('cursor').length > 1 || requestedUrl.searchParams.getAll('limit').length > 1) {
     throw badRequest('Duplicate native window parameters')
   }
-  const formatValues = url.searchParams.getAll('format')
+  const formatValues = requestedUrl.searchParams.getAll('format')
   if (formatValues.length > 1
     || (formatValues.length === 1 && !['review', 'review-turns'].includes(formatValues[0]!))) {
     throw badRequest('Unsupported native window format')
   }
-  const cursor = decodeCursor(url.searchParams.get('cursor'))
+  const cursor = decodeCursor(requestedUrl.searchParams.get('cursor'))
   const turnMode = formatValues[0] === 'review-turns'
-  const turnLimitValues = url.searchParams.getAll('turnLimit')
+  const turnLimitValues = requestedUrl.searchParams.getAll('turnLimit')
   const turnLimit = turnLimitValues.length === 0 ? 1 : Number(turnLimitValues[0])
   if (turnLimitValues.length > 1 || (turnLimitValues.length && !turnMode)
     || !Number.isSafeInteger(turnLimit) || turnLimit < 1

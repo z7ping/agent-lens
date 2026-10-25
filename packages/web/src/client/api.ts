@@ -406,6 +406,25 @@ export class AgentLensApi {
     )
   }
 
+  /** Stable-ID native Review deep link. Source identity remains resolved on the daemon. */
+  nativeReviewById(id: string, options: {
+    cursor?: string
+    turnLimit?: number
+    limit?: number
+    signal?: AbortSignal
+  } = {}): Promise<NativeReviewWindowResponseDto> {
+    const params = new URLSearchParams()
+    if (options.cursor) params.set('cursor', options.cursor)
+    if (options.turnLimit !== undefined) params.set('turnLimit',
+      String(Math.max(1, Math.min(options.turnLimit, 4))))
+    if (options.limit !== undefined) params.set('limit',
+      String(Math.max(1, Math.min(options.limit, 16))))
+    return requestJson<NativeReviewWindowResponseDto>(
+      `/api/v1/native-sessions/${encodeURIComponent(id)}/review${params.size ? `?${params}` : ''}`,
+      options.signal ? { signal: options.signal } : {},
+    )
+  }
+
   review(filters: ReviewFilters, limit = 40, cursor?: string, signal?: AbortSignal): Promise<ReviewResponseDto> {
     const params = new URLSearchParams()
     appendFilters(params, filters)
