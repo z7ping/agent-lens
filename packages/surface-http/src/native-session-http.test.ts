@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import type { StorageService } from '@agent-lens/core'
+import type { StorageService, NativeSessionCatalogEntry } from '@agent-lens/core'
+import { nativeReviewSessionId } from '@agent-lens/projection-review'
 import type { NativeSessionWindowReader } from './native-session-http'
 import { encodeNativeSessionCursor } from './native-session-http'
 import { startHttpSurface } from './server'
@@ -529,4 +530,59 @@ test('native Review batching returns contiguous complete turns with one rewind c
     const invalidFormat=await fetch(url.replace('&format=review-turns','&format=review')+'&turnLimit=2')
     assert.equal(invalidFormat.status,400)
   }finally{await http.dispose()}
+})
+
+test('native Review stable-ID endpoint resolves Catalog on demand without accepting caller-owned source paths',async()=>{
+  const at='2026-10-25T00:00:00Z'
+  const entry:NativeSessionCatalogEntry={
+    sourceId:'pi',installationId:'inst',nativeSessionId:'S1',
+    locationKind:'native',filePath:'/private/should-not-expose.jsonl',
+    fileIdentity:'1:2',fileSize:128,fileMtimeMs:1,lastActivityAt:at,updatedAt:at,
+  }
+  const nativeId=nativeReviewSessionId(entry.sourceId,entry.installationId,entry.nativeSessionId)
+  let catalogReads=0
+  const storage={
+    ...noopStorage,
+    nativeSessionCatalog:{
+      async getByReviewSessionId(value:string){
+        catalogReads++
+        return value===nativeId?entry:null
+      },
+    },
+  } as unknown as StorageService
+  const called:Array<{sourceId:string;installationId:string;nativeSessionId:string}>=[]
+  const reader:NativeSessionWindowReader={
+    async read(q){
+      called.push({sourceId:q.sourceId,installationId:q.installationId,nativeSessionId:q.nativeSessionId})
+      return {
+        state:'available',
+        observations:[{
+          kind:'message.user',capturedAt:at,
+          payload:{text:'hello'},identityHints:{nativeSessionId:'S1'},
+        }],
+        observationRecordIds:['native-row-1'],
+        observationCursors:[{offset:0,sequence:0,fileIdentity:'1:2'}],
+        evidenceCandidates:[],
+        nextCursor:{offset:64,sequence:1,fileIdentity:'1:2'},
+        hasMore:false,pendingTail:false,
+      }
+    },
+  }
+  const server=await startHttpSurface(storage,{port:0,nativeSessionReader:reader})
+  const url=`http://${server.host}:${server.port}/api/v1/native-sessions/${encodeURIComponent(nativeId)}/review`
+  try{
+    const response=await fetch(url+'?turnLimit=2')
+    assert.equal(response.status,200)
+    const payload=await response.json() as {state:string;sessionId:string;interactions:Array<{ordinal:number}>}
+    assert.equal(payload.state,'available')
+    assert.equal(payload.sessionId,nativeId)
+    assert.deepEqual(payload.interactions.map(item=>item.ordinal),[1])
+    assert.equal(JSON.stringify(payload).includes('/private/'),false)
+    assert.deepEqual(called,[{sourceId:'pi',installationId:'inst',nativeSessionId:'S1'}])
+    assert.equal(catalogReads,1)
+    for (const suffix of ['?sourceId=codex','?nativeSessionId=OTHER','?path=/tmp/x','?format=review']) {
+      assert.equal((await fetch(url+suffix)).status,400,suffix)
+    }
+    assert.equal((await fetch(url.replace(encodeURIComponent(nativeId),encodeURIComponent(nativeReviewSessionId('pi','inst','missing')))).status,404)
+  }finally{await server.dispose()}
 })
