@@ -1,4 +1,4 @@
-import type { CanonicalObservation, SourceCheckpointService, SourceService, StorageService } from '@agent-lens/core'
+import type { CanonicalObservation, SourceCheckpointService, SourceRecord, SourceService, StorageService } from '@agent-lens/core'
 import { reviewMessageAttachmentSourcesFromPayload } from '@agent-lens/protocol'
 import { asRecord, readVerifiedNativeJsonlObject } from '@agent-lens/source-support'
 
@@ -34,7 +34,7 @@ export async function reviewAttachmentSources(
         storage.repositories.installations.get(observation.installationId),
       ])
       if (!host || !installation) continue
-      let nativeRecord
+      let nativeRecord: SourceRecord
       if (definition.rawRecovery.hydrate) {
         // The adapter supplies its own authorized Source roots and reconstructs
         // the envelope even if SourceRecord.payload is no longer persisted.
