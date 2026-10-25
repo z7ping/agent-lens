@@ -9,7 +9,7 @@ import type {
   SourceRecordEmitter,
 } from '@agent-lens/core'
 import { abortableDelay } from '@agent-lens/runtime-cordis'
-import { archiveAcceptedHookInboxFile, nativeHookArchiveEnabled, asRecord, isMissingPathError, startHistoryFileWatch } from '@agent-lens/source-support'
+import { archiveAcceptedHookInboxFile, prepareHookInboxArchive, nativeHookArchiveEnabled, asRecord, isMissingPathError, startHistoryFileWatch } from '@agent-lens/source-support'
 import { CODEX_CURRENT_PARSER_VERSION } from './current-protocol'
 import { codexHistoryRoots, ingestCodexFile, listJsonlFiles } from './history'
 
@@ -140,16 +140,20 @@ export async function startCodexRuntimeCapture(
           const originalBytes = await readFile(filePath)
           const envelope = parseEnvelope(originalBytes.toString('utf8'), fileName)
           const record = sourceRecordFromEnvelope(envelope, filePath, ctx)
+          // Seal the SAME original Hook bytes before any writer can accept
+          // or reject this event. Failed delivery keeps inbox for retry and
+          // still leaves a verified Source-owned single-copy archive.
+          const archiveInput = nativeHookArchiveEnabled() && record.sourceSessionNativeId
+            ? {
+                inbox,fileName,nativeSessionId:record.sourceSessionNativeId,
+                installationId:ctx.installation.id,
+                expectedSha256:createHash('sha256').update(originalBytes).digest('hex'),
+              }
+            : null
+          if (archiveInput) await prepareHookInboxArchive(archiveInput)
           await emitter.emit(record)
-          if (nativeHookArchiveEnabled() && record.sourceSessionNativeId) {
-            await archiveAcceptedHookInboxFile({
-              inbox,fileName,nativeSessionId:record.sourceSessionNativeId,
-              installationId:ctx.installation.id,
-              expectedSha256:createHash('sha256').update(originalBytes).digest('hex'),
-            })
-          } else {
-            await unlink(filePath)
-          }
+          if (archiveInput) await archiveAcceptedHookInboxFile(archiveInput)
+          else await unlink(filePath)
         } catch {
           // Durable inbox semantics: leave the file in place and retry later.
           break
