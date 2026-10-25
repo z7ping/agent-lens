@@ -1,4 +1,8 @@
 import assert from 'node:assert/strict'
+import { mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { nativeSqliteRevision } from '@agent-lens/source-support'
 import test from 'node:test'
 import type {
   CapturePolicyService, NativeSessionCatalogEntry, NativeSessionCatalogStore,
@@ -363,4 +367,48 @@ test('per-Source metric pagination does not reuse a different Source keyset curs
       {sourceId:'codex',after:'S3'},{sourceId:'pi',after:'S3'},
     ])
   }finally{refresh.dispose()}
+})
+
+test('mutable native SQLite metrics reject a WAL revision written during multi-page counting',async()=>{
+  const root=await mkdtemp(join(tmpdir(),'al-native-metric-revision-'))
+  const path=join(root,'state.db')
+  const snapshots:NativeSessionMetricSnapshot[]=[]
+  const metrics={
+    async replace(value:NativeSessionMetricSnapshot){snapshots.push(value);return true},
+  } as unknown as NativeSessionMetricsStore
+  const sourceDefinition={
+    manifest:{sourceId:'opencode',parserVersion:'v1'},
+    nativeSessionCoverageComplete:true,
+  } as unknown as ReturnType<SourceService['list']>[number]
+  try{
+    await writeFile(path,'original database metadata')
+    const before=await nativeSqliteRevision(path)
+    const dbEntry:NativeSessionCatalogEntry={
+      ...entry,sourceId:'opencode',filePath:path,...before,
+    }
+    let revisionChanged=false
+    const reader:NativeSessionWindowReader={
+      async read(){
+        if(!revisionChanged){
+          await writeFile(`${path}-wal`,'native sqlite WAL update during scan')
+          revisionChanged=true
+        }
+        return {
+          state:'available',observations:[],observationRecordIds:[],
+          evidenceCandidates:[],hasMore:false,pendingTail:false,
+          nextCursor:{offset:12,sequence:1,fileIdentity:before.fileIdentity},
+        }
+      },
+    }
+    const first=await rebuildNativeSessionMetrics(dbEntry,metrics,reader,sourceDefinition,
+      new AbortController().signal)
+    assert.deepEqual(first,{state:'drifted',reason:'native-metrics-source-revision-changed'})
+    assert.equal(snapshots.length,0,'never publish totals across a WAL revision')
+    const latest=await nativeSqliteRevision(path)
+    const second=await rebuildNativeSessionMetrics({...dbEntry,...latest},metrics,reader,
+      sourceDefinition,new AbortController().signal)
+    assert.equal(second.state,'available')
+    assert.equal(snapshots.length,1)
+    assert.equal(snapshots[0]?.fileSize,latest.fileSize)
+  }finally{await rm(root,{recursive:true,force:true})}
 })
