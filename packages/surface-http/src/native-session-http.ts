@@ -419,12 +419,11 @@ export async function handleNativeSessionAttachmentRequest(
     if(sourceCursor.offset!==cursor.offset || sourceCursor.fileIdentity!==cursor.fileIdentity
       || sourceCursor.sequence!==cursor.sequence) continue
     const candidate=page.observations[i]!
+    const recordId=page.observationRecordIds[i]!
+    const ordinal=seen.get(recordId)??0
+    seen.set(recordId,ordinal+1)
     if(candidate.kind!=='message.user' && candidate.kind!=='message.assistant'
       && candidate.kind!=='message.commentary' && candidate.kind!=='message.reasoning') continue
-    const recordId=page.observationRecordIds[i]!
-    const key=recordId
-    const ordinal=seen.get(key)??0
-    seen.set(key,ordinal+1)
     if(nativeReviewObservationId(entry.sourceId,entry.installationId,entry.nativeSessionId,
       candidate,recordId,ordinal)!==observationId) continue
     // Never return arbitrary host paths or remote URLs. For inline images only,
