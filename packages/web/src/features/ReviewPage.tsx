@@ -108,6 +108,7 @@ export function ReviewPage({ model, embedded = false, latestRequest = 0 }: { mod
       sessionId: id,
       interactions: cursor && previous?.sessionId === id ? previous.interactions : [],
       hasMore: false,
+      ...(cursor ? {nextCursor:cursor} : {}),
       loading: true,
     }))
     void hookApi.nativeReviewHooksById(id, cursor ? {cursor} : {}).then(page => {
@@ -117,6 +118,7 @@ export function ReviewPage({ model, embedded = false, latestRequest = 0 }: { mod
           sessionId: id,
           interactions: previous?.sessionId === id ? previous.interactions : [],
           hasMore: false,
+          ...(cursor ? {nextCursor:cursor} : {}),
           loading: false,
           error: page.reason,
         }))
@@ -124,6 +126,9 @@ export function ReviewPage({ model, embedded = false, latestRequest = 0 }: { mod
       }
       if (page.boundaryIntegrity !== 'partial') {
         throw new Error('Hook-only evidence must not claim complete user turns')
+      }
+      if (page.hasMore && !page.nextCursor) {
+        throw new Error('Hook pagination reported more files without a cursor')
       }
       setHookEvidence(previous => ({
         sessionId: id,
@@ -141,6 +146,7 @@ export function ReviewPage({ model, embedded = false, latestRequest = 0 }: { mod
         sessionId: id,
         interactions: previous?.sessionId === id ? previous.interactions : [],
         hasMore: false,
+        ...(cursor ? {nextCursor:cursor} : {}),
         loading: false,
         error: error instanceof Error ? error.message : String(error),
       }))
@@ -384,7 +390,7 @@ export function ReviewPage({ model, embedded = false, latestRequest = 0 }: { mod
                     loadAttachments={model.reviewAttachments}
                     loadProcess={model.reviewProcessDetail}
                     expansionStore={roundExpansionRef.current}
-                    showAllEvents
+                    showAllEvents={showAllEvents}
                     onShowAllEvents={toggleEventVisibility}
                     fileChangesEnabled={false}
                   />
