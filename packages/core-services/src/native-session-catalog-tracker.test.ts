@@ -102,3 +102,39 @@ test('native SQLite catalog observes real message clock through WAL mtime thrott
     assert.equal(JSON.stringify(stored).includes('DO_NOT_PERSIST'),false)
   }finally{await rm(root,{recursive:true,force:true})}
 })
+
+test('catalog indexes native session titles only, never user/tool content',async()=>{
+  const root=await mkdtemp(join(tmpdir(),'agent-lens-catalog-title-'))
+  const path=join(root,'session.jsonl')
+  const stored:NativeSessionCatalogEntry[]=[]
+  const catalog={async upsert(entry:NativeSessionCatalogEntry){stored.push(entry)}} as NativeSessionCatalogStore
+  let now=Date.parse(at)
+  const tracker=new NativeSessionCatalogTracker(catalog,()=>now,30_000)
+  try{
+    await writeFile(path,'{}\n')
+    const transcript={...record(path),payload:{
+      session:{nativeSessionId:'pi-original'},
+      entry:{type:'message',message:{role:'user',content:'PRIVATE_PROMPT'},title:'untrusted-message-title'},
+    }}
+    assert.equal(await tracker.observe(source,transcript),true)
+    assert.equal(stored[0]?.title,undefined)
+    assert.equal(JSON.stringify(stored).includes('PRIVATE_PROMPT'),false)
+    const titled={...record(path),payload:{
+      session:{nativeSessionId:'pi-original',sessionName:'Native title'},
+      entry:{type:'message',message:{role:'assistant',content:'PRIVATE_RESPONSE'}},
+    }}
+    assert.equal(await tracker.observe(source,titled),true)
+    assert.equal(stored[1]?.title,'Native title')
+    assert.equal(JSON.stringify(stored).includes('PRIVATE_RESPONSE'),false)
+    // A repeated user turn must not replace a trusted title or force a write.
+    assert.equal(await tracker.observe(source,transcript),false)
+    assert.equal(stored.length,2)
+    now+=30_001
+    assert.equal(await tracker.observe(source,transcript),true)
+    assert.equal(stored[2]?.title,undefined) // SQL upsert keeps previous native title.
+    assert.equal(await tracker.observe(source,{
+      ...record(path),payload:{entry:{type:'session_info',name:'Explicit new title'}},
+    }),true)
+    assert.equal(stored[3]?.title,'Explicit new title')
+  }finally{await rm(root,{recursive:true,force:true})}
+})

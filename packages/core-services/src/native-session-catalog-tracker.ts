@@ -6,12 +6,41 @@ import type {
   SourceRecord,
 } from '@agent-lens/core'
 
+function nativeTitle(record: SourceRecord): string | undefined {
+  // Titles are allowed metadata; text from user/assistant bodies is NOT.
+  // Trust only an explicit Source session metadata field or a native
+  // session-info event, never an arbitrary 'title' in tool arguments.
+  const payload = record.payload
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) return undefined
+  const envelope = payload as Record<string, unknown>
+  const session = envelope.session
+  let raw: unknown
+  if (session && typeof session === 'object' && !Array.isArray(session)) {
+    const meta = session as Record<string, unknown>
+    raw = meta.title ?? meta.sessionName
+  }
+  const entry = envelope.entry
+  if (raw === undefined && entry && typeof entry === 'object' && !Array.isArray(entry)) {
+    const native = entry as Record<string, unknown>
+    if (native.type === 'session_info' || native.type === 'session_title') {
+      raw = native.title ?? native.name
+      if (raw === undefined && native.payload && typeof native.payload === 'object'
+        && !Array.isArray(native.payload)) {
+        raw = (native.payload as Record<string, unknown>).title
+      }
+    }
+  }
+  if (typeof raw !== 'string') return undefined
+  const title = raw.trim()
+  return title && title.length <= 512 ? title : undefined
+}
+
 /**
  * Piggyback lightweight directory changes on already-observed Source records.
  * This is not an additional startup scan and never stores record payload.
  */
 export class NativeSessionCatalogTracker {
-  private readonly inspected = new Map<string, { checkedAt: number; activityMs: number }>()
+  private readonly inspected = new Map<string, { checkedAt: number; activityMs: number; title?: string }>()
 
   constructor(
     private readonly catalog?: NativeSessionCatalogStore,
@@ -46,7 +75,10 @@ export class NativeSessionCatalogTracker {
     // without one SQLite catalog write for every message.
     const significantActivity = originalDatabase && previous
       && activityMs - previous.activityMs >= 5 * 60_000
-    if (previous && now - previous.checkedAt < this.minRefreshMs && !significantActivity) return false
+    const title = nativeTitle(record)
+    const titleChanged = Boolean(title && previous?.title !== title)
+    if (previous && now - previous.checkedAt < this.minRefreshMs
+      && !significantActivity && !titleChanged) return false
     // Limit memory, even during long multi-source history scans.
     if (this.inspected.size >= 1024) {
       const oldest = this.inspected.keys().next().value
@@ -55,6 +87,7 @@ export class NativeSessionCatalogTracker {
     this.inspected.set(key, {
       checkedAt: now,
       activityMs: Math.max(previous?.activityMs ?? Number.NEGATIVE_INFINITY, activityMs),
+      ...(title ?? previous?.title ? { title: title ?? previous?.title } : {}),
     })
 
     let file
@@ -86,6 +119,7 @@ export class NativeSessionCatalogTracker {
         && Number.isFinite(Date.parse(record.occurredAt))
         ? new Date(record.occurredAt).toISOString()
         : new Date(file.mtimeMs).toISOString(),
+      ...(title ? { title } : {}),
       updatedAt: new Date(now).toISOString(),
     })
     return true
