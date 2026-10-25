@@ -166,8 +166,8 @@ test('native session catalog remains metadata-only, stable and independently pag
     }),false)
 
     // Unfiltered view still exposes all original catalog entries.
-    const allNative = await catalog.query({locationKind:'native',limit:3})
-    assert.deepEqual(allNative.items.map(x=>x.nativeSessionId),['c','b','a'])
+    const allNative = await catalog.query({locationKind:'native',limit:6})
+    assert.deepEqual(allNative.items.map(x=>x.nativeSessionId),['source-record-only','legacy-first','c','b','a'])
     assert.equal(JSON.stringify(unmatched).includes('never included'),false)
 
     const columns = storage.db.prepare('PRAGMA table_info(native_session_catalog)').all() as Array<{name:string}>
