@@ -511,7 +511,17 @@ async function shouldReadNativeOnly(
   // Two independent runners may race for the same session. Every path must
   // claim an immutable owner BEFORE persisting legacy events or skipping them.
   const established = await tracker.getWriteMode(key)
-  if (established) return established === 'native-only'
+  if (established === 'native-only') {
+    // Older opt-in claims may predate Source recoverability/coverage checks.
+    // Never silently discard an ephemeral hook or a Source whose native store
+    // is no longer authoritative. Escalate as Source runtime failure instead
+    // of pretending these unique facts were safely persisted elsewhere.
+    if (!isDurablyNativeRecoverable(source, record)) {
+      throw new Error('native-only-source-recovery-coverage-drift')
+    }
+    return true
+  }
+  if (established === 'legacy') return false
   const claimLegacy = async () => {
     const mode = await catalog.claimLegacyWrite(key)
     tracker.rememberWriteMode(key, mode)
