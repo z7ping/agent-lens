@@ -3,7 +3,7 @@ import type { TFunction } from 'i18next'
 import { useTranslation } from 'react-i18next'
 import { createPortal } from 'react-dom'
 import { useLocation, useNavigate } from 'react-router-dom'
-import type { HubReadAvailability, HubReviewSessionSummaryDto, LaunchableProjectDto, LaunchableProjectsResponseDto, LiveRuntimeRefDto, NativeSessionSummaryDto } from '@agent-lens/protocol'
+import type { HubReadAvailability, HubReviewSessionSummaryDto, LaunchableProjectDto, LaunchableProjectsResponseDto, LiveRuntimeRefDto, NativeBodySearchHitDto, NativeSessionSummaryDto } from '@agent-lens/protocol'
 import type { AgentLensClientModel } from '../client/model'
 import { fetchHubReviewSessions } from '../client/hub-review'
 import { cachedLaunchableProjects, fetchLaunchableProjects, prefetchLaunchableProjects } from '../client/launchable-projects'
@@ -202,6 +202,15 @@ function RemoteTaskItem({ item, active, nowMs, onClick }: { item: HubReviewSessi
   </button>
 }
 
+function nativeSessionFromHit(hit:NativeBodySearchHitDto):NativeSessionSummaryDto {
+  return {
+    id:hit.sessionId,sourceId:hit.sourceId,
+    installationId:hit.installationId,nativeSessionId:hit.nativeSessionId,
+    locationKind:'native',lastActivityAt:hit.lastActivityAt,
+    ...(hit.title?{title:hit.title}:{}),
+  }
+}
+
 export function TaskCenterPage({ model, mode, sidebarHost }: { model: AgentLensClientModel; mode: TaskCenterMode; sidebarHost?: HTMLDivElement | null }) {
   const { t, i18n } = useTranslation('task')
   const { t: tNavigation } = useTranslation('navigation')
@@ -213,6 +222,11 @@ export function TaskCenterPage({ model, mode, sidebarHost }: { model: AgentLensC
   const navigate = useNavigate()
   const [hubSessions, setHubSessions] = useState<HubReviewSessionSummaryDto[]>([])
   const [nativeSessions, setNativeSessions] = useState<NativeSessionSummaryDto[]>([])
+  const [nativeBodySessions, setNativeBodySessions] = useState<NativeSessionSummaryDto[]>([])
+  const [nativeBodyCursor, setNativeBodyCursor] = useState<string | undefined>()
+  const [nativeBodyPartial, setNativeBodyPartial] = useState(false)
+  const [nativeBodyLoading, setNativeBodyLoading] = useState(false)
+  const [nativeBodyError, setNativeBodyError] = useState(false)
   const [nativeCursor, setNativeCursor] = useState<string | undefined>()
   const [nativeLoadingMore, setNativeLoadingMore] = useState(false)
   const nativeRequestKeyRef = useRef('')
@@ -291,29 +305,102 @@ export function TaskCenterPage({ model, mode, sidebarHost }: { model: AgentLensC
     return ()=>controller.abort()
   },[nativeScopeKey,review.response?.meta.generatedAt,model])
 
+  // Search original Source bodies only on demand. Never persist text search
+  // excerpts or invent a complete search when only one bounded page was read.
+  useEffect(()=>{
+    const filters=review.filters
+    const search=filters.search.trim()
+    const allowed=!filters.projectId && filters.status==='all'
+      && (filters.sourceIds===null || filters.sourceIds.length>0)
+      && search.length>=2
+    setNativeBodySessions([])
+    setNativeBodyCursor(undefined)
+    setNativeBodyPartial(false)
+    setNativeBodyError(false)
+    setNativeBodyLoading(false)
+    if(!allowed){setNativeBodyLoading(false);return}
+    const controller=new AbortController()
+    const sourceId=filters.sourceIds?.length===1?filters.sourceIds[0]:undefined
+    const timer=window.setTimeout(()=>{
+      setNativeBodyLoading(true)
+      void model.nativeBodySearch(search,{
+        ...(sourceId?{sourceId}:{}),signal:controller.signal,
+      }).then(page=>{
+        if(controller.signal.aborted)return
+        if(page.state!=='available'){
+          setNativeBodyPartial(true)
+          setNativeBodyError(true)
+          return
+        }
+        const sessions=new Map<string,NativeSessionSummaryDto>()
+        for(const hit of page.items)sessions.set(hit.sessionId,nativeSessionFromHit(hit))
+        setNativeBodySessions([...sessions.values()])
+        setNativeBodyPartial(page.hasMore || page.pendingTail)
+        setNativeBodyCursor(page.pendingTail?undefined:page.nextCursor)
+      },()=>{
+        if(controller.signal.aborted)return
+        setNativeBodyPartial(true)
+        setNativeBodyError(true)
+      }).finally(()=>{
+        if(!controller.signal.aborted)setNativeBodyLoading(false)
+      })
+    },250)
+    return ()=>{window.clearTimeout(timer);controller.abort()}
+  },[nativeScopeKey,model])
+
   const loadMoreNativeSessions=useCallback(async()=>{
-    if(!nativeCursor || nativeLoadingMore)return
+    if((!nativeCursor && !nativeBodyCursor) || nativeLoadingMore)return
     const key=nativeRequestKeyRef.current
     const filters=review.filters
     const sourceId=filters.sourceIds?.length===1?filters.sourceIds[0]:undefined
     setNativeLoadingMore(true)
     try{
-      const page=await model.nativeSessions({
-        ...(sourceId?{sourceId}:{}),
-        onlyWithoutLegacyReview:true,search:filters.search.trim(),
-        limit:100,cursor:nativeCursor,
-      })
-      if(nativeRequestKeyRef.current!==key)return
-      setNativeSessions(current=>{
-        const rows=new Map(current.map(item=>[item.id,item]))
-        for(const item of page.items)rows.set(item.id,item)
-        return [...rows.values()]
-      })
-      setNativeCursor(page.hasMore?page.nextCursor:undefined)
-    }catch{
-      // A failed page never invents EOF or clears already-found sessions.
+      if(nativeCursor){
+        try{
+          const page=await model.nativeSessions({
+            ...(sourceId?{sourceId}:{}),
+            onlyWithoutLegacyReview:true,search:filters.search.trim(),
+            limit:100,cursor:nativeCursor,
+          })
+          if(nativeRequestKeyRef.current!==key)return
+          setNativeSessions(current=>{
+            const rows=new Map(current.map(item=>[item.id,item]))
+            for(const item of page.items)rows.set(item.id,item)
+            return [...rows.values()]
+          })
+          setNativeCursor(page.hasMore?page.nextCursor:undefined)
+        }catch{
+          // Keep existing rows and cursor for a manual retry.
+        }
+      }
+      if(nativeBodyCursor && filters.search.trim().length>=2){
+        try{
+          const page=await model.nativeBodySearch(filters.search.trim(),{
+            ...(sourceId?{sourceId}:{}),cursor:nativeBodyCursor,
+          })
+          if(nativeRequestKeyRef.current!==key)return
+          if(page.state!=='available'){
+            setNativeBodyError(true)
+            setNativeBodyPartial(true)
+          }else{
+            setNativeBodySessions(current=>{
+              const rows=new Map(current.map(item=>[item.id,item]))
+              for(const hit of page.items)rows.set(hit.sessionId,nativeSessionFromHit(hit))
+              return [...rows.values()]
+            })
+            setNativeBodyPartial(page.hasMore || page.pendingTail)
+            setNativeBodyCursor(page.pendingTail?undefined:page.nextCursor)
+            setNativeBodyError(false)
+          }
+        }catch{
+          if(nativeRequestKeyRef.current===key){
+            setNativeBodyError(true)
+            setNativeBodyPartial(true)
+          }
+        }
+      }
     }finally{setNativeLoadingMore(false)}
-  },[nativeCursor,nativeLoadingMore,review.filters,model])
+  },[nativeCursor,nativeBodyCursor,nativeLoadingMore,review.filters,model])
 
   useEffect(() => {
     if (!review.response) {
@@ -413,8 +500,11 @@ export function TaskCenterPage({ model, mode, sidebarHost }: { model: AgentLensC
     projectLoadingMore,
   ])
 
-  const nativeHistory=useMemo(()=>nativeTaskCenterSummaries(nativeSessions,review.filters,nowMs),
-    [nativeSessions,review.filters,nowMs])
+  const nativeHistory=useMemo(()=>{
+    const all=new Map(nativeSessions.map(item=>[item.id,item]))
+    for(const item of nativeBodySessions)all.set(item.id,item)
+    return nativeTaskCenterSummaries([...all.values()],review.filters,nowMs)
+  },[nativeSessions,nativeBodySessions,review.filters,nowMs])
   const localSessions = useMemo(() => mergeTaskCenterSessions(
     // SQL wins if a Catalog refresh races an existing Legacy ownership claim.
     [...nativeHistory,...(review.response?.items ?? [])],runtimes,location.pathname,
@@ -624,7 +714,7 @@ export function TaskCenterPage({ model, mode, sidebarHost }: { model: AgentLensC
       {review.loading && !review.response && !localSessions.length && <SessionListSkeleton/>}
 
       {historyGroups.map(group => <section className="task-center-group task-center-history-group" key={group.key}>
-        <div className="task-center-group-title"><span>{group.label}</span><span>{group.items.length}{group.key === 'earlier' && (review.response?.meta.hasMore || nativeCursor) ? '+' : ''}</span></div>
+        <div className="task-center-group-title"><span>{group.label}</span><span>{group.items.length}{group.key === 'earlier' && (review.response?.meta.hasMore || nativeCursor || nativeBodyCursor) ? '+' : ''}</span></div>
         {group.items.map(entry => entry.kind === 'local'
           ? <HistoryTaskItem key={`local:${entry.id}`} item={entry.local} runtime={entry.runtime} nowMs={nowMs} active={entry.runtime ? location.pathname === taskLiveRuntimeHref(entry.runtime) : mode === 'history' && review.selectedId === entry.id} onClick={() => entry.runtime ? navigate(taskLiveRuntimeHref(entry.runtime)) : openHistoryTask(entry.id)}/>
           : <RemoteTaskItem key={`remote:${entry.id}`} item={entry.remote} nowMs={nowMs} active={mode === 'hub' && location.pathname === `/review/hub/${encodeURIComponent(entry.id)}`} onClick={() => navigate(`/review/hub/${encodeURIComponent(entry.id)}`)}/>)}
@@ -633,7 +723,10 @@ export function TaskCenterPage({ model, mode, sidebarHost }: { model: AgentLensC
       {review.response && !historyCount && !review.loading && <div className="task-center-empty">{t('center.history.empty')}</div>}
       {hubSessions.length > 0 && unsupportedRemoteFilters && <div className="task-center-empty" role="status">{t('center.history.remoteFilterLimitation')}</div>}
       {review.response?.meta.hasMore && <Button size="small" className="session-load-more" loading={review.loadingMore} onClick={() => void model.loadMoreReview()}>{t('center.history.loadMore')}</Button>}
-      {nativeCursor && <Button size="small" className="session-load-more"
+      {nativeBodyLoading && <div className="task-center-empty" role="status">{t('center.history.nativeSearchScanning')}</div>}
+      {nativeBodyError && <div className="task-center-empty" role="status">{t('center.history.nativeSearchError')}</div>}
+      {!nativeBodyError && nativeBodyPartial && <div className="task-center-empty" role="status">{t('center.history.nativeSearchPartial')}</div>}
+      {(nativeCursor || nativeBodyCursor) && <Button size="small" className="session-load-more"
         loading={nativeLoadingMore} onClick={() => void loadMoreNativeSessions()}>
         {t('center.history.loadMore')}
       </Button>}
