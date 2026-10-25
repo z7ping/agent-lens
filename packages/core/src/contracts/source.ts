@@ -68,6 +68,8 @@ export interface SourceHistoryWindow {
 
 export interface SourceHistoryExecutionContext extends SourceExecutionContext {
   historyWindow?: SourceHistoryWindow
+  /** Only trusted, source-enumerated native paths already claimed native-only. */
+  skipNativeSessionFile?: (filePath: string) => boolean
   /** 来源只报告真实工作节点；由共享 Runner 节流并持久化。 */
   reportProgress?(update: SourceHistoryProgressUpdate): Promise<void>
 }
