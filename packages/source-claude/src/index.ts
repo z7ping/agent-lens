@@ -1064,7 +1064,11 @@ export const claudeSourceDefinition: SourceDefinition = {
     const records = []
     for (const line of page.lines) {
       const entry = line.entry
-      if (nativeSessionId(entry, query.filePath) !== nativeId) {
+      // A Claude header/metadata entry can omit sessionId, in which case
+      // the whole file's verified session identity applies to that record.
+      // A conflicting *explicit* sessionId must still fail closed.
+      const entrySessionId = stringField(entry, 'sessionId', 'session_id')
+      if (entrySessionId && entrySessionId !== nativeId) {
         return { state: 'drifted' as const, reason: 'native-session-record-identity-changed' }
       }
       const nativeEntry = nativeEntryId(entry)
