@@ -44,6 +44,7 @@ export async function handleNativeSessionMetricsOverviewRequest(
   const items=await Promise.all(sourceDefs.map(source=>metrics.overview!({
     sourceId:source.manifest.sourceId,
     parserVersion:source.manifest.parserVersion,
+    coverageCertified:source.nativeSessionCoverageComplete===true,
     ...(from?{from}:{}),
     ...(to?{to}:{}),
   })))
