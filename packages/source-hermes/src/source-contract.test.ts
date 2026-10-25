@@ -1,9 +1,10 @@
 import assert from 'node:assert/strict'
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, rm, writeFile, stat } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import test from 'node:test'
 import { DatabaseSync } from 'node:sqlite'
+import { archiveAcceptedHookInboxFile } from '@agent-lens/source-support'
 import type { DiscoveredAsset, SourceExecutionContext, SourceRecord } from '@agent-lens/core'
 import {
   declareHermesCapabilities,
@@ -430,3 +431,79 @@ test('Hermes system and developer messages are context, not generic unknown', as
     assert.equal(payload.sourceRole, role)
   }
 })
+
+test('Hermes archived native Hook uses original inbox inode, reuses normalizer and paginates safely', async () => {
+  const inbox = await mkdtemp(join(tmpdir(), 'al-hermes-native-hook-'))
+  const previous = process.env.AGENT_LENS_HERMES_INBOX
+  process.env.AGENT_LENS_HERMES_INBOX = inbox
+  const nativeSessionId = 'H-stable-session'
+  const ctx = {
+    installation: { id: 'hermes-inst' },
+    abortSignal: new AbortController().signal,
+  } as unknown as SourceExecutionContext
+  try {
+    for(let i=0; i<18; i++){
+      const fileName = `hook-${String(i).padStart(3,'0')}.json`
+      await writeFile(join(inbox,fileName), JSON.stringify({
+        id: 'h-'+i, capturedAt: '2026-10-25T00:00:00Z',
+        event: {
+          hook_event_name: 'pre_approval_request',
+          session_id: nativeSessionId,
+          tool_name: 'shell', secret: 'do-not-index-or-persist',
+        },
+      }))
+      const before = await stat(join(inbox,fileName))
+      await archiveAcceptedHookInboxFile({inbox,fileName,nativeSessionId})
+      if(i===0){
+        const archived = await stat(join(inbox,'archive',
+          (await import('node:crypto')).createHash('sha256').update(nativeSessionId).digest('hex'),fileName))
+        assert.equal(before.ino,archived.ino)
+      }
+    }
+    const reader = hermesSourceDefinition.readArchivedNativeHooksPage!
+    const first=await reader(nativeSessionId,ctx)
+    assert.equal(first.records.length,16)
+    assert.equal(first.hasMore,true)
+    assert.ok(first.nextCursor)
+    assert.equal(first.records.every(record=>record.locator.kind==='runtime-hook'),true)
+    assert.equal(first.records.every(record=>record.sourceSessionNativeId===nativeSessionId),true)
+    const next=await reader(nativeSessionId,ctx,first.nextCursor)
+    assert.equal(next.records.length,2)
+    assert.equal(next.hasMore,false)
+    assert.equal(next.nextCursor,undefined)
+    const normalized=await normalizeHermesRecord(next.records[0]!,{} as never)
+    assert.equal(normalized.observations[0]?.kind,'permission.request')
+    await assert.rejects(reader('H-other',ctx,first.nextCursor),/Invalid archived Hook cursor/)
+    const response=JSON.stringify({
+      cursor:first.nextCursor, ids:next.records.map(record=>record.id),
+    })
+    assert.equal(response.includes('do-not-index-or-persist'),false)
+  } finally {
+    if(previous===undefined)delete process.env.AGENT_LENS_HERMES_INBOX
+    else process.env.AGENT_LENS_HERMES_INBOX=previous
+    await rm(inbox,{recursive:true,force:true})
+  }
+})
+
+test('Hermes Hook archive rejects mismatched source session identity',async()=>{
+  const inbox=await mkdtemp(join(tmpdir(),'al-hermes-native-foreign-'))
+  const previous=process.env.AGENT_LENS_HERMES_INBOX
+  process.env.AGENT_LENS_HERMES_INBOX=inbox
+  try {
+    await writeFile(join(inbox,'foreign.json'),JSON.stringify({
+      id:'foreign-hook',event:{hook_event_name:'subagent_start',session_id:'H-foreign'},
+    }))
+    await archiveAcceptedHookInboxFile({
+      inbox,fileName:'foreign.json',nativeSessionId:'H-authorized',
+    })
+    const ctx={installation:{id:'hermes-inst'},abortSignal:new AbortController().signal}
+      as unknown as SourceExecutionContext
+    await assert.rejects(hermesSourceDefinition.readArchivedNativeHooksPage!('H-authorized',ctx),
+      /does not belong to requested native session/)
+  } finally {
+    if(previous===undefined)delete process.env.AGENT_LENS_HERMES_INBOX
+    else process.env.AGENT_LENS_HERMES_INBOX=previous
+    await rm(inbox,{recursive:true,force:true})
+  }
+})
+
