@@ -293,7 +293,7 @@ function selectRows(
  */
 function nativeSessionRows(db: DatabaseSync, nativeSessionId: string, afterRowId: number, limit: number): HermesRow[] {
   return messageQuery(db, false, undefined, undefined, nativeSessionId)
-    .all(afterRowId, nativeSessionId, limit).map(hermesRow)
+    .all(nativeSessionId, afterRowId, limit).map(hermesRow)
 }
 
 function recentRows(db: DatabaseSync, limit: number): HermesRow[] {
