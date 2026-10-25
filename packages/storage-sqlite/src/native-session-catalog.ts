@@ -251,6 +251,17 @@ export class SqliteNativeSessionCatalog {
         // Do not advertise pre-v35 metadata rows that cannot be opened by
         // their synthetic Review ID until their next incremental upsert.
         predicates.push('review_session_id IS NOT NULL')
+        // A Legacy owner may already be durable before its first SQL Review
+        // Observation becomes visible. Do not create a synthetic Native-only
+        // rail entry in that in-flight interval (or for SourceRecord-only
+        // legacy sessions) merely because the Review projection is empty.
+        predicates.push(`NOT EXISTS (
+          SELECT 1 FROM native_session_write_claims AS claim
+          WHERE claim.source_id = native_session_catalog.source_id
+            AND claim.installation_id = native_session_catalog.installation_id
+            AND claim.native_session_id = native_session_catalog.native_session_id
+            AND claim.mode = 'legacy'
+        )`)
         // The existing SourceSession unique triple is the authoritative
         // association between source-native and legacy logical identities.
         // EXISTS uses the existing observations logical-session index, with
