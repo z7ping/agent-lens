@@ -56,6 +56,7 @@ import {
 import {
   createProgressiveHistoryStages,
   createParserReplayMaintenanceStages,
+  nativeCaptureStartupBatches,
   deferredHistoryStages,
   parserReplayMaintenanceStagesAllowedByCapacity,
   stagesAllowedByCapacity,
@@ -699,7 +700,7 @@ try {
         // installation claim legacy before the catalog proof completed.
         const nativeFast = process.env.AGENT_LENS_NATIVE_ONLY_NEW_SESSIONS === '1'
           && process.env.AGENT_LENS_NATIVE_CATALOG_FAST_SCAN === '1'
-        const batches = nativeFast ? targets.map(target => [target]) : [targets]
+        const batches = nativeCaptureStartupBatches(targets, nativeFast)
         for (const batch of batches) {
           startupTasks.push(startPreparedSource(batch).catch(error => {
             console.warn('[AgentLens] source startup fast path failed', error)
