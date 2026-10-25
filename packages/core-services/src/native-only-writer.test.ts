@@ -61,7 +61,11 @@ test('opt-in native-only Writer skips SourceRecord / Observation / Evidence only
   const source={
     manifest:{sourceId:'pi',productId:'pi',parserVersion:'1'},
     rawRecovery:{
-      describe(){return {canReread:true}},
+      describe(){return {
+        canReread:true,authority:'native-store',locatorStability:'stable',
+        mutability:'append-oriented',verification:'fingerprint',
+        canReparse:true,replayable:true,persistencePreference:'reference',
+      }},
       async verify(){return {state:'verified',checkedAt:at}},
     },
     async normalize(){
