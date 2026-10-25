@@ -30,6 +30,7 @@ import {
   type ManagedAssetFilePreviewResponseDto,
   type ManagedAssetRoot,
   type NativeBodySearchResponseDto,
+  type NativeMetricOverviewResponseDto,
   type NativeSessionCatalogResponseDto,
   type NativeSessionSummaryDto,
   type NativeReviewWindowResponseDto,
@@ -381,6 +382,22 @@ export class AgentLensApi {
     return requestJson<NativeBodySearchResponseDto>(
       `/api/v1/native-sessions/search?${params}`,
       options.signal ? {signal:options.signal} : {},
+    )
+  }
+
+  /** Read global source-owned numerical totals, without scanning native files.
+   * A partial coverage response is NOT a complete global usage count.
+   */
+  nativeMetricsOverview(options:{
+    sourceId?:string;from?:string;to?:string;signal?:AbortSignal
+  }={}):Promise<NativeMetricOverviewResponseDto>{
+    const params=new URLSearchParams()
+    if(options.sourceId)params.set('sourceId',options.sourceId)
+    if(options.from)params.set('from',options.from)
+    if(options.to)params.set('to',options.to)
+    return requestJson<NativeMetricOverviewResponseDto>(
+      `/api/v1/native-sessions/metrics/overview${params.size?`?${params}`:''}`,
+      options.signal?{signal:options.signal}:{},
     )
   }
 

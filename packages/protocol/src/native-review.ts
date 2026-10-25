@@ -47,6 +47,37 @@ export type NativeBodySearchResponseDto =
     }
   | { state: 'unavailable' | 'drifted' | 'unsupported'; reason: string }
 
+/** SQL-only numerical projection. No event rows or local file locations. */
+export interface NativeMetricOverviewSourceDto {
+  sourceId:string
+  eligibleSessions:number
+  readySessions:number
+  missingSessions:number
+  staleSessions:number
+  partialSessions:number
+  totals:{
+    interactionCount:number;toolCallCount:number;toolResultCount:number
+    toolErrorCount:number;errorCount:number
+    inputTokens:number|null;outputTokens:number|null
+  }
+  tools:Array<{
+    nativeToolName:string;callCount:number;resultCount:number
+    errorCount:number;totalDurationMs:number;sessionCount:number
+  }>
+  toolsTruncated:boolean
+}
+export type NativeMetricOverviewResponseDto =
+  | {
+      state:'available'
+      coverage:'complete'|'partial'
+      items:NativeMetricOverviewSourceDto[]
+      totals:{
+        eligibleSessions:number;readySessions:number
+        missingSessions:number;staleSessions:number;partialSessions:number
+      }
+    }
+  | {state:'unavailable'|'unsupported';reason:string}
+
 export type NativeReviewWindowResponseDto =
   | NativeReviewWindowDto
   | { state: 'unavailable' | 'drifted' | 'unsupported'; reason: string }

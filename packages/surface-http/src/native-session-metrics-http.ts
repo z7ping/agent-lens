@@ -1,4 +1,5 @@
 import type { IncomingMessage, ServerResponse } from 'node:http'
+import { NATIVE_SESSION_METRIC_PROJECTION_VERSION } from '@agent-lens/core'
 import type {
   CapturePolicyService, NativeSessionCatalogStore, NativeSessionMetricsStore,
   SourceService, SourceNativeSessionCursor,
@@ -9,7 +10,7 @@ import type { NativeSessionWindowReader } from './native-session-http'
 
 const MAX_PAGES=64
 const PAGE_LIMIT=32
-const PROJECTION_VERSION='native-source-metrics-v1'
+const PROJECTION_VERSION=NATIVE_SESSION_METRIC_PROJECTION_VERSION
 const PATH=/^\/api\/v1\/native-sessions\/([^/]+)\/metrics(?:\/(rebuild))?$/
 
 export async function handleNativeSessionMetricsRequest(
