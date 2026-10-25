@@ -128,6 +128,7 @@ export const piSourceDefinition: SourceDefinition = {
   detect: detectPi,
   declareCapabilities: declarePiCapabilities,
   rawRecovery: jsonlRawRecovery,
+  nativeSessionCoverageComplete: true,
   async *discoverNativeSessions(ctx) {
     const root = ctx.installation.dataRoot
     if (!root) return
