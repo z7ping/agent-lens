@@ -282,5 +282,7 @@ export function overlayNativeHookEvents(input: {
     interactions,
     observationCount: window.observationCount + mergedCount,
     ...(input.truncated ? {hookEventsTruncated: true} : {}),
+    ...(window.hookFactsPartial || mergedCount < observations.length
+      ? {hookFactsPartial:true} : {}),
   }
 }
