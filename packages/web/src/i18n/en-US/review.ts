@@ -273,6 +273,7 @@ export const englishReviewMessages: LocaleMessagesDto = {
         loadMoreLoading: 'Loading more sessions…',
         loadMoreFailed: 'Load failed · click to retry',
         loadMoreAuto: 'Keep scrolling to load more sessions automatically',
+        loadMoreNative: 'Load more native sessions',
         allLoaded: 'All sessions loaded',
         empty: 'No sessions in the current filter range',
       },
