@@ -1053,7 +1053,9 @@ async function readClaudeArchivedHookPage(
   const archive = await readArchivedHookInboxPage({ inbox, nativeSessionId, installationId: ctx.installation.id, limit: 16, ...(cursor ? {cursor} : {}) })
   const records = archive.items.map(item => {
     const envelope = parseRuntimeEnvelope(item.content, item.fileName)
-    const archivePath = join(inbox, 'archive', sha256(nativeSessionId), item.fileName)
+    const archivePath = archivedHookInboxRecordPath({
+      inbox, fileName: item.fileName, nativeSessionId, installationId: ctx.installation.id,
+    })
     const record = runtimeRecord(envelope, archivePath, ctx)
     if (record.sourceSessionNativeId !== nativeSessionId
       || record.sourceId !== SOURCE_ID || record.installationId !== ctx.installation.id) {
