@@ -1,3 +1,4 @@
+import type { Stats } from 'node:fs'
 import { stat } from 'node:fs/promises'
 
 /** A native SQLite database may append to its -wal without touching the
@@ -11,11 +12,11 @@ import { stat } from 'node:fs/promises'
  */
 export async function nativeSqliteRevision(
   path: string,
-  primary?: Awaited<ReturnType<typeof stat>>,
+  primary?: Stats,
 ): Promise<{ fileIdentity:string; fileSize:number; fileMtimeMs:number }> {
-  const db = primary ?? await stat(path)
+  const db:Stats = primary ?? await stat(path)
   if (!db.isFile()) throw new TypeError('Original native database must be a regular file')
-  let wal: Awaited<ReturnType<typeof stat>> | undefined
+  let wal:Stats | undefined
   try {
     wal = await stat(`${path}-wal`)
   } catch (error) {
