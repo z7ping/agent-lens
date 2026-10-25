@@ -99,14 +99,13 @@ export function projectNativeReviewWindow(input: NativeReviewProjectionInput): N
     const nativeKey = recordId ?? candidate.nativeEventId ?? `${candidate.kind}:${candidate.sourceSequence ?? 'unknown'}`
     const withinRecordOrdinal = candidateOccurrences.get(nativeKey) ?? 0
     candidateOccurrences.set(nativeKey, withinRecordOrdinal + 1)
-    const id = `native-observation:${stableId([
-      sessionId,
-      recordId ?? candidate.nativeEventId ?? candidate.sourceSequence ?? 'unspecified',
-      candidate.kind,
-      candidate.nativeEventId ?? '',
-      candidate.sourceSequence ?? '',
-      recordId ? withinRecordOrdinal : index,
-    ])}`
+    const id = recordId
+      ? nativeReviewObservationId(input.sourceId, input.installationId, input.nativeSessionId,
+        candidate, recordId, withinRecordOrdinal)
+      : `native-observation:${stableId([
+          sessionId, candidate.nativeEventId ?? candidate.sourceSequence ?? 'unspecified',
+          candidate.kind, candidate.nativeEventId ?? '', candidate.sourceSequence ?? '', index,
+        ])}`
     const at = candidate.occurredAt ?? candidate.capturedAt
     const payload = jsonValue(candidate.payload)
     return {
