@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict'
 import { lstat, mkdtemp, mkdir, readFile, rm, stat, symlink, writeFile } from 'node:fs/promises'
+import { createHash } from 'node:crypto'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import test from 'node:test'
@@ -214,3 +215,60 @@ test('Hook archive cursor remains opaque and bounded for long valid inbox names'
   }finally{await rm(inbox,{recursive:true,force:true})}
 })
 
+
+test('one-copy Hook archive seals SHA-256 metadata and rejects same-length source mutation',async()=>{
+  const inbox=await mkdtemp(join(tmpdir(),'al-hook-seal-'))
+  try{
+    const session='S1',installationId='install-A',fileName='hook.json'
+    const original=JSON.stringify({message:'secret-A'})
+    const modified=JSON.stringify({message:'secret-B'})
+    assert.equal(Buffer.byteLength(original),Buffer.byteLength(modified))
+    await writeFile(join(inbox,fileName),original)
+    const prior=await stat(join(inbox,fileName))
+    await archiveAcceptedHookInboxFile({inbox,fileName,nativeSessionId:session,installationId})
+    const path=archivedHookInboxRecordPath({inbox,fileName,nativeSessionId:session,installationId})
+    assert.equal((await stat(path)).ino,prior.ino,'one payload inode must remain')
+    assert.equal(await readFile(`${path}.sha256`,'utf8'),
+      createHash('sha256').update(original).digest('hex'))
+    const before=await readArchivedHookInboxPage({inbox,nativeSessionId:session,installationId})
+    assert.deepEqual(before.items,[{fileName,content:original}])
+    await writeFile(path,modified)
+    await assert.rejects(
+      readArchivedHookInboxPage({inbox,nativeSessionId:session,installationId}),
+      /Hook archive event fingerprint changed/,
+    )
+  }finally{await rm(inbox,{recursive:true,force:true})}
+})
+
+test('a crash before Hook seal publication can retry without copying or overwriting',async()=>{
+  const inbox=await mkdtemp(join(tmpdir(),'al-hook-retry-seal-'))
+  try{
+    const session='S2',installationId='install',fileName='hook.json'
+    const original='{"permission":"ask"}'
+    const path=archivedHookInboxRecordPath({inbox,fileName,nativeSessionId:session,installationId})
+    await mkdir(join(path,'..'),{recursive:true})
+    await writeFile(join(inbox,fileName),original)
+    const {link}=await import('node:fs/promises')
+    await link(join(inbox,fileName),path)
+    // Archive hard link exists, but digest publication did not finish.
+    await archiveAcceptedHookInboxFile({inbox,fileName,nativeSessionId:session,installationId})
+    await assert.rejects(stat(join(inbox,fileName)),{code:'ENOENT'})
+    assert.equal(await readFile(path,'utf8'),original)
+    assert.equal(await readFile(`${path}.sha256`,'utf8'),
+      createHash('sha256').update(original).digest('hex'))
+  }finally{await rm(inbox,{recursive:true,force:true})}
+})
+
+test('historical unsealed Hook archive remains readable, but malformed seal rejects evidence',async()=>{
+  const inbox=await mkdtemp(join(tmpdir(),'al-hook-legacy-unsealed-'))
+  try{
+    const session='S3',installationId='install',fileName='hook.json'
+    const path=archivedHookInboxRecordPath({inbox,fileName,nativeSessionId:session,installationId})
+    await mkdir(join(path,'..'),{recursive:true})
+    await writeFile(path,'{"id":"unsealed"}')
+    assert.equal((await readArchivedHookInboxPage({inbox,nativeSessionId:session,installationId})).items.length,1)
+    await writeFile(`${path}.sha256`,'invalid digest')
+    await assert.rejects(readArchivedHookInboxPage({inbox,nativeSessionId:session,installationId}),
+      /Hook archive event fingerprint changed/)
+  }finally{await rm(inbox,{recursive:true,force:true})}
+})

@@ -1,5 +1,5 @@
-import { createHash } from 'node:crypto'
-import { link, lstat, mkdir, readFile, readdir, unlink } from 'node:fs/promises'
+import { createHash, randomUUID } from 'node:crypto'
+import { link, lstat, mkdir, readFile, readdir, unlink, writeFile } from 'node:fs/promises'
 import { basename, join } from 'node:path'
 
 const MAX_EVENT_BYTES = 1024 * 1024
@@ -85,6 +85,32 @@ export async function archiveAcceptedHookInboxFile(input: {
     // Retries are safe only when the archive contains byte-for-byte the same
     // original event. Never overwrite a conflicting original Hook record.
     if (!existing.equals(current)) throw new Error('Hook archive filename collision')
+  }
+  // A digest is metadata, not a second copy of the event. Atomically
+  // publish it BEFORE removing the acknowledged original inbox name.
+  // A process crash can safely retry through the still-present inbox inode.
+  const eventBytes = await readFile(targetPath)
+  if (eventBytes.length === 0 || eventBytes.length > MAX_EVENT_BYTES) {
+    throw new Error('Hook archive event changed during sealing')
+  }
+  const digest = createHash('sha256').update(eventBytes).digest('hex')
+  const checksumPath = `${targetPath}.sha256`
+  const temporaryPath = `${checksumPath}.${randomUUID()}.tmp`
+  try {
+    await writeFile(temporaryPath, digest, { flag: 'wx', mode: 0o600 })
+    try {
+      await link(temporaryPath, checksumPath)
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error
+      if ((await readFile(checksumPath, 'utf8')) !== digest) {
+        throw new Error('Hook archive digest collision')
+      }
+    }
+  } finally {
+    try { await unlink(temporaryPath) }
+    catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
+    }
   }
   await unlink(sourcePath)
 }
@@ -179,6 +205,21 @@ export async function readArchivedHookInboxPage(input: {
     }
     const data = await readFile(filePath)
     if (data.length !== info.size) throw new Error('Hook archive event changed during read')
+    // Pre-seal historical archives remain readable, but all newly archived
+    // events must match the immutable digest before becoming review evidence.
+    // Existing Hook review always exposes partial coverage; absence of a
+    // legacy seal must never be interpreted as a complete lifecycle proof.
+    let expected: string | undefined
+    try { expected = await readFile(`${filePath}.sha256`, 'utf8') }
+    catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
+    }
+    if (expected !== undefined && (
+      !/^[a-f0-9]{64}$/.test(expected)
+      || createHash('sha256').update(data).digest('hex') !== expected
+    )) {
+      throw new Error('Hook archive event fingerprint changed')
+    }
     items.push({ fileName: name, content: data.toString('utf8') })
   }
   return {
