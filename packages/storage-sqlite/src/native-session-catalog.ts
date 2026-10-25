@@ -1,7 +1,12 @@
 import { isAbsolute } from 'node:path'
 import type { SqliteExecutor } from './executor'
 
-import type { NativeSessionCatalogEntry, NativeSessionCatalogQuery, NativeSessionLocationKind } from '@agent-lens/core'
+import {
+  nativeReviewSessionId,
+  type NativeSessionCatalogEntry,
+  type NativeSessionCatalogQuery,
+  type NativeSessionLocationKind,
+} from '@agent-lens/core'
 
 function row(row: {
   source_id: string
@@ -57,8 +62,8 @@ export class SqliteNativeSessionCatalog {
       this.executor.db.prepare(`
         INSERT INTO native_session_catalog
           (source_id,installation_id,native_session_id,location_kind,file_path,
-           file_identity,file_size,file_mtime_ms,last_activity_at,title,updated_at)
-        VALUES (?,?,?,?,?,?,?,?,?,?,?)
+           file_identity,file_size,file_mtime_ms,last_activity_at,title,updated_at,review_session_id)
+        VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
         ON CONFLICT (source_id,installation_id,native_session_id,location_kind) DO UPDATE SET
           file_path=excluded.file_path,
           file_identity=excluded.file_identity,
@@ -66,10 +71,12 @@ export class SqliteNativeSessionCatalog {
           file_mtime_ms=excluded.file_mtime_ms,
           last_activity_at=MAX(native_session_catalog.last_activity_at, excluded.last_activity_at),
           title=COALESCE(excluded.title,native_session_catalog.title),
-          updated_at=excluded.updated_at
+          updated_at=excluded.updated_at,
+          review_session_id=excluded.review_session_id
       `).run(input.sourceId,input.installationId,input.nativeSessionId,input.locationKind,
         input.filePath,input.fileIdentity,input.fileSize,input.fileMtimeMs,
-        input.lastActivityAt,input.title ?? null,input.updatedAt)
+        input.lastActivityAt,input.title ?? null,input.updatedAt,
+        nativeReviewSessionId(input.sourceId,input.installationId,input.nativeSessionId))
     })
   }
 
@@ -88,6 +95,18 @@ export class SqliteNativeSessionCatalog {
         LIMIT 1
       `).get(input.sourceId,input.installationId,input.nativeSessionId,
         input.locationKind ?? null,input.locationKind ?? null)
+      return value ? row(value as Parameters<typeof row>[0]) : null
+    })
+  }
+
+  async getByReviewSessionId(id: string): Promise<NativeSessionCatalogEntry | null> {
+    if (!/^native:[0-9a-f]{32}$/.test(id)) return null
+    return this.executor.run(() => {
+      const value = this.executor.db.prepare(`
+        SELECT * FROM native_session_catalog WHERE review_session_id = ?
+        ORDER BY CASE location_kind WHEN 'native' THEN 0 ELSE 1 END
+        LIMIT 1
+      `).get(id)
       return value ? row(value as Parameters<typeof row>[0]) : null
     })
   }

@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto'
-import type { ObservationCandidate } from '@agent-lens/core'
+import { nativeReviewSessionId, type ObservationCandidate } from '@agent-lens/core'
+export { nativeReviewSessionId } from '@agent-lens/core'
 import {
   type JsonValue,
   type NativeReviewWindowDto,
@@ -63,10 +64,6 @@ function jsonValue(value: unknown, depth = 0, seen = new WeakSet<object>()): Jso
  * Window boundaries may cut through an interaction. Clients must not append
  * these partial interactions to the main Task Surface until stitching exists.
  */
-export function nativeReviewSessionId(sourceId: string, installationId: string, nativeSessionId: string): string {
-  return `native:${stableId([sourceId, installationId, nativeSessionId])}`
-}
-
 export function projectNativeReviewWindow(input: NativeReviewProjectionInput): NativeReviewWindowDto {
   if (input.observationRecordIds && input.observationRecordIds.length !== input.observations.length) {
     throw new Error('Native Review candidate and source record identity counts disagree')

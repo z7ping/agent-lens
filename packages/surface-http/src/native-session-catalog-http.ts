@@ -53,7 +53,19 @@ export async function handleNativeSessionCatalogRequest(
   catalog?: NativeSessionCatalogStore,
   policy?: CapturePolicyService,
 ): Promise<boolean> {
-  if (url.pathname !== PATH) return false
+  const encodedSessionId = url.pathname.startsWith(`${PATH}/`)
+    ? url.pathname.slice(PATH.length + 1)
+    : ''
+  let sessionId: string | undefined
+  if (encodedSessionId && !encodedSessionId.includes('/')) {
+    try {
+      const decoded = decodeURIComponent(encodedSessionId)
+      if (/^native:[0-9a-f]{32}$/.test(decoded)) sessionId = decoded
+    } catch {
+      // Malformed native IDs never fall through to a broad Catalog scan.
+    }
+  }
+  if (url.pathname !== PATH && !sessionId) return false
   if (request.method !== 'GET') {
     response.setHeader('allow', 'GET')
     writeJson(response, 405, { error: 'method_not_allowed' })
@@ -61,6 +73,25 @@ export async function handleNativeSessionCatalogRequest(
   }
   if (!catalog || !policy) {
     writeJson(response, 503, { state: 'unavailable', reason: 'native-session-catalog-unavailable' })
+    return true
+  }
+  // A direct Review deep-link resolves by indexed native identity rather
+  // than scanning thousands of Source-owned session locations.
+  if (sessionId) {
+    const entry = await catalog.getByReviewSessionId(sessionId)
+    if (!entry || !policy.isSourceEnabled(entry.sourceId)) {
+      writeJson(response, 404, { error: 'not_found' })
+      return true
+    }
+    writeJson(response, 200, {
+      id: sessionId,
+      sourceId: entry.sourceId,
+      installationId: entry.installationId,
+      nativeSessionId: entry.nativeSessionId,
+      locationKind: entry.locationKind,
+      lastActivityAt: entry.lastActivityAt,
+      ...(entry.title ? { title: entry.title } : {}),
+    })
     return true
   }
   // Client never receives local file paths or file identities. This index is

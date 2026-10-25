@@ -20,6 +20,9 @@ test('native Catalog HTTP exposes only authorized session identities, no physica
       seen.push(query)
       return { items: all.slice(0,2), hasMore: true }
     },
+    async getByReviewSessionId(id: string) {
+      return id === nativeReviewSessionId('pi','installation','A') ? all[0]! : null
+    },
   } as NativeSessionCatalogStore
   const policy = {
     isSourceEnabled: (id: string) => id === 'pi',
@@ -45,6 +48,12 @@ test('native Catalog HTTP exposes only authorized session identities, no physica
     assert.equal(result.hasMore,true)
     assert.equal(JSON.stringify(result).includes('/private/native'), false)
     assert.equal(JSON.stringify(result).includes('fileIdentity'), false)
+    const direct = await fetch(`${base}/${encodeURIComponent(nativeReviewSessionId('pi','installation','A'))}`)
+    assert.equal(direct.status,200)
+    assert.deepEqual(await direct.json(),result.items[0])
+    assert.equal((await fetch(`${base}/${encodeURIComponent(nativeReviewSessionId('pi','installation','missing'))}`)).status,404)
+    // Direct-link lookup is indexed and never executes Catalog.query().
+    assert.equal(seen.length,1)
     const second=await fetch(`${base}?sourceId=pi&installationId=installation&limit=2&cursor=${result.nextCursor}`)
     assert.equal(second.status,200)
     assert.deepEqual(seen[1],{
