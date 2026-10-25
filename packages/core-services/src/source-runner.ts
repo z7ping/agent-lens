@@ -447,6 +447,117 @@ async function processSourceRecord(
   return result
 }
 
+const NATIVE_ONLY_WRITER_OPT_IN = 'AGENT_LENS_NATIVE_ONLY_NEW_SESSIONS'
+
+function noPersistedObservations(): ProcessResult {
+  return {
+    observationsCreated: 0,
+    observationsMerged: 0,
+    observationsUnchanged: 0,
+    evidenceCandidates: [],
+  }
+}
+
+/**
+ * Select a storage owner once per source-native session, for BOTH history and
+ * runtime. A durable native-only claim must never fall back into the legacy
+ * SourceRecord/Observation/Evidence pipeline, even if the opt-in is removed.
+ *
+ * New claims are opt-in while unsupported historical consumers are being
+ * converted. The original record must be verifiable and the original session
+ * reader must independently authorize the Catalog location.
+ */
+async function shouldReadNativeOnly(
+  storage: StorageService,
+  tracker: NativeSessionCatalogTracker,
+  source: SourceDefinition,
+  host: Host,
+  installation: AgentInstallation,
+  runtimeProfile: RuntimeProfile | undefined,
+  record: SourceRecord,
+  signal: AbortSignal,
+): Promise<boolean> {
+  const catalog = storage.nativeSessionCatalog
+  const nativeSessionId = record.sourceSessionNativeId
+  if (!catalog || !nativeSessionId) return false
+  const key = {
+    sourceId: record.sourceId,
+    installationId: record.installationId,
+    nativeSessionId,
+  }
+  // Two independent runners may race for the same session. Every path must
+  // claim an immutable owner BEFORE persisting legacy events or skipping them.
+  const established = await catalog.getSessionWriteMode(key)
+  if (established) return established === 'native-only'
+  const claimLegacy = async () => (await catalog.claimLegacyWrite(key)) === 'native-only'
+  if (process.env[NATIVE_ONLY_WRITER_OPT_IN] !== '1'
+    || !source.readNativeSessionPage || !source.rawRecovery?.verify
+    || !source.rawRecovery.describe(record).canReread
+    || record.sourceId !== source.manifest.sourceId
+    || record.installationId !== installation.id
+    || !record.locator.path || !record.fingerprint) return claimLegacy()
+
+  signal.throwIfAborted()
+  const context = {
+    host, installation,
+    ...(runtimeProfile ? { runtimeProfile } : {}),
+    abortSignal: signal,
+    checkpoint: {
+      async get() { return null },
+      async set() { throw new Error('Native-only writer cannot update source checkpoints') },
+      async clear() { throw new Error('Native-only writer cannot remove source checkpoints') },
+    } satisfies SourceCheckpointService,
+  }
+  const verification = await source.rawRecovery.verify(record, context)
+  if (verification.state !== 'verified') return claimLegacy()
+
+  // The Catalog update is metadata-only. This MUST succeed before claiming
+  // native ownership. A throttled row may already be durable from this Source.
+  await tracker.observe(source, record)
+  const native = await catalog.get({ ...key, locationKind: 'native' })
+  if (!native || native.filePath !== record.locator.path) return claimLegacy()
+
+  const probe = await source.readNativeSessionPage({
+    filePath: native.filePath,
+    nativeSessionId,
+    limit: 1,
+  }, context)
+  if (probe.state !== 'available'
+    || probe.nextCursor.fileIdentity !== native.fileIdentity
+    || probe.records.length === 0) return claimLegacy()
+
+  const nativeOnly = await catalog.claimNativeOnlyWrite({
+    ...key, filePath: native.filePath, fileIdentity: native.fileIdentity,
+  })
+  // If the competing legacy writer claimed this session while Source proof
+  // was in flight, honor its decision instead of mixing the two histories.
+  return nativeOnly || claimLegacy()
+}
+
+async function processSourceRecordWithOwnership(
+  storage: StorageService,
+  observations: ObservationService,
+  coverage: CoverageService,
+  capturePolicy: CapturePolicyService,
+  tracker: NativeSessionCatalogTracker,
+  source: SourceDefinition,
+  host: Host,
+  installation: AgentInstallation,
+  runtimeProfile: RuntimeProfile | undefined,
+  record: SourceRecord,
+  signal: AbortSignal,
+): Promise<ProcessResult> {
+  if (await shouldReadNativeOnly(storage, tracker, source, host, installation, runtimeProfile, record, signal)) {
+    // Do not normalize, create Evidence, commit Canonical observations or
+    // duplicate raw SourceRecords. Read-time Source normalization owns this.
+    return noPersistedObservations()
+  }
+  // Legacy behavior is unchanged for existing SQL sessions, sources without
+  // verified native storage, and users who have not enabled the cutover.
+  return processSourceRecord(storage, observations, coverage, capturePolicy,
+    source, host, installation, runtimeProfile, record)
+}
+
 export class SourceHistoryRunner {
   private readonly nativeCatalogTracker: NativeSessionCatalogTracker
 
@@ -693,16 +804,18 @@ export class SourceHistoryRunner {
         if (input.cooperate) await input.cooperate()
         if (abortSignal.aborted) break
         result.records += 1
-        const processed = await processSourceRecord(
+        const processed = await processSourceRecordWithOwnership(
           this.storage,
           this.observations,
           this.coverage,
           this.capturePolicy,
+          this.nativeCatalogTracker,
           source,
           host,
           installation,
           runtimeProfile,
           record,
+          abortSignal,
         )
         result.observationsCreated += processed.observationsCreated
         result.observationsMerged += processed.observationsMerged
@@ -840,16 +953,18 @@ export class SourceRuntimeRunner {
             if (closed) throw new Error(`Source runtime is closed: ${source.manifest.sourceId}`)
             const task = tail.then(async () => {
               try {
-                await processSourceRecord(
+                await processSourceRecordWithOwnership(
                   this.storage,
                   this.observations,
                   this.coverage,
                   this.capturePolicy,
+                  this.nativeCatalogTracker,
                   source,
                   host,
                   installation,
                   runtimeProfile,
                   record,
+                  abortSignal,
                 )
                 try {
                   await this.nativeCatalogTracker.observe(source, record)
@@ -1047,6 +1162,7 @@ export class SourceAssetRunner {
 }
 
 export const sourceRunnerInternals = {
+  processSourceRecordWithOwnership,
   createCooperativeScheduler,
   parserReplayCheckpointKey,
   parserReplayWindowKey,

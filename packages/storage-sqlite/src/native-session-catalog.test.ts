@@ -121,6 +121,8 @@ test('native session catalog remains metadata-only, stable and independently pag
     }),false)
     assert.equal(await catalog.claimNativeOnlyWrite(ownership),true)
     assert.equal(await catalog.hasNativeOnlyWriteClaim(ownership),true)
+    assert.equal(await catalog.getSessionWriteMode(ownership),'native-only')
+    assert.equal(await catalog.claimLegacyWrite(ownership),'native-only') // no mixed writer
     assert.equal(await catalog.claimNativeOnlyWrite(ownership),true) // idempotent
     assert.equal(await catalog.claimNativeOnlyWrite({
       ...ownership, nativeSessionId:'b',filePath:middle.filePath,
@@ -128,6 +130,14 @@ test('native session catalog remains metadata-only, stable and independently pag
     assert.equal(await catalog.claimNativeOnlyWrite({
       ...ownership, nativeSessionId:'c',filePath:newest.filePath,
     }),false) // prior Observation
+    await catalog.upsert(location('legacy-first'))
+    const legacyFirst = { ...ownership, nativeSessionId:'legacy-first',
+      filePath:location('legacy-first').filePath }
+    assert.equal(await catalog.getSessionWriteMode(legacyFirst),null)
+    assert.equal(await catalog.claimLegacyWrite(legacyFirst),'legacy')
+    assert.equal(await catalog.claimNativeOnlyWrite(legacyFirst),false)
+    assert.equal(await catalog.getSessionWriteMode(legacyFirst),'legacy')
+    assert.equal(await catalog.hasNativeOnlyWriteClaim(legacyFirst),false)
     await catalog.upsert(location('source-record-only'))
     storage.db.prepare(`INSERT INTO source_records(
       id,source_id,installation_id,source_session_native_id,native_type,
@@ -152,7 +162,7 @@ test('native session catalog remains metadata-only, stable and independently pag
     const columns = storage.db.prepare('PRAGMA table_info(native_session_catalog)').all() as Array<{name:string}>
     assert.equal(columns.some(x=>x.name==='payload' || x.name==='payload_json' || x.name==='observation_id'),false)
     const rows = storage.db.prepare('SELECT COUNT(*) AS count FROM native_session_catalog').get() as {count:number}
-    assert.equal(rows.count,5)
+    assert.equal(rows.count,6)
     await assert.rejects(catalog.upsert({ ...middle, filePath: '../relative.jsonl' }))
     await assert.rejects(catalog.query({limit:5000}))
   } finally {

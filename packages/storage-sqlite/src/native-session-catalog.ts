@@ -116,7 +116,7 @@ export class SqliteNativeSessionCatalog {
   }): Promise<boolean> {
     return this.executor.run(() => Boolean(this.executor.db.prepare(`
       SELECT 1 FROM native_session_write_claims
-      WHERE source_id=? AND installation_id=? AND native_session_id=?
+      WHERE source_id=? AND installation_id=? AND native_session_id=? AND mode='native-only'
     `).get(input.sourceId,input.installationId,input.nativeSessionId)))
   }
 
@@ -126,6 +126,41 @@ export class SqliteNativeSessionCatalog {
    * This only records ownership: it deliberately does not skip Source writes
    * before runtime consumers are audited and switched.
    */
+  async getSessionWriteMode(input: {
+    sourceId: string; installationId: string; nativeSessionId: string
+  }): Promise<'legacy' | 'native-only' | null> {
+    return this.executor.run(() => {
+      const row = this.executor.db.prepare(`
+        SELECT mode FROM native_session_write_claims
+        WHERE source_id=? AND installation_id=? AND native_session_id=?
+      `).get(input.sourceId,input.installationId,input.nativeSessionId) as
+        {mode:'legacy'|'native-only'} | undefined
+      return row?.mode ?? null
+    })
+  }
+
+  async claimLegacyWrite(input: {
+    sourceId: string; installationId: string; nativeSessionId: string
+  }): Promise<'legacy' | 'native-only'> {
+    if (!input.sourceId || !input.installationId || !input.nativeSessionId) {
+      throw new Error('Invalid legacy session write ownership identity')
+    }
+    return this.executor.run(() => {
+      this.executor.db.prepare(`
+        INSERT OR IGNORE INTO native_session_write_claims
+          (source_id,installation_id,native_session_id,claimed_at,mode)
+        VALUES (?,?,?,?,'legacy')
+      `).run(input.sourceId,input.installationId,input.nativeSessionId,new Date().toISOString())
+      const row = this.executor.db.prepare(`
+        SELECT mode FROM native_session_write_claims
+        WHERE source_id=? AND installation_id=? AND native_session_id=?
+      `).get(input.sourceId,input.installationId,input.nativeSessionId) as
+        {mode:'legacy'|'native-only'} | undefined
+      if (!row) throw new Error('Native session write owner is unavailable')
+      return row.mode
+    })
+  }
+
   async claimNativeOnlyWrite(input: {
     sourceId: string; installationId: string; nativeSessionId: string
     filePath: string; fileIdentity: string
@@ -137,8 +172,8 @@ export class SqliteNativeSessionCatalog {
     return this.executor.run(() => {
       this.executor.db.prepare(`
         INSERT OR IGNORE INTO native_session_write_claims
-          (source_id,installation_id,native_session_id,claimed_at)
-        SELECT ?,?,?,?
+          (source_id,installation_id,native_session_id,claimed_at,mode)
+        SELECT ?,?,?,?,'native-only'
         WHERE EXISTS (
           SELECT 1 FROM native_session_catalog AS catalog
           WHERE catalog.source_id=?
@@ -171,10 +206,11 @@ export class SqliteNativeSessionCatalog {
         input.sourceId,input.installationId,input.nativeSessionId,
       )
       const row = this.executor.db.prepare(`
-        SELECT 1 FROM native_session_write_claims
+        SELECT mode FROM native_session_write_claims
         WHERE source_id=? AND installation_id=? AND native_session_id=?
-      `).get(input.sourceId,input.installationId,input.nativeSessionId)
-      return Boolean(row)
+      `).get(input.sourceId,input.installationId,input.nativeSessionId) as
+        {mode:'native-only'|'legacy'} | undefined
+      return row?.mode === 'native-only'
     })
   }
 
