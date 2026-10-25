@@ -67,6 +67,7 @@ import type {
 } from '../contracts/source'
 import type { SourceRawAuditReader } from './source-raw-retention'
 import type { NativeSessionCatalogStore } from './native-session-catalog'
+import type { NativeSessionMetricsStore } from './native-session-metrics'
 import type { MaintenanceJobStore } from './maintenance'
 import type { ToolUsageObservationReader } from './tool-usage'
 import type { TaskFileChangeProjectionStore } from './task-file-changes'
@@ -581,6 +582,7 @@ export interface StorageService {
   readonly sessionSummaryProjection?: SessionSummaryProjectionStore
   readonly launchableProjects?: LaunchableProjectReader
   readonly nativeSessionCatalog?: NativeSessionCatalogStore
+  readonly nativeSessionMetrics?: NativeSessionMetricsStore
   readonly taskFileChanges?: TaskFileChangeProjectionStore
   readonly toolUsageObservations?: ToolUsageObservationReader
   readonly maintenance?: StorageMaintenance
@@ -603,3 +605,4 @@ export * from './source-raw-recovery-audit'
 export * from './task-file-changes'
 
 export * from './native-session-catalog'
+export * from './native-session-metrics'
