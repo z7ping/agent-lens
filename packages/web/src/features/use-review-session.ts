@@ -129,6 +129,9 @@ export function useReviewSession(model: AgentLensClientModel, embedded: boolean)
         return [...rows.values()]
       })
       setNativeCursor(page.hasMore ? page.nextCursor : undefined)
+    } catch {
+      // Keep already displayed sessions and preserve cursor for manual retry.
+      // A temporary Source/Catalog failure must not hide SQL history.
     } finally {
       setNativeLoadingMore(false)
     }
