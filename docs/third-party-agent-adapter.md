@@ -1,5 +1,7 @@
 # 第三方 Agent 接入契约（Source / Live）
 
+> **第一次接入？** 请先阅读 [Agent 接入实战教程](contributing/agent-integration/README.md)，从现成测试开始；本页保留为架构和接口契约参考。
+
 > 适用 AgentLens Plugin API `1.0`。入口契约：`packages/core/src/contracts/{plugin,source,live}.ts`；实施边界见 `AGENTS.md` 与 `docs/agent-convergence-audit.md`。本指南不承诺任何特定 Agent 已接入。
 
 ## 两条独立的数据入口
