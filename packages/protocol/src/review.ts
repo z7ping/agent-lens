@@ -216,6 +216,8 @@ export interface ReviewMessageNodeDto extends ReviewNodeSourceDto {
   sourceId: string
   text: string
   attachments?: ReviewMessageAttachmentDto[]
+  /** Opaque native record rewind cursor; usable only with catalog-owned Source identity. */
+  nativeAttachmentCursor?: string
   payload: JsonValue
   evidence: TimelineEvidenceDto[]
   observationIds: string[]

@@ -69,6 +69,7 @@ function fixture(opts: { enabled?: boolean; catalogEntry?: NativeSessionCatalogE
   const sources = { list: () => [source] } as unknown as SourceService
   const policy = {
     isSourceEnabled: () => opts.enabled !== false,
+    isEnabled: () => opts.enabled !== false,
     sanitizeNormalizedOutput(input: { observations: typeof sample[]; evidenceCandidates: unknown[] }) {
       calls.sanitized++
       return { ...input, observations: input.observations.map(observation => ({
@@ -188,4 +189,25 @@ test('native reader uses isolated worker for supported sources and still sanitiz
   assert.equal(workerRead, 1)
   assert.equal(sourceRead, 0)
   assert.equal(sanitized, 1)
+})
+
+test('native lazy-media reader returns only one verified original Source record without persisting text',async()=>{
+  const {reader,calls}=fixture()
+  const offset={offset:0,sequence:0,fileIdentity:'1:9'}
+  const result=await reader.readUnpersistedMediaPage({...query,cursor:offset})
+  assert.equal(result.state,'available')
+  if(result.state!=='available')return
+  assert.deepEqual(result.observationCursors,[offset])
+  assert.deepEqual(result.observationRecordIds,['record'])
+  assert.deepEqual(result.observations[0]?.payload,{text:'secret'})
+  assert.deepEqual(result.evidenceCandidates,[])
+  assert.deepEqual(calls,{catalog:1,source:1,normalize:1,sanitized:0})
+  const bad=await fixture().reader.readUnpersistedMediaPage({
+    ...query,cursor:{offset:0,sequence:0,fileIdentity:'forged'},
+  })
+  assert.deepEqual(bad,{state:'unsupported',reason:'native-attachment-cursor-invalid'})
+  const disabled=await fixture({enabled:false}).reader.readUnpersistedMediaPage({...query,cursor:offset})
+  assert.deepEqual(disabled,{state:'unsupported',reason:'native-attachment-capture-disabled'})
+  const drift=await fixture({identity:'other'}).reader.readUnpersistedMediaPage({...query,cursor:offset})
+  assert.deepEqual(drift,{state:'drifted',reason:'native-attachment-record-identity-changed'})
 })

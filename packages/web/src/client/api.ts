@@ -437,6 +437,15 @@ export class AgentLensApi {
     return requestJson<ReviewResponseDto>(`/api/v1/review?${params}`, signal ? { signal } : {})
   }
 
+  nativeReviewAttachments(
+    sessionId: string, observationId: string, cursor: string,
+  ): Promise<ReviewMessageAttachmentDto[]> {
+    const params=new URLSearchParams({cursor})
+    return requestJson<ReviewMessageAttachmentsResponseDto>(
+      `/api/v1/native-sessions/${encodeURIComponent(sessionId)}/observations/${encodeURIComponent(observationId)}/attachments?${params}`,
+    ).then(result=>result.items)
+  }
+
   reviewAttachments(observationId: string): Promise<ReviewMessageAttachmentDto[]> {
     const requestPath = `/api/v1/review/observations/${encodeURIComponent(observationId)}/attachments`
     return shareInFlight(

@@ -61,6 +61,68 @@ export class NativeSessionReader {
     private readonly nativeWorker?: NativeReaderWorkerPort,
   ) {}
 
+  /**
+   * Attachment-only Source rehydration. Unlike read(), this transient result
+   * retains original inline media bytes solely for the bounded HTTP attachment
+   * extractor. It MUST NOT be used for Review content or persisted to SQLite.
+   * Source-owned root, file identity, session identity and record rewind points
+   * are verified again before returning any candidate.
+   */
+  async readUnpersistedMediaPage(query: NativeSessionReadQuery): Promise<NativeSessionReadResult> {
+    if (!this.capturePolicy.isSourceEnabled(query.sourceId) || !this.capturePolicy.isEnabled('prompt')) {
+      return {state:'unsupported',reason:'native-attachment-capture-disabled'}
+    }
+    const catalog = await this.storage.nativeSessionCatalog?.get({
+      sourceId:query.sourceId,installationId:query.installationId,
+      nativeSessionId:query.nativeSessionId,locationKind:'native',
+    })
+    if (!catalog) return {state:'unavailable',reason:'native-session-not-indexed'}
+    const source=this.sources.list().find(item=>item.manifest.sourceId===query.sourceId)
+    if (!source?.readNativeSessionPage) return {state:'unsupported',reason:'native-attachment-source-unavailable'}
+    const installation=await this.storage.repositories.installations.get(query.installationId)
+    if (!installation || installation.productId!==source.manifest.productId) {
+      return {state:'drifted',reason:'native-installation-identity-changed'}
+    }
+    const host=await this.storage.repositories.hosts.get(installation.hostId)
+    if (!host) return {state:'unavailable',reason:'native-source-host-unavailable'}
+    if (!query.cursor || !Number.isSafeInteger(query.cursor.offset)
+      || query.cursor.offset<0 || query.cursor.fileIdentity!==catalog.fileIdentity) {
+      return {state:'unsupported',reason:'native-attachment-cursor-invalid'}
+    }
+    query.signal.throwIfAborted()
+    const page=await source.readNativeSessionPage({
+      filePath:catalog.filePath,nativeSessionId:catalog.nativeSessionId,
+      cursor:query.cursor,limit:1,
+    },{host,installation,abortSignal:query.signal,checkpoint:readOnlyCheckpoint})
+    if (page.state!=='available') return page
+    if (page.nextCursor.fileIdentity!==catalog.fileIdentity
+      || !page.recordCursors || page.recordCursors.length!==page.records.length
+      || page.records.length!==1 || page.pendingTail) {
+      return {state:'drifted',reason:'native-attachment-record-identity-changed'}
+    }
+    const record=page.records[0]!
+    const cursor=page.recordCursors[0]!
+    if (record.sourceId!==query.sourceId || record.installationId!==installation.id
+      || record.sourceSessionNativeId!==catalog.nativeSessionId
+      || record.locator.path!==catalog.filePath
+      || cursor.offset!==query.cursor.offset || cursor.sequence!==query.cursor.sequence
+      || cursor.fileIdentity!==catalog.fileIdentity || !record.fingerprint) {
+      return {state:'drifted',reason:'native-attachment-record-cursor-drifted'}
+    }
+    // Process one verified native record at a time. Raw prompt/tool text never
+    // enters the HTTP DTO: only the endpoint's media extractor may consume it.
+    const normalized=await source.normalize(record,{host,installation})
+    query.signal.throwIfAborted()
+    return {
+      state:'available',
+      observations:normalized.observations,
+      observationRecordIds:normalized.observations.map(()=>record.id),
+      observationCursors:normalized.observations.map(()=>cursor),
+      evidenceCandidates:[],
+      nextCursor:page.nextCursor,hasMore:page.hasMore,pendingTail:false,
+    }
+  }
+
   async read(query: NativeSessionReadQuery): Promise<NativeSessionReadResult> {
     if (!this.capturePolicy.isSourceEnabled(query.sourceId)) {
       return { state: 'unsupported', reason: 'source-disabled' }

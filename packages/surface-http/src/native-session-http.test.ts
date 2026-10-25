@@ -587,3 +587,69 @@ test('native Review stable-ID endpoint resolves Catalog on demand without accept
     assert.equal((await fetch(missingUrl)).status,404)
   }finally{await server.dispose()}
 })
+
+test('native Review lazy images resolve from source cursor, never SQL rows or arbitrary paths',async()=>{
+  const at='2026-10-25T00:00:00Z'
+  const entry:NativeSessionCatalogEntry={
+    sourceId:'pi',installationId:'pi-inst',nativeSessionId:'S-image',
+    locationKind:'native',filePath:'/source-owned/never-exposed.jsonl',
+    fileIdentity:'8:2',fileSize:200,fileMtimeMs:1000,
+    lastActivityAt:at,updatedAt:at,
+  }
+  const id=nativeReviewSessionId(entry.sourceId,entry.installationId,entry.nativeSessionId)
+  const storage={
+    ...noopStorage,
+    nativeSessionCatalog:{
+      async getByReviewSessionId(value:string){return value===id?entry:null},
+    },
+  } as unknown as StorageService
+  const cursor={offset:0,sequence:0,fileIdentity:'8:2'}
+  const user={
+    kind:'message.user' as const,capturedAt:at,
+    payload:{text:'What is this?',attachments:[{
+      kind:'images',value:{type:'image',mimeType:'image/png',data:'aGVsbG8='},
+    }]},
+    identityHints:{nativeSessionId:'S-image'},
+  }
+  let reads=0
+  const reader:NativeSessionWindowReader={
+    async read(q){
+      reads++
+      assert.equal(q.sourceId,'pi')
+      assert.equal(q.nativeSessionId,'S-image')
+      if(q.cursor)assert.deepEqual(q.cursor,cursor)
+      return {
+        state:'available',observations:[user],
+        observationRecordIds:['source-record-id'],
+        observationCursors:[cursor],
+        evidenceCandidates:[{
+          captureMethod:'native-log',derivation:'observed',capturedAt:at,
+          sourceLocator:{kind:'file',path:'/sensitive/image-source-private.jsonl'},
+        }],
+        nextCursor:{offset:100,sequence:1,fileIdentity:'8:2'},
+        hasMore:false,pendingTail:false,
+      }
+    },
+  }
+  const server=await startHttpSurface(storage,{port:0,nativeSessionReader:reader})
+  try{
+    const base=`http://${server.host}:${server.port}/api/v1/native-sessions/${id}`
+    const reviewResponse=await fetch(base+'/review')
+    assert.equal(reviewResponse.status,200)
+    const review=await reviewResponse.json() as {
+      interactions:Array<{nodes:Array<{type:string;id:string;nativeAttachmentCursor?:string;attachments?:unknown[]}>}>
+    }
+    const message=review.interactions[0]?.nodes.find(n=>n.type==='message')
+    assert.ok(message?.nativeAttachmentCursor)
+    assert.equal(JSON.stringify(review).includes('aGVsbG8='),false)
+    const attachmentPath=`${base}/observations/${message.id}/attachments?cursor=${encodeURIComponent(message.nativeAttachmentCursor!)}`
+    const response=await fetch(attachmentPath)
+    assert.equal(response.status,200)
+    const body=await response.json() as {items:Array<{type:string;mimeType?:string;dataUrl?:string}>}
+    assert.deepEqual(body.items,[{type:'image',mimeType:'image/png',dataUrl:'data:image/png;base64,aGVsbG8='}])
+    assert.equal(JSON.stringify(body).includes('/sensitive/'),false)
+    assert.equal((await fetch(`${base}/observations/native-observation:${'0'.repeat(32)}/attachments?cursor=${encodeURIComponent(message.nativeAttachmentCursor!)}`)).status,404)
+    assert.equal((await fetch(`${base}/observations/${message.id}/attachments?cursor=${encodeURIComponent(message.nativeAttachmentCursor!)}&path=/etc/passwd`)).status,400)
+    assert.equal(reads,3)
+  }finally{await server.dispose()}
+})

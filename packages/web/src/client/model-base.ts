@@ -226,8 +226,20 @@ export abstract class AgentLensModelBase {
   nativeSessions = (options: Parameters<AgentLensApi['nativeSessions']>[0] = {}): Promise<NativeSessionCatalogResponseDto> =>
     this.api.nativeSessions(options)
 
-  reviewAttachments = (observationId: string): Promise<ReviewMessageAttachmentDto[]> =>
-    this.api.reviewAttachments(observationId)
+  reviewAttachments = (observationId: string): Promise<ReviewMessageAttachmentDto[]> => {
+    const detail=this.snapshot.review.detail
+    if (detail?.statisticsCompleteness === 'window') {
+      // The native Task Surface's message nodes retain only a validated
+      // rewind cursor; do not fall back to SQL Observation IDs.
+      const node=detail.interactions.flatMap(item=>item.nodes)
+        .find(item=>item.type==='message' && item.observationIds.includes(observationId))
+      if (!node || node.type!=='message') return Promise.resolve([])
+      return node.nativeAttachmentCursor
+        ? this.api.nativeReviewAttachments(detail.id,observationId,node.nativeAttachmentCursor)
+        : Promise.resolve(node.attachments ?? [])
+    }
+    return this.api.reviewAttachments(observationId)
+  }
 
   reviewProcessDetail = (
     sessionId: string,

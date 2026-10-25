@@ -1,13 +1,15 @@
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import type { NativeSessionReadQuery, NativeSessionReadResult } from '@agent-lens/core-services'
 import type { NativeSessionCatalogStore, ObservationCandidate, SourceNativeSessionCursor } from '@agent-lens/core'
-import type { NativeReviewWindowDto } from '@agent-lens/protocol'
+import { reviewMessageAttachmentsFromPayload, type NativeReviewWindowDto } from '@agent-lens/protocol'
 
-import { projectNativeReviewWindow } from '@agent-lens/projection-review'
+import { nativeReviewObservationId, projectNativeReviewWindow } from '@agent-lens/projection-review'
 import { badRequest, writeJson } from './http-utils'
 
 export interface NativeSessionWindowReader {
   read(query: NativeSessionReadQuery): Promise<NativeSessionReadResult>
+  /** Source-authorized, one-record native media hydration (never public raw DTO). */
+  readUnpersistedMediaPage?(query: NativeSessionReadQuery): Promise<NativeSessionReadResult>
 }
 
 const PATH = '/api/v1/native-sessions/window'
@@ -119,6 +121,7 @@ async function readCompleteNativeTurn(
 ): Promise<NativeTurnReadResult> {
   const observations: ObservationCandidate[] = []
   const observationRecordIds: string[] = []
+  const observationCursors: string[] = []
   const pendingTools = new Set<string>()
   let current = initial
   let pages = 0
@@ -142,7 +145,7 @@ async function readCompleteNativeTurn(
       sourceId: query.sourceId,
       installationId: query.installationId,
       nativeSessionId: query.nativeSessionId,
-      observations, observationRecordIds,
+      observations, observationRecordIds, observationCursors,
       hasMore, pendingTail: false,
       hasPrevious: query.cursor !== undefined,
       nextCursor: '',
@@ -208,6 +211,7 @@ async function readCompleteNativeTurn(
       }
       observations.push(observation)
       observationRecordIds.push(current.observationRecordIds[index]!)
+      observationCursors.push(encodeNativeSessionCursor(recordCursor))
       if (observation.kind === 'message.user') sawUser = true
       const callId = toolCallId(observation)
       if (callId && observation.kind === 'tool.call') pendingTools.add(callId)
@@ -356,6 +360,94 @@ function decodeCursor(value: string | null): EncodedNativeCursor | undefined {
 
 export function encodeNativeSessionCursor(cursor: EncodedNativeCursor): string {
   return Buffer.from(JSON.stringify(cursor), 'utf8').toString('base64url')
+}
+
+/**
+ * An original message attachment is hydrated only after the same Source worker
+ * verifies the Catalog-owned session and physical record start. A client may
+ * provide an opaque cursor, never a filesystem path or raw Source payload.
+ */
+export async function handleNativeSessionAttachmentRequest(
+  request: IncomingMessage,
+  response: ServerResponse,
+  url: URL,
+  reader?: NativeSessionWindowReader,
+  catalog?: NativeSessionCatalogStore,
+): Promise<boolean> {
+  const match = url.pathname.match(/^\/api\/v1\/native-sessions\/([^/]+)\/observations\/([^/]+)\/attachments$/)
+  if (!match) return false
+  if (request.method !== 'GET') {
+    response.setHeader('allow', 'GET')
+    writeJson(response, 405, {error:'method_not_allowed'})
+    return true
+  }
+  if (!reader || !catalog) {
+    writeJson(response,503,{state:'unavailable',reason:'native-session-attachments-unavailable'})
+    return true
+  }
+  const id = (() => {try{return decodeURIComponent(match[1]!)}catch{return ''}})()
+  const observationId = (() => {try{return decodeURIComponent(match[2]!)}catch{return ''}})()
+  if (!/^native:[a-f0-9]{32}$/.test(id) || !/^native-observation:[a-f0-9]{32}$/.test(observationId)) {
+    writeJson(response,404,{error:'not_found'})
+    return true
+  }
+  if ([...url.searchParams.keys()].some(key=>key!=='cursor')
+    || url.searchParams.getAll('cursor').length!==1) throw badRequest('Invalid native attachment request')
+  const cursor=decodeCursor(url.searchParams.get('cursor'))
+  if (!cursor || cursor.mode) throw badRequest('Native attachment requires an original record-start cursor')
+  const entry=await catalog.getByReviewSessionId(id)
+  if (!entry || entry.locationKind!=='native') {
+    writeJson(response,404,{error:'not_found'})
+    return true
+  }
+  const signal = AbortSignal.timeout(10_000)
+  const mediaQuery={
+    sourceId:entry.sourceId,installationId:entry.installationId,
+    nativeSessionId:entry.nativeSessionId,cursor,limit:1,signal,
+  }
+  const page=await (reader.readUnpersistedMediaPage
+    ? reader.readUnpersistedMediaPage(mediaQuery)
+    : reader.read(mediaQuery))
+  if(page.state!=='available'){
+    writeJson(response,409,{state:page.state,reason:page.reason})
+    return true
+  }
+  if (!page.observationCursors || page.observationCursors.length!==page.observations.length
+    || page.observationRecordIds.length!==page.observations.length) {
+    writeJson(response,409,{state:'unsupported',reason:'native-attachment-source-cursors-unavailable'})
+    return true
+  }
+  const seen=new Map<string,number>()
+  for(let i=0;i<page.observations.length;i++){
+    const sourceCursor=page.observationCursors[i]!
+    // A forged offset into a different record must never authorize an image.
+    if(sourceCursor.offset!==cursor.offset || sourceCursor.fileIdentity!==cursor.fileIdentity
+      || sourceCursor.sequence!==cursor.sequence) continue
+    const candidate=page.observations[i]!
+    const recordId=page.observationRecordIds[i]!
+    const ordinal=seen.get(recordId)??0
+    seen.set(recordId,ordinal+1)
+    if(candidate.kind!=='message.user' && candidate.kind!=='message.assistant'
+      && candidate.kind!=='message.commentary' && candidate.kind!=='message.reasoning') continue
+    if(nativeReviewObservationId(entry.sourceId,entry.installationId,entry.nativeSessionId,
+      candidate,recordId,ordinal)!==observationId) continue
+    // Never return arbitrary host paths or remote URLs. For inline images only,
+    // retain a small, source-sanitized data URL and bounded public metadata.
+    let total=0
+    const items=reviewMessageAttachmentsFromPayload(candidate.payload).slice(0,8).map(item=>{
+      if(item.type!=='image' || !item.dataUrl || !/^data:image\/(png|jpeg|gif|webp);base64,/i.test(item.dataUrl)
+        || item.dataUrl.length>2_700_000 || total+item.dataUrl.length>2_700_000) {
+        const {dataUrl:_dataUrl,...metadata}=item
+        return metadata
+      }
+      total+=item.dataUrl.length
+      return item
+    })
+    writeJson(response,200,{observationId,items})
+    return true
+  }
+  writeJson(response,404,{error:'not_found'})
+  return true
 }
 
 /**
