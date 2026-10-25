@@ -224,3 +224,29 @@ test('Hook overlay rejects partial native turns and inconsistent record provenan
   }),/exact source record provenance/)
 })
 
+test('Hook events sharing one native correlation ID retain distinct request and response facts',()=>{
+  const native=projectNativeReviewWindow({
+    ...page,completeBoundaries:true,
+    observations:[
+      {...candidate('message.user',1,{text:'run'}),occurredAt:'2026-10-25T04:00:00Z'},
+      {...candidate('message.assistant',2,{text:'done'}),occurredAt:'2026-10-25T04:00:05Z'},
+    ],
+    observationRecordIds:['native-user','native-reply'],
+  })
+  const events:ObservationCandidate[]=[
+    {...candidate('permission.request',3,{decision:'prompt'}),occurredAt:'2026-10-25T04:00:01Z',nativeEventId:'same-hook-id'},
+    {...candidate('permission.response',4,{decision:'allow'}),occurredAt:'2026-10-25T04:00:02Z',nativeEventId:'same-hook-id'},
+    {...candidate('permission.request',5,{decision:'prompt'}),occurredAt:'2026-10-25T04:00:03Z',nativeEventId:'same-hook-id'},
+  ]
+  const result=overlayNativeHookEvents({
+    window:native,observations:events,
+    observationRecordIds:['req-one','response','duplicate-request'],
+    truncated:false,
+  })
+  assert.deepEqual(result.interactions[0]?.nodes.map(node=>node.type==='event'?node.kind:node.type),[
+    'message','permission.request','permission.response','message',
+  ])
+  assert.equal(result.observationCount,native.observationCount+2)
+  assert.equal(result.hookFactsPartial,true,'the ambiguous duplicate remains standalone')
+})
+

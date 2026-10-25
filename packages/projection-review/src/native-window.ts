@@ -234,9 +234,11 @@ export function overlayNativeHookEvents(input: {
   const candidates = projected.interactions.flatMap(item => item.nodes)
     .filter((node): node is Extract<typeof node, {type:'event'}> => node.type === 'event')
   const seenIds = new Set(window.interactions.flatMap(turn => turn.nodes.map(node => node.id)))
+  const nativeFactKey = (kind: string, nativeEventId: string) =>
+    JSON.stringify([kind, nativeEventId])
   const existingSourceFacts = new Set(window.interactions.flatMap(turn => turn.nodes)
     .filter(node => node.type === 'event' && node.nativeEventId)
-    .map(node => node.nativeEventId!))
+    .map(node => nativeFactKey(node.kind, node.nativeEventId!)))
   const fingerprint = (kind: string, at: string, payload: unknown) =>
     JSON.stringify([kind, at, payload])
   const existingFacts = new Set(window.interactions.flatMap(turn => turn.nodes)
@@ -245,7 +247,7 @@ export function overlayNativeHookEvents(input: {
   const added = new Map<string, typeof candidates>()
   for (const node of candidates) {
     if (seenIds.has(node.id)
-      || (node.nativeEventId && existingSourceFacts.has(node.nativeEventId))
+      || (node.nativeEventId && existingSourceFacts.has(nativeFactKey(node.kind, node.nativeEventId)))
       || existingFacts.has(fingerprint(node.kind, node.at, node.payload))) continue
     const at = Date.parse(node.at)
     // The last turn is bounded by its last *observed* native fact, not by
@@ -261,7 +263,7 @@ export function overlayNativeHookEvents(input: {
     events.push(node)
     added.set(matching.id, events)
     seenIds.add(node.id)
-    if (node.nativeEventId) existingSourceFacts.add(node.nativeEventId)
+    if (node.nativeEventId) existingSourceFacts.add(nativeFactKey(node.kind, node.nativeEventId))
     existingFacts.add(fingerprint(node.kind, node.at, node.payload))
   }
   let mergedCount = 0
