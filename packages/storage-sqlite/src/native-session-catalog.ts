@@ -238,6 +238,15 @@ export class SqliteNativeSessionCatalog {
       if (input.sourceId) { predicates.push('source_id=?'); values.push(input.sourceId) }
       if (input.installationId) { predicates.push('installation_id=?'); values.push(input.installationId) }
       if (input.locationKind) { predicates.push('location_kind=?'); values.push(input.locationKind) }
+      const search = input.search?.trim().slice(0, 256)
+      if (search) {
+        // Parametrized substring search: literal '%' and '_' are NOT SQL wildcards.
+        // This only scans compact metadata, never the native event stream.
+        predicates.push(`(instr(lower(COALESCE(title,'')), lower(?)) > 0
+          OR instr(lower(native_session_id), lower(?)) > 0
+          OR instr(lower(source_id), lower(?)) > 0)`)
+        values.push(search, search, search)
+      }
       if (input.onlyWithoutLegacyReview) {
         // Do not advertise pre-v35 metadata rows that cannot be opened by
         // their synthetic Review ID until their next incremental upsert.
