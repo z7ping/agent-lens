@@ -59,6 +59,7 @@ import type { HttpEventHub } from './events'
 import { badRequest, statusCodeForError, writeJson } from './http-utils'
 import { handleLiveAttachmentRequest } from './live-attachments-http'
 import { handleNativeSessionWindowRequest, type NativeSessionWindowReader } from './native-session-http'
+import { handleNativeSessionCatalogRequest } from './native-session-catalog-http'
 import { reviewAttachmentSources } from './review-attachments'
 import { handleLiveRequest } from './live-http'
 import { handleManagedAssetFilesRequest } from './managed-asset-files'
@@ -272,6 +273,7 @@ export async function startHttpSurface(
     try {
       const url = new URL(request.url ?? '/', `http://${AGENT_LENS_HTTP_HOST}`)
       route = httpRouteLabel(url.pathname)
+      if (await handleNativeSessionCatalogRequest(request, response, url, storage.nativeSessionCatalog, options.capturePolicy)) return
       if (await handleNativeSessionWindowRequest(request, response, url, options.nativeSessionReader)) return
       if (await handleLiveAttachmentRequest(request, response, url, options.liveAttachments)) return
       if (await handleLiveRequest(request, response, url, options.lives, options.selectProjectDirectory, { storage, sources: options.sources })) return
