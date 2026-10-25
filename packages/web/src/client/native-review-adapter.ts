@@ -82,7 +82,11 @@ export function nativeReviewDetail(
     page: {
       count: interactions.length,
       hasMore: window.hasMore,
-      ...(window.hasMore ? { nextCursor: window.nextCursor } : {}),
+      // A complete native EOF is also a valid append-only resume boundary.
+      // Keep this Source-owned cursor even when no older turns remain. The
+      // regular Load More action still requires hasMore=true; native incremental
+      // refresh can resume here without rescanning a long original session.
+      nextCursor: window.nextCursor,
       direction: 'forward',
       filter: 'all',
     },

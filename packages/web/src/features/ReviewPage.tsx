@@ -203,6 +203,11 @@ export function ReviewPage({ model, embedded = false, latestRequest = 0 }: { mod
             </div>
             <div className="round-nav-actions" aria-label={t('local.roundNav.actionsAria')}>
               {review.detailHasNewData && <Button className="round-nav-live" onClick={() => void jumpToLatest()}>{t('local.roundNav.newRecords')}<UiIcon name="arrow-down" size={14}/></Button>}
+              {detail?.statisticsCompleteness === 'window' && !detail.page.hasMore
+                && <Button size="small" variant="quiet" disabled={review.detailLoadingMore}
+                  onClick={() => void model.refreshReviewTailIncremental()}>
+                  {t('local.roundNav.checkNativeTail')}
+                </Button>}
             </div>
             {detail.statisticsCompleteness === 'window'
               && <span className="round-nav-status">{t('local.roundNav.nativeWindow')}</span>}

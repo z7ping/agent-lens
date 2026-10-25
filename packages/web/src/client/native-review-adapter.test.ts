@@ -191,3 +191,48 @@ test('native Review pagination rebuilds bounded statistics without SQL totals',a
   } finally { model.stop() }
 })
 
+test('native EOF keeps a safe cursor and incrementally fetches newly completed turns without SQL',async()=>{
+  let stage:'waiting'|'new-turn'|'drifted'='waiting'
+  const requests:string[]=[]
+  const initial=page(1,false)
+  const appended=page(2,false)
+  const api={
+    async nativeSession(){return summary},
+    async nativeReviewById(_id:string,options:{cursor?:string}){
+      requests.push(options.cursor??'initial')
+      if(!options.cursor)return initial
+      if(stage==='waiting')return {state:'unsupported',reason:'native-review-no-user-turn'} as const
+      if(stage==='drifted')return {state:'drifted',reason:'native-catalog-file-identity-changed'} as const
+      return appended
+    },
+    reviewDetail(){throw Error('Incremental native review must not query SQL detail')},
+    reviewFileChanges(){throw Error('Incremental native review must not query SQL files')},
+    relationships(){throw Error('Incremental native review must not query SQL relationships')},
+  } as unknown as AgentLensApi
+  const model=new AgentLensClientModel(api)
+  try{
+    await model.selectReviewSession(id)
+    assert.equal(model.getSnapshot().review.detail?.page.hasMore,false)
+    assert.equal(model.getSnapshot().review.detail?.page.nextCursor,'opaque-cursor-1',
+      'Source-owned EOF cursor must be reusable after native file append')
+    await model.refreshReviewTailIncremental()
+    assert.deepEqual(model.getSnapshot().review.detail?.interactions.map(turn=>turn.ordinal),[1])
+    assert.equal(model.getSnapshot().review.error,'')
+    assert.equal(model.getSnapshot().review.detailLoadingMore,false)
+    stage='new-turn'
+    await model.refreshReviewTailIncremental()
+    assert.deepEqual(model.getSnapshot().review.detail?.interactions.map(turn=>turn.ordinal),[1,2])
+    assert.equal(model.getSnapshot().review.detail?.page.nextCursor,'opaque-cursor-2')
+    assert.equal(model.getSnapshot().review.detail?.observationCount,2)
+    assert.equal(model.getSnapshot().review.detail?.statisticsCompleteness,'window')
+    stage='drifted'
+    await model.refreshReviewTailIncremental()
+    assert.deepEqual(model.getSnapshot().review.detail?.interactions.map(turn=>turn.ordinal),[1,2],
+      'Drift must not silently mix records into the current projection')
+    assert.match(model.getSnapshot().review.error,/identity|drift|source|原生/i)
+    assert.deepEqual(requests,[
+      'initial','opaque-cursor-1','opaque-cursor-1','opaque-cursor-2',
+    ])
+  }finally{model.stop()}
+})
+

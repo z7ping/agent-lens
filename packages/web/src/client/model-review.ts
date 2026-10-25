@@ -732,7 +732,76 @@ export abstract class AgentLensReviewModel extends AgentLensIntegrationModel {
   async refreshReviewTailIncremental(): Promise<void> {
     const current = this.snapshot.review
     const detail = current.detail
-    if (detail?.statisticsCompleteness === 'window') return
+    if (detail?.statisticsCompleteness === 'window') {
+      // Do not confuse a still-unread historical page with an EOF refresh.
+      // The native Source owns the cursor; no SQL Review row is consulted.
+      if (!current.selectedId || current.selectedId !== detail.id
+        || current.detailLoading || current.detailLoadingMore
+        || detail.page.hasMore || !detail.page.nextCursor) return
+      const selectedId = current.selectedId
+      const generation = this.detailGeneration
+      const tailCursor = detail.page.nextCursor
+      const lastOrdinal = detail.interactions.at(-1)?.ordinal ?? 0
+      this.publish({
+        ...this.snapshot,
+        review: { ...current, detailLoadingMore: true, error: '' },
+      })
+      try {
+        const window = await this.api.nativeReviewById(selectedId, {
+          cursor: tailCursor, turnLimit: 4,
+        })
+        if (generation !== this.detailGeneration || this.snapshot.review.selectedId !== selectedId) return
+        if (window.state !== 'available') {
+          // At native EOF, a new user turn may not yet exist, or its tools may
+          // still be running. Neither condition is a failed data refresh.
+          if (window.state === 'unsupported' && [
+            'native-review-no-user-turn',
+            'native-review-turn-tool-pending',
+            'native-review-turn-pending-tail',
+            'native-review-turn-exceeds-budget',
+          ].includes(window.reason)) {
+            this.publish({
+              ...this.snapshot,
+              review: { ...this.snapshot.review, detailLoadingMore: false, error: '' },
+            })
+            return
+          }
+          throw new Error(translateProduct('review:local.session.nativeReadUnavailable', {
+            reason: window.reason,
+          }))
+        }
+        if (!window.interactions.length
+          || window.interactions[0]!.ordinal <= lastOrdinal
+          || !window.nextCursor || window.nextCursor === tailCursor) {
+          throw new Error('Native Review tail cursor did not advance to a new complete turn')
+        }
+        const latest = this.snapshot.review
+        if (!latest.detail || latest.detail.id !== selectedId) return
+        const next = nativeReviewNextPage(latest.detail, window)
+        this.publish({
+          ...this.snapshot,
+          review: {
+            ...latest,
+            detail: mergeReviewDetail(latest.detail, next),
+            fileChanges: nativeReviewObservedFileChanges(window, latest.fileChanges),
+            detailLoadingMore: false,
+            detailHasNewData: window.hasMore,
+            error: '',
+          },
+        })
+      } catch (error) {
+        if (generation !== this.detailGeneration || this.snapshot.review.selectedId !== selectedId) return
+        this.publish({
+          ...this.snapshot,
+          review: {
+            ...this.snapshot.review,
+            detailLoadingMore: false,
+            error: error instanceof Error ? error.message : String(error),
+          },
+        })
+      }
+      return
+    }
     if (
       !current.selectedId
       || !detail
