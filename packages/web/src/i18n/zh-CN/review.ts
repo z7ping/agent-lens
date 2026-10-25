@@ -363,6 +363,7 @@ export const chineseReviewMessages: LocaleMessagesDto = {
         newRecords: '有新记录',
         querying: '正在查询完整会话…',
         nativeWindow: '原生会话 · 仅展示已加载轮次',
+        nativeHookPartial: '部分 Hook 事件暂不可完整读取',
         latencyNote: '“耗时较高”由服务器基于完整会话的轮次耗时分布计算。',
         loadingOlder: '正在加载更早轮次…',
         loadFailedRetry: '加载失败 · 重试',
