@@ -827,6 +827,72 @@ export const openCodeSourceDefinition: SourceDefinition = {
   detect: detectOpenCode,
   declareCapabilities: declareOpenCodeCapabilities,
   rawRecovery: databaseRawRecovery,
+  async *discoverNativeSessions(ctx) {
+    const root = ctx.installation.dataRoot ?? ctx.installation.configRoot
+    if (!root || ctx.abortSignal.aborted) return
+    const dbPath = join(root, DB_NAME)
+    let file
+    try { file = await stat(dbPath) }
+    catch (error) { if (isMissingPathError(error)) return; throw error }
+    if (!file.isFile()) return
+    const db = openDatabase(root)
+    const identity = `${file.dev}:${file.ino}`
+    try {
+      // Read only session/part grouping metadata. No part.data or message.data
+      // is fetched into AgentLens and no native database table is modified.
+      const query = db.prepare(`
+        SELECT p.session_id AS native_session_id,
+          MAX(p.rowid) AS last_row,
+          MAX(${timestampMillisSql('p.time_created')}) AS last_ms,
+          MAX(s.title) AS session_title
+        FROM part p LEFT JOIN session s ON p.session_id = s.id
+        WHERE p.session_id IS NOT NULL AND trim(p.session_id) <> ''
+        GROUP BY p.session_id
+        HAVING MAX(p.rowid) < ?
+        ORDER BY last_row DESC
+        LIMIT ?
+      `)
+      const newerThan = ctx.historyWindow?.activeSince
+        ? Date.parse(ctx.historyWindow.activeSince) : Number.NaN
+      const maxSessions = Math.max(0, Math.floor(ctx.historyWindow?.sessionLimit ?? Number.MAX_SAFE_INTEGER))
+      let lastRow = Number.MAX_SAFE_INTEGER
+      let emitted = 0
+      while (!ctx.abortSignal.aborted && emitted < maxSessions) {
+        const batchLimit = Math.min(128, maxSessions-emitted)
+        const rows = query.all(lastRow,batchLimit) as Array<{
+          native_session_id:string;last_row:number;last_ms:number|null;session_title:string|null
+        }>
+        if (!rows.length) break
+        for (const row of rows) {
+          ctx.abortSignal.throwIfAborted()
+          if (!row.native_session_id || !Number.isSafeInteger(row.last_row)) continue
+          const sourceTime = row.last_ms === null ? undefined : normalizeTimestamp(row.last_ms)
+          const observedAt = sourceTime ?? new Date(file.mtimeMs).toISOString()
+          if (Number.isFinite(newerThan) && Date.parse(observedAt)<newerThan) continue
+          const current = await stat(dbPath)
+          if (!current.isFile() || current.dev !== file.dev || current.ino !== file.ino) {
+            throw new Error('OpenCode native database changed identity during catalog scan')
+          }
+          const title=row.session_title?.trim()
+          yield {
+            sourceId: SOURCE_ID, installationId:ctx.installation.id,
+            nativeSessionId:row.native_session_id,
+            locationKind:'native' as const,
+            filePath:dbPath, fileIdentity:identity,
+            fileSize:current.size, fileMtimeMs:current.mtimeMs,
+            lastActivityAt:observedAt,
+            ...(title ? {title} : {}),
+            updatedAt:new Date().toISOString(),
+          }
+          emitted++
+        }
+        const last=rows[rows.length-1]!
+        if (last.last_row >= lastRow) throw new Error('OpenCode catalog row cursor did not advance')
+        lastRow=last.last_row
+        if (rows.length<batchLimit) break
+      }
+    } finally {db.close()}
+  },
   async readNativeSessionPage(query, ctx) {
     const root = ctx.installation.dataRoot ?? ctx.installation.configRoot
     const limit = query.limit ?? 32

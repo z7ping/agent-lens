@@ -32,6 +32,20 @@ test('Hermes native SQLite pages isolate session rows and normalize with no chec
       id:'hermes-inst',hostId:host.id,productId:'hermes',
       dataRoot:root,firstSeenAt:at,lastSeenAt:at,
     }
+    const catalogRows=[]
+    const catalogContext={
+      host,installation,abortSignal:new AbortController().signal,
+      checkpoint:{async get(){return null},async set(){throw Error('No catalog checkpoint write')},async clear(){}},
+      historyWindow:{sessionLimit:1},
+    } as const
+    for await (const entry of hermesSourceDefinition.discoverNativeSessions!(catalogContext)) catalogRows.push(entry)
+    assert.equal(catalogRows.length,1)
+    assert.equal(catalogRows[0]?.nativeSessionId,'S1')
+    assert.equal(catalogRows[0]?.title,'Session')
+    assert.equal(catalogRows[0]?.filePath,path)
+    assert.equal(catalogRows[0]?.fileSize,(await stat(path)).size)
+    assert.equal(JSON.stringify(catalogRows).includes('first'),false)
+    assert.equal(JSON.stringify(catalogRows).includes('second'),false)
     let checkpointWrites=0
     const ctx:SourceRawRecoveryContext={
       host,installation,abortSignal:new AbortController().signal,
