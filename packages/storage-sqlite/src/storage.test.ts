@@ -21,12 +21,12 @@ async function createStorage() {
   return storage
 }
 
-test('SQLite storage migrates to schema version 33 and exposes required tables', async () => {
+test('SQLite storage migrates to schema version 34 and exposes required tables', async () => {
   const storage = await createStorage()
   try {
     const health = await storage.health()
     assert.equal(health.ok, true)
-    assert.equal(health.schemaVersion, 33)
+    assert.equal(health.schemaVersion, 34)
     const details = health.details as {
       dataGrowth: { capacity: { softLimitBytes: number, state: string }, reclaimableBytes: number, totals?: unknown, last7Days?: unknown }
       unknownObservations?: unknown
@@ -60,6 +60,7 @@ test('SQLite storage migrates to schema version 33 and exposes required tables',
       'workspaces',
       'logical_sessions',
       'source_sessions',
+      'native_session_catalog',
       'session_relationships',
       'session_relationship_candidates',
       'source_runtime_status',
