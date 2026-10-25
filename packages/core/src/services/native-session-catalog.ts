@@ -58,6 +58,16 @@ export interface NativeSessionCatalogStore {
   hasNativeOnlyWriteClaim(input: {
     sourceId: string; installationId: string; nativeSessionId: string
   }): Promise<boolean>
+  /** Durable single-owner write mode; null means unclaimed. */
+  getSessionWriteMode(input: {
+    sourceId: string; installationId: string; nativeSessionId: string
+  }): Promise<'legacy' | 'native-only' | null>
+  /** Atomic fallback: legacy wins unless a native-only claim already exists.
+   * MUST be called before starting a legacy record transaction.
+   */
+  claimLegacyWrite(input: {
+    sourceId: string; installationId: string; nativeSessionId: string
+  }): Promise<'legacy' | 'native-only'>
   /** Atomic, non-destructive claim for a VERIFIED original Source location.
    * Refuses sessions with any legacy SourceRecord or SQL Observation.
    * The caller must separately prove record fingerprint and Source authorization.
