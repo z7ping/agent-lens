@@ -126,6 +126,9 @@ export class SqliteNativeSessionCatalog {
       if (input.installationId) { predicates.push('installation_id=?'); values.push(input.installationId) }
       if (input.locationKind) { predicates.push('location_kind=?'); values.push(input.locationKind) }
       if (input.onlyWithoutLegacyReview) {
+        // Do not advertise pre-v35 metadata rows that cannot be opened by
+        // their synthetic Review ID until their next incremental upsert.
+        predicates.push('review_session_id IS NOT NULL')
         // The existing SourceSession unique triple is the authoritative
         // association between source-native and legacy logical identities.
         // EXISTS uses the existing observations logical-session index, with
