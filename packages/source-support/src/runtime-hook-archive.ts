@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from 'node:crypto'
-import { link, lstat, mkdir, readFile, readdir, unlink, writeFile } from 'node:fs/promises'
+import { link, lstat, mkdir, open, readFile, readdir, unlink, writeFile } from 'node:fs/promises'
 import { basename, join } from 'node:path'
 
 const MAX_EVENT_BYTES = 1024 * 1024
@@ -217,8 +217,25 @@ export async function readArchivedHookInboxPage(input: {
     if (!info.isFile() || info.isSymbolicLink() || info.size <= 0 || info.size > MAX_EVENT_BYTES) {
       throw new Error('Hook archive contains invalid event file')
     }
-    const data = await readFile(filePath)
-    if (data.length !== info.size) throw new Error('Hook archive event changed during read')
+    // Keep one file descriptor for the actual bytes. A pathname can be
+    // replaced by a symlink/other inode between lstat and readFile; matching
+    // the opened descriptor prevents that archive identity swap.
+    const handle = await open(filePath, 'r')
+    let data:Buffer
+    try{
+      const opened = await handle.stat()
+      if (!opened.isFile() || opened.dev !== info.dev || opened.ino !== info.ino
+        || opened.size !== info.size) {
+        throw new Error('Hook archive event changed during read')
+      }
+      data = await handle.readFile()
+      const after = await handle.stat()
+      if (data.length !== opened.size || after.dev !== opened.dev
+        || after.ino !== opened.ino || after.size !== opened.size
+        || after.mtimeMs !== opened.mtimeMs || after.ctimeMs !== opened.ctimeMs) {
+        throw new Error('Hook archive event changed during read')
+      }
+    }finally{await handle.close()}
     // Pre-seal historical archives remain readable, but all newly archived
     // events must match the immutable digest before becoming review evidence.
     // Existing Hook review always exposes partial coverage; absence of a
