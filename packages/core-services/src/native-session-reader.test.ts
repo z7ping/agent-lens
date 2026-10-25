@@ -35,7 +35,7 @@ const sample = {
 }
 
 function fixture(opts: { enabled?: boolean; catalogEntry?: NativeSessionCatalogEntry | null;
-  identity?: string; sourceId?: string } = {}) {
+  identity?: string; sourceId?: string; rawMediaBytes?: number; normalizedMediaBytes?: number } = {}) {
   const calls = { catalog: 0, source: 0, normalize: 0, sanitized: 0 }
   const storage = {
     nativeSessionCatalog: { async get() { calls.catalog++; return opts.catalogEntry === undefined ? catalog : opts.catalogEntry } },
@@ -55,7 +55,8 @@ function fixture(opts: { enabled?: boolean; catalogEntry?: NativeSessionCatalogE
       await assert.rejects(ctx.checkpoint.set('cursor', 123), /cannot persist/)
       return {
         state: 'available' as const,
-        records: [{ ...raw, ...(opts.sourceId ? { sourceId: opts.sourceId } : {}) }],
+        records: [{ ...raw, ...(opts.sourceId ? { sourceId: opts.sourceId } : {}),
+          ...(opts.rawMediaBytes ? { payload: { bytes: 'x'.repeat(opts.rawMediaBytes) } } : {}) }],
         recordCursors: [{ offset: 0, sequence: 0, fileIdentity: opts.identity ?? '1:9' }],
         nextCursor: { offset: 50, sequence: 1, fileIdentity: opts.identity ?? '1:9' },
         hasMore: true, pendingTail: false,
@@ -63,7 +64,9 @@ function fixture(opts: { enabled?: boolean; catalogEntry?: NativeSessionCatalogE
     },
     async normalize() {
       calls.normalize++
-      return { observations: [sample], evidenceCandidates: [] }
+      return { observations: [opts.normalizedMediaBytes
+        ? { ...sample, payload: { imageData: 'x'.repeat(opts.normalizedMediaBytes) } }
+        : sample], evidenceCandidates: [] }
     },
   } as unknown as SourceDefinition
   const sources = { list: () => [source] } as unknown as SourceService
@@ -210,4 +213,20 @@ test('native lazy-media reader returns only one verified original Source record 
   assert.deepEqual(disabled,{state:'unsupported',reason:'native-attachment-capture-disabled'})
   const drift=await fixture({identity:'other'}).reader.readUnpersistedMediaPage({...query,cursor:offset})
   assert.deepEqual(drift,{state:'drifted',reason:'native-attachment-record-identity-changed'})
+})
+
+test('native media hydration refuses oversized original and normalized images before public DTO', async () => {
+  const cursor = {offset:0,sequence:0,fileIdentity:'1:9'}
+  const raw = fixture({rawMediaBytes:3*1024*1024+1})
+  assert.deepEqual(await raw.reader.readUnpersistedMediaPage({...query,cursor}), {
+    state:'unsupported',reason:'native-attachment-source-payload-too-large',
+  })
+  assert.equal(raw.calls.normalize,0, 'oversized native payload must not be normalized')
+
+  const normalized = fixture({normalizedMediaBytes:3*1024*1024+1})
+  assert.deepEqual(await normalized.reader.readUnpersistedMediaPage({...query,cursor}), {
+    state:'unsupported',reason:'native-attachment-normalized-payload-too-large',
+  })
+  assert.equal(normalized.calls.normalize,1)
+  assert.equal(normalized.calls.sanitized,0)
 })

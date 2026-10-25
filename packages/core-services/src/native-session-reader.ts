@@ -111,8 +111,29 @@ export class NativeSessionReader {
     }
     // Process one verified native record at a time. Raw prompt/tool text never
     // enters the HTTP DTO: only the endpoint's media extractor may consume it.
+    // The attachment-only route deliberately sees unredacted inline media.
+    // Limit its transient allocations separately from the public HTTP response.
+    // Do not serialize or return an unbounded source payload to the web layer.
+    let sourceBytes: number
+    try {
+      sourceBytes = Buffer.byteLength(JSON.stringify(record.payload), 'utf8')
+    } catch {
+      return {state:'unsupported',reason:'native-attachment-source-payload-invalid'}
+    }
+    if (sourceBytes > 3 * 1024 * 1024) {
+      return {state:'unsupported',reason:'native-attachment-source-payload-too-large'}
+    }
     const normalized=await source.normalize(record,{host,installation})
     query.signal.throwIfAborted()
+    let normalizedBytes: number
+    try {
+      normalizedBytes = Buffer.byteLength(JSON.stringify(normalized.observations), 'utf8')
+    } catch {
+      return {state:'unsupported',reason:'native-attachment-normalized-payload-invalid'}
+    }
+    if (normalizedBytes > 3 * 1024 * 1024) {
+      return {state:'unsupported',reason:'native-attachment-normalized-payload-too-large'}
+    }
     return {
       state:'available',
       observations:normalized.observations,
