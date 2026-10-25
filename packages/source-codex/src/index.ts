@@ -128,21 +128,20 @@ async function readCodexArchivedHookPage(
   nativeSessionId: string, ctx: SourceExecutionContext, cursor?: string,
 ) {
   ctx.abortSignal.throwIfAborted()
-    const inbox = codexRuntimeInternals.inboxDirectory()
-    const archive = await readArchivedHookInboxPage({ inbox, nativeSessionId, limit: 16, ...(cursor ? {cursor} : {}) })
-    const records = archive.items.map(item => {
-      const envelope = codexRuntimeInternals.parseEnvelope(item.content, item.fileName)
-      const archivePath = join(inbox, 'archive',
-        createHash('sha256').update(nativeSessionId).digest('hex'), item.fileName)
-      const record = codexRuntimeInternals.sourceRecordFromEnvelope(envelope, archivePath, ctx)
-      if (record.sourceSessionNativeId !== nativeSessionId
-        || record.sourceId !== 'codex' || record.installationId !== ctx.installation.id) {
-        throw new Error('Archived Codex Hook does not belong to requested native session')
-      }
-      return record
-    })
-    ctx.abortSignal.throwIfAborted()
-  ctx.abortSignal.throwIfAborted()
+  const inbox = codexRuntimeInternals.inboxDirectory()
+  const archive = await readArchivedHookInboxPage({ inbox, nativeSessionId, limit: 16, ...(cursor ? {cursor} : {}) })
+  const records = archive.items.map(item => {
+    const envelope = codexRuntimeInternals.parseEnvelope(item.content, item.fileName)
+    const archivePath = join(inbox, 'archive',
+      createHash('sha256').update(nativeSessionId).digest('hex'), item.fileName)
+    const record = codexRuntimeInternals.sourceRecordFromEnvelope(envelope, archivePath, ctx)
+    if (record.sourceSessionNativeId !== nativeSessionId
+      || record.sourceId !== 'codex' || record.installationId !== ctx.installation.id) {
+      throw new Error('Archived Codex Hook does not belong to requested native session')
+    }
+    return record
+  })
+ctx.abortSignal.throwIfAborted()
   return {
     records,
     hasMore: archive.hasMore,
