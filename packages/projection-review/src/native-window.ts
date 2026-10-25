@@ -6,6 +6,7 @@ import {
   type TimelineItemDto,
 } from '@agent-lens/protocol'
 import { buildInteractions } from './nodes'
+import { observedTaskFileChanges, summarizeObservedTaskFileChanges } from '@agent-lens/projection-session'
 
 export interface NativeReviewProjectionInput {
   sourceId: string
@@ -111,6 +112,17 @@ export function projectNativeReviewWindow(input: NativeReviewProjectionInput): N
     }
   })
 
+  const changedFiles = summarizeObservedTaskFileChanges(observedTaskFileChanges(items))
+  const files = changedFiles.slice(0, 64).map(change => ({
+    path: change.path,
+    changeType: change.changeType,
+    ...(change.oldPath ? { oldPath: change.oldPath } : {}),
+    firstChangedAt: change.firstChangedAt,
+    lastChangedAt: change.lastChangedAt,
+    evidence: change.evidence,
+    confidence: change.confidence,
+  }))
+
   return {
     state: 'available',
     sourceId: input.sourceId,
@@ -118,6 +130,8 @@ export function projectNativeReviewWindow(input: NativeReviewProjectionInput): N
     nativeSessionId: input.nativeSessionId,
     sessionId,
     ...(input.completeBoundaries ? { pagingUnit: 'interaction' as const } : {}),
+    ...(files.length ? { observedFileChanges: files } : {}),
+    ...(changedFiles.length > files.length ? { fileChangesTruncated: true } : {}),
     interactions: buildInteractions(items, input.startingOrdinal ?? 1).map(interaction => ({
       ...interaction,
       // Stable even if an interaction's global ordinal changes.
