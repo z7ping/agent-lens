@@ -31,7 +31,7 @@ test('Native-only totals are returned separately with incomplete/unknown coverag
       called.push(q.sourceId)
       return overview(q.sourceId)
     },
-  } as NativeSessionMetricsStore
+  } as unknown as NativeSessionMetricsStore
   const response=await nativeMetricContribution(metrics,sources,policy,{})
   assert.deepEqual(called,['pi'])
   assert.deepEqual(response,{
