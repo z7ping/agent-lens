@@ -73,6 +73,9 @@ export async function handleNativeSessionMetricsRequest(
     const output=await rebuildNativeSessionMetrics(entry,metrics,reader!,source,abort.signal)
     if(!abort.signal.aborted && !response.destroyed)writeJson(response,200,output)
     return true
+  }catch(error){
+    if(abort.signal.aborted || response.destroyed)return true
+    throw error
   }finally{
     response.off('close',onClose)
   }
