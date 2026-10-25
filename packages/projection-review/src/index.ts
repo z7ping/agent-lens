@@ -1,4 +1,4 @@
-export { projectNativeReviewWindow, type NativeReviewProjectionInput } from './native-window'
+export { projectNativeReviewWindow, nativeReviewSessionId, type NativeReviewProjectionInput } from './native-window'
 import type {
   JsonValue,
   ReviewDetailQueryDto,

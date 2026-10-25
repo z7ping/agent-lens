@@ -29,6 +29,8 @@ import {
   type ManagedAssetDirectoryResponseDto,
   type ManagedAssetFilePreviewResponseDto,
   type ManagedAssetRoot,
+  type NativeSessionCatalogResponseDto,
+  type NativeReviewWindowResponseDto,
   type ReviewDetailDirection,
   type ReviewDetailFilter,
   type ReviewInteractionDto,
@@ -334,6 +336,56 @@ export class AgentLensApi {
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ capabilities }),
     })
+  }
+
+  /** Session metadata from original agents, never from duplicated SQLite events. */
+  nativeSessions(options: {
+    sourceId?: string
+    installationId?: string
+    limit?: number
+    cursor?: string
+    signal?: AbortSignal
+  } = {}): Promise<NativeSessionCatalogResponseDto> {
+    const params = new URLSearchParams()
+    if (options.sourceId) params.set('sourceId', options.sourceId)
+    if (options.installationId) params.set('installationId', options.installationId)
+    if (options.cursor) params.set('cursor', options.cursor)
+    if (options.limit !== undefined) {
+      params.set('limit', String(Math.max(1, Math.min(options.limit, 100))))
+    }
+    return requestJson<NativeSessionCatalogResponseDto>(
+      `/api/v1/native-sessions${params.size ? `?${params}` : ''}`,
+      options.signal ? { signal: options.signal } : {},
+    )
+  }
+
+  /** Read one bounded native Review window through the existing Task DTO.
+   * This does not silently fall back to SQL rows or claim incomplete turns are complete.
+   */
+  nativeReviewWindow(identity: {
+    sourceId: string
+    installationId: string
+    nativeSessionId: string
+  }, options: {
+    cursor?: string
+    format?: 'review' | 'review-turns'
+    limit?: number
+    signal?: AbortSignal
+  } = {}): Promise<NativeReviewWindowResponseDto> {
+    const params = new URLSearchParams({
+      sourceId: identity.sourceId,
+      installationId: identity.installationId,
+      nativeSessionId: identity.nativeSessionId,
+      format: options.format ?? 'review-turns',
+    })
+    if (options.cursor) params.set('cursor', options.cursor)
+    if (options.limit !== undefined) {
+      params.set('limit', String(Math.max(1, Math.min(options.limit, 16))))
+    }
+    return requestJson<NativeReviewWindowResponseDto>(
+      `/api/v1/native-sessions/window?${params}`,
+      options.signal ? { signal: options.signal } : {},
+    )
   }
 
   review(filters: ReviewFilters, limit = 40, cursor?: string, signal?: AbortSignal): Promise<ReviewResponseDto> {
