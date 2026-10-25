@@ -130,6 +130,85 @@ test('metadata-only Source history stage updates Catalog, never ingests SourceRe
   assert.equal(normalizeCalls,0)
 })
 
+
+test('verified new native session skips transcript ingestion, SourceRecord and Observation when both opt-ins enabled',async()=>{
+  const filePath='/tmp/native-fast-pi.jsonl'
+  const key={sourceId:'test-source',installationId:installation.id,nativeSessionId:'fast-new'}
+  const recordForProbe:SourceRecord={
+    id:'r1',...key,sourceSessionNativeId:'fast-new',
+    nativeType:'session',capturedAt:'2026-10-25T00:00:00Z',
+    parserVersion:'1',fingerprint:'sha256-hash',
+    locator:{kind:'file',path:filePath,offset:0},payload:{},
+  }
+  const oldNative=process.env.AGENT_LENS_NATIVE_ONLY_NEW_SESSIONS
+  const oldFast=process.env.AGENT_LENS_NATIVE_CATALOG_FAST_SCAN
+  let verificationCount=0
+  let ingested=0
+  let committed=0
+  let wroteRaw=0
+  let metadata=0
+  const source:SourceDefinition={
+    manifest:{pluginId:'test-fast',pluginVersion:'1',apiVersion:'1.0',
+      pluginType:'source',displayName:'Test',sourceId:'test-source',
+      productId:'test-product',parserVersion:'1'},
+    async detect(){return [detected]},
+    async declareCapabilities(){return []},
+    rawRecovery:{
+      describe(){return {canReread:true,authority:'native-store',mutability:'append-oriented',
+        locatorStability:'stable',verification:'fingerprint',canReparse:true,
+        replayable:true,persistencePreference:'reference'}},
+      async verify(){verificationCount++;return {state:'verified',checkedAt:'2026-10-25T00:00:00Z'}},
+    },
+    async *discoverNativeSessions(){
+      yield {...key,locationKind:'native' as const,filePath,
+        fileIdentity:'42:12',fileSize:256,fileMtimeMs:1000,
+        lastActivityAt:'2026-10-25T00:00:00Z',updatedAt:'2026-10-25T00:00:00Z'}
+    },
+    async readNativeSessionPage(){
+      return {state:'available',records:[recordForProbe],
+        nextCursor:{offset:64,sequence:1,fileIdentity:'42:12'},
+        hasMore:false,pendingTail:false}
+    },
+    async *ingestHistory(ctx){
+      if (ctx.skipNativeSessionFile?.(filePath)) return
+      ingested++
+      yield recordForProbe
+    },
+    async normalize(value){return normalized(value)},
+  }
+  const storage={
+    nativeSessionCatalog:{
+      async upsert(){metadata++},
+      async claimNativeOnlyWrite(){return true},
+      async getSessionWriteMode(){return 'native-only'},
+    },
+    checkpoints:{async get(){return null},async set(){},async clear(){}},
+    repositories:{sourceRecords:{async put(){wroteRaw++}}},
+  } as unknown as StorageService
+  const runner=new SourceHistoryRunner(storage,
+    {async resolveInstallation(){return installation}} as unknown as IdentityService,
+    {async commit(){committed++;return {status:'created'}}} as unknown as ObservationService,
+    {registerSourceCapabilities(){return {dispose(){}}}} as unknown as CapabilityService,
+    {async declare(){return {}}} as unknown as CoverageService,
+    capturePolicy)
+  try{
+    process.env.AGENT_LENS_NATIVE_ONLY_NEW_SESSIONS='1'
+    process.env.AGENT_LENS_NATIVE_CATALOG_FAST_SCAN='1'
+    const result=await runner.sync({source,host,detected,abortSignal:new AbortController().signal})
+    assert.equal(metadata,1)
+    assert.equal(verificationCount,1)
+    assert.equal(result.records,0)
+    assert.equal(ingested,0)
+    assert.equal(committed,0)
+    assert.equal(wroteRaw,0)
+  }finally{
+    if(oldNative===undefined)delete process.env.AGENT_LENS_NATIVE_ONLY_NEW_SESSIONS
+    else process.env.AGENT_LENS_NATIVE_ONLY_NEW_SESSIONS=oldNative
+    if(oldFast===undefined)delete process.env.AGENT_LENS_NATIVE_CATALOG_FAST_SCAN
+    else process.env.AGENT_LENS_NATIVE_CATALOG_FAST_SCAN=oldFast
+  }
+})
+
 test('后台来源处理达到时间预算后主动让出事件循环', async () => {
   let currentTime = 0
   let yields = 0
