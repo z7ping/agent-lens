@@ -937,7 +937,7 @@ async function readHermesArchivedHookPage(
   ctx.abortSignal.throwIfAborted()
   const inbox = hermesInboxDirectory()
   const page = await readArchivedHookInboxPage({
-    inbox, nativeSessionId, limit: 16,
+    inbox, nativeSessionId, installationId: ctx.installation.id, limit: 16,
     ...(cursor ? { cursor } : {}),
   })
   const records = page.items.map(item => {
