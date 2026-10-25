@@ -131,7 +131,7 @@ test('metadata-only Source history stage updates Catalog, never ingests SourceRe
 })
 
 
-test('verified new native session skips transcript ingestion, SourceRecord and Observation when both opt-ins enabled',async()=>{
+test('verified new native session defaults to metadata-only without legacy transcript persistence',async()=>{
   const filePath='/tmp/native-fast-pi.jsonl'
   const key={sourceId:'test-source',installationId:installation.id,nativeSessionId:'fast-new'}
   const recordForProbe:SourceRecord={
@@ -140,8 +140,6 @@ test('verified new native session skips transcript ingestion, SourceRecord and O
     parserVersion:'1',fingerprint:'sha256-hash',
     locator:{kind:'file',path:filePath,offset:0},payload:{},
   }
-  const oldNative=process.env.AGENT_LENS_NATIVE_ONLY_NEW_SESSIONS
-  const oldFast=process.env.AGENT_LENS_NATIVE_CATALOG_FAST_SCAN
   let verificationCount=0
   let ingested=0
   let committed=0
@@ -194,25 +192,17 @@ test('verified new native session skips transcript ingestion, SourceRecord and O
     {registerSourceCapabilities(){return {dispose(){}}}} as unknown as CapabilityService,
     {async declare(){return {}}} as unknown as CoverageService,
     capturePolicy)
-  try{
-    process.env.AGENT_LENS_NATIVE_ONLY_NEW_SESSIONS='1'
-    process.env.AGENT_LENS_NATIVE_CATALOG_FAST_SCAN='1'
-    const result=await runner.sync({source,host,detected,
-      abortSignal:new AbortController().signal,
-      onNativeCatalogReady(){ catalogReady++; assert.equal(verificationCount,1) },
-    })
-    assert.equal(metadata,1)
-    assert.equal(verificationCount,1)
-    assert.equal(result.records,0)
-    assert.equal(ingested,0)
-    assert.equal(committed,0)
-    assert.equal(wroteRaw,0)
-  }finally{
-    if(oldNative===undefined)delete process.env.AGENT_LENS_NATIVE_ONLY_NEW_SESSIONS
-    else process.env.AGENT_LENS_NATIVE_ONLY_NEW_SESSIONS=oldNative
-    if(oldFast===undefined)delete process.env.AGENT_LENS_NATIVE_CATALOG_FAST_SCAN
-    else process.env.AGENT_LENS_NATIVE_CATALOG_FAST_SCAN=oldFast
-  }
+  const result=await runner.sync({source,host,detected,
+    abortSignal:new AbortController().signal,
+    onNativeCatalogReady(){ catalogReady++; assert.equal(verificationCount,1) },
+  })
+  assert.equal(metadata,1)
+  assert.equal(verificationCount,1)
+  assert.equal(catalogReady,1)
+  assert.equal(result.records,0)
+  assert.equal(ingested,0)
+  assert.equal(committed,0)
+  assert.equal(wroteRaw,0)
 })
 
 test('后台来源处理达到时间预算后主动让出事件循环', async () => {
