@@ -5,13 +5,14 @@ import type {
   DetectedSource,
   ObservationCapability,
   SourceDefinition,
+  SourceExecutionContext,
   SourcePluginManifest,
 } from '@agent-lens/core'
 import {
   defineAgentLensPlugin,
   type AgentLensContext,
 } from '@agent-lens/runtime-cordis'
-import { readArchivedHookInboxSession, readAuthorizedNativeJsonlEntry, readNativeSessionWindow, verifyJsonlLineSha256 } from '@agent-lens/source-support'
+import { readArchivedHookInboxPage, readAuthorizedNativeJsonlEntry, readNativeSessionWindow, verifyJsonlLineSha256 } from '@agent-lens/source-support'
 import { discoverCodexAssets } from './assets'
 import {
   CODEX_CURRENT_PARSER_VERSION,
@@ -123,16 +124,13 @@ const jsonlRawRecovery: NonNullable<SourceDefinition['rawRecovery']> = {
   },
 }
 
-export const codexSourceDefinition: SourceDefinition = {
-  manifest: codexManifest,
-  detect: detectCodex,
-  declareCapabilities: declareCodexCapabilities,
-  rawRecovery: jsonlRawRecovery,
-  async readArchivedNativeHooks(nativeSessionId, ctx) {
-    ctx.abortSignal.throwIfAborted()
+async function readCodexArchivedHookPage(
+  nativeSessionId: string, ctx: SourceExecutionContext, cursor?: string,
+) {
+  ctx.abortSignal.throwIfAborted()
     const inbox = codexRuntimeInternals.inboxDirectory()
-    const archive = await readArchivedHookInboxSession({ inbox, nativeSessionId, limit: 16 })
-    const records = archive.map(item => {
+    const archive = await readArchivedHookInboxPage({ inbox, nativeSessionId, limit: 16, ...(cursor ? {cursor} : {}) })
+    const records = archive.items.map(item => {
       const envelope = codexRuntimeInternals.parseEnvelope(item.content, item.fileName)
       const archivePath = join(inbox, 'archive',
         createHash('sha256').update(nativeSessionId).digest('hex'), item.fileName)
@@ -144,8 +142,23 @@ export const codexSourceDefinition: SourceDefinition = {
       return record
     })
     ctx.abortSignal.throwIfAborted()
-    return records
+  ctx.abortSignal.throwIfAborted()
+  return {
+    records,
+    hasMore: archive.hasMore,
+    ...(archive.nextCursor ? {nextCursor: archive.nextCursor} : {}),
+  }
+}
+
+export const codexSourceDefinition: SourceDefinition = {
+  manifest: codexManifest,
+  detect: detectCodex,
+  declareCapabilities: declareCodexCapabilities,
+  rawRecovery: jsonlRawRecovery,
+  async readArchivedNativeHooks(nativeSessionId, ctx) {
+    return (await readCodexArchivedHookPage(nativeSessionId, ctx)).records
   },
+  readArchivedNativeHooksPage: readCodexArchivedHookPage,
   async *discoverNativeSessions(ctx) {
     const paths = await listCodexHistoryFiles(ctx.installation, ctx.historyWindow)
     for (const filePath of paths) {
