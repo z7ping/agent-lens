@@ -136,10 +136,9 @@ export async function rebuildNativeSessionMetrics(
     if(!result.hasMore){exhausted=true;break}
   }
   signal.throwIfAborted()
-  // EOF does not certify omitted runtime Hook facts or a mutable DB Source.
-  // Until their full provenance/recovery contracts are proven, only Pi is
-  // eligible for a complete numerical projection.
-  const sourceCoverageCertified=entry.sourceId==='pi'
+  // EOF proves a bounded native read, not complete runtime facts. The Source
+  // owns its recoverability attestation; never infer it from the agent name.
+  const sourceCoverageCertified=source.nativeSessionCoverageComplete===true
   const snapshot=accumulator.snapshot({
     ...identity,fileIdentity:entry.fileIdentity,fileSize:entry.fileSize,
     fileMtimeMs:entry.fileMtimeMs,parserVersion:source.manifest.parserVersion,
