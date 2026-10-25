@@ -141,3 +141,21 @@ test('native attachment cursor binds to canonical observation ID without exposin
     ...page,observations:[c],observationRecordIds:['record-id'],observationCursors:[],
   }),/rewind cursor identity counts disagree/)
 })
+test('native tool pairing uses normalized nativeCallId when payload has no alias', () => {
+  const observations: ObservationCandidate[] = [
+    candidate('message.user', 1, { text: 'run' }),
+    { ...candidate('tool.call', 2, {nativeToolName:'shell',input:{command:'ls'}}), nativeCallId:'native-call-7' },
+    { ...candidate('tool.result', 3, {success:true,output:'done'}), nativeCallId:'native-call-7' },
+  ]
+  const projected = projectNativeReviewWindow({
+    ...page, observations, observationRecordIds:['user','call','result'],
+    completeBoundaries:true,
+  })
+  const tool = projected.interactions[0]?.nodes.find(node => node.type === 'tool')
+  assert.equal(tool?.type, 'tool')
+  if (tool?.type !== 'tool') return
+  assert.equal(tool.callId, 'native-call-7')
+  assert.equal(tool.status, 'success')
+  assert.deepEqual(tool.observationIds.length, 2)
+  assert.equal(tool.output, 'done')
+})
