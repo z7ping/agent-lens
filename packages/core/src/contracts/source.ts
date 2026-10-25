@@ -68,8 +68,16 @@ export interface SourceHistoryWindow {
 
 export interface SourceHistoryExecutionContext extends SourceExecutionContext {
   historyWindow?: SourceHistoryWindow
-  /** Only trusted, source-enumerated native paths already claimed native-only. */
+  /** Only trusted, source-enumerated native paths already claimed native-only.
+   * A path is safe to skip only when it contains ONE session (JSONL), never
+   * when several independently claimed sessions share a mutable SQLite DB.
+   */
   skipNativeSessionFile?: (filePath: string) => boolean
+  /** Durable Source-native session IDs with verified Native-only ownership.
+   * Sources sharing one SQLite database must skip ONLY these sessions while
+   * retaining Legacy rows from the same physical database file.
+   */
+  skipNativeSessionId?: (nativeSessionId: string) => boolean
   /** 来源只报告真实工作节点；由共享 Runner 节流并持久化。 */
   reportProgress?(update: SourceHistoryProgressUpdate): Promise<void>
 }
