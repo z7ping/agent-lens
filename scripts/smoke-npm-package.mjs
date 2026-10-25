@@ -2,8 +2,8 @@ import { spawn } from 'node:child_process'
 import { mkdtemp, mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises'
 import { createServer } from 'node:net'
 import { tmpdir } from 'node:os'
-import { dirname, isAbsolute, join, resolve } from 'node:path'
-import { fileURLToPath, pathToFileURL } from 'node:url'
+import { dirname, isAbsolute, join, relative, resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const npmCommand = process.platform === 'win32' ? 'npm.cmd' : 'npm'
@@ -83,7 +83,12 @@ try {
     private: true,
   }, null, 2)}\n`)
 
-  await run(npmCommand, ['install', '--no-audit', '--no-fund', pathToFileURL(tarball).href], {
+  // npm CLI decodes file:// URL paths inconsistently on Windows when the
+  // temporary user folder uses DOS 8.3 notation (RUNNER~1 -> RUNNER%7E1).
+  // Relative file: specifiers avoid URL encoding and keep npm's resolved
+  // path inside the isolated consumer project on every supported platform.
+  const localTarballSpecifier = `file:${relative(consumer, tarball).replaceAll('\\\\', '/')}`
+  await run(npmCommand, ['install', '--no-audit', '--no-fund', localTarballSpecifier], {
     cwd: consumer,
     shell: process.platform === 'win32',
   })
