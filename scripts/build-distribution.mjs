@@ -57,6 +57,12 @@ await build({
   outfile: resolve(dist, 'data-runtime-worker.mjs'),
 })
 
+await build({
+  ...common,
+  entryPoints: [resolve(root, 'packages/core-services/src/native-reader-worker.ts')],
+  outfile: resolve(dist, 'native-reader-worker.mjs'),
+})
+
 await cp(
   resolve(root, 'packages/runtime-cordis/src/pi-live/worker-entry.mjs'),
   resolve(dist, 'worker-entry.mjs'),
