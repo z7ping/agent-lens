@@ -15,6 +15,9 @@ import { createTestCapturePolicy } from '@agent-lens/core-services/test-support'
 import { SqliteStorageService } from '@agent-lens/storage-sqlite'
 import { detectPi, discoverPiAssets, piSourceDefinition } from './index'
 
+// These SQL history assertions concern explicit Legacy-owned sessions only.
+const legacyPiSource = { ...piSourceDefinition, nativeSessionCoverageComplete: false }
+
 function sessionLine(id = 'pi-integrity-session') {
   return JSON.stringify({
     type: 'session',
@@ -59,7 +62,7 @@ async function withHistoryRunner<T>(
   }
 }
 
-test('Pi history does not consume an unterminated partial JSONL entry', async () => {
+test('Pi Legacy history does not consume an unterminated partial JSONL entry', async () => {
   const root = await mkdtemp(join(tmpdir(), 'agent-lens-pi-partial-'))
   const agentDir = join(root, 'agent')
   const transcript = join(agentDir, 'sessions', 'partial', 'session.jsonl')
@@ -71,7 +74,7 @@ test('Pi history does not consume an unterminated partial JSONL entry', async ()
   try {
     await withHistoryRunner(agentDir, async ({ storage, history, host, detected }) => {
       const first = await history.sync({
-        source: piSourceDefinition,
+        source: legacyPiSource,
         host,
         detected,
         abortSignal: new AbortController().signal,
@@ -82,7 +85,7 @@ test('Pi history does not consume an unterminated partial JSONL entry', async ()
       await appendFile(transcript, 'lo"}]}}\n', 'utf8')
 
       const second = await history.sync({
-        source: piSourceDefinition,
+        source: legacyPiSource,
         host,
         detected,
         abortSignal: new AbortController().signal,
@@ -98,7 +101,7 @@ test('Pi history does not consume an unterminated partial JSONL entry', async ()
   }
 })
 
-test('Pi history resets checkpoint after truncation or physical file replacement', async () => {
+test('Pi Legacy history resets checkpoint after truncation or physical file replacement', async () => {
   const root = await mkdtemp(join(tmpdir(), 'agent-lens-pi-reset-'))
   const agentDir = join(root, 'agent')
   const transcript = join(agentDir, 'sessions', 'reset', 'session.jsonl')
@@ -120,7 +123,7 @@ test('Pi history resets checkpoint after truncation or physical file replacement
   try {
     await withHistoryRunner(agentDir, async ({ storage, history, host, detected }) => {
       const sync = () => history.sync({
-        source: piSourceDefinition,
+        source: legacyPiSource,
         host,
         detected,
         abortSignal: new AbortController().signal,
@@ -157,7 +160,7 @@ test('Pi history resets checkpoint after truncation or physical file replacement
   }
 })
 
-test('Pi history preserves a newline-terminated malformed row and continues afterwards', async () => {
+test('Pi Legacy history preserves a newline-terminated malformed row and continues afterwards', async () => {
   const root = await mkdtemp(join(tmpdir(), 'agent-lens-pi-malformed-'))
   const agentDir = join(root, 'agent')
   const transcript = join(agentDir, 'sessions', 'malformed', 'session.jsonl')
@@ -177,7 +180,7 @@ test('Pi history preserves a newline-terminated malformed row and continues afte
   try {
     await withHistoryRunner(agentDir, async ({ storage, history, host, detected }) => {
       const result = await history.sync({
-        source: piSourceDefinition,
+        source: legacyPiSource,
         host,
         detected,
         abortSignal: new AbortController().signal,
@@ -358,7 +361,7 @@ test('Pi session SourceRecord nativeId is the upstream session id without AgentL
   try {
     await withHistoryRunner(agentDir, async ({ storage, history, host, detected }) => {
       await history.sync({
-        source: piSourceDefinition,
+        source: legacyPiSource,
         host,
         detected,
         abortSignal: new AbortController().signal,
