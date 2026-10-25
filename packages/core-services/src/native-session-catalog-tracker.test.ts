@@ -103,6 +103,15 @@ test('native SQLite catalog observes real message clock through WAL mtime thrott
     assert.equal(stored.length,2)
     assert.equal(stored[0]?.lastActivityAt,new Date(now).toISOString())
     assert.equal(stored[1]?.lastActivityAt,new Date(now+6*60_000).toISOString())
+    // Main .db bytes did not change. An appended WAL must still invalidate
+    // derived metadata; no row bodies or WAL payload enter the Catalog.
+    await writeFile(`${path}-wal`,'source-owned SQLite WAL bytes')
+    now+=30_001
+    assert.equal(await tracker.observe(dbSource,atOffset(7)),true)
+    assert.equal(stored.length,3)
+    assert.equal(stored[2]!.fileIdentity,stored[1]!.fileIdentity)
+    assert.ok(stored[2]!.fileSize>stored[1]!.fileSize)
+    assert.equal(JSON.stringify(stored).includes('source-owned SQLite WAL bytes'),false)
     assert.equal(JSON.stringify(stored).includes('DO_NOT_PERSIST'),false)
   }finally{await rm(root,{recursive:true,force:true})}
 })

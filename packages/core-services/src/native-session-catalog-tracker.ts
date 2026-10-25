@@ -1,5 +1,6 @@
 import { stat } from 'node:fs/promises'
 import { extname, isAbsolute } from 'node:path'
+import { nativeSqliteRevision } from '@agent-lens/source-support'
 import type {
   NativeSessionCatalogStore,
   SourceDefinition,
@@ -121,6 +122,12 @@ export class NativeSessionCatalogTracker {
       throw error
     }
     if (!file.isFile() || !Number.isFinite(file.mtimeMs) || file.mtimeMs < 0) return false
+    // Native SQLite WAL may receive new messages while state.db stays
+    // untouched. The lightweight derived-metrics revision must include WAL
+    // metadata; file identity still refers to the real main DB inode.
+    const revision = originalDatabase
+      ? await nativeSqliteRevision(path,file)
+      : {fileIdentity:`${file.dev}:${file.ino}`,fileSize:file.size,fileMtimeMs:file.mtimeMs}
     await this.catalog.upsert({
       sourceId: record.sourceId,
       installationId: record.installationId,
@@ -129,9 +136,9 @@ export class NativeSessionCatalogTracker {
       // The 'archive' catalog status is reserved for verified AgentLens Vault archives.
       locationKind: 'native',
       filePath: path,
-      fileIdentity: `${file.dev}:${file.ino}`,
-      fileSize: file.size,
-      fileMtimeMs: file.mtimeMs,
+      fileIdentity: revision.fileIdentity,
+      fileSize: revision.fileSize,
+      fileMtimeMs: revision.fileMtimeMs,
       // SQLite can be in WAL mode: the main DB mtime need not advance on
       // a new session message. Prefer the native event clock when valid.
       lastActivityAt: originalDatabase && record.occurredAt

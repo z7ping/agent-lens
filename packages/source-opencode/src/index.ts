@@ -28,7 +28,7 @@ import {
   resolveOpenCodeRoots,
   type AgentLensContext,
 } from '@agent-lens/runtime-cordis'
-import { isMissingPathError, watchSourceFiles, type SourceFileWatchHandle } from '@agent-lens/source-support'
+import { isMissingPathError, nativeSqliteRevision, watchSourceFiles, type SourceFileWatchHandle } from '@agent-lens/source-support'
 import { discoverOpenCodeAssets } from './assets.js'
 import { OPENCODE_KNOWN_PROJECT_CWDS_CHECKPOINT_KEY } from './workspace-context.js'
 
@@ -874,12 +874,13 @@ export const openCodeSourceDefinition: SourceDefinition = {
             throw new Error('OpenCode native database changed identity during catalog scan')
           }
           const title=row.session_title?.trim()
+          const revision=await nativeSqliteRevision(dbPath,current)
           yield {
             sourceId: SOURCE_ID, installationId:ctx.installation.id,
             nativeSessionId:row.native_session_id,
             locationKind:'native' as const,
             filePath:dbPath, fileIdentity:identity,
-            fileSize:current.size, fileMtimeMs:current.mtimeMs,
+            fileSize:revision.fileSize, fileMtimeMs:revision.fileMtimeMs,
             lastActivityAt:observedAt,
             ...(title ? {title} : {}),
             updatedAt:new Date().toISOString(),
