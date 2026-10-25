@@ -41,6 +41,7 @@ export interface NativeSessionMetricOverview {
   }
   /** Only tool names and numbers. No event ID, args or output. */
   tools:NativeSessionMetricToolTotal[]
+  toolsTruncated:boolean
 }
 
 export interface NativeSessionMetricTool {
