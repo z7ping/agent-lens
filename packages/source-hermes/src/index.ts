@@ -815,10 +815,12 @@ function normalizeHookEnvelope(record: SourceRecord, envelope: HermesHookEnvelop
     })]
   }
   if (eventName === 'pre_approval_request') {
-    return [candidate(record, envelope, 'permission.request', event)]
+    return [candidate(record, envelope, 'permission.request', event,
+      callId ? {nativeCallId:callId} : {})]
   }
   if (eventName === 'post_approval_response') {
-    return [candidate(record, envelope, 'permission.response', event)]
+    return [candidate(record, envelope, 'permission.response', event,
+      callId ? {nativeCallId:callId} : {})]
   }
   if (eventName === 'subagent_start') return [candidate(record, envelope, 'subagent.spawn', event)]
   if (eventName === 'subagent_stop') return [candidate(record, envelope, 'subagent.end', event)]
