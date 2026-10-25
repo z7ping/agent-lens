@@ -154,6 +154,8 @@ export interface SourceHistorySyncInput {
   detected: DetectedSource
   abortSignal: AbortSignal
   historyWindow?: SourceHistoryWindow
+  /** Explicit source metadata pass; never ingests or writes transcript events. */
+  mode?: 'records' | 'native-catalog'
   /** 历史导入在前台请求活跃时可在记录边界暂停。 */
   cooperate?: () => Promise<void>
   queuedStatus?: SourceRuntimeStatus
@@ -174,6 +176,8 @@ export interface SourceHistorySyncResult {
   sourceId: string
   installationId: string
   records: number
+  /** Catalog-only files indexed; no equivalent legacy event rows. */
+  nativeSessionsIndexed?: number
   observationsCreated: number
   observationsMerged: number
   observationsUnchanged: number
@@ -781,6 +785,39 @@ export class SourceHistoryRunner {
         observationsUnchanged: 0,
       }
       const yieldForInteractivity = createCooperativeScheduler()
+
+      if (input.mode === 'native-catalog') {
+        const catalog = this.storage.nativeSessionCatalog
+        if (!catalog || !source.discoverNativeSessions) {
+          throw new Error('Source native catalog discovery is unsupported')
+        }
+        const checkpoint = new ScopedCheckpointService(
+          this.storage,
+          checkpointScope(source.manifest.sourceId, installation.id, runtimeProfile),
+        )
+        let indexed = 0
+        for await (const entry of source.discoverNativeSessions({
+          host, installation,
+          ...(runtimeProfile ? { runtimeProfile } : {}),
+          abortSignal, checkpoint,
+          ...(input.historyWindow ? { historyWindow: input.historyWindow } : {}),
+        })) {
+          if (abortSignal.aborted) break
+          if (entry.sourceId !== source.manifest.sourceId
+            || entry.installationId !== installation.id
+            || entry.locationKind !== 'native') {
+            throw new Error('Native Catalog Source returned a foreign session identity')
+          }
+          await catalog.upsert(entry)
+          indexed += 1
+          if (input.cooperate) await input.cooperate()
+          await yieldForInteractivity()
+        }
+        result.nativeSessionsIndexed = indexed
+        await progress.phase('checkpoint')
+        await progress.settle(abortSignal.aborted ? 'cancelled' : 'completed')
+        return result
+      }
 
       if (!source.ingestHistory) {
         await progress.phase('checkpoint')
