@@ -293,13 +293,18 @@ export function overlayNativeHookEvents(input: {
     const at = Date.parse(node.at)
     // The last turn is bounded by its last *observed* native fact, not by
     // the Catalog's wall-clock activity or the Hook capture time.
-    const matching = window.interactions.find(turn => {
+    const possibleTurns = window.interactions.filter(turn => {
       const start = Date.parse(turn.startedAt)
       const end = Date.parse(turn.endedAt)
       return turn.trigger === 'user' && Number.isFinite(start)
         && Number.isFinite(end) && at >= start && at <= end
     })
-    if (!matching) continue
+    // Adjacent user turns can share an exact timestamp; choosing the first
+    // would silently assign a permission or subagent fact to the wrong turn.
+    // Keep ambiguous facts on the standalone Hook lane until an exact
+    // Source-native correlation key proves the owner.
+    if (possibleTurns.length !== 1) continue
+    const matching = possibleTurns[0]!
     const events = added.get(matching.id) ?? []
     events.push(node)
     added.set(matching.id, events)
