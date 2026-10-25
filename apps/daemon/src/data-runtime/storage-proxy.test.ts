@@ -422,3 +422,27 @@ test('Data Runtime exposes replication orchestration namespaces through maintena
     await runtime.dispose()
   }
 })
+
+
+test('Data Runtime persists lightweight native Session Catalog through writer and reads through reader', async () => {
+  const runtime = await fixture()
+  try {
+    const catalog = runtime.storage.nativeSessionCatalog
+    assert.ok(catalog)
+    const item = {
+      sourceId: 'pi', installationId: 'pi-installed', nativeSessionId: 'original',
+      locationKind: 'native' as const,
+      filePath: join(runtime.root, 'session.jsonl'),
+      fileIdentity: '1:10', fileSize: 120, fileMtimeMs: 12345,
+      lastActivityAt: '2026-10-25T00:00:00Z', updatedAt: '2026-10-25T00:00:00Z',
+    }
+    await catalog.upsert(item)
+    const found = await catalog.get({sourceId: 'pi', installationId: 'pi-installed', nativeSessionId: 'original'})
+    assert.deepEqual(found, item)
+    assert.deepEqual((await catalog.query({installationId: 'pi-installed'})).items,[item])
+    assert.equal(dataRuntimeStorageInternals.isReadPath(['nativeSessionCatalog', 'query']), true)
+    assert.equal(dataRuntimeStorageInternals.isReadPath(['nativeSessionCatalog', 'upsert']), false)
+  } finally {
+    await runtime.dispose()
+  }
+})
