@@ -383,3 +383,55 @@ test('OpenCode StepFinishPart has sourced usage only if native tokens exist', as
   const legacy = await normalizeOpenCodeRecord(record({ type: 'step-finish' }, { role: 'assistant' }), {} as never)
   assert.deepEqual(legacy.observations.map(item => item.kind), ['session.lifecycle'])
 })
+
+
+test('OpenCode native SQLite cursor proves preceding row has not mutated across read transactions',async()=>{
+  const root=await mkdtemp(join(tmpdir(),'al-opencode-cursor-anchor-'))
+  const dbPath=join(root,'opencode.db')
+  const db=new DatabaseSync(dbPath)
+  const ctx={
+    installation:{id:'test-opencode',hostId:'local',productId:'opencode',dataRoot:root},
+    abortSignal:new AbortController().signal,
+  } as SourceExecutionContext
+  try{
+    db.exec(`CREATE TABLE session(id TEXT PRIMARY KEY,directory TEXT,title TEXT);
+CREATE TABLE message(id TEXT PRIMARY KEY,data TEXT);
+CREATE TABLE part(id TEXT,message_id TEXT,session_id TEXT,time_created TEXT,data TEXT);
+INSERT INTO session VALUES('S1','/workspace','Task');
+INSERT INTO message VALUES('m1','{"role":"user"}');
+INSERT INTO part VALUES('p1','m1','S1','2026-10-25T00:00:00Z','{"type":"text","text":"hello"}');`)
+    const first=await openCodeSourceDefinition.readNativeSessionPage!({
+      filePath:dbPath,nativeSessionId:'S1',limit:1,
+    },ctx)
+    assert.equal(first.state,'available')
+    if(first.state!=='available')return
+    assert.equal(first.records.length,1)
+    assert.match(first.nextCursor.boundaryHash??'',/^[0-9a-f]{64}$/)
+    db.exec(`INSERT INTO message VALUES('m2','{"role":"assistant"}'); INSERT INTO part VALUES('p2','m2','S1','2026-10-25T00:00:01Z','{"type":"text","text":"done"}')`)
+    const appended=await openCodeSourceDefinition.readNativeSessionPage!({
+      filePath:dbPath,nativeSessionId:'S1',limit:1,cursor:first.nextCursor,
+    },ctx)
+    assert.equal(appended.state,'available')
+    if(appended.state==='available'){
+      assert.equal(appended.records.length,1)
+      assert.notEqual(appended.nextCursor.boundaryHash,first.nextCursor.boundaryHash)
+    }
+    db.exec(`UPDATE part SET data='{"type":"text","text":"mutated"}' WHERE id='p1'`)
+    const changed=await openCodeSourceDefinition.readNativeSessionPage!({
+      filePath:dbPath,nativeSessionId:'S1',limit:1,cursor:first.nextCursor,
+    },ctx)
+    assert.deepEqual(changed,{
+      state:'drifted',reason:'native-database-cursor-boundary-changed',
+    })
+    const legacy=await openCodeSourceDefinition.readNativeSessionPage!({
+      filePath:dbPath,nativeSessionId:'S1',limit:1,
+      cursor:{offset:first.nextCursor.offset,sequence:first.nextCursor.sequence,
+        fileIdentity:first.nextCursor.fileIdentity},
+    },ctx)
+    assert.equal(legacy.state,'available','old cursors remain readable during rollout')
+  }finally{
+    db.close()
+    await rm(root,{recursive:true,force:true})
+  }
+})
+

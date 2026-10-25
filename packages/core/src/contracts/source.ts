@@ -193,7 +193,7 @@ export interface SourceNativeSessionCursor {
   offset: number
   sequence: number
   fileIdentity: string
-  /** Optional hash of the 256 bytes preceding this source boundary. */
+  /** Optional source-owned boundary proof: JSONL preceding 256 bytes, or a verified SQLite row fingerprint. */
   boundaryHash?: string
 }
 

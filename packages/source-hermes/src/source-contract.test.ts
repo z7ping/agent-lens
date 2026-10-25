@@ -510,3 +510,52 @@ test('Hermes Hook archive rejects mismatched source session identity',async()=>{
   }
 })
 
+
+test('Hermes native SQLite cursor proves preceding row has not mutated across read transactions',async()=>{
+  const root=await mkdtemp(join(tmpdir(),'al-hermes-cursor-anchor-'))
+  const dbPath=join(root,'state.db')
+  const db=new DatabaseSync(dbPath)
+  const ctx={
+    installation:{id:'test-hermes',hostId:'local',productId:'hermes',dataRoot:root},
+    abortSignal:new AbortController().signal,
+  } as SourceExecutionContext
+  try{
+    db.exec(`CREATE TABLE sessions(id TEXT PRIMARY KEY,cwd TEXT,title TEXT);
+CREATE TABLE messages(id TEXT,session_id TEXT,role TEXT,content TEXT,timestamp TEXT,tool_calls TEXT,tool_call_id TEXT,tool_name TEXT);
+INSERT INTO sessions VALUES('S1','/workspace','Task');
+INSERT INTO messages VALUES('m1','S1','user','hello','2026-10-25T00:00:00Z',NULL,NULL,NULL);`)
+    const first=await hermesSourceDefinition.readNativeSessionPage!({
+      filePath:dbPath,nativeSessionId:'S1',limit:1,
+    },ctx)
+    assert.equal(first.state,'available')
+    if(first.state!=='available')return
+    assert.equal(first.records.length,1)
+    assert.match(first.nextCursor.boundaryHash??'',/^[0-9a-f]{64}$/)
+    db.exec(`INSERT INTO messages VALUES('m2','S1','assistant','done','2026-10-25T00:00:01Z',NULL,NULL,NULL)`)
+    const appended=await hermesSourceDefinition.readNativeSessionPage!({
+      filePath:dbPath,nativeSessionId:'S1',limit:1,cursor:first.nextCursor,
+    },ctx)
+    assert.equal(appended.state,'available')
+    if(appended.state==='available'){
+      assert.equal(appended.records.length,1)
+      assert.notEqual(appended.nextCursor.boundaryHash,first.nextCursor.boundaryHash)
+    }
+    db.exec(`UPDATE messages SET content='mutated' WHERE id='m1'`)
+    const changed=await hermesSourceDefinition.readNativeSessionPage!({
+      filePath:dbPath,nativeSessionId:'S1',limit:1,cursor:first.nextCursor,
+    },ctx)
+    assert.deepEqual(changed,{
+      state:'drifted',reason:'native-database-cursor-boundary-changed',
+    })
+    const legacy=await hermesSourceDefinition.readNativeSessionPage!({
+      filePath:dbPath,nativeSessionId:'S1',limit:1,
+      cursor:{offset:first.nextCursor.offset,sequence:first.nextCursor.sequence,
+        fileIdentity:first.nextCursor.fileIdentity},
+    },ctx)
+    assert.equal(legacy.state,'available','old cursors remain readable during rollout')
+  }finally{
+    db.close()
+    await rm(root,{recursive:true,force:true})
+  }
+})
+
