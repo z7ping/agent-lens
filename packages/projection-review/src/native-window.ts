@@ -249,11 +249,10 @@ export function overlayNativeHookEvents(input: {
     const attested = observation.occurredAt
       && observation.occurredAt !== observation.capturedAt
     const millis = attested ? Date.parse(observation.occurredAt!) : NaN
-    // A unique native parent event or tool call is stronger than a Hook
-    // capture clock. Keep unmatched identities off the turn rather than
-    // treating the capture time as evidence of ownership.
-    const hasNativeCorrelation = Boolean(observation.nativeParentEventId || observation.nativeCallId)
-    return kinds.has(observation.kind) && (Number.isFinite(millis) || hasNativeCorrelation)
+    // An identity alone is not evidence of lifecycle-wide uniqueness:
+    // a tool call ID may be reused outside the currently loaded page.
+    // Require a Source-attested event time even for exact ID matching.
+    return kinds.has(observation.kind) && Number.isFinite(millis)
       ? [{ observation, recordId: observationRecordIds[index]! }]
       : []
   })
@@ -337,6 +336,14 @@ export function overlayNativeHookEvents(input: {
       matching = possibleTurns[0]
     }
     if (!matching) continue
+    // Uniqueness within this loaded page is not uniqueness across the entire
+    // native session. Bound even an exact call/parent ID to the attested
+    // occurrence interval of the selected complete user turn.
+    const eventAt = Date.parse(node.occurredAt ?? '')
+    const turnStart = Date.parse(matching.startedAt)
+    const turnEnd = Date.parse(matching.endedAt)
+    if (!Number.isFinite(eventAt) || !Number.isFinite(turnStart)
+      || !Number.isFinite(turnEnd) || eventAt < turnStart || eventAt > turnEnd) continue
     const events = added.get(matching.id) ?? []
     events.push(node)
     added.set(matching.id, events)
