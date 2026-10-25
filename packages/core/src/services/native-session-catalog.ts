@@ -1,12 +1,3 @@
-import { createHash } from 'node:crypto'
-
-/** Stable source-native session identity, independent of temporary Catalog row IDs. */
-export function nativeReviewSessionId(sourceId: string, installationId: string, nativeSessionId: string): string {
-  return `native:${createHash('sha256').update(
-    JSON.stringify([sourceId, installationId, nativeSessionId]),
-  ).digest('hex').slice(0, 32)}`
-}
-
 /** ADR-0024 B: durable metadata only. No event payloads or Evidence graphs. */
 export type NativeSessionLocationKind = 'native' | 'archive'
 

@@ -278,7 +278,7 @@ export abstract class AgentLensReviewModel extends AgentLensIntegrationModel {
       const next = detail.statisticsCompleteness === 'window'
         ? await (async () => {
             const window = await this.api.nativeReviewById(selectedId, {
-              cursor: detail.page.nextCursor,
+              cursor: detail.page.nextCursor!,
               turnLimit: 4,
             })
             if (window.state !== 'available') throw new Error(translateProduct('review:local.session.nativeReadUnavailable', { reason: window.reason }))

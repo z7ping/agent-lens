@@ -583,6 +583,7 @@ test('native Review stable-ID endpoint resolves Catalog on demand without accept
     for (const suffix of ['?sourceId=codex','?nativeSessionId=OTHER','?path=/tmp/x','?format=review']) {
       assert.equal((await fetch(url+suffix)).status,400,suffix)
     }
-    assert.equal((await fetch(url.replace(encodeURIComponent(nativeId),encodeURIComponent(nativeReviewSessionId('pi','inst','missing')))).status,404)
+    const missingUrl = url.replace(encodeURIComponent(nativeId), encodeURIComponent(nativeReviewSessionId('pi','inst','missing')))
+    assert.equal((await fetch(missingUrl)).status,404)
   }finally{await server.dispose()}
 })
