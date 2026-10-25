@@ -2,6 +2,7 @@ import type { LiveUpdateArea, LiveUpdateEventDto, ReviewDetailFilter, ReviewResp
 import { type QueryFilters, type ReviewFilters } from './api'
 import { AgentLensIntegrationModel } from './model-integration'
 import { INITIAL_REVIEW_LIMIT } from './model-base'
+import { nativeReviewDetail, nativeReviewNextPage } from './native-review-adapter'
 
 const REVIEW_PAGE_SIZE = 20
 const REVIEW_DETAIL_PAGE_SIZE = 10
@@ -273,13 +274,22 @@ export abstract class AgentLensReviewModel extends AgentLensIntegrationModel {
       review: { ...current, detailLoadingMore: true, error: '' },
     })
     try {
-      const next = await this.api.reviewDetail(selectedId, {
-        cursor: detail.page.nextCursor,
-        limit: REVIEW_DETAIL_PAGE_SIZE,
-        direction: detail.page.direction,
-        filter: detail.page.filter,
-        process: 'summary',
-      })
+      const next = detail.statisticsCompleteness === 'window'
+        ? await (async () => {
+            const window = await this.api.nativeReviewById(selectedId, {
+              cursor: detail.page.nextCursor,
+              turnLimit: 4,
+            })
+            if (window.state !== 'available') throw new Error(`原生会话读取不可用：${window.reason}`)
+            return nativeReviewNextPage(detail, window)
+          })()
+        : await this.api.reviewDetail(selectedId, {
+            cursor: detail.page.nextCursor,
+            limit: REVIEW_DETAIL_PAGE_SIZE,
+            direction: detail.page.direction,
+            filter: detail.page.filter,
+            process: 'summary',
+          })
       if (generation !== this.detailGeneration || this.snapshot.review.selectedId !== selectedId) return
       const latest = this.snapshot.review
       if (!latest.detail) return
@@ -307,6 +317,8 @@ export abstract class AgentLensReviewModel extends AgentLensIntegrationModel {
 
   async selectReviewDetailFilter(filter: Exclude<ReviewDetailFilter, 'all'>): Promise<void> {
     const current = this.snapshot.review
+    // SQL-wide error/latency filters require complete historical aggregates.
+    if (current.detail?.statisticsCompleteness === 'window') return
     if (!current.selectedId) return
     const selectedId = current.selectedId
     const generation = ++this.detailGeneration
@@ -336,6 +348,8 @@ export abstract class AgentLensReviewModel extends AgentLensIntegrationModel {
 
   async jumpToLatestReviewDetail(): Promise<void> {
     const current = this.snapshot.review
+    // A native-only Source has not yet supplied an exact last-turn bookmark.
+    if (current.detail?.statisticsCompleteness === 'window') return
     if (!current.selectedId) return
     const selectedId = current.selectedId
     const generation = ++this.detailGeneration
@@ -365,6 +379,10 @@ export abstract class AgentLensReviewModel extends AgentLensIntegrationModel {
 
   async showReviewFromStart(): Promise<void> {
     const current = this.snapshot.review
+    if (current.detail?.statisticsCompleteness === 'window') {
+      await this.selectNativeReviewSession(current.detail.id)
+      return
+    }
     if (!current.selectedId) return
     const selectedId = current.selectedId
     const generation = ++this.detailGeneration
@@ -394,6 +412,7 @@ export abstract class AgentLensReviewModel extends AgentLensIntegrationModel {
 
   async jumpToReviewInteraction(ordinal: number): Promise<void> {
     const current = this.snapshot.review
+    if (current.detail?.statisticsCompleteness === 'window') return
     if (!current.selectedId || ordinal < 1) return
     if (current.detail?.interactions.some(item => item.ordinal === ordinal)) return
     const selectedId = current.selectedId
@@ -491,7 +510,8 @@ export abstract class AgentLensReviewModel extends AgentLensIntegrationModel {
         : await this.api.review(current.filters, refreshLimit)
       if (generation !== this.reviewGeneration) return
       let selectedId = this.snapshot.review.selectedId
-      if (!selectedId || (!preserveDetail && !response.items.some(item => item.id === selectedId))) {
+      if (!selectedId || (!selectedId.startsWith('native:')
+        && !preserveDetail && !response.items.some(item => item.id === selectedId))) {
         selectedId = response.items[0]?.id ?? ''
       }
       this.reviewPaginationDirty = false
@@ -573,6 +593,7 @@ export abstract class AgentLensReviewModel extends AgentLensIntegrationModel {
 
   async selectReviewSession(id: string): Promise<void> {
     if (!id) return
+    if (id.startsWith('native:')) return this.selectNativeReviewSession(id)
     // Cancel the previous selection's network reads, not just its stale UI updates.
     this.reviewSelectionAbort?.abort()
     const controller = new AbortController()
@@ -643,6 +664,52 @@ export abstract class AgentLensReviewModel extends AgentLensIntegrationModel {
     }
   }
 
+  /** Deep-linked native sessions use the SAME Task Surface, not a second UI.
+   * Unknown aggregate statistics and unsupported SQL-only operations stay
+   * unavailable rather than fabricated.
+   */
+  protected async selectNativeReviewSession(id: string): Promise<void> {
+    this.reviewSelectionAbort?.abort()
+    const controller = new AbortController()
+    this.reviewSelectionAbort = controller
+    const generation = ++this.detailGeneration
+    const current = this.snapshot.review
+    this.publish({
+      ...this.snapshot,
+      review: {
+        ...current, selectedId: id, detailLoading: true, detailLoadingMore: false,
+        detailHasNewData: false, error: '', detail: null,
+        relationships: null, relationshipError: '',
+        fileChanges: null, fileChangesLoading: false, fileChangesError: '',
+      },
+    })
+    try {
+      const [summary, window] = await Promise.all([
+        this.api.nativeSession(id, controller.signal),
+        this.api.nativeReviewById(id, { turnLimit: 4, signal: controller.signal }),
+      ])
+      if (controller.signal.aborted || generation !== this.detailGeneration
+        || this.snapshot.review.selectedId !== id) return
+      if (!summary) throw new Error('原生会话目录不存在或尚未建立可读取的稳定身份')
+      if (window.state !== 'available') throw new Error(`原生会话读取不可用：${window.reason}`)
+      const detail = nativeReviewDetail(summary, window)
+      this.publish({
+        ...this.snapshot,
+        review: { ...this.snapshot.review, detail, detailLoading: false, error: '' },
+      })
+    } catch (error) {
+      if (controller.signal.aborted || generation !== this.detailGeneration
+        || this.snapshot.review.selectedId !== id) return
+      this.publish({
+        ...this.snapshot,
+        review: {
+          ...this.snapshot.review, detailLoading: false,
+          error: error instanceof Error ? error.message : String(error),
+        },
+      })
+    }
+  }
+
   protected async refreshSelectedTailIncremental(): Promise<void> {
     const current = this.snapshot.review
     if (!current.selectedId || current.detailHasNewData) return
@@ -655,6 +722,7 @@ export abstract class AgentLensReviewModel extends AgentLensIntegrationModel {
   async refreshReviewTailIncremental(): Promise<void> {
     const current = this.snapshot.review
     const detail = current.detail
+    if (detail?.statisticsCompleteness === 'window') return
     if (
       !current.selectedId
       || !detail
