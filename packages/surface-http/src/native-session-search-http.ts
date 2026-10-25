@@ -141,6 +141,11 @@ export async function handleNativeSessionBodySearchRequest(
     || sourceId.length>512 || (url.searchParams.has('sourceId') && !sourceId)) {
     throw badRequest('Invalid native search scope')
   }
+  // Validate cursor/query binding BEFORE any disabled-source shortcut.
+  // Otherwise a cross-scope cursor can be accepted as a bogus empty result.
+  const needle=query.toLocaleLowerCase()
+  const scopeHash=createHash('sha256').update(JSON.stringify([needle,sourceId])).digest('hex')
+  const cursor=decode(url.searchParams.get('cursor'),scopeHash)
   if (sourceId && !policy.isSourceEnabled(sourceId)) {
     writeJson(response,200,{
       state:'available',coverage:'bounded',items:[],scannedSessions:0,scannedObservations:0,
@@ -148,9 +153,6 @@ export async function handleNativeSessionBodySearchRequest(
     })
     return true
   }
-  const needle=query.toLocaleLowerCase()
-  const scopeHash=createHash('sha256').update(JSON.stringify([needle,sourceId])).digest('hex')
-  const cursor=decode(url.searchParams.get('cursor'),scopeHash)
   const page=await catalog.query({
     limit:1,locationKind:'native',onlyWithoutLegacyReview:true,
     ...(sourceId ? {sourceId} : {}),
