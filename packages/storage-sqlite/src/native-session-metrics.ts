@@ -274,7 +274,7 @@ export class SqliteNativeSessionMetrics implements NativeSessionMetricsStore {
   /** Select only the most recent uncomputed/stale Native-only session.
    * Uses the catalog/write-claim index, not source events.
    */
-  nextPending(query:{sourceId:string;parserVersion:string}):Promise<NativeMetricPendingSession|null>{
+  listPending(query:{sourceId:string;parserVersion:string}):Promise<NativeMetricPendingSession[]>{
     if(!query.sourceId || query.sourceId.length>128 || !query.parserVersion
       || query.parserVersion.length>512)throw new TypeError('Invalid pending native metric query')
     return this.executor.run(()=>{
@@ -302,9 +302,9 @@ export class SqliteNativeSessionMetrics implements NativeSessionMetricsStore {
             OR metrics.projection_version<>?)
         ORDER BY catalog.last_activity_at DESC,
                  catalog.installation_id ASC,catalog.native_session_id ASC
-        LIMIT 1
-      `).get(query.sourceId,query.parserVersion,NATIVE_SESSION_METRIC_PROJECTION_VERSION)
-      return (row as NativeMetricPendingSession | undefined)??null
+        LIMIT 16
+      `).all(query.sourceId,query.parserVersion,NATIVE_SESSION_METRIC_PROJECTION_VERSION)
+      return row as NativeMetricPendingSession[]
     })
   }
 
