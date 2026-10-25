@@ -20,6 +20,7 @@ function mergeReviewDetail(current: ReviewSessionDetailDto, next: ReviewSessionD
       : ordered.slice(-REVIEW_DETAIL_WINDOW_SIZE)
   return {
     ...current,
+    ...(next.nativeHookEventsTruncated ? {nativeHookEventsTruncated:true} : {}),
     interactions: windowed,
     page: next.page,
   }

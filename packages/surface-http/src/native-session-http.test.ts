@@ -881,3 +881,91 @@ test('native Review preserves completed turns while the following live tool is p
   } finally { await http.dispose() }
 })
 
+test('Catalog native Review shares one Task DTO with bounded Hook-exclusive facts, not duplicated tool calls',async()=>{
+  const at='2026-10-25T04:00:00Z'
+  const entry:NativeSessionCatalogEntry={
+    sourceId:'claude-code',installationId:'claude-inst',nativeSessionId:'S-hook-merge',
+    locationKind:'native',filePath:'/private/source.jsonl',
+    fileIdentity:'5:6',fileSize:1024,fileMtimeMs:1,lastActivityAt:at,updatedAt:at,
+  }
+  const nativeId=nativeReviewSessionId(entry.sourceId,entry.installationId,entry.nativeSessionId)
+  const storage={...noopStorage,nativeSessionCatalog:{
+    async getByReviewSessionId(id:string){return id===nativeId?entry:null},
+  }} as unknown as StorageService
+  let hookReads=0
+  const reader:NativeSessionWindowReader={
+    async read(){
+      const items=[
+        {kind:'message.user' as const,capturedAt:at,occurredAt:at,
+          payload:{text:'Original source prompt'},identityHints:{nativeSessionId:entry.nativeSessionId}},
+        {kind:'message.assistant' as const,capturedAt:at,occurredAt:'2026-10-25T04:00:04Z',
+          payload:{text:'Original answer'},identityHints:{nativeSessionId:entry.nativeSessionId}},
+      ]
+      return {state:'available',observations:items,
+        observationRecordIds:['native-user','native-assistant'],
+        observationCursors:[
+          {offset:0,sequence:0,fileIdentity:'5:6'},
+          {offset:64,sequence:1,fileIdentity:'5:6'},
+        ],
+        evidenceCandidates:[],
+        nextCursor:{offset:128,sequence:2,fileIdentity:'5:6'},
+        hasMore:false,pendingTail:false,
+      }
+    },
+    async readArchivedHooks(query){
+      hookReads++
+      assert.equal(query.sourceId,entry.sourceId)
+      assert.equal(query.nativeSessionId,entry.nativeSessionId)
+      const one=query.cursor===undefined
+      return {
+        state:'available',
+        observations: one ? [
+          {kind:'permission.request' as const,capturedAt:at,
+            occurredAt:'2026-10-25T04:00:01Z',payload:{toolName:'shell'},
+            identityHints:{nativeSessionId:entry.nativeSessionId}},
+          {kind:'tool.call' as const,capturedAt:at,
+            occurredAt:'2026-10-25T04:00:02Z',payload:{callId:'duplicate-tool'},
+            identityHints:{nativeSessionId:entry.nativeSessionId}},
+        ] : [{
+          kind:'subagent.spawn' as const,capturedAt:at,
+          occurredAt:'2026-10-25T04:00:03Z',payload:{nativeActorId:'child-1'},
+          identityHints:{nativeSessionId:entry.nativeSessionId},
+        }],
+        observationRecordIds:one?['hook-permission','hook-tool']:['hook-subagent'],
+        truncated:one,...(one?{nextCursor:'hook-page-two'}:{}),
+      }
+    },
+  }
+  const old=process.env.AGENT_LENS_NATIVE_HOOK_ARCHIVE
+  process.env.AGENT_LENS_NATIVE_HOOK_ARCHIVE='1'
+  const app=await startHttpSurface(storage,{port:0,nativeSessionReader:reader})
+  try{
+    const base=`http://${app.host}:${app.port}/api/v1/native-sessions`
+    const response=await fetch(base+'/'+encodeURIComponent(nativeId)+'/review')
+    assert.equal(response.status,200)
+    const dto=await response.json() as {
+      state:string;boundaryIntegrity:string;hookEventsTruncated?:boolean;hookFactsPartial?:boolean;
+      interactions:Array<{nodes:Array<{type:string;kind?:string;payload?:unknown}>}>
+    }
+    assert.equal(dto.state,'available')
+    assert.equal(dto.boundaryIntegrity,'complete')
+    assert.equal(dto.hookEventsTruncated,undefined)
+    assert.equal(dto.hookFactsPartial,true,'tool hooks remain on standalone evidence lane')
+    assert.equal(hookReads,2)
+    assert.deepEqual(dto.interactions[0]?.nodes.map(node=>node.kind??node.type),[
+      'message','permission.request','subagent.spawn','message',
+    ])
+    assert.equal(JSON.stringify(dto).includes('duplicate-tool'),false)
+    assert.equal(JSON.stringify(dto).includes('/private'),false)
+    const ordinary=await fetch(base+'/window?sourceId=claude-code&installationId=claude-inst&nativeSessionId=S-hook-merge&format=review-turns')
+    assert.equal(ordinary.status,200)
+    const native=await ordinary.json() as typeof dto
+    assert.equal(native.interactions[0]?.nodes.length,2,'raw native window must remain Hook-free')
+    assert.equal(hookReads,2)
+  }finally{
+    if(old===undefined)delete process.env.AGENT_LENS_NATIVE_HOOK_ARCHIVE
+    else process.env.AGENT_LENS_NATIVE_HOOK_ARCHIVE=old
+    await app.dispose()
+  }
+})
+

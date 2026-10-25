@@ -319,6 +319,8 @@ export interface ReviewDetailPageDto {
 export interface ReviewSessionDetailDto extends ReviewSessionSummaryDto {
   /** Native windows supply only loaded facts; never treat their counts as session totals. */
   statisticsCompleteness?: 'window'
+  /** Hook-only facts can be absent when the source archive is disabled or a bounded page is incomplete. */
+  nativeHookEventsTruncated?: boolean
   interactions: ReviewInteractionDto[]
   interactionIndex?: ReviewInteractionIndexDto[]
   page: ReviewDetailPageDto

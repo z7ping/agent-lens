@@ -173,3 +173,116 @@ export function projectNativeReviewWindow(input: NativeReviewProjectionInput): N
       : (input.hasPrevious || input.hasMore || input.pendingTail) ? 'partial' : 'complete',
   }
 }
+
+/**
+ * Attach only timestamp-attested, Hook-exclusive event facts to a complete
+ * native user turn. Never overlay Hook tool calls/results or user messages:
+ * their identity, ordering and cross-source pairing are NOT established by
+ * timestamp proximity. The standalone Hook lane remains authoritative for
+ * those ambiguous facts until explicit native-event correlation is available.
+ *
+ * This is a projection only: Source originals stay source-owned, with no new
+ * SQL Observation, Evidence, or duplicated message payload.
+ */
+export function overlayNativeHookEvents(input: {
+  window: NativeReviewWindowDto
+  observations: readonly ObservationCandidate[]
+  observationRecordIds: readonly string[]
+  truncated: boolean
+}): NativeReviewWindowDto {
+  const { window, observations, observationRecordIds } = input
+  if (window.boundaryIntegrity !== 'complete' || window.pagingUnit !== 'interaction') {
+    throw new Error('Hook overlay requires a complete native user-turn window')
+  }
+  if (observations.length !== observationRecordIds.length) {
+    throw new Error('Hook overlay requires exact source record provenance')
+  }
+  const kinds = new Set<ObservationCandidate['kind']>([
+    'permission.request', 'permission.response',
+    'subagent.spawn', 'subagent.end',
+    'context.compaction', 'context.injected',
+  ])
+  // Require a true native occurrence time. A processing/capture timestamp is
+  // not evidence that a Hook belongs to the nearby user turn.
+  const selected = observations.flatMap((observation, index) => {
+    // Source runtimes may fill occurredAt from Hook capture time when the
+    // original event has no clock. Equal values are therefore insufficient
+    // evidence for cross-source placement (even if some are truly equal).
+    const attested = observation.occurredAt
+      && observation.occurredAt !== observation.capturedAt
+    const millis = attested ? Date.parse(observation.occurredAt!) : NaN
+    return kinds.has(observation.kind) && Number.isFinite(millis)
+      ? [{ observation, recordId: observationRecordIds[index]! }]
+      : []
+  })
+  if (!selected.length || !window.interactions.length) {
+    return {
+      ...window,
+      ...(input.truncated ? { hookEventsTruncated: true } : {}),
+      ...(observations.length ? { hookFactsPartial: true } : {}),
+    }
+  }
+  const projected = projectNativeReviewWindow({
+    sourceId: window.sourceId,
+    installationId: window.installationId,
+    nativeSessionId: window.nativeSessionId,
+    observations: selected.map(item => item.observation),
+    observationRecordIds: selected.map(item => item.recordId),
+    hasMore: false, pendingTail: false, nextCursor: '',
+    hasPrevious: false,
+  })
+  const candidates = projected.interactions.flatMap(item => item.nodes)
+    .filter((node): node is Extract<typeof node, {type:'event'}> => node.type === 'event')
+  const seenIds = new Set(window.interactions.flatMap(turn => turn.nodes.map(node => node.id)))
+  const existingSourceFacts = new Set(window.interactions.flatMap(turn => turn.nodes)
+    .filter(node => node.type === 'event' && node.nativeEventId)
+    .map(node => node.nativeEventId!))
+  const fingerprint = (kind: string, at: string, payload: unknown) =>
+    JSON.stringify([kind, at, payload])
+  const existingFacts = new Set(window.interactions.flatMap(turn => turn.nodes)
+    .filter(node => node.type === 'event')
+    .map(node => fingerprint(node.kind, node.at, node.payload)))
+  const added = new Map<string, typeof candidates>()
+  for (const node of candidates) {
+    if (seenIds.has(node.id)
+      || (node.nativeEventId && existingSourceFacts.has(node.nativeEventId))
+      || existingFacts.has(fingerprint(node.kind, node.at, node.payload))) continue
+    const at = Date.parse(node.at)
+    // The last turn is bounded by its last *observed* native fact, not by
+    // the Catalog's wall-clock activity or the Hook capture time.
+    const matching = window.interactions.find(turn => {
+      const start = Date.parse(turn.startedAt)
+      const end = Date.parse(turn.endedAt)
+      return turn.trigger === 'user' && Number.isFinite(start)
+        && Number.isFinite(end) && at >= start && at <= end
+    })
+    if (!matching) continue
+    const events = added.get(matching.id) ?? []
+    events.push(node)
+    added.set(matching.id, events)
+    seenIds.add(node.id)
+    if (node.nativeEventId) existingSourceFacts.add(node.nativeEventId)
+    existingFacts.add(fingerprint(node.kind, node.at, node.payload))
+  }
+  let mergedCount = 0
+  const interactions = window.interactions.map(turn => {
+    const events = added.get(turn.id)
+    if (!events?.length) return turn
+    // Preserve native ordering at the same timestamp; Hooks are placed after
+    // existing native facts rather than before the verified user prompt.
+    const combined = [
+      ...turn.nodes.map((node, index) => ({node, index})),
+      ...events.map((node, index) => ({node, index: turn.nodes.length + index})),
+    ].sort((a,b) => Date.parse(a.node.at)-Date.parse(b.node.at) || a.index-b.index)
+    mergedCount += events.length
+    return {...turn, nodes: combined.map(item => item.node)}
+  })
+  return {
+    ...window,
+    interactions,
+    observationCount: window.observationCount + mergedCount,
+    ...(input.truncated ? {hookEventsTruncated: true} : {}),
+    ...(window.hookFactsPartial || mergedCount < observations.length
+      ? {hookFactsPartial:true} : {}),
+  }
+}
