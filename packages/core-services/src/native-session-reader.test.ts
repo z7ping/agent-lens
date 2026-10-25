@@ -56,6 +56,7 @@ function fixture(opts: { enabled?: boolean; catalogEntry?: NativeSessionCatalogE
       return {
         state: 'available' as const,
         records: [{ ...raw, ...(opts.sourceId ? { sourceId: opts.sourceId } : {}) }],
+        recordCursors: [{ offset: 0, sequence: 0, fileIdentity: opts.identity ?? '1:9' }],
         nextCursor: { offset: 50, sequence: 1, fileIdentity: opts.identity ?? '1:9' },
         hasMore: true, pendingTail: false,
       }
@@ -89,6 +90,7 @@ test('native reader resolves trusted Catalog path and sanitizes canonical candid
   assert.equal(output.observations[0]?.kind, 'message.user')
   assert.deepEqual(output.observations[0]?.payload, { text: '[redacted]' })
   assert.equal(output.nextCursor.offset, 50)
+  assert.deepEqual(output.observationCursors, [{offset:0,sequence:0,fileIdentity:'1:9'}])
   assert.equal(output.hasMore, true)
   assert.deepEqual(calls, { catalog: 1, source: 1, normalize: 1, sanitized: 1 })
 })
@@ -166,6 +168,7 @@ test('native reader uses isolated worker for supported sources and still sanitiz
         state: 'available' as const,
         entries: [{
           recordId: 'worker-record',
+          recordCursor: {offset:0,sequence:0,fileIdentity:catalog.fileIdentity},
           sourceId: 'pi', installationId: installation.id,
           sourceSessionNativeId: catalog.nativeSessionId,
           normalized: { observations: [sample], evidenceCandidates: [] },
@@ -180,6 +183,7 @@ test('native reader uses isolated worker for supported sources and still sanitiz
   assert.equal(output.state,'available')
   if(output.state !== 'available') return
   assert.deepEqual(output.observationRecordIds, ['worker-record'])
+  assert.deepEqual(output.observationCursors, [{offset:0,sequence:0,fileIdentity:'1:9'}])
   assert.deepEqual(output.observations[0]?.payload, {text:'[parent-redacted]'})
   assert.equal(workerRead, 1)
   assert.equal(sourceRead, 0)
