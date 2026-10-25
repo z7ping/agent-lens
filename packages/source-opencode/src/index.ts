@@ -393,7 +393,11 @@ export async function* ingestOpenCodeHistory(
       await ctx.reportProgress?.({ phase: 'processing' })
       for (const row of rows) {
         if (ctx.abortSignal.aborted) return
-        yield recordFromRow(row, ctx, 'history')
+        // A shared .db may contain Native-only and Legacy sessions together.
+        // Skip only a Source-verified session ID, never the whole DB file.
+        if (!row.session_id || !ctx.skipNativeSessionId?.(row.session_id)) {
+          yield recordFromRow(row, ctx, 'history')
+        }
         rowId = row.row_id
         await ctx.checkpoint.set(checkpointKey, rowId)
       }
