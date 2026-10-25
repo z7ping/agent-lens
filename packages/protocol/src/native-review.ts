@@ -41,6 +41,10 @@ export interface NativeReviewWindowDto {
   /** File mutation evidence from the returned complete user-turn window only. */
   observedFileChanges?: TaskFileChangeDto[]
   fileChangesTruncated?: boolean
+  /** True when the supplementary Hook lane reaches its bounded read limit.
+   * A partial Hook lane is never a complete user-turn history.
+   */
+  hookEventsTruncated?: boolean
   hasMore: boolean
   pendingTail: boolean
   nextCursor: string

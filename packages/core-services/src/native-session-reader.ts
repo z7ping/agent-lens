@@ -48,6 +48,11 @@ export type NativeSessionReadResult =
       reason: string
     }
 
+export type NativeArchivedHookReadResult =
+  | { state: 'available'; observations: ObservationCandidate[];
+      observationRecordIds: string[]; truncated: boolean }
+  | { state: 'unavailable' | 'drifted' | 'unsupported'; reason: string }
+
 /**
  * Resolves a source-authorized native window through the metadata-only catalog.
  * No caller-provided path is accepted; sources still perform independent root
@@ -60,6 +65,71 @@ export class NativeSessionReader {
     private readonly capturePolicy: CapturePolicyService,
     private readonly nativeWorker?: NativeReaderWorkerPort,
   ) {}
+
+  /** Hook-only source lane: never reads a client-supplied path, does not
+   * advance capture checkpoints, and never returns raw Hook/Evidence payloads.
+   * It is not a complete-turn history reader or a replacement for legacy
+   * runtime-hook projections until the TaskSurface merge is verified.
+   */
+  async readArchivedHooks(query: {
+    sourceId: string; installationId: string; nativeSessionId: string;
+    signal: AbortSignal
+  }): Promise<NativeArchivedHookReadResult> {
+    if (!this.capturePolicy.isSourceEnabled(query.sourceId)) {
+      return { state: 'unsupported', reason: 'source-disabled' }
+    }
+    query.signal.throwIfAborted()
+    const catalog = await this.storage.nativeSessionCatalog?.get({
+      sourceId: query.sourceId, installationId: query.installationId,
+      nativeSessionId: query.nativeSessionId, locationKind: 'native',
+    })
+    if (!catalog) return { state: 'unavailable', reason: 'native-session-not-indexed' }
+    const source = this.sources.list().find(definition =>
+      definition.manifest.sourceId === query.sourceId)
+    if (!source?.readArchivedNativeHooks) {
+      return { state: 'unsupported', reason: 'native-hook-archive-source-unavailable' }
+    }
+    const installation = await this.storage.repositories.installations.get(query.installationId)
+    if (!installation || installation.productId !== source.manifest.productId) {
+      return { state: 'drifted', reason: 'native-installation-identity-changed' }
+    }
+    const host = await this.storage.repositories.hosts.get(installation.hostId)
+    if (!host) return { state: 'unavailable', reason: 'native-source-host-unavailable' }
+    const records = await source.readArchivedNativeHooks(query.nativeSessionId, {
+      host, installation, abortSignal: query.signal, checkpoint: readOnlyCheckpoint,
+    })
+    // A Source can emit at most sixteen bounded Hook records for one page.
+    if (records.length > 16) {
+      return {state:'unsupported',reason:'native-hook-archive-page-too-large'}
+    }
+    const observations: ObservationCandidate[] = []
+    const observationRecordIds: string[] = []
+    for (const record of records) {
+      query.signal.throwIfAborted()
+      if (record.sourceId !== query.sourceId
+        || record.installationId !== installation.id
+        || record.sourceSessionNativeId !== query.nativeSessionId
+        || record.locator.kind !== 'runtime-hook') {
+        return { state: 'drifted', reason: 'native-hook-record-identity-drifted' }
+      }
+      const normalized = this.capturePolicy.sanitizeNormalizedOutput(
+        await source.normalize(record, {host, installation}))
+      for (const observation of normalized.observations) {
+        observations.push(observation)
+        observationRecordIds.push(record.id)
+      }
+    }
+    let candidateBytes: number
+    try { candidateBytes = Buffer.byteLength(JSON.stringify(observations), 'utf8') }
+    catch { return {state:'unsupported',reason:'native-hook-payload-invalid'} }
+    if (candidateBytes > 2 * 1024 * 1024) {
+      return {state:'unsupported',reason:'native-hook-payload-too-large'}
+    }
+    return {
+      state: 'available', observations, observationRecordIds,
+      truncated: records.length === 16,
+    }
+  }
 
   /**
    * Attachment-only Source rehydration. Unlike read(), this transient result

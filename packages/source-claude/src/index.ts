@@ -1052,7 +1052,7 @@ export const claudeSourceDefinition: SourceDefinition = {
   async readArchivedNativeHooks(nativeSessionId, ctx) {
     ctx.abortSignal.throwIfAborted()
     const inbox = runtimeInboxDirectory()
-    const archive = await readArchivedHookInboxSession({ inbox, nativeSessionId })
+    const archive = await readArchivedHookInboxSession({ inbox, nativeSessionId, limit: 16 })
     const records = archive.map(item => {
       const envelope = parseRuntimeEnvelope(item.content, item.fileName)
       const archivePath = join(inbox, 'archive', sha256(nativeSessionId), item.fileName)

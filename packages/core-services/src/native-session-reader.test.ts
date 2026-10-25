@@ -230,3 +230,38 @@ test('native media hydration refuses oversized original and normalized images be
   assert.equal(normalized.calls.normalize,1)
   assert.equal(normalized.calls.sanitized,0)
 })
+
+test('Hook archive reader uses Catalog Source authority, sanitizes and forbids foreign Hook records',async()=>{
+  let reads=0
+  const nativeSource={
+    manifest:{sourceId:'pi',productId:'pi'},
+    async readArchivedNativeHooks(_nativeSessionId:string){
+      reads++
+      return [{...raw,locator:{kind:'runtime-hook' as const,hookEventId:'h1'}}]
+    },
+    async normalize(){return {observations:[sample],evidenceCandidates:[]}},
+  } as unknown as SourceDefinition
+  const stores={
+    nativeSessionCatalog:{async get(){return catalog}},
+    repositories:{installations:{async get(){return installation}},hosts:{async get(){return host}}},
+  } as unknown as StorageService
+  const policy={
+    isSourceEnabled(){return true},
+    sanitizeNormalizedOutput(){return {observations:[{...sample,payload:{text:'[redacted]'}}],evidenceCandidates:[]}},
+  } as unknown as CapturePolicyService
+  const r=new NativeSessionReader(stores,{list:()=>[nativeSource]} as unknown as SourceService,policy)
+  const answer=await r.readArchivedHooks(query)
+  assert.equal(answer.state,'available')
+  if(answer.state==='available'){
+    assert.deepEqual(answer.observations[0]?.payload,{text:'[redacted]'})
+    assert.deepEqual(answer.observationRecordIds,['record'])
+    assert.equal(answer.truncated,false)
+    assert.equal(JSON.stringify(answer).includes('/sessions/'),false)
+  }
+  assert.equal(reads,1)
+  nativeSource.readArchivedNativeHooks=async()=>[
+    {...raw,sourceSessionNativeId:'foreign',locator:{kind:'runtime-hook',hookEventId:'h2'}},
+  ]
+  assert.deepEqual(await r.readArchivedHooks(query),
+    {state:'drifted',reason:'native-hook-record-identity-drifted'})
+})

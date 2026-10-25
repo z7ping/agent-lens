@@ -131,7 +131,7 @@ export const codexSourceDefinition: SourceDefinition = {
   async readArchivedNativeHooks(nativeSessionId, ctx) {
     ctx.abortSignal.throwIfAborted()
     const inbox = codexRuntimeInternals.inboxDirectory()
-    const archive = await readArchivedHookInboxSession({ inbox, nativeSessionId })
+    const archive = await readArchivedHookInboxSession({ inbox, nativeSessionId, limit: 16 })
     const records = archive.map(item => {
       const envelope = codexRuntimeInternals.parseEnvelope(item.content, item.fileName)
       const archivePath = join(inbox, 'archive',
