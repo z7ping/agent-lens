@@ -5,15 +5,38 @@ import { basename, join } from 'node:path'
 const MAX_EVENT_BYTES = 1024 * 1024
 const MAX_FILES_PER_READ = 128
 
-function opaqueSessionDirectory(nativeSessionId: string): string {
+function opaqueSessionDirectory(nativeSessionId: string, installationId?: string): string {
   if (!nativeSessionId || nativeSessionId.length > 512) {
     throw new TypeError('Hook archive requires a valid native session identity')
   }
-  return createHash('sha256').update(nativeSessionId).digest('hex')
+  if (installationId === undefined) {
+    // Keep the legacy unscoped key readable via the explicit old helper API.
+    // New Source readers always pass installationId, never auto-claim these
+    // ambiguous legacy bytes under an unrelated installation.
+    return createHash('sha256').update(nativeSessionId).digest('hex')
+  }
+  if (!installationId || installationId.length > 512) {
+    throw new TypeError('Hook archive requires a valid installation identity')
+  }
+  return createHash('sha256').update(JSON.stringify([
+    'native-hook-archive-v2', installationId, nativeSessionId,
+  ])).digest('hex')
 }
 
 function safeInboxName(name: string): boolean {
   return /^[a-zA-Z0-9][a-zA-Z0-9._-]{0,254}\.json$/.test(name)
+}
+
+/** Internal Source-only locator. Never put the host path in HTTP DTOs. */
+export function archivedHookInboxRecordPath(input: {
+  inbox: string; fileName: string; nativeSessionId: string; installationId: string
+}): string {
+  if (!safeInboxName(input.fileName)) {
+    throw new TypeError('Invalid original Hook inbox filename')
+  }
+  return join(input.inbox, 'archive',
+    opaqueSessionDirectory(input.nativeSessionId, input.installationId),
+    input.fileName)
 }
 
 /**
@@ -29,8 +52,10 @@ export async function archiveAcceptedHookInboxFile(input: {
   inbox: string
   fileName: string
   nativeSessionId: string
+  /** New sources must supply the Installation scope. Omitted only for legacy testing/read. */
+  installationId?: string
 }): Promise<void> {
-  const { inbox, fileName, nativeSessionId } = input
+  const { inbox, fileName, nativeSessionId, installationId } = input
   if (!safeInboxName(fileName) || basename(fileName) !== fileName) {
     throw new TypeError('Invalid original Hook inbox filename')
   }
@@ -40,7 +65,7 @@ export async function archiveAcceptedHookInboxFile(input: {
     || info.size > MAX_EVENT_BYTES) {
     throw new Error('Hook inbox event is not a bounded regular file')
   }
-  const directory = join(inbox, 'archive', opaqueSessionDirectory(nativeSessionId))
+  const directory = join(inbox, 'archive', opaqueSessionDirectory(nativeSessionId, installationId))
   await mkdir(directory, { recursive: true, mode: 0o700 })
   const targetPath = join(directory, fileName)
   try {
@@ -86,6 +111,7 @@ function encodeHookCursor(session: string, after: string): string {
 export async function readArchivedHookInboxPage(input: {
   inbox: string
   nativeSessionId: string
+  installationId?: string
   limit?: number
   cursor?: string
 }): Promise<{ items: Array<{ fileName: string; content: string }>;
@@ -94,7 +120,7 @@ export async function readArchivedHookInboxPage(input: {
   if (!Number.isSafeInteger(limit) || limit < 1 || limit > MAX_FILES_PER_READ) {
     throw new TypeError('Hook archive read limit out of range')
   }
-  const session = opaqueSessionDirectory(input.nativeSessionId)
+  const session = opaqueSessionDirectory(input.nativeSessionId, input.installationId)
   const after = decodeHookCursor(input.cursor, session)
   const directory = join(input.inbox, 'archive', session)
   let names: string[]
@@ -132,6 +158,7 @@ export async function readArchivedHookInboxPage(input: {
 export async function readArchivedHookInboxSession(input: {
   inbox: string
   nativeSessionId: string
+  installationId?: string
   limit?: number
 }): Promise<Array<{ fileName: string; content: string }>> {
   return (await readArchivedHookInboxPage(input)).items

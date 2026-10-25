@@ -12,7 +12,7 @@ import {
   defineAgentLensPlugin,
   type AgentLensContext,
 } from '@agent-lens/runtime-cordis'
-import { readArchivedHookInboxPage, readAuthorizedNativeJsonlEntry, readNativeSessionWindow, verifyJsonlLineSha256 } from '@agent-lens/source-support'
+import { archivedHookInboxRecordPath, readArchivedHookInboxPage, readAuthorizedNativeJsonlEntry, readNativeSessionWindow, verifyJsonlLineSha256 } from '@agent-lens/source-support'
 import { discoverCodexAssets } from './assets'
 import {
   CODEX_CURRENT_PARSER_VERSION,
@@ -129,11 +129,12 @@ async function readCodexArchivedHookPage(
 ) {
   ctx.abortSignal.throwIfAborted()
   const inbox = codexRuntimeInternals.inboxDirectory()
-  const archive = await readArchivedHookInboxPage({ inbox, nativeSessionId, limit: 16, ...(cursor ? {cursor} : {}) })
+  const archive = await readArchivedHookInboxPage({ inbox, nativeSessionId, installationId: ctx.installation.id, limit: 16, ...(cursor ? {cursor} : {}) })
   const records = archive.items.map(item => {
     const envelope = codexRuntimeInternals.parseEnvelope(item.content, item.fileName)
-    const archivePath = join(inbox, 'archive',
-      createHash('sha256').update(nativeSessionId).digest('hex'), item.fileName)
+    const archivePath = archivedHookInboxRecordPath({
+      inbox, fileName: item.fileName, nativeSessionId, installationId: ctx.installation.id,
+    })
     const record = codexRuntimeInternals.sourceRecordFromEnvelope(envelope, archivePath, ctx)
     if (record.sourceSessionNativeId !== nativeSessionId
       || record.sourceId !== 'codex' || record.installationId !== ctx.installation.id) {

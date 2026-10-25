@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import test from 'node:test'
 import { DatabaseSync } from 'node:sqlite'
-import { archiveAcceptedHookInboxFile } from '@agent-lens/source-support'
+import { archiveAcceptedHookInboxFile, archivedHookInboxRecordPath } from '@agent-lens/source-support'
 import type { DiscoveredAsset, SourceExecutionContext, SourceRecord } from '@agent-lens/core'
 import {
   declareHermesCapabilities,
@@ -453,10 +453,11 @@ test('Hermes archived native Hook uses original inbox inode, reuses normalizer a
         },
       }))
       const before = await stat(join(inbox,fileName))
-      await archiveAcceptedHookInboxFile({inbox,fileName,nativeSessionId})
+      await archiveAcceptedHookInboxFile({inbox,fileName,nativeSessionId,installationId:'hermes-inst'})
       if(i===0){
-        const archived = await stat(join(inbox,'archive',
-          (await import('node:crypto')).createHash('sha256').update(nativeSessionId).digest('hex'),fileName))
+        const archived = await stat(archivedHookInboxRecordPath({
+          inbox,fileName,nativeSessionId,installationId:'hermes-inst',
+        }))
         assert.equal(before.ino,archived.ino)
       }
     }
@@ -494,7 +495,7 @@ test('Hermes Hook archive rejects mismatched source session identity',async()=>{
       id:'foreign-hook',event:{hook_event_name:'subagent_start',session_id:'H-foreign'},
     }))
     await archiveAcceptedHookInboxFile({
-      inbox,fileName:'foreign.json',nativeSessionId:'H-authorized',
+      inbox,fileName:'foreign.json',nativeSessionId:'H-authorized',installationId:'hermes-inst',
     })
     const ctx=({installation:{id:'hermes-inst'},abortSignal:new AbortController().signal}
       as unknown as SourceExecutionContext)

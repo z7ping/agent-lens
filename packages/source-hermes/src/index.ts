@@ -40,6 +40,7 @@ import {
 } from '@agent-lens/runtime-cordis'
 import {
   archiveAcceptedHookInboxFile,
+  archivedHookInboxRecordPath,
   readArchivedHookInboxPage,
   isMissingPathError,
   watchSourceFiles,
@@ -571,7 +572,7 @@ export async function startHermesRuntimeCapture(
           const record = hookRecord(envelope, filePath, ctx)
           await emitter.emit(record)
           if (process.env.AGENT_LENS_NATIVE_HOOK_ARCHIVE === '1' && record.sourceSessionNativeId) {
-            await archiveAcceptedHookInboxFile({ inbox, fileName, nativeSessionId: record.sourceSessionNativeId })
+            await archiveAcceptedHookInboxFile({ inbox, fileName, nativeSessionId: record.sourceSessionNativeId, installationId: ctx.installation.id })
           } else {
             await unlink(filePath)
           }
@@ -936,12 +937,14 @@ async function readHermesArchivedHookPage(
   ctx.abortSignal.throwIfAborted()
   const inbox = hermesInboxDirectory()
   const page = await readArchivedHookInboxPage({
-    inbox, nativeSessionId, limit: 16,
+    inbox, nativeSessionId, installationId: ctx.installation.id, limit: 16,
     ...(cursor ? { cursor } : {}),
   })
   const records = page.items.map(item => {
     const envelope = parseInboxEnvelope(item.content, item.fileName)
-    const path = join(inbox, 'archive', sha256(nativeSessionId), item.fileName)
+    const path = archivedHookInboxRecordPath({
+      inbox, fileName: item.fileName, nativeSessionId, installationId: ctx.installation.id,
+    })
     const record = hookRecord(envelope, path, ctx)
     if (record.sourceId !== SOURCE_ID
       || record.installationId !== ctx.installation.id

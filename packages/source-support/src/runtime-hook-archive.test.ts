@@ -3,7 +3,7 @@ import { lstat, mkdtemp, mkdir, readFile, rm, stat, symlink, writeFile } from 'n
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import test from 'node:test'
-import { archiveAcceptedHookInboxFile, readArchivedHookInboxPage, readArchivedHookInboxSession } from './runtime-hook-archive'
+import { archiveAcceptedHookInboxFile, archivedHookInboxRecordPath, readArchivedHookInboxPage, readArchivedHookInboxSession } from './runtime-hook-archive'
 
 test('archive accepted source Hook by hard link: original is single-copy and session-scoped',async()=>{
   const inbox=await mkdtemp(join(tmpdir(),'al-native-hook-'))
@@ -90,6 +90,58 @@ test('Hook sidecar pages preserve every source file, reject cross-session cursor
       readArchivedHookInboxPage({inbox,nativeSessionId:'S1',cursor:'Li4vcGFzc3dk'}),
       /Invalid archived Hook cursor/,
     )
+  }finally{await rm(inbox,{recursive:true,force:true})}
+})
+
+test('Hook archive scope separates installations even for identical native session ID and filename',async()=>{
+  const inbox=await mkdtemp(join(tmpdir(),'al-native-installation-scope-'))
+  try{
+    const session='same-native-session'
+    const fileName='hook-1.json'
+    const firstContent=JSON.stringify({id:'one',event:{session_id:session,token:'first-install'}})
+    const secondContent=JSON.stringify({id:'two',event:{session_id:session,token:'second-install'}})
+    await writeFile(join(inbox,fileName),firstContent)
+    const before=await stat(join(inbox,fileName))
+    await archiveAcceptedHookInboxFile({
+      inbox,fileName,nativeSessionId:session,installationId:'installation-A',
+    })
+    const aPath=archivedHookInboxRecordPath({
+      inbox,fileName,nativeSessionId:session,installationId:'installation-A',
+    })
+    assert.equal((await stat(aPath)).ino,before.ino)
+    await writeFile(join(inbox,fileName),secondContent)
+    await archiveAcceptedHookInboxFile({
+      inbox,fileName,nativeSessionId:session,installationId:'installation-B',
+    })
+    const bPath=archivedHookInboxRecordPath({
+      inbox,fileName,nativeSessionId:session,installationId:'installation-B',
+    })
+    assert.notEqual(aPath,bPath)
+    const a=await readArchivedHookInboxPage({
+      inbox,nativeSessionId:session,installationId:'installation-A',
+    })
+    const b=await readArchivedHookInboxPage({
+      inbox,nativeSessionId:session,installationId:'installation-B',
+    })
+    assert.equal(a.items[0]?.content,firstContent)
+    assert.equal(b.items[0]?.content,secondContent)
+    assert.equal(a.hasMore,false)
+    assert.equal(b.hasMore,false)
+    assert.deepEqual((await readArchivedHookInboxSession({inbox,nativeSessionId:session})),[],
+      'unscoped legacy reader must not acquire v2 installation-scoped events')
+    // Continuations are scoped to BOTH installation and native session.
+    await writeFile(join(inbox,'hook-2.json'),JSON.stringify({id:'three'}))
+    await archiveAcceptedHookInboxFile({
+      inbox,fileName:'hook-2.json',nativeSessionId:session,installationId:'installation-A',
+    })
+    const first=await readArchivedHookInboxPage({
+      inbox,nativeSessionId:session,installationId:'installation-A',limit:1,
+    })
+    assert.ok(first.nextCursor)
+    await assert.rejects(readArchivedHookInboxPage({
+      inbox,nativeSessionId:session,installationId:'installation-B',
+      cursor:first.nextCursor!,
+    }),/Invalid archived Hook cursor/)
   }finally{await rm(inbox,{recursive:true,force:true})}
 })
 

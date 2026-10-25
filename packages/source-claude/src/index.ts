@@ -47,6 +47,7 @@ import {
 } from '@agent-lens/runtime-cordis'
 import {
   archiveAcceptedHookInboxFile,
+  archivedHookInboxRecordPath,
   readArchivedHookInboxPage,
   isCompleteJson,
   isMissingPathError,
@@ -580,7 +581,7 @@ export async function startClaudeRuntimeCapture(
           const record = runtimeRecord(envelope, filePath, ctx)
           await emitter.emit(record)
           if (process.env.AGENT_LENS_NATIVE_HOOK_ARCHIVE === '1' && record.sourceSessionNativeId) {
-            await archiveAcceptedHookInboxFile({inbox,fileName,nativeSessionId:record.sourceSessionNativeId})
+            await archiveAcceptedHookInboxFile({inbox,fileName,nativeSessionId:record.sourceSessionNativeId,installationId:ctx.installation.id})
           } else {
             await unlink(filePath)
           }
@@ -1049,10 +1050,12 @@ async function readClaudeArchivedHookPage(
 ) {
   ctx.abortSignal.throwIfAborted()
   const inbox = runtimeInboxDirectory()
-  const archive = await readArchivedHookInboxPage({ inbox, nativeSessionId, limit: 16, ...(cursor ? {cursor} : {}) })
+  const archive = await readArchivedHookInboxPage({ inbox, nativeSessionId, installationId: ctx.installation.id, limit: 16, ...(cursor ? {cursor} : {}) })
   const records = archive.items.map(item => {
     const envelope = parseRuntimeEnvelope(item.content, item.fileName)
-    const archivePath = join(inbox, 'archive', sha256(nativeSessionId), item.fileName)
+    const archivePath = archivedHookInboxRecordPath({
+      inbox, fileName: item.fileName, nativeSessionId, installationId: ctx.installation.id,
+    })
     const record = runtimeRecord(envelope, archivePath, ctx)
     if (record.sourceSessionNativeId !== nativeSessionId
       || record.sourceId !== SOURCE_ID || record.installationId !== ctx.installation.id) {
