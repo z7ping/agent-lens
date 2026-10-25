@@ -93,6 +93,16 @@ export async function handleNativeSessionMetricsRequest(
 }
 
 
+/** Resume state is memory-only and scoped to one verified source revision.
+ * Tool call IDs used by the accumulator never enter SQLite or HTTP DTOs. */
+export interface NativeMetricRebuildProgress {
+  sourceId:string; installationId:string; nativeSessionId:string
+  fileIdentity:string; fileSize:number; fileMtimeMs:number; parserVersion:string
+  accumulator:NativeSessionMetricAccumulator
+  cursor:SourceNativeSessionCursor
+  scannedRecords:number
+}
+
 /** The single bounded computation path shared by explicit rebuild and
  * opportunistic refresh. The trusted Source Reader owns file authorization,
  * worker isolation and CapturePolicy; only numerical snapshots reach SQLite.
@@ -103,16 +113,25 @@ export async function rebuildNativeSessionMetrics(
   reader:NativeSessionWindowReader,
   source:SourceDefinition,
   signal:AbortSignal,
+  incremental?:{progress?:NativeMetricRebuildProgress},
 ){
   const identity={
     sourceId:entry.sourceId,installationId:entry.installationId,
     nativeSessionId:entry.nativeSessionId,
   }
-  const accumulator=new NativeSessionMetricAccumulator()
-  let cursor:SourceNativeSessionCursor|undefined
+  const prior=incremental?.progress
+  const reusable=prior && prior.sourceId===entry.sourceId
+    && prior.installationId===entry.installationId
+    && prior.nativeSessionId===entry.nativeSessionId
+    && prior.fileIdentity===entry.fileIdentity
+    && prior.fileSize===entry.fileSize
+    && prior.fileMtimeMs===entry.fileMtimeMs
+    && prior.parserVersion===source.manifest.parserVersion
+  const accumulator=reusable?prior.accumulator:new NativeSessionMetricAccumulator()
+  let cursor:SourceNativeSessionCursor|undefined=reusable?prior.cursor:undefined
   let exhausted=false
   let pendingTail=false
-  let scannedRecords=0
+  let scannedRecords=reusable?prior.scannedRecords:0
   for(let pageIndex=0;pageIndex<MAX_PAGES;pageIndex++){
     signal.throwIfAborted()
     const result=await reader.read({
@@ -140,6 +159,18 @@ export async function rebuildNativeSessionMetrics(
     if(!result.hasMore){exhausted=true;break}
   }
   signal.throwIfAborted()
+  // The bounded reader may not yet have reached EOF. Retain only numeric
+  // accumulator state and the verified Source-owned cursor in ephemeral memory.
+  // No partial/incorrect full-session snapshot is written to SQLite here.
+  if(incremental && !exhausted){
+    if(!cursor) return {state:'unsupported' as const,
+      reason:'native-metrics-resume-cursor-missing'}
+    return {state:'in_progress' as const,progress:{
+      ...identity,fileIdentity:entry.fileIdentity,fileSize:entry.fileSize,
+      fileMtimeMs:entry.fileMtimeMs,parserVersion:source.manifest.parserVersion,
+      accumulator,cursor,scannedRecords,
+    } satisfies NativeMetricRebuildProgress}
+  }
   // EOF proves a bounded native read, not complete runtime facts. The Source
   // owns its recoverability attestation; never infer it from the agent name.
   const sourceCoverageCertified=source.nativeSessionCoverageComplete===true
