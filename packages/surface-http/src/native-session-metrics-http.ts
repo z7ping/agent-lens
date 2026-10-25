@@ -121,7 +121,7 @@ export async function rebuildNativeSessionMetrics(
     nativeSessionId:entry.nativeSessionId,
   }
   const reviewSessionId=incremental?.reviewSessionId ?? incremental?.progress?.reviewSessionId
-  if(incremental && (!reviewSessionId || !/^native:[a-f0-9]{32}$/.test(reviewSessionId))){
+  if(incremental && (!reviewSessionId || !reviewSessionId.startsWith('native:') || reviewSessionId.length>96)){
     return {state:'unsupported' as const,reason:'native-metrics-resume-session-id-missing'}
   }
   const prior=incremental?.progress
