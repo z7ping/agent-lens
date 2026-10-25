@@ -490,6 +490,8 @@ export async function handleNativeSessionHookRequest(
     hasMore:Boolean(result.nextCursor),
     nextCursor:result.nextCursor ?? '',
     hookEventsTruncated:result.truncated,
+    // Reaching the end of archived files is not a lifecycle capture proof.
+    hookFactsPartial:true,
   }
   if(Buffer.byteLength(JSON.stringify(responseDto),'utf8')>MAX_RESPONSE_BYTES){
     writeJson(response,413,{state:'unsupported',reason:'native-hook-response-too-large'})
