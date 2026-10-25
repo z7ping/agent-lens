@@ -98,6 +98,10 @@ export function ToolsPage({ model, toolbarHost }: { model: AgentLensClientModel;
   const review = useClientSnapshotField(model, 'review')
   const navigate = useNavigate()
   const data = usage.response
+  const nativeMetrics=data?.meta.native
+  const nativeHasSessions=nativeMetrics?.state==='available'
+    && nativeMetrics.eligibleSessions>0
+  const nativeTools=nativeMetrics?.state==='available' ? nativeMetrics.tools??[] : []
   const projection = data?.meta.projection
   const projectionPartial = projection?.state === 'partial'
   const projectionPercent = projection ? Math.max(0, Math.min(100, Math.round(projection.coverageRatio * 100))) : 0
@@ -219,6 +223,35 @@ export function ToolsPage({ model, toolbarHost }: { model: AgentLensClientModel;
           <span><b>{t('page.projectionTitle')}</b><small>{t('page.projectionDescription', { projected: projection.projectedCount.toLocaleString(locale), total: projection.sourceObservationCount.toLocaleString(locale), percent: projectionPercent })}</small></span>
         </div>}
 
+        {nativeHasSessions && nativeMetrics?.state==='available' && <section className="tool-table-card"
+          aria-label={t('page.nativeTitle')}>
+          <div className="table-section-head"><div><h2>{t('page.nativeTitle')}</h2>
+            <small>{t('page.nativeScope', {ready:nativeMetrics.readySessions,
+              eligible:nativeMetrics.eligibleSessions})}</small></div></div>
+          <div className="table-scroll">
+            {nativeTools.length ? <table className="tool-table">
+              <thead><tr>
+                <th scope="col">{t('page.tool')}</th>
+                <th scope="col">{t('page.calls')}</th>
+                <th scope="col">{t('page.nativeResults')}</th>
+                <th scope="col">{t('page.failure')}</th>
+                <th scope="col">{t('page.sessions')}</th>
+              </tr></thead>
+              <tbody>{nativeTools.map(tool=><tr key={tool.sourceId+'::'+tool.nativeToolName}>
+                <td><span className="tool-table-name"><ToolKindIcon kind={toolVisualKind(tool.nativeToolName)}/>
+                  <span><b className="tool-name">{tool.nativeToolName}</b>
+                    <span className="tool-source">{sourceLabels([tool.sourceId])}</span></span></span></td>
+                <td>{tool.callCount}</td>
+                <td>{tool.resultCount}</td>
+                <td className={tool.errorCount ? 'cell-danger' : 'cell-muted'}>{tool.errorCount}</td>
+                <td>{tool.sessionCount}</td>
+              </tr>)}</tbody>
+            </table> : <div className="tools-empty-state">{t('page.nativeNoCalls')}</div>}
+          </div>
+          <small>{nativeMetrics.coverage==='partial' || nativeMetrics.toolsTruncated
+            ? t('page.nativePartialNote') : t('page.nativeSeparateNote')}</small>
+        </section>}
+
         {blockingError ? null : usage.loading && !data ? <WorkspaceSkeleton kind="tools"/> : <>
           <section className="tool-summary-grid">
             <div className="tool-summary-card"><span>{t('page.mostFrequent')}</span><strong>{mostUsed?.nativeToolName ?? '—'}</strong><small>{mostUsed ? t('page.callsAndSessions', { calls: mostUsed.callCount, sessions: mostUsed.sessionCount }) : t('page.noData')}</small></div>
@@ -253,8 +286,8 @@ export function ToolsPage({ model, toolbarHost }: { model: AgentLensClientModel;
                 })}</tbody>
               </table> : <div className="tools-empty-state"><EmptyStatePanel
                 icon={<UiIcon name="search" size={20}/>}
-                title={t('page.emptyTitle')}
-                description={t('page.emptyDescription')}
+                title={nativeHasSessions ? t('page.nativeOnlyEmptyTitle') : t('page.emptyTitle')}
+                description={nativeHasSessions ? t('page.nativeOnlyEmptyDescription') : t('page.emptyDescription')}
                 action={canRelaxFilters ? { label: t('page.relaxFilters'), onClick: relaxFilters } : { label: t('page.refresh'), onClick: () => void model.refreshUsage() }}
                 compact
               /></div>}
