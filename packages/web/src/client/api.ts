@@ -31,6 +31,7 @@ import {
   type ManagedAssetRoot,
   type NativeBodySearchResponseDto,
   type NativeMetricOverviewResponseDto,
+  type NativeMetricStatusDto,
   type NativeSessionCatalogResponseDto,
   type NativeSessionSummaryDto,
   type NativeReviewWindowResponseDto,
@@ -408,6 +409,22 @@ export class AgentLensApi {
       signal ? { signal } : {},
     ).catch(error => error instanceof AgentLensRequestError && error.status === 404
       ? null : Promise.reject(error))
+  }
+
+  /** Read only the disposable numerical projection state; never the native body. */
+  nativeMetricStatus(id: string, signal?: AbortSignal): Promise<NativeMetricStatusDto> {
+    return requestJson<NativeMetricStatusDto>(
+      `/api/v1/native-sessions/${encodeURIComponent(id)}/metrics`,
+      signal ? { signal } : {},
+    )
+  }
+
+  /** Explicit, bounded materialization for an opened Native-only session. */
+  rebuildNativeMetric(id: string, signal?: AbortSignal): Promise<NativeMetricStatusDto> {
+    return requestJson<NativeMetricStatusDto>(
+      `/api/v1/native-sessions/${encodeURIComponent(id)}/metrics/rebuild`,
+      { method: 'POST', ...(signal ? { signal } : {}) },
+    )
   }
 
   /** Read one bounded native Review window through the existing Task DTO.
