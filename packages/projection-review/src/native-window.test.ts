@@ -250,3 +250,24 @@ test('Hook events sharing one native correlation ID retain distinct request and 
   assert.equal(result.hookFactsPartial,true,'the ambiguous duplicate remains standalone')
 })
 
+test('empty Hook archive is not evidence of complete runtime capture history',()=>{
+  const native=projectNativeReviewWindow({
+    ...page,
+    observations:[
+      {...candidate('message.user',1,{text:'hello'}),occurredAt:'2026-10-25T04:00:00Z'},
+      {...candidate('message.assistant',2,{text:'world'}),occurredAt:'2026-10-25T04:00:02Z'},
+    ],
+    observationRecordIds:['native-user','native-assistant'],
+    completeBoundaries:true,
+  })
+  const overlaid=overlayNativeHookEvents({
+    window:native,observations:[],observationRecordIds:[],truncated:false,
+  })
+  assert.equal(overlaid.boundaryIntegrity,'complete','original transcript turn is still verified')
+  assert.equal(overlaid.hookFactsPartial,true,
+    'no archived Hook events does not prove there were no historical Hook facts')
+  assert.equal(overlaid.hookEventsTruncated,undefined,
+    'no page truncated is independent of unknown historical capture coverage')
+  assert.deepEqual(overlaid.interactions,native.interactions)
+})
+

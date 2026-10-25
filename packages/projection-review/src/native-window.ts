@@ -219,7 +219,10 @@ export function overlayNativeHookEvents(input: {
     return {
       ...window,
       ...(input.truncated ? { hookEventsTruncated: true } : {}),
-      ...(observations.length ? { hookFactsPartial: true } : {}),
+      // There is no durable per-session Hook capture-completeness certificate.
+      // Even an empty archive does not prove that no events occurred before
+      // the Source-owned archive was enabled.
+      hookFactsPartial: true,
     }
   }
   const projected = projectNativeReviewWindow({
@@ -284,7 +287,8 @@ export function overlayNativeHookEvents(input: {
     interactions,
     observationCount: window.observationCount + mergedCount,
     ...(input.truncated ? {hookEventsTruncated: true} : {}),
-    ...(window.hookFactsPartial || mergedCount < observations.length
-      ? {hookFactsPartial:true} : {}),
+    // A directory snapshot proves a consistent page, NOT full runtime
+    // coverage. Source-only events before archival activation remain unknown.
+    hookFactsPartial: true,
   }
 }
