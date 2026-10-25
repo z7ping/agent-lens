@@ -1050,7 +1050,7 @@ async function readClaudeArchivedHookPage(
 ) {
   ctx.abortSignal.throwIfAborted()
   const inbox = runtimeInboxDirectory()
-  const archive = await readArchivedHookInboxPage({ inbox, nativeSessionId, limit: 16, ...(cursor ? {cursor} : {}) })
+  const archive = await readArchivedHookInboxPage({ inbox, nativeSessionId, installationId: ctx.installation.id, limit: 16, ...(cursor ? {cursor} : {}) })
   const records = archive.items.map(item => {
     const envelope = parseRuntimeEnvelope(item.content, item.fileName)
     const archivePath = join(inbox, 'archive', sha256(nativeSessionId), item.fileName)
