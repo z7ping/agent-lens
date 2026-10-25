@@ -147,6 +147,7 @@ test('verified new native session skips transcript ingestion, SourceRecord and O
   let committed=0
   let wroteRaw=0
   let metadata=0
+  let catalogReady=0
   const source:SourceDefinition={
     manifest:{pluginId:'test-fast',pluginVersion:'1',apiVersion:'1.0',
       pluginType:'source',displayName:'Test',sourceId:'test-source',
@@ -170,6 +171,7 @@ test('verified new native session skips transcript ingestion, SourceRecord and O
         hasMore:false,pendingTail:false}
     },
     async *ingestHistory(ctx){
+      assert.equal(catalogReady,1,'runtime capture may start only after native claims')
       if (ctx.skipNativeSessionFile?.(filePath)) return
       ingested++
       yield recordForProbe
@@ -194,7 +196,10 @@ test('verified new native session skips transcript ingestion, SourceRecord and O
   try{
     process.env.AGENT_LENS_NATIVE_ONLY_NEW_SESSIONS='1'
     process.env.AGENT_LENS_NATIVE_CATALOG_FAST_SCAN='1'
-    const result=await runner.sync({source,host,detected,abortSignal:new AbortController().signal})
+    const result=await runner.sync({source,host,detected,
+      abortSignal:new AbortController().signal,
+      onNativeCatalogReady(){ catalogReady++; assert.equal(verificationCount,1) },
+    })
     assert.equal(metadata,1)
     assert.equal(verificationCount,1)
     assert.equal(result.records,0)
