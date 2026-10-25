@@ -203,6 +203,8 @@ export type SourceNativeSessionPageResult =
   | {
       state: 'available'
       records: SourceRecord[]
+      /** Per-record rewind point: exact byte start and preceding physical line count. */
+      recordCursors?: SourceNativeSessionCursor[]
       nextCursor: SourceNativeSessionCursor
       hasMore: boolean
       pendingTail: boolean
