@@ -81,6 +81,11 @@ test('OpenCode native SQLite reads only one session with an exact rowid rewind c
     assert.equal(capability.recoveryScope,'session-current-state')
     assert.equal(capability.persistencePreference,'reference')
     assert.equal(capability.locatorStability,'best-effort')
+    const foreignTable={...second.records[0]!,locator:{
+      ...second.records[0]!.locator,table:'message',
+    }}
+    assert.equal(openCodeSourceDefinition.rawRecovery!.describe(foreignTable).canReread,false)
+    assert.equal((await openCodeSourceDefinition.rawRecovery!.verify!(foreignTable)).state,'unsupported')
     // OpenCode may rewrite an existing SQLite part row. Old cursors fail
     // closed; a fresh Source read reconstructs the CURRENT original state.
     db.prepare('UPDATE part SET data=? WHERE id=?')
