@@ -273,6 +273,7 @@ export const chineseReviewMessages: LocaleMessagesDto = {
         loadMoreLoading: '正在加载更多会话…',
         loadMoreFailed: '加载失败 · 点击重试',
         loadMoreAuto: '继续向下滚动，自动加载更多会话',
+        loadMoreNative: '加载更多原生会话',
         allLoaded: '已加载全部会话',
         empty: '当前筛选范围没有会话',
       },
