@@ -83,6 +83,8 @@ export interface TimelineItemDto {
   interactionId?: string
   actorId?: string
   nativeEventId?: string
+  /** Source-normalized tool call identity; distinct from the event ID. */
+  nativeCallId?: string
   nativeParentEventId?: string
   parentObservationId?: string
   sourceSequence?: number
