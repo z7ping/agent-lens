@@ -1,5 +1,6 @@
 import { stat } from 'node:fs/promises'
 import { extname, isAbsolute } from 'node:path'
+import { nativeSqliteRevision } from '@agent-lens/source-support'
 import type {
   NativeSessionCatalogStore,
   SourceDefinition,
