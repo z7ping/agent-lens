@@ -588,8 +588,16 @@ export async function startHermesRuntimeCapture(
                 expectedSha256:createHash('sha256').update(originalBytes).digest('hex'),
               }
             : null
-          if (archiveInput) await prepareHookInboxArchive(archiveInput)
-          await emitter.emit(record)
+          const archivePath = archiveInput
+            ? await prepareHookInboxArchive(archiveInput) : undefined
+          // Verified Hook sidecar is now the Source-owned reference. Legacy
+          // ownership may still store its own SQL facts; Native-only owners
+          // can verify this inode instead of attempting to rewrite events.
+          const deliveredRecord = archivePath && archiveInput
+            ? {...record,locator:{...record.locator,path:archivePath},
+                fingerprint:archiveInput.expectedSha256}
+            : record
+          await emitter.emit(deliveredRecord)
           if (archiveInput) await archiveAcceptedHookInboxFile(archiveInput)
           else await unlink(filePath)
         } catch {
