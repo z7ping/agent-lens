@@ -938,7 +938,10 @@ export class SourceHistoryRunner {
           if (await catalog.claimNativeOnlyWrite({
             ...key, filePath: entry.filePath, fileIdentity: entry.fileIdentity,
           })) {
-            verifiedNativePaths.add(entry.filePath)
+            // Shared native SQLite databases contain several independently
+            // claimed sessions. Never exclude all rows by the common DB path.
+            if (record.locator.kind === 'file') verifiedNativePaths.add(entry.filePath)
+            verifiedNativeSessionIds.add(entry.nativeSessionId)
             this.nativeCatalogTracker.rememberWriteMode(key, 'native-only')
           }
           if (input.cooperate) await input.cooperate()
