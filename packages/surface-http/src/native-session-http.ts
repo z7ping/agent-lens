@@ -3,7 +3,7 @@ import type { NativeSessionReadQuery, NativeSessionReadResult } from '@agent-len
 import type { NativeSessionCatalogStore, ObservationCandidate, SourceNativeSessionCursor } from '@agent-lens/core'
 import { reviewMessageAttachmentsFromPayload, type NativeReviewWindowDto } from '@agent-lens/protocol'
 
-import { nativeReviewObservationId, projectNativeReviewWindow } from '@agent-lens/projection-review'
+import { nativeReviewObservationId, overlayNativeHookEvents, projectNativeReviewWindow } from '@agent-lens/projection-review'
 import { badRequest, writeJson } from './http-utils'
 
 export interface NativeSessionWindowReader {
@@ -666,10 +666,54 @@ export async function handleNativeSessionWindowRequest(
       if (abort.signal.aborted || response.destroyed) return true
       if (complete.state !== 'available') {
         writeJson(response, 200, complete)
-      } else if (Buffer.byteLength(JSON.stringify(complete.dto), 'utf8') > MAX_RESPONSE_BYTES) {
-        writeJson(response, 413, { state: 'unsupported', reason: 'native-window-response-too-large' })
       } else {
-        writeJson(response, 200, complete.dto)
+        let dto = complete.dto
+        // Only the Catalog-authenticated native Review deep-link may overlay
+        // source-owned Hook facts. Raw Source identity windows stay unchanged.
+        // Never merge Hook tool calls/results or prompts without strong
+        // correlation; those remain on the standalone Hook evidence lane.
+        if (byId && reader.readArchivedHooks
+          && ['codex','claude-code','hermes'].includes(sourceId)) {
+          const hooks: ObservationCandidate[] = []
+          const recordIds: string[] = []
+          let hookCursor: string | undefined
+          let completeHookLane = process.env.AGENT_LENS_NATIVE_HOOK_ARCHIVE === '1'
+          const visited = new Set<string>()
+          for (let page = 0; page < 4 && !abort.signal.aborted; page++) {
+            const result = await reader.readArchivedHooks({
+              sourceId, installationId, nativeSessionId,
+              signal: abort.signal,
+              ...(hookCursor ? {cursor:hookCursor} : {}),
+            })
+            if (result.state !== 'available') {
+              completeHookLane = false
+              break
+            }
+            hooks.push(...result.observations)
+            recordIds.push(...result.observationRecordIds)
+            if (!result.nextCursor) {
+              if (result.truncated) completeHookLane = false
+              break
+            }
+            if (visited.has(result.nextCursor) || result.nextCursor === hookCursor) {
+              completeHookLane = false
+              break
+            }
+            hookCursor = result.nextCursor
+            visited.add(hookCursor)
+            if (page === 3) completeHookLane = false
+          }
+          dto = overlayNativeHookEvents({
+            window: dto, observations: hooks, observationRecordIds: recordIds,
+            truncated: !completeHookLane,
+          })
+        }
+        if (abort.signal.aborted || response.destroyed) return true
+        if (Buffer.byteLength(JSON.stringify(dto), 'utf8') > MAX_RESPONSE_BYTES) {
+          writeJson(response, 413, { state: 'unsupported', reason: 'native-window-response-too-large' })
+        } else {
+          writeJson(response, 200, dto)
+        }
       }
       return true
     }
