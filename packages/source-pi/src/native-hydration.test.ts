@@ -67,7 +67,7 @@ test('Pi: metadata-only reference hydrates an original event and reuses the orig
     const outside = join(root, 'outside.jsonl')
     await writeFile(outside, header + '\n' + event + '\n', 'utf8')
     assert.deepEqual(await hydrate({
-      ...reference, locator: { kind: 'file', path: outside, offset: reference.locator.offset },
+      ...reference, locator: { kind: 'file', path: outside, offset: reference.locator.offset! },
     }, ctx), { state: 'unsupported', reason: 'source-path-outside-authorized-roots' })
 
     const abort = new AbortController()
