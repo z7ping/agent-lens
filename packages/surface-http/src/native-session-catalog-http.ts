@@ -1,5 +1,6 @@
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import type { CapturePolicyService, NativeSessionCatalogQuery, NativeSessionCatalogStore, NativeSessionCatalogEntry } from '@agent-lens/core'
+import { nativeReviewSessionId } from '@agent-lens/projection-review'
 import { badRequest, writeJson } from './http-utils'
 
 const PATH = '/api/v1/native-sessions'
@@ -85,6 +86,7 @@ export async function handleNativeSessionCatalogRequest(
   const items = page.items
     .filter(item => policy.isSourceEnabled(item.sourceId))
     .map(item => ({
+      id: nativeReviewSessionId(item.sourceId, item.installationId, item.nativeSessionId),
       sourceId: item.sourceId,
       installationId: item.installationId,
       nativeSessionId: item.nativeSessionId,
