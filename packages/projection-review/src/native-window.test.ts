@@ -179,6 +179,9 @@ test('native Hook overlay only merges attested permission/subagent facts within 
     {...candidate('tool.call',8,{callId:'hook-tool'}),occurredAt:'2026-10-25T04:00:01Z'},
     // A capture timestamp alone cannot locate a source fact in a user turn.
     candidate('permission.response',9,{decision:'allow'}),
+    // Some Source adapters fill occurredAt from capture time when the Hook
+    // lacks its own timestamp; never infer a user turn from that alone.
+    {...candidate('permission.request',11,{decision:'unknown-clock'}),occurredAt:at},
     // Recorded after the complete turn: do not pull into a finished turn.
     {...candidate('context.injected',10,{text:'late'}),occurredAt:'2026-10-25T04:00:04Z'},
   ]
