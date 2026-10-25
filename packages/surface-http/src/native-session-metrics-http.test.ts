@@ -180,3 +180,43 @@ test('legacy catalog records never trigger duplicate native metric scans',async(
     assert.equal(metricCalls,0)
   }finally{await app.dispose()}
 })
+
+test('Pi cannot claim complete numerical coverage after Source attestation is withdrawn',async()=>{
+  let snapshot:NativeSessionMetricSnapshot|null=null
+  const uncertifiedSources={
+    list:()=>[{manifest:{sourceId:'pi',productId:'pi',parserVersion:'pi-version-3'},
+      nativeSessionCoverageComplete:false,
+      readNativeSessionPage:async()=>{throw Error('Worker owns native reads')}}],
+  } as unknown as SourceService
+  const storage={
+    ...unsupportedStorage,
+    nativeSessionCatalog:{
+      getByReviewSessionId:async()=>entry,
+      hasNativeOnlyWriteClaim:async()=>true,
+    },
+    nativeSessionMetrics:{
+      get:async()=>({state:'missing'}),
+      replace:async(value:NativeSessionMetricSnapshot)=>{snapshot=value;return true},
+    },
+  } as unknown as StorageService
+  const reader:NativeSessionWindowReader={
+    async read(){return {
+      state:'available',observations:[],observationRecordIds:[],evidenceCandidates:[],
+      nextCursor:{offset:0,sequence:0,fileIdentity:entry.fileIdentity},
+      hasMore:false,pendingTail:false,
+    }},
+  }
+  const app=await startHttpSurface(storage,{
+    port:0,nativeSessionReader:reader,sources:uncertifiedSources,capturePolicy:policy,
+  })
+  try{
+    const path=`http://${app.host}:${app.port}/api/v1/native-sessions/${encodeURIComponent(id)}/metrics/rebuild`
+    const result=await fetch(path,{method:'POST'})
+    assert.equal(result.status,200)
+    const value=await result.json() as {state:string;coverage:string;reason:string}
+    assert.equal(value.state,'available')
+    assert.equal(value.coverage,'partial')
+    assert.equal(value.reason,'native-source-coverage-unverified')
+    assert.equal((snapshot as NativeSessionMetricSnapshot|null)?.coverage,'partial')
+  }finally{await app.dispose()}
+})
