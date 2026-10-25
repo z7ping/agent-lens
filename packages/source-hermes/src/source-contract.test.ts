@@ -497,8 +497,10 @@ test('Hermes Hook archive rejects mismatched source session identity',async()=>{
     await archiveAcceptedHookInboxFile({
       inbox,fileName:'foreign.json',nativeSessionId:'H-authorized',installationId:'hermes-inst',
     })
-    const ctx=({installation:{id:'hermes-inst'},abortSignal:new AbortController().signal}
-      as unknown as SourceExecutionContext)
+    const ctx = {
+      installation: { id: 'hermes-inst' },
+      abortSignal: new AbortController().signal,
+    } as unknown as SourceExecutionContext
     await assert.rejects(hermesSourceDefinition.readArchivedNativeHooksPage!('H-authorized',ctx),
       /does not belong to requested native session/)
   } finally {
