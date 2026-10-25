@@ -1079,10 +1079,21 @@ export const hermesSourceDefinition: SourceDefinition = {
     }
     const db = new DatabaseSync(authorized, { readOnly: true, timeout: 1_500 })
     let rows: HermesRow[]
+    let boundaryDrifted = false
     try {
       db.exec('BEGIN')
       try {
-        rows = nativeSessionRows(db, query.nativeSessionId, fromRow, limit + 1)
+        // This cursor is attached to one previously observed Source row.
+        // Re-read that row inside the SAME SQLite snapshot as the next page.
+        // A mutable row or rowId reuse must never silently splice histories.
+        if (query.cursor?.boundaryHash) {
+          const previous = fromRow > 0
+            ? nativeSessionRows(db, query.nativeSessionId, fromRow - 1, 1)[0]
+            : undefined
+          boundaryDrifted = !previous || previous.row_id !== fromRow
+            || rowFingerprint(previous) !== query.cursor.boundaryHash
+        }
+        rows = boundaryDrifted ? [] : nativeSessionRows(db, query.nativeSessionId, fromRow, limit + 1)
         ctx.abortSignal.throwIfAborted()
         db.exec('COMMIT')
       } catch (error) {
@@ -1094,6 +1105,9 @@ export const hermesSourceDefinition: SourceDefinition = {
     }
     if ((await stat(authorized)).ino !== initial.ino) {
       return { state: 'drifted', reason: 'native-file-identity-changed' }
+    }
+    if (boundaryDrifted) {
+      return {state:'drifted',reason:'native-database-cursor-boundary-changed'}
     }
     const selected = rows.slice(0, limit)
     const records = selected.map(row => dbRecord(row, ctx, 'history'))
@@ -1107,7 +1121,11 @@ export const hermesSourceDefinition: SourceDefinition = {
       recordCursors: selected.map(row => ({
         offset: row.row_id - 1, sequence: row.row_id - 1, fileIdentity: identity,
       })),
-      nextCursor: { offset: endRow, sequence: endRow, fileIdentity: identity },
+      nextCursor: {
+        offset: endRow, sequence: endRow, fileIdentity: identity,
+        ...(selected.length ? {boundaryHash:rowFingerprint(selected[selected.length-1]!)}
+          : query.cursor?.boundaryHash ? {boundaryHash:query.cursor.boundaryHash} : {}),
+      },
       hasMore: rows.length > limit,
       pendingTail: false,
     }
