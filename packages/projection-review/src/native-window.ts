@@ -283,11 +283,9 @@ export function overlayNativeHookEvents(input: {
   const existingSourceFacts = new Set(window.interactions.flatMap(turn => turn.nodes)
     .flatMap(node => node.type === 'event' && node.nativeEventId
       ? [nativeFactKey(node.kind, node.nativeEventId)] : []))
-  const fingerprint = (kind: string, at: string, payload: unknown) =>
-    JSON.stringify([kind, at, payload])
-  const existingFacts = new Set(window.interactions.flatMap(turn => turn.nodes)
-    .flatMap(node => node.type === 'event'
-      ? [fingerprint(node.kind, node.at, node.payload)] : []))
+  // Content and timestamps are NOT provenance. Two independent approval or
+  // subagent facts may have identical payloads and clocks; dropping one by
+  // similarity silently loses Source-owned evidence.
   const explicitOwners = new Map<string, Set<string>>()
   const identityKey = (kind: 'event' | 'call', id: string) => JSON.stringify([kind, id])
   for (const turn of window.interactions.filter(item => item.trigger === 'user')) {
@@ -306,8 +304,7 @@ export function overlayNativeHookEvents(input: {
   const added = new Map<string, typeof candidates>()
   for (const node of candidates) {
     if (seenIds.has(node.id)
-      || (node.nativeEventId && existingSourceFacts.has(nativeFactKey(node.kind, node.nativeEventId)))
-      || existingFacts.has(fingerprint(node.kind, node.at, node.payload))) continue
+      || (node.nativeEventId && existingSourceFacts.has(nativeFactKey(node.kind, node.nativeEventId)))) continue
     const correlationKeys = [
       ...(node.nativeParentEventId ? [identityKey('event', node.nativeParentEventId)] : []),
       ...(node.nativeCallId ? [identityKey('call', node.nativeCallId)] : []),
@@ -349,7 +346,6 @@ export function overlayNativeHookEvents(input: {
     added.set(matching.id, events)
     seenIds.add(node.id)
     if (node.nativeEventId) existingSourceFacts.add(nativeFactKey(node.kind, node.nativeEventId))
-    existingFacts.add(fingerprint(node.kind, node.at, node.payload))
   }
   let mergedCount = 0
   const interactions = window.interactions.map(turn => {
