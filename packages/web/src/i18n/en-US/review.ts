@@ -358,6 +358,7 @@ export const englishReviewMessages: LocaleMessagesDto = {
         expandPage: 'Expand rounds on this page',
         newRecords: 'New records available',
         querying: 'Querying full session…',
+        nativeWindow: 'Native session · loaded turns only',
         latencyNote: '“High latency” is calculated by the server from the duration distribution of rounds in the full session.',
         loadingOlder: 'Loading earlier rounds…',
         loadFailedRetry: 'Load failed · retry',
