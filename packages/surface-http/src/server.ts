@@ -62,6 +62,7 @@ import { handleNativeSessionWindowRequest, handleNativeSessionAttachmentRequest,
 import { handleNativeSessionCatalogRequest } from './native-session-catalog-http'
 import { handleNativeSessionBodySearchRequest } from './native-session-search-http'
 import { handleNativeSessionMetricsRequest } from './native-session-metrics-http'
+import { handleNativeSessionMetricsOverviewRequest } from './native-session-metrics-overview-http'
 import { reviewAttachmentSources } from './review-attachments'
 import { handleLiveRequest } from './live-http'
 import { handleManagedAssetFilesRequest } from './managed-asset-files'
@@ -275,6 +276,8 @@ export async function startHttpSurface(
     try {
       const url = new URL(request.url ?? '/', `http://${AGENT_LENS_HTTP_HOST}`)
       route = httpRouteLabel(url.pathname)
+      if (await handleNativeSessionMetricsOverviewRequest(request,response,url,
+        storage.nativeSessionMetrics,options.sources,options.capturePolicy)) return
       if (await handleNativeSessionMetricsRequest(request,response,url,
         storage.nativeSessionCatalog,storage.nativeSessionMetrics,
         options.nativeSessionReader,options.sources,options.capturePolicy)) return
