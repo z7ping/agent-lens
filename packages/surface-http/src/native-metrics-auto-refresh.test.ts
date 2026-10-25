@@ -177,11 +177,15 @@ test('a 65-page native session resumes the numerical accumulator instead of resc
   let pages=0
   const readOffsets:number[]=[]
   const snapshots:NativeSessionMetricSnapshot[]=[]
+  let candidateQueries=0
   const metrics={
-    findRebuildCandidates:async()=>[{
-      reviewSessionId:key,sourceId:'pi',installationId:'pi-local',
-      nativeSessionId:'session-1',lastActivityAt:at,
-    }],
+    findRebuildCandidates:async()=>{
+      candidateQueries++
+      return candidateQueries===1?[{
+        reviewSessionId:key,sourceId:'pi',installationId:'pi-local',
+        nativeSessionId:'session-1',lastActivityAt:at,
+      }]:[]
+    },
     replace:async(snapshot:NativeSessionMetricSnapshot)=>{
       snapshots.push(snapshot)
       return true
@@ -212,6 +216,7 @@ test('a 65-page native session resumes the numerical accumulator instead of resc
     refresh.schedule()
     await flush()
     assert.equal(pages,65,'second trigger reads only the remaining page')
+    assert.equal(candidateQueries,1,'resuming an in-progress session must not depend on a second candidate query')
     assert.deepEqual(readOffsets,Array.from({length:65},(_,i)=>i))
     assert.equal(snapshots.length,1)
     assert.equal(snapshots[0]?.coverage,'complete')
@@ -246,8 +251,11 @@ test('a changed native Catalog revision discards in-memory progress before any n
   } as unknown as NativeSessionMetricsStore
   const nativeSource=source.list()[0]!
   const abort=new AbortController()
-  const first=await rebuildNativeSessionMetrics(entry,metrics,reader,nativeSource,abort.signal,{enabled:true})
+  const first=await rebuildNativeSessionMetrics(entry,metrics,reader,nativeSource,abort.signal,{
+    enabled:true,reviewSessionId:'native:0123456789abcdef0123456789abcdef',
+  })
   if(first.state!=='in_progress')assert.fail('Expected first bounded read to pause')
+  assert.equal(first.progress.reviewSessionId,'native:0123456789abcdef0123456789abcdef')
   assert.equal(readOffsets.length,64)
   readOffsets.length=0
   const revised={...entry,fileSize:entry.fileSize+1}
