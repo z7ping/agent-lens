@@ -66,10 +66,10 @@ export class NativeReaderWorkerClient implements NativeReaderWorkerPort {
   ): Promise<R> {
     signal.throwIfAborted()
     if (!this.supports(request.input.sourceId)) {
-      return { state: 'unsupported', reason: 'source-not-supported-by-native-worker' }
+      return { state: 'unsupported', reason: 'source-not-supported-by-native-worker' } as R
     }
     if (this.pending.size >= MAX_PENDING) {
-      return { state: 'unsupported', reason: 'native-worker-queue-full' }
+      return { state: 'unsupported', reason: 'native-worker-queue-full' } as R
     }
     const worker = this.ensureWorker()
     const id = ++this.sequence
