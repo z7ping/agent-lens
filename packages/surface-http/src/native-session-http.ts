@@ -401,8 +401,11 @@ function decodeCursor(value: string | null): EncodedNativeCursor | undefined {
       || !Number.isSafeInteger(cursor.sequence) || (cursor.sequence as number) < 0
       || typeof cursor.fileIdentity !== 'string'
       || !cursor.fileIdentity || cursor.fileIdentity.length > 128
-      || !(Object.keys(cursor).length === 3
-        || (Object.keys(cursor).length === 5
+      || (cursor.boundaryHash !== undefined
+        && (typeof cursor.boundaryHash !== 'string'
+          || !/^[0-9a-f]{64}$/.test(cursor.boundaryHash)))
+      || !(Object.keys(cursor).length === (cursor.boundaryHash === undefined ? 3 : 4)
+        || (Object.keys(cursor).length === (cursor.boundaryHash === undefined ? 5 : 6)
           && cursor.mode === 'review-turns'
           && Number.isSafeInteger(cursor.turnOrdinal)
           && (cursor.turnOrdinal as number) >= 1))) {
@@ -412,6 +415,7 @@ function decodeCursor(value: string | null): EncodedNativeCursor | undefined {
       offset: cursor.offset as number,
       sequence: cursor.sequence as number,
       fileIdentity: cursor.fileIdentity,
+      ...(cursor.boundaryHash ? {boundaryHash:cursor.boundaryHash} : {}),
       ...(cursor.mode === 'review-turns'
         ? { mode: 'review-turns' as const, turnOrdinal: cursor.turnOrdinal as number }
         : {}),
