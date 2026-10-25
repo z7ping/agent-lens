@@ -13,10 +13,9 @@ import { sourceRunnerInternals } from './source-runner'
 
 const at='2026-10-25T00:00:00Z'
 
-test('opt-in native-only Writer skips SourceRecord / Observation / Evidence only after source verification and durable claim',async()=>{
+test('certified native-only Writer defaults to single-copy Source facts after durable claim',async()=>{
   const root=await mkdtemp(join(tmpdir(),'agent-lens-native-writer-'))
   const filePath=join(root,'session.jsonl')
-  const oldEnv=process.env.AGENT_LENS_NATIVE_ONLY_NEW_SESSIONS
   const host:Host={id:'host',name:'local',platform:process.platform,arch:process.arch,createdAt:at,lastSeenAt:at}
   const installation:AgentInstallation={
     id:'installation',hostId:host.id,productId:'pi',dataRoot:root,
@@ -97,7 +96,6 @@ test('opt-in native-only Writer skips SourceRecord / Observation / Evidence only
   }
   try{
     await writeFile(filePath,'{"type":"message"}\n')
-    process.env.AGENT_LENS_NATIVE_ONLY_NEW_SESSIONS='1'
     const args=[
       storage, observations, coverage, policy, tracker,
       source, host, installation, undefined, record,
@@ -111,9 +109,7 @@ test('opt-in native-only Writer skips SourceRecord / Observation / Evidence only
     assert.equal(committed,0)
     assert.equal(catalog?.nativeSessionId,'S1')
     assert.equal(JSON.stringify(catalog).includes('PRIVATE_SOURCE_BODY'),false)
-    // Removing the opt-in does NOT change a previously-claimed session back
-    // to SQL/event persistence (both historical and runtime writers consult).
-    delete process.env.AGENT_LENS_NATIVE_ONLY_NEW_SESSIONS
+    // The immutable ownership claim continues to prevent duplicate SQL facts.
     await sourceRunnerInternals.processSourceRecordWithOwnership(...args)
     assert.equal(rawWrites,0)
     assert.equal(normalizations,0)
@@ -148,15 +144,11 @@ test('opt-in native-only Writer skips SourceRecord / Observation / Evidence only
     )
     assert.equal(rawWrites,0)
   }finally{
-    if(oldEnv===undefined)delete process.env.AGENT_LENS_NATIVE_ONLY_NEW_SESSIONS
-    else process.env.AGENT_LENS_NATIVE_ONLY_NEW_SESSIONS=oldEnv
     await rm(root,{recursive:true,force:true})
   }
 })
 
-test('opt-in keeps mutable database records legacy even when native reader can verify a row',async()=>{
-  const oldEnv=process.env.AGENT_LENS_NATIVE_ONLY_NEW_SESSIONS
-  process.env.AGENT_LENS_NATIVE_ONLY_NEW_SESSIONS='1'
+test('default cutover preserves mutable SQLite legacy sessions even with a native reader',async()=>{
   const host:Host={id:'host',name:'local',platform:'linux',arch:'x64',createdAt:at,lastSeenAt:at}
   const installation:AgentInstallation={
     id:'inst',hostId:'host',productId:'test',firstSeenAt:at,lastSeenAt:at,
@@ -204,14 +196,10 @@ test('opt-in keeps mutable database records legacy even when native reader can v
     )
     assert.equal(persisted,1)
   }finally{
-    if(oldEnv===undefined)delete process.env.AGENT_LENS_NATIVE_ONLY_NEW_SESSIONS
-    else process.env.AGENT_LENS_NATIVE_ONLY_NEW_SESSIONS=oldEnv
   }
 })
 
 test('a competing native-only claim never discards this writers unverified record',async()=>{
-  const previous=process.env.AGENT_LENS_NATIVE_ONLY_NEW_SESSIONS
-  delete process.env.AGENT_LENS_NATIVE_ONLY_NEW_SESSIONS
   const host:Host={id:'host',name:'local',platform:'linux',arch:'x64',
     createdAt:at,lastSeenAt:at}
   const installation:AgentInstallation={id:'inst',hostId:host.id,productId:'pi',
@@ -277,8 +265,6 @@ test('a competing native-only claim never discards this writers unverified recor
     await assert.rejects(run(),/native-only-source-recovery-coverage-drift/)
     assert.equal(writes,0)
   }finally{
-    if(previous===undefined)delete process.env.AGENT_LENS_NATIVE_ONLY_NEW_SESSIONS
-    else process.env.AGENT_LENS_NATIVE_ONLY_NEW_SESSIONS=previous
   }
 })
 
