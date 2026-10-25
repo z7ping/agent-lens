@@ -153,3 +153,64 @@ test('source-owned Hook archive defaults to enabled with explicit emergency opt-
   assert.equal(nativeHookArchiveEnabled({ AGENT_LENS_NATIVE_HOOK_ARCHIVE: '0' } as NodeJS.ProcessEnv), false)
   assert.equal(nativeHookArchiveEnabled({ AGENT_LENS_NATIVE_HOOK_ARCHIVE: '' } as NodeJS.ProcessEnv), true)
 })
+
+test('Hook archive cursor detects newly inserted older-sort files instead of losing them',async()=>{
+  const inbox=await mkdtemp(join(tmpdir(),'al-hook-snapshot-'))
+  const session='stable-session'
+  const installationId='worker-install'
+  try {
+    for(const name of ['b.json','d.json','f.json']){
+      await writeFile(join(inbox,name),JSON.stringify({id:name}))
+      await archiveAcceptedHookInboxFile({inbox,fileName:name,nativeSessionId:session,installationId})
+    }
+    const first=await readArchivedHookInboxPage({inbox,nativeSessionId:session,installationId,limit:1})
+    assert.deepEqual(first.items.map(item=>item.fileName),['b.json'])
+    assert.equal(first.hasMore,true)
+    assert.ok(first.nextCursor)
+    assert.equal(first.nextCursor!.length<=512,true)
+    assert.equal(first.nextCursor!.includes('b.json'),false)
+    await writeFile(join(inbox,'a.json'),JSON.stringify({id:'a'}))
+    await archiveAcceptedHookInboxFile({inbox,fileName:'a.json',nativeSessionId:session,installationId})
+    await assert.rejects(readArchivedHookInboxPage({
+      inbox,nativeSessionId:session,installationId,limit:1,cursor:first.nextCursor!,
+    }),/Invalid archived Hook cursor/,'resume must fail rather than skip a newly inserted earlier event')
+
+    let cursor: string | undefined
+    const all: string[]=[]
+    for(let page=0;page<8;page++){
+      const result=await readArchivedHookInboxPage({
+        inbox,nativeSessionId:session,installationId,limit:1,
+        ...(cursor ? {cursor} : {}),
+      })
+      all.push(...result.items.map(item=>item.fileName))
+      if(!result.hasMore)break
+      assert.ok(result.nextCursor)
+      cursor=result.nextCursor
+    }
+    assert.deepEqual(all,['a.json','b.json','d.json','f.json'])
+  } finally {
+    await rm(inbox,{recursive:true,force:true})
+  }
+})
+
+test('Hook archive cursor remains opaque and bounded for long valid inbox names',async()=>{
+  const inbox=await mkdtemp(join(tmpdir(),'al-hook-long-cursor-'))
+  const session='long-name-session'
+  const installationId='install'
+  try {
+    const longName='a'.repeat(200)+'.json'
+    for(const fileName of [longName,'z.json']){
+      await writeFile(join(inbox,fileName),JSON.stringify({fileName}))
+      await archiveAcceptedHookInboxFile({inbox,fileName,nativeSessionId:session,installationId})
+    }
+    const page=await readArchivedHookInboxPage({inbox,nativeSessionId:session,installationId,limit:1})
+    assert.ok(page.nextCursor)
+    assert.ok(page.nextCursor!.length <=512)
+    assert.ok(!page.nextCursor!.includes(longName))
+    const second=await readArchivedHookInboxPage({
+      inbox,nativeSessionId:session,installationId,limit:1,cursor:page.nextCursor!,
+    })
+    assert.deepEqual(second.items.map(x=>x.fileName),['z.json'])
+  }finally{await rm(inbox,{recursive:true,force:true})}
+})
+
