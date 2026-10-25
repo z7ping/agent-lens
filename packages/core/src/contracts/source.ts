@@ -13,6 +13,7 @@ import type {
 } from '../domain/observation'
 import type { AgentLensPluginManifest } from './plugin'
 import type { SourceHistoryProgressUpdate } from '../domain/diagnostics'
+import type { NativeSessionCatalogEntry } from '../services/native-session-catalog'
 
 export interface SourcePluginManifest extends AgentLensPluginManifest {
   pluginType: 'source'
@@ -216,6 +217,8 @@ export interface SourceDefinition {
   detect(ctx: SourceDetectionContext): Promise<DetectedSource[]>
   declareCapabilities(detected: DetectedSource): Promise<ObservationCapability[]>
   discoverAssets?(ctx: SourceExecutionContext): AsyncIterable<DiscoveredAsset>
+  /** Read only native session file headers + stat; no SourceRecord, normalize or replay. */
+  discoverNativeSessions?(ctx: SourceHistoryExecutionContext): AsyncIterable<NativeSessionCatalogEntry>
   ingestHistory?(ctx: SourceHistoryExecutionContext): AsyncIterable<SourceRecord>
   startCapture?(ctx: SourceExecutionContext, emit: SourceRecordEmitter): Promise<Disposable>
   rawRecovery?: SourceRawRecoveryPolicy
