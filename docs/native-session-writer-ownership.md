@@ -38,3 +38,13 @@ A `verified` record is not enough to delete the durable event copy if its upstre
 ## Source session completeness attestation
 
 In addition to stable append-only/fingerprint-verified storage, Native-only now requires the Source to opt in with `nativeSessionCoverageComplete: true`, meaning its history **and** runtime facts for that session can be reread from the original store. Default false. Pi's file-watch runtime capture tails the same JSONL source and opts in. Codex and Claude Code have independent runtime-hook evidence (permission/subagent lifecycle, etc.) and **do not** opt in until those facts have a separately recoverable, nonduplicating sidecar. Hermes/OpenCode remain disabled both for mutable SQLite history and this coverage condition. No source may turn on the flag merely to improve startup speed; a real recovery test is required first. Existing experimental Native-only ownership rows remain immutable and require separate follow-up before honoring their runtime-only events.
+
+
+## Hook 原始归档默认保留（2026-10-25 P0）
+
+Codex、Claude Code、Hermes 的 Runtime Hook 在原有 emitter 确认成功后，默认将本机 Inbox 原始事件文件通过同文件系统 hard-link → unlink 转入以 **安装实例 + 原生会话** 双重隔离的 Source-owned archive。**不会再复制/重新序列化一份 Hook 事件正文**；归档文件始终走现有 Reader/Worker/Normalizer/CapturePolicy 授权按需读取。仅没有可信会话 ID 的 Hook 沿用原 Inbox 清理策略，不能冒认进入其他会话。
+
+- 默认归档：不需要配置 `AGENT_LENS_NATIVE_HOOK_ARCHIVE=1`。
+- 紧急关闭：设置 `AGENT_LENS_NATIVE_HOOK_ARCHIVE=0`；这会重新删除已消费 Inbox 原始文件，因此 Hook 恢复/合流不再能证明完整，HTTP 必须标注证据可能缺失。
+- **归档开启 ≠ Native-only 已经切换**：旧 Writer 依然是生产默认，阶段性可能同时存在原 Hook 文件归档和既有 SQL 事件。只有消费者完全去旧事件依赖、来源完整性/恢复证明充分以后，才能移除旧 Writer。旧数据不迁移、不删除。
+- Vault 归档/恢复及 Hook 长期保留和清理策略尚未完成，不能自动删除源文件。先为实际数据量做好监控。
