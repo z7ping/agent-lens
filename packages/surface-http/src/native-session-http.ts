@@ -10,6 +10,12 @@ export interface NativeSessionWindowReader {
   read(query: NativeSessionReadQuery): Promise<NativeSessionReadResult>
   /** Source-authorized, one-record native media hydration (never public raw DTO). */
   readUnpersistedMediaPage?(query: NativeSessionReadQuery): Promise<NativeSessionReadResult>
+  readArchivedHooks?(query: {
+    sourceId:string; installationId:string; nativeSessionId:string; signal:AbortSignal
+  }): Promise<
+    | {state:'available';observations:ObservationCandidate[];observationRecordIds:string[];truncated:boolean}
+    | {state:'unavailable' | 'drifted' | 'unsupported';reason:string}
+  >
 }
 
 const PATH = '/api/v1/native-sessions/window'
@@ -367,6 +373,57 @@ export function encodeNativeSessionCursor(cursor: EncodedNativeCursor): string {
  * verifies the Catalog-owned session and physical record start. A client may
  * provide an opaque cursor, never a filesystem path or raw Source payload.
  */
+/** A distinct, explicitly partial read-only Hook lane, never a full user turn. */
+export async function handleNativeSessionHookRequest(
+  request:IncomingMessage,response:ServerResponse,url:URL,
+  reader?:NativeSessionWindowReader,catalog?:NativeSessionCatalogStore,
+):Promise<boolean>{
+  const match=url.pathname.match(/^\/api\/v1\/native-sessions\/([^/]+)\/hooks$/)
+  if(!match) return false
+  if(request.method!=='GET'){
+    response.setHeader('allow','GET')
+    writeJson(response,405,{error:'method_not_allowed'})
+    return true
+  }
+  if(!reader?.readArchivedHooks || !catalog){
+    writeJson(response,503,{state:'unavailable',reason:'native-hook-reader-unavailable'})
+    return true
+  }
+  if([...url.searchParams.keys()].length) throw badRequest('Native Hook reader does not accept file paths or query overrides')
+  const nativeId=(()=>{try{return decodeURIComponent(match[1]!)}catch{return ''}})()
+  if(!/^native:[0-9a-f]{32}$/.test(nativeId)){
+    writeJson(response,404,{error:'not_found'})
+    return true
+  }
+  const entry=await catalog.getByReviewSessionId(nativeId)
+  if(!entry || entry.locationKind!=='native'){
+    writeJson(response,404,{error:'not_found'})
+    return true
+  }
+  const result=await reader.readArchivedHooks({
+    sourceId:entry.sourceId,installationId:entry.installationId,
+    nativeSessionId:entry.nativeSessionId,signal:AbortSignal.timeout(10_000),
+  })
+  if(result.state!=='available'){
+    writeJson(response,200,result)
+    return true
+  }
+  const dto=projectNativeReviewWindow({
+    sourceId:entry.sourceId,installationId:entry.installationId,
+    nativeSessionId:entry.nativeSessionId,
+    observations:result.observations,observationRecordIds:result.observationRecordIds,
+    hasMore:false,pendingTail:false,nextCursor:'',hasPrevious:false,
+    completeBoundaries:false,
+  })
+  const responseDto={...dto,hookEventsTruncated:result.truncated}
+  if(Buffer.byteLength(JSON.stringify(responseDto),'utf8')>MAX_RESPONSE_BYTES){
+    writeJson(response,413,{state:'unsupported',reason:'native-hook-response-too-large'})
+  }else{
+    writeJson(response,200,responseDto)
+  }
+  return true
+}
+
 export async function handleNativeSessionAttachmentRequest(
   request: IncomingMessage,
   response: ServerResponse,
