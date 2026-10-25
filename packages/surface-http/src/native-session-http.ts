@@ -274,6 +274,10 @@ async function readCompleteNativeTurns(
           ...assembled,
           interactions: [...assembled.interactions, ...value.interactions],
           observationCount: assembled.observationCount + value.observationCount,
+          observedFileChanges: [...(assembled.observedFileChanges ?? []), ...(value.observedFileChanges ?? [])].slice(0,64),
+          ...(assembled.fileChangesTruncated || value.fileChangesTruncated
+            || (assembled.observedFileChanges?.length ?? 0) + (value.observedFileChanges?.length ?? 0) > 64
+            ? { fileChangesTruncated: true } : {}),
           hasMore: value.hasMore,
           nextCursor: value.nextCursor,
           boundaryIntegrity: 'complete',

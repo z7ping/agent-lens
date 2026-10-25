@@ -3,7 +3,7 @@ import test from 'node:test'
 import type { AgentLensApi } from './api'
 import type { NativeReviewWindowDto, NativeSessionSummaryDto } from '@agent-lens/protocol'
 import { AgentLensClientModel } from './model'
-import { nativeReviewDetail, nativeReviewNextPage } from './native-review-adapter'
+import { nativeReviewDetail, nativeReviewNextPage, nativeReviewObservedFileChanges } from './native-review-adapter'
 
 const id='native:1234567890abcdef1234567890abcdef'
 const at='2026-10-25T00:00:00Z'
@@ -80,4 +80,26 @@ test('native deep-linked Review uses shared model, never SQL file changes or rel
       'catalog:'+id,'native:'+id,'native:'+id+':next',
     ])
   }finally{model.stop()}
+})
+
+test('native loaded file changes are evidence-only and incremental without SQL reads',()=>{
+  const one={...page(1,true),observedFileChanges:[{
+    path:'src/service.ts',changeType:'unknown' as const,
+    firstChangedAt:at,lastChangedAt:at,evidence:['tool' as const],confidence:'medium' as const,
+  }]}
+  const first=nativeReviewObservedFileChanges(one)
+  assert.equal(first.logicalSessionId,id)
+  assert.equal(first.summary.observedCount,1)
+  assert.equal(first.summary.exactCount,0)
+  assert.equal(first.meta.truncated,true)
+  const two={...page(2,false),observedFileChanges:[{
+    path:'src/service.ts',changeType:'unknown' as const,
+    firstChangedAt:at,lastChangedAt:at,evidence:['tool' as const],confidence:'medium' as const,
+  },{
+    path:'src/new.ts',changeType:'unknown' as const,
+    firstChangedAt:at,lastChangedAt:at,evidence:['tool' as const],confidence:'medium' as const,
+  }]}
+  const second=nativeReviewObservedFileChanges(two,first)
+  assert.deepEqual(second.items.map(item=>item.path),['src/service.ts','src/new.ts'])
+  assert.equal(second.meta.truncated,undefined)
 })

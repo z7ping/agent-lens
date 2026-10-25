@@ -1,4 +1,5 @@
 import type { ReviewInteractionDto } from './review'
+import type { TaskFileChangeDto } from './task-file-changes'
 
 /** Metadata-only native catalog records; never expose Source-owned file locators. */
 export interface NativeSessionSummaryDto {
@@ -37,6 +38,9 @@ export interface NativeReviewWindowDto {
   /** Optional opt-in paging mode; the default mode remains raw native windows. */
   pagingUnit?: 'interaction'
   observationCount: number
+  /** File mutation evidence from the returned complete user-turn window only. */
+  observedFileChanges?: TaskFileChangeDto[]
+  fileChangesTruncated?: boolean
   hasMore: boolean
   pendingTail: boolean
   nextCursor: string
