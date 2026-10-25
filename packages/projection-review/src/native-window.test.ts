@@ -67,6 +67,7 @@ test('native Review page explicitly flags cross-window tool pairing as partial, 
   })
   assert.equal(left.boundaryIntegrity, 'partial')
   assert.equal(right.boundaryIntegrity, 'partial')
+  assert.notEqual(left.interactions[0]?.id, right.interactions[0]?.id)
   const leftTool = left.interactions.flatMap(turn => turn.nodes).find(node => node.type === 'tool')
   assert.equal(leftTool?.type, 'tool')
   if (leftTool?.type === 'tool') assert.equal(leftTool.status, 'unknown')
