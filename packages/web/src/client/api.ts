@@ -480,6 +480,18 @@ export class AgentLensApi {
     )
   }
 
+  /** Source-owned Hook evidence is deliberately independent of user-turn pagination.
+   * Its partial boundary MUST NOT be used as a complete native Review page.
+   */
+  nativeReviewHooksById(id: string, options: { cursor?: string; signal?: AbortSignal } = {}): Promise<NativeReviewWindowResponseDto> {
+    const params = new URLSearchParams()
+    if (options.cursor) params.set('cursor', options.cursor)
+    return requestJson<NativeReviewWindowResponseDto>(
+      `/api/v1/native-sessions/${encodeURIComponent(id)}/hooks${params.size ? `?${params}` : ''}`,
+      options.signal ? {signal:options.signal} : {},
+    )
+  }
+
   review(filters: ReviewFilters, limit = 40, cursor?: string, signal?: AbortSignal): Promise<ReviewResponseDto> {
     const params = new URLSearchParams()
     appendFilters(params, filters)
