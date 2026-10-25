@@ -1087,3 +1087,35 @@ test('complete native user turn carries exact SourceRecord Evidence without expo
   }finally{await surface.dispose()}
 })
 
+test('native Review never silently truncates more than 512 provenance candidates',async()=>{
+  const reader:NativeSessionWindowReader={
+    async read(){
+      return {
+        state:'available',
+        observations:[{
+          kind:'message.user' as const,capturedAt:'2026-10-25T00:00:00Z',
+          payload:{text:'check evidence'},identityHints:{nativeSessionId:'S1'},
+        }],
+        observationRecordIds:['native-r1'],
+        evidenceCandidates:Array.from({length:513},(_,i)=>({
+          captureMethod:'native-log' as const,derivation:'observed' as const,
+          sourceRecordId:'native-r1',capturedAt:'2026-10-25T00:00:00Z',
+          nativeStableId:'e-'+i,
+        })),
+        nextCursor:{offset:100,sequence:1,fileIdentity:'inode-1'},
+        hasMore:false,pendingTail:false,
+      }
+    },
+  }
+  const surface=await startHttpSurface(noopStorage,{port:0,nativeSessionReader:reader})
+  try{
+    for(const format of ['review','review-turns']){
+      const response=await fetch(`http://${surface.host}:${surface.port}/api/v1/native-sessions/window?sourceId=pi&installationId=inst&nativeSessionId=S1&format=${format}`)
+      assert.equal(response.status,200)
+      assert.deepEqual(await response.json(),{
+        state:'unsupported',reason:'native-review-evidence-budget',
+      })
+    }
+  }finally{await surface.dispose()}
+})
+
