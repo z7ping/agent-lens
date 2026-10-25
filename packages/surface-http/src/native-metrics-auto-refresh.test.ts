@@ -16,12 +16,12 @@ const entry:NativeSessionCatalogEntry={
 }
 const catalog={
   getByReviewSessionId:async(id:string)=>id==='native:0123456789abcdef0123456789abcdef'?entry:null,
-} as NativeSessionCatalogStore
+} as unknown as NativeSessionCatalogStore
 const source={
   list:()=>[{manifest:{sourceId:'pi',parserVersion:'pi-v1'},
     readNativeSessionPage:async()=>{throw Error('must use reader worker')}}],
 } as unknown as SourceService
-const policy={isSourceEnabled:(id:string)=>id==='pi'} as CapturePolicyService
+const policy={isSourceEnabled:(id:string)=>id==='pi'} as unknown as CapturePolicyService
 const flush=()=>new Promise<void>(resolve=>setImmediate(resolve))
 
 test('no startup scan; first Insights trigger lazily builds numerical Pi metrics',async()=>{
@@ -75,7 +75,8 @@ test('disabled Source and disposal cannot start an opportunistic native scan',as
     findRebuildCandidates:async()=>{selected++;return []},
   } as unknown as NativeSessionMetricsStore
   const disabled={isSourceEnabled:()=>false} as unknown as CapturePolicyService
-  const refresh=new NativeMetricsAutoRefresh(catalog,metrics,undefined,source,disabled)
+  const reader={read:async()=>{throw Error('disabled Source must never read')}} as unknown as NativeSessionWindowReader
+  const refresh=new NativeMetricsAutoRefresh(catalog,metrics,reader,source,disabled)
   refresh.schedule()
   await flush()
   assert.equal(selected,0)
