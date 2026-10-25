@@ -1,7 +1,7 @@
 import { isAbsolute } from 'node:path'
 import type { SqliteExecutor } from './executor'
 
-import type { NativeSessionCatalogEntry, NativeSessionCatalogQuery } from '@agent-lens/core'
+import type { NativeSessionCatalogEntry, NativeSessionCatalogQuery, NativeSessionLocationKind } from '@agent-lens/core'
 
 function row(row: {
   source_id: string
