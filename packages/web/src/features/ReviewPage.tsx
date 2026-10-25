@@ -6,7 +6,7 @@ import { TaskSessionComposer } from '../components/TaskSessionComposer'
 import { liveComposerDraftKey, readLiveComposerDraft } from '../components/live-composer-session-state'
 import { LocalPathActions } from '../components/LocalPathActions'
 import { VirtualRoundMount } from '../components/VirtualRoundMount'
-import { Button, IconButton, Input, SelectMenu, StatusBadge, Toolbar, UiIcon } from '../components/ui'
+import { Button, Disclosure, IconButton, Input, SelectMenu, StatusBadge, Toolbar, UiIcon } from '../components/ui'
 import { historyTaskPresentation, sessionListTitle } from './task-center'
 import { projectReviewLiveInteraction } from './review-live-interaction'
 import { TaskHeader } from './TaskHeader'
@@ -14,9 +14,11 @@ import { TaskSurface } from './TaskSurface'
 import { readableTaskHeaderTitle, workspaceDisplayName } from './task-detail-model'
 import { formatTime, formatDateTime, sessionRelativeTime, duration, compactTitle, hubSessionTime, hubSessionTitle } from './review-session-format'
 import { Inspector } from './ReviewEvidenceInspector'
-import { ReviewRoundAdapter } from './ReviewRoundPresentation'
+import { ReviewRoundAdapter, interactionStats } from './ReviewRoundPresentation'
 import { TaskFileChangesDisclosure } from './TaskFileChangesDisclosure'
+import { AgentLensApi } from '../client/api'
 import type { AgentLensClientModel } from '../client/model'
+import type { ReviewInteractionDto } from '@agent-lens/protocol'
 import { useReviewSession } from './use-review-session'
 
 export function ReviewPage({ model, embedded = false, latestRequest = 0 }: { model: AgentLensClientModel; embedded?: boolean; latestRequest?: number }) {
@@ -83,6 +85,67 @@ export function ReviewPage({ model, embedded = false, latestRequest = 0 }: { mod
   const [composerExpanded, setComposerExpanded] = useState(false)
   const [composerHasContent, setComposerHasContent] = useState(false)
   const [attachmentPending, setAttachmentPending] = useState(false)
+  const hookApi = useMemo(() => new AgentLensApi(), [])
+  const hookRequestRef = useRef(0)
+  const [hookEvidence, setHookEvidence] = useState<{
+    sessionId: string
+    interactions: ReviewInteractionDto[]
+    nextCursor?: string
+    hasMore: boolean
+    loading: boolean
+    error?: string
+  } | null>(null)
+  useEffect(() => {
+    // Discard responses from the previous session, including slow native workers.
+    hookRequestRef.current += 1
+    setHookEvidence(null)
+  }, [detail?.id])
+  const loadHookEvidence = (cursor?: string) => {
+    const id = detail?.id
+    if (!id) return
+    const requestId = ++hookRequestRef.current
+    setHookEvidence(previous => ({
+      sessionId: id,
+      interactions: cursor && previous?.sessionId === id ? previous.interactions : [],
+      hasMore: false,
+      loading: true,
+    }))
+    void hookApi.nativeReviewHooksById(id, cursor ? {cursor} : {}).then(page => {
+      if (hookRequestRef.current !== requestId) return
+      if (page.state !== 'available') {
+        setHookEvidence(previous => ({
+          sessionId: id,
+          interactions: previous?.sessionId === id ? previous.interactions : [],
+          hasMore: false,
+          loading: false,
+          error: page.reason,
+        }))
+        return
+      }
+      if (page.boundaryIntegrity !== 'partial') {
+        throw new Error('Hook-only evidence must not claim complete user turns')
+      }
+      setHookEvidence(previous => ({
+        sessionId: id,
+        interactions: [
+          ...(cursor && previous?.sessionId === id ? previous.interactions : []),
+          ...page.interactions,
+        ],
+        hasMore: page.hasMore,
+        ...(page.hasMore && page.nextCursor ? {nextCursor:page.nextCursor} : {}),
+        loading: false,
+      }))
+    }).catch(error => {
+      if (hookRequestRef.current !== requestId) return
+      setHookEvidence(previous => ({
+        sessionId: id,
+        interactions: previous?.sessionId === id ? previous.interactions : [],
+        hasMore: false,
+        loading: false,
+        error: error instanceof Error ? error.message : String(error),
+      }))
+    })
+  }
   const draftKey = useMemo(() => detail && detailLiveInteraction
     ? liveComposerDraftKey(detailLiveInteraction.liveId, `history:${detail.id}`)
     : '', [detail?.id, detailLiveInteraction?.liveId])
@@ -282,6 +345,62 @@ export function ReviewPage({ model, embedded = false, latestRequest = 0 }: { mod
               <summary><UiIcon className="session-relationship-tree-chevron" name="chevron-right" size={14}/><span>{t('local.relationship.sessionTree', { count: review.relationships.items.length })}</span></summary>
               <div>{review.relationships.items.map(item => <div key={item.id}>{item.fromNativeSessionId ?? item.fromSessionId} <span><UiIcon name="arrow-right" size={14}/></span> {item.toNativeSessionId ?? item.toSessionId}</div>)}</div>
             </details> : null}
+
+            {detail.statisticsCompleteness === 'window'
+              && ['codex','claude-code','hermes'].includes(detail.sourceIds[0] ?? '')
+              && <Disclosure
+                summary={t('local.roundNav.nativeHookEvidence')}
+                summaryMeta={t('local.roundNav.nativeHookEvidenceHint')}
+                onToggle={event => {
+                  if (event.currentTarget.open && hookEvidence?.sessionId !== detail.id) {
+                    loadHookEvidence()
+                  }
+                }}
+              >
+                {hookEvidence?.sessionId === detail.id && hookEvidence.error
+                  && <div className="page-error" role="alert">
+                    {t('local.roundNav.nativeHookEvidenceLoadFailed', {reason:hookEvidence.error})}
+                    <Button size="small" onClick={() => loadHookEvidence(hookEvidence.nextCursor)}>
+                      {t('local.roundNav.loadFailedRetry')}
+                    </Button>
+                  </div>}
+                {hookEvidence?.sessionId === detail.id && hookEvidence.interactions.map(interaction => {
+                  const stats = interactionStats(interaction)
+                  return <ReviewRoundAdapter
+                    key={interaction.id}
+                    sessionId={detail.id}
+                    interaction={interaction}
+                    round={{
+                      id:interaction.id,
+                      ordinal:interaction.ordinal,
+                      label:t('local.interaction.background'),
+                      state:'settled',
+                      toolCount:stats.toolCount,
+                      errorCount:stats.errorCount,
+                      durationMs:stats.durationMs,
+                      highLatency:false,
+                    }}
+                    inspect={setInspect}
+                    loadAttachments={model.reviewAttachments}
+                    loadProcess={model.reviewProcessDetail}
+                    expansionStore={roundExpansionRef.current}
+                    showAllEvents
+                    onShowAllEvents={toggleEventVisibility}
+                    fileChangesEnabled={false}
+                  />
+                })}
+                {hookEvidence?.sessionId === detail.id && hookEvidence.hasMore
+                  && <Button size="small" disabled={hookEvidence.loading}
+                    onClick={() => loadHookEvidence(hookEvidence.nextCursor)}>
+                    {t('local.roundNav.nativeHookEvidenceMore')}
+                  </Button>}
+                {hookEvidence?.sessionId === detail.id && hookEvidence.loading
+                  && <div role="status">{t('local.roundNav.querying')}</div>}
+                {hookEvidence?.sessionId === detail.id
+                  && !hookEvidence.loading && !hookEvidence.hasMore
+                  && !hookEvidence.interactions.length && !hookEvidence.error
+                  && <div className="round-filter-empty">{t('local.roundNav.nativeHookEvidenceEmpty')}</div>}
+              </Disclosure>}
 
             <div className="review-flow">
               {isBackward && roundFilter === 'all' && pageIncomplete && <div ref={detailLoadSentinelRef} className="detail-load-sentinel detail-load-sentinel-top" aria-live="polite">
