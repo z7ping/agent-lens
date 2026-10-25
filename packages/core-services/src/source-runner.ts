@@ -854,13 +854,20 @@ export class SourceHistoryRunner {
             || entry.locationKind !== 'native') {
             throw new Error('Native Catalog fast scan returned a foreign Source identity')
           }
-          await catalog.upsert(entry)
           // No blind claims from filename/mtime: the source-owned reader must
           // prove matching native session + physical identity and first-row
           // fingerprint before skipping the original history parser.
-          const first = await source.readNativeSessionPage({
-            filePath: entry.filePath, nativeSessionId: entry.nativeSessionId, limit: 1,
-          }, context)
+          let first: Awaited<ReturnType<NonNullable<SourceDefinition['readNativeSessionPage']>>>
+          try {
+            first = await source.readNativeSessionPage({
+              filePath: entry.filePath, nativeSessionId: entry.nativeSessionId, limit: 1,
+            }, context)
+          } catch (error) {
+            if (abortSignal.aborted) throw error
+            // A transient file/path failure must leave ingestion in legacy
+            // mode, not turn a metadata row into an unverified native claim.
+            continue
+          }
           if (first.state !== 'available' || !first.records.length
             || first.nextCursor.fileIdentity !== entry.fileIdentity) continue
           const record = first.records[0]!
@@ -870,8 +877,14 @@ export class SourceHistoryRunner {
             || record.locator.path !== entry.filePath
             || !record.fingerprint
             || !source.rawRecovery.describe(record).canReread) continue
-          const proof = await source.rawRecovery.verify(record, context)
+          let proof: Awaited<ReturnType<NonNullable<SourceDefinition['rawRecovery']>['verify']>>
+          try { proof = await source.rawRecovery.verify(record, context) }
+          catch (error) {
+            if (abortSignal.aborted) throw error
+            continue
+          }
           if (proof.state !== 'verified') continue
+          await catalog.upsert(entry)
           const key = { sourceId: entry.sourceId,
             installationId: entry.installationId,
             nativeSessionId: entry.nativeSessionId }
