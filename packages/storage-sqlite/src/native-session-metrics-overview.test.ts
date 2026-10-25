@@ -65,7 +65,7 @@ test('native metrics overview counts only complete, current Native-only owned se
       sourceId:source,parserVersion,
     },100),/Invalid native metric refresh scope/)
 
-    const overview=await metrics.overview({sourceId:source,parserVersion})
+    const overview=await metrics.overview({sourceId:source,parserVersion,coverageCertified:true})
     assert.equal(overview.eligibleSessions,4)
     assert.deepEqual([
       overview.readySessions,overview.partialSessions,overview.missingSessions,overview.staleSessions,
@@ -79,14 +79,14 @@ test('native metrics overview counts only complete, current Native-only owned se
       totalDurationMs:200,sessionCount:1,
     }])
     assert.equal(overview.toolsTruncated,false)
-    assert.equal((await metrics.overview({sourceId:'other',parserVersion})).eligibleSessions,0)
-    const unknownParser=await metrics.overview({sourceId:source,parserVersion:'new-parser'})
+    assert.equal((await metrics.overview({sourceId:'other',parserVersion,coverageCertified:true})).eligibleSessions,0)
+    const unknownParser=await metrics.overview({sourceId:source,parserVersion:'new-parser',coverageCertified:true})
     assert.equal(unknownParser.readySessions,0)
     assert.equal(unknownParser.staleSessions,3)
     assert.equal(unknownParser.missingSessions,1)
     assert.deepEqual(unknownParser.tools,[])
     // Activity-bound range must be respected without scanning Source bodies.
-    assert.equal((await metrics.overview({sourceId:source,parserVersion,
+    assert.equal((await metrics.overview({sourceId:source,parserVersion,coverageCertified:true,
       from:'2026-11-01T00:00:00Z'})).eligibleSessions,0)
   }finally{await storage.close()}
 })
@@ -99,7 +99,7 @@ test('native overview excludes legacy claim even when a numerical cache row exis
     await storage.nativeSessionCatalog.upsert(row)
     assert.equal(await storage.nativeSessionCatalog.claimLegacyWrite(row),'legacy')
     assert.equal(await storage.nativeSessionMetrics.replace(metric('legacy-only')),true)
-    const overview=await storage.nativeSessionMetrics.overview({sourceId:source,parserVersion})
+    const overview=await storage.nativeSessionMetrics.overview({sourceId:source,parserVersion,coverageCertified:true})
     assert.equal(overview.eligibleSessions,0)
     assert.equal(overview.readySessions,0)
     assert.equal(overview.totals.toolCallCount,0)
@@ -142,5 +142,35 @@ test('native metric rebuild candidates paginate fairly when activity timestamps 
         lastActivityAt:'broken',installationId:installation,nativeSessionId:'item-0',
       }),/Invalid native metric refresh scope/,
     )
+  }finally{await storage.close()}
+})
+
+test('revoked Source certification instantly masks previously complete Native-only totals',async()=>{
+  const storage=new SqliteStorageService({path:':memory:'})
+  await storage.migrate()
+  try{
+    const sourceRow=location('certified-then-revoked')
+    await storage.nativeSessionCatalog.upsert(sourceRow)
+    assert.equal(await storage.nativeSessionCatalog.claimNativeOnlyWrite(sourceRow),true)
+    assert.equal(await storage.nativeSessionMetrics.replace(metric(sourceRow.nativeSessionId)),true)
+    const scope={sourceId:source,parserVersion}
+    const verified=await storage.nativeSessionMetrics.overview({...scope,coverageCertified:true})
+    assert.equal(verified.readySessions,1)
+    assert.equal(verified.totals.toolCallCount,3)
+    assert.equal(verified.tools.length,1)
+    // Changing Source certification is NOT a new file/Parser revision.
+    // Historical complete numerical rows must not leak into Usage/Insights.
+    for(const query of [{...scope,coverageCertified:false},scope]){
+      const revoked=await storage.nativeSessionMetrics.overview(query)
+      assert.deepEqual([
+        revoked.eligibleSessions,revoked.readySessions,revoked.partialSessions,
+        revoked.totals.toolCallCount,revoked.totals.errorCount,
+      ],[1,0,1,0,0])
+      assert.equal(revoked.totals.inputTokens,null)
+      assert.equal(revoked.totals.outputTokens,null)
+      assert.deepEqual(revoked.tools,[])
+    }
+    const recertified=await storage.nativeSessionMetrics.overview({...scope,coverageCertified:true})
+    assert.equal(recertified.readySessions,1)
   }finally{await storage.close()}
 })
