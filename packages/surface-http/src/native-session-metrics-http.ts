@@ -1,4 +1,5 @@
 import type { IncomingMessage, ServerResponse } from 'node:http'
+import { stat } from 'node:fs/promises'
 import { NATIVE_SESSION_METRIC_PROJECTION_VERSION } from '@agent-lens/core'
 import type {
   CapturePolicyService, NativeSessionCatalogStore, NativeSessionMetricsStore,
@@ -192,6 +193,22 @@ export async function rebuildNativeSessionMetrics(
     if (current.fileIdentity!==entry.fileIdentity
       || current.fileSize!==entry.fileSize
       || current.fileMtimeMs!==entry.fileMtimeMs) {
+      return {state:'drifted' as const,reason:'native-metrics-source-revision-changed'}
+    }
+  }
+  // JSONL can append or rotate during a multi-page scan while Catalog
+  // metadata lags. Cursors certify the opened inode, not a stable EOF size.
+  // Certified production file Sources provide original rawRecovery.verify;
+  // they must confirm the actual current revision before claiming totals.
+  if (/\.jsonl$/i.test(entry.filePath) && source.rawRecovery?.verify) {
+    let current:Awaited<ReturnType<typeof stat>>
+    try{current=await stat(entry.filePath)}
+    catch{
+      return {state:'unavailable' as const,reason:'native-metrics-source-revision-unavailable'}
+    }
+    signal.throwIfAborted()
+    if(!current.isFile() || `${current.dev}:${current.ino}`!==entry.fileIdentity
+      || current.size!==entry.fileSize || current.mtimeMs!==entry.fileMtimeMs){
       return {state:'drifted' as const,reason:'native-metrics-source-revision-changed'}
     }
   }
