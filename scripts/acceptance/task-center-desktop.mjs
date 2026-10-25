@@ -421,10 +421,27 @@ async function verifyToolDisclosureSections(win) {
 async function runInspectorReturn(win) {
   const setup = await withTimeout(win.webContents.executeJavaScript(`(async () => {
     const pane = document.querySelector('.review-reader-pane')
-    const call = document.querySelector('[data-tool-fact="true"]')
-    if (call instanceof HTMLDetailsElement && !call.open) call.querySelector('summary')?.click()
-    const trigger = call?.querySelector('button.task-tool-inspect')
-    if (!(pane instanceof HTMLElement) || !(trigger instanceof HTMLElement)) return { skipped: true, reason: '缺少 Review Reader 或折叠内 Inspector 操作' }
+    const call = pane?.querySelector('[data-tool-fact="true"]')
+    if (!(pane instanceof HTMLElement) || !(call instanceof HTMLDetailsElement)) {
+      return { skipped: true, reason: '缺少 Review Reader 或可展开 Tool Row' }
+    }
+    if (!call.open) call.querySelector(':scope > summary')?.click()
+    // Tool Row's Inspector action is intentionally lazy-rendered by React
+    // only after the native <details> onToggle state update. One synchronous
+    // query here races React on Windows/Electron and creates a false negative.
+    let trigger = call.querySelector('button.task-tool-inspect')
+    for (let attempt = 0; attempt < 40 && !(trigger instanceof HTMLButtonElement); attempt += 1) {
+      await new Promise(resolve => setTimeout(resolve, 25))
+      trigger = call.querySelector('button.task-tool-inspect')
+    }
+    if (!(trigger instanceof HTMLButtonElement)) {
+      return {
+        skipped: true,
+        reason: '展开 Tool Row 后 Inspector 按钮未渲染',
+        rowOpen: call.open,
+        sections: call.querySelectorAll('[data-tool-section]').length,
+      }
+    }
     trigger.dataset.acceptanceInspectorTrigger = 'true'
     trigger.scrollIntoView({ block: 'center' })
     await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))

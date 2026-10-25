@@ -69,6 +69,16 @@ test('Task Center viewport acceptance checks current search/filter layout and ea
   assert.match(source, /Tool Row 内部横向溢出/)
 })
 
+test('Inspector acceptance waits for actual lazy React disclosure and never bypasses focus/scroll gates', () => {
+  assert.match(source, /for \(let attempt = 0; attempt < 40 && !\(trigger instanceof HTMLButtonElement\); attempt \+= 1\)/)
+  assert.match(source, /await new Promise\(resolve => setTimeout\(resolve, 25\)\)/)
+  assert.match(source, /展开 Tool Row 后 Inspector 按钮未渲染/)
+  assert.match(source, /if \(setup\.skipped\) return \{ \.\.\.setup, ok: false/)
+  assert.match(source, /if \(!opened\.focusInside \|\| !opened\.firstFocusableFocused\) errors\.push/)
+  assert.match(source, /if \(!after\.focusReturned\) errors\.push/)
+  assert.match(source, /if \(Math\.abs\(after\.afterScrollTop - setup\.beforeScrollTop\) > 2\)/)
+})
+
 test('Codex real desktop acceptance validates folded Process/Tool and explicit Inspector click', () => {
   const codex = readFileSync(new URL('./codex-semantics-real.mjs', import.meta.url), 'utf8')
   assert.match(codex, /initial\.closedCount !== initial\.groupCount/)
