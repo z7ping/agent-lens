@@ -224,7 +224,7 @@ function selectRows(
   sessionLimit?: number,
   nativeSessionId?: string,
 ): OpenCodeRow[] {
-  const params: number[] = [afterRowId]
+  const params: Array<number | string> = [afterRowId]
   const filters: string[] = []
   if (nativeSessionId !== undefined) {
     filters.push('p.session_id = ?')
