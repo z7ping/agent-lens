@@ -51,6 +51,7 @@ import {
   nativeHookArchiveEnabled,
   archivedHookInboxRecordPath,
   readArchivedHookInboxPage,
+  verifyPreparedHookInboxOriginal,
   isCompleteJson,
   isMissingPathError,
   readJsonlLines,
@@ -1051,7 +1052,29 @@ const jsonlRawRecovery: NonNullable<SourceDefinition['rawRecovery']> = {
             : 'record does not expose a stable JSONL path+offset+fingerprint locator',
         }
   },
-  async verify(record) {
+  async verify(record, ctx) {
+    if(record.locator.kind==='runtime-hook'){
+      const checkedAt=new Date().toISOString()
+      if(!ctx || record.sourceId!==SOURCE_ID
+        || record.installationId!==ctx.installation.id
+        || !record.sourceSessionNativeId || !record.locator.path
+        || !record.fingerprint){
+        return {state:'unsupported' as const,checkedAt,
+          reason:'native-hook-scoped-original-required'}
+      }
+      const proof={
+        inbox:runtimeInboxDirectory(),
+        fileName:basename(record.locator.path),
+        nativeSessionId:record.sourceSessionNativeId,
+        installationId:ctx.installation.id,
+        expectedSha256:record.fingerprint,
+      }
+      if(archivedHookInboxRecordPath(proof)!==record.locator.path){
+        return {state:'drifted' as const,checkedAt,
+          reason:'native-hook-archive-location-changed'}
+      }
+      return {state:await verifyPreparedHookInboxOriginal(proof),checkedAt}
+    }
     const result = await verifyJsonlLineSha256({
       ...(record.locator.path === undefined ? {} : { path: record.locator.path }),
       ...(record.locator.offset === undefined ? {} : { offset: record.locator.offset }),
