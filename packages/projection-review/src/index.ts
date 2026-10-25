@@ -1,4 +1,4 @@
-export { projectNativeReviewWindow, nativeReviewSessionId, nativeReviewObservationId, type NativeReviewProjectionInput } from './native-window'
+export { projectNativeReviewWindow, overlayNativeHookEvents, nativeReviewSessionId, nativeReviewObservationId, type NativeReviewProjectionInput } from './native-window'
 import type {
   JsonValue,
   ReviewDetailQueryDto,
