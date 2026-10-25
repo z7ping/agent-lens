@@ -862,3 +862,4 @@ export class DefaultProjectionService implements ProjectionService {
 
 export * from './live-attachments'
 
+export * from './native-session-reader'
