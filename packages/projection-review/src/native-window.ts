@@ -66,17 +66,21 @@ export function projectNativeReviewWindow(input: NativeReviewProjectionInput): N
   }
   const sessionId = `native:${stableId([input.sourceId, input.installationId, input.nativeSessionId])}`
   const sourceSessionId = `native-source:${stableId([input.sourceId, input.installationId, input.nativeSessionId])}`
+  const candidateOccurrences = new Map<string, number>()
   const items: TimelineItemDto[] = input.observations.map((candidate, index) => {
     const recordId = input.observationRecordIds?.[index]
     // Persistent row IDs never enter this path. Source identity must be stable
     // even if the user changes display modes or reopens an original session.
+    const nativeKey = recordId ?? candidate.nativeEventId ?? `${candidate.kind}:${candidate.sourceSequence ?? 'unknown'}`
+    const withinRecordOrdinal = candidateOccurrences.get(nativeKey) ?? 0
+    candidateOccurrences.set(nativeKey, withinRecordOrdinal + 1)
     const id = `native-observation:${stableId([
       sessionId,
       recordId ?? candidate.nativeEventId ?? candidate.sourceSequence ?? 'unspecified',
       candidate.kind,
       candidate.nativeEventId ?? '',
       candidate.sourceSequence ?? '',
-      index,
+      recordId ? withinRecordOrdinal : index,
     ])}`
     const at = candidate.occurredAt ?? candidate.capturedAt
     const payload = jsonValue(candidate.payload)
