@@ -147,8 +147,7 @@ test('failed catalog upsert is not remembered as an indexed session',async()=>{
   const root=await mkdtemp(join(tmpdir(),'al-index-retry-'))
   const path=join(root,'session.jsonl')
   let attempts=0
-  const catalog=({async upsert(){attempts++;if(attempts===1)throw Error('writer busy')}})
-    as unknown as NativeSessionCatalogStore
+  const catalog = ({ async upsert() { attempts++; if (attempts === 1) throw Error('writer busy') } }) as unknown as NativeSessionCatalogStore
   const tracker=new NativeSessionCatalogTracker(catalog,()=>1_000,30_000)
   try {
     await writeFile(path,'{}\n')
