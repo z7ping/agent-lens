@@ -50,6 +50,13 @@ export async function handleNativeSessionMetricsRequest(
     sourceId:entry.sourceId,installationId:entry.installationId,
     nativeSessionId:entry.nativeSessionId,
   }
+  // Only sessions durably owned by Native-only may materialize metrics.
+  // Legacy sessions continue to use their existing SQL projections without
+  // a second, unused native scan or a misleading ready snapshot.
+  if(!await catalog.hasNativeOnlyWriteClaim(identity)){
+    writeJson(response,200,{state:'unsupported',reason:'native-metrics-legacy-session'})
+    return true
+  }
   const existing=await metrics.get(identity)
   if(!rebuild){
     // Do not claim the persisted Parser projection is current until checked.
