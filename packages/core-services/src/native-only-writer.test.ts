@@ -171,6 +171,7 @@ test('default cutover preserves mutable SQLite legacy sessions even with a nativ
   } as unknown as StorageService
   const source={
     manifest:{sourceId:'test'},
+    nativeSessionCoverageComplete:true,
     rawRecovery:{
       describe(){return {
         authority:'native-store',canReread:true,locatorStability:'best-effort',
