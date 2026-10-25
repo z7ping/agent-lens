@@ -104,6 +104,7 @@ type NativeTurnReadResult =
   | Extract<NativeSessionReadResult, { state: 'unsupported' | 'unavailable' | 'drifted' }>
 
 function toolCallId(observation: ObservationCandidate): string | undefined {
+  if (observation.nativeCallId) return observation.nativeCallId
   const payload = observation.payload
   if (!payload || typeof payload !== 'object' || Array.isArray(payload)) return undefined
   const fields = payload as Record<string, unknown>
@@ -129,6 +130,7 @@ async function readCompleteNativeTurn(
   const observationRecordIds: string[] = []
   const observationCursors: string[] = []
   const pendingTools = new Set<string>()
+  let unidentifiableToolCall = false
   let current = initial
   let pages = 0
   let bytes = 0
@@ -139,6 +141,9 @@ async function readCompleteNativeTurn(
   const finish = (nextCursor: SourceNativeSessionCursor, hasMore: boolean): NativeTurnReadResult => {
     // A source page can end while a model tool is still running; this is NOT a
     // completed user turn, even when the file has no further full records yet.
+    if (unidentifiableToolCall) {
+      return { state: 'unsupported', reason: 'native-review-turn-tool-id-missing' }
+    }
     if (pendingTools.size > 0) {
       return { state: 'unsupported', reason: 'native-review-turn-tool-pending' }
     }
@@ -220,8 +225,18 @@ async function readCompleteNativeTurn(
       observationCursors.push(encodeNativeSessionCursor(recordCursor))
       if (observation.kind === 'message.user') sawUser = true
       const callId = toolCallId(observation)
-      if (callId && observation.kind === 'tool.call') pendingTools.add(callId)
-      if (callId && observation.kind === 'tool.result') pendingTools.delete(callId)
+      if (observation.kind === 'tool.call') {
+        if (callId) pendingTools.add(callId)
+        else unidentifiableToolCall = true
+      }
+      if (observation.kind === 'tool.result') {
+        // A result without a matching in-turn call cannot prove a complete
+        // boundary, even when the original file reached EOF.
+        if (!callId || !pendingTools.has(callId)) {
+          return { state: 'unsupported', reason: 'native-review-turn-orphan-tool-result' }
+        }
+        pendingTools.delete(callId)
+      }
       lastRecordStart = recordCursor
     }
     pages++

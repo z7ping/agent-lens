@@ -697,3 +697,59 @@ test('native Hook endpoint is metadata-authorized, returns partial Review nodes 
     assert.equal(reads,1)
   }finally{await server.dispose()}
 })
+test('native complete-turn boundaries honor source nativeCallId and reject unpaired tools', async () => {
+  const at = '2026-10-25T00:00:00Z'
+  for (const mode of ['paired', 'pending', 'missing-id', 'orphan'] as const) {
+    const observations = [
+      {kind:'message.user' as const,capturedAt:at,payload:{text:'test'},
+        identityHints:{nativeSessionId:'S1'}},
+      ...(mode === 'orphan' ? [] : [{
+        kind:'tool.call' as const,capturedAt:at,
+        ...(mode === 'missing-id' ? {} : {nativeCallId:'normalized-1'}),
+        payload:{nativeToolName:'shell'},identityHints:{nativeSessionId:'S1'},
+      }]),
+      ...(mode === 'paired' || mode === 'orphan' ? [{
+        kind:'tool.result' as const,capturedAt:at,nativeCallId:'normalized-1',
+        payload:{success:true,output:'ok'},identityHints:{nativeSessionId:'S1'},
+      }] : []),
+    ]
+    const reader: NativeSessionWindowReader = {
+      async read() {
+        return {
+          state:'available', observations,
+          observationRecordIds:observations.map((_,i)=>'record-'+i),
+          observationCursors:observations.map((_,i)=>({
+            offset:i*64,sequence:i,fileIdentity:'1:2',
+          })),
+          evidenceCandidates:[],
+          nextCursor:{offset:observations.length*64,sequence:observations.length,fileIdentity:'1:2'},
+          hasMore:false,pendingTail:false,
+        }
+      },
+    }
+    const surface=await startHttpSurface(noopStorage,{port:0,nativeSessionReader:reader})
+    try {
+      const url=`http://${surface.host}:${surface.port}/api/v1/native-sessions/window?sourceId=pi&installationId=inst&nativeSessionId=S1&format=review-turns`
+      const res=await fetch(url)
+      assert.equal(res.status,200)
+      const body=await res.json() as {
+        state:string;reason?:string;boundaryIntegrity?:string;
+        interactions?:Array<{nodes:Array<{type:string;callId?:string;status?:string}>}>
+      }
+      if (mode === 'paired') {
+        assert.equal(body.state,'available')
+        assert.equal(body.boundaryIntegrity,'complete')
+        const tool=body.interactions?.[0]?.nodes.find(node=>node.type==='tool')
+        assert.equal(tool?.callId,'normalized-1')
+        assert.equal(tool?.status,'success')
+      } else {
+        assert.equal(body.state,'unsupported')
+        assert.equal(body.reason,mode==='pending'
+          ? 'native-review-turn-tool-pending'
+          : mode==='missing-id' ? 'native-review-turn-tool-id-missing'
+            : 'native-review-turn-orphan-tool-result')
+        assert.equal(body.interactions,undefined)
+      }
+    } finally { await surface.dispose() }
+  }
+})
