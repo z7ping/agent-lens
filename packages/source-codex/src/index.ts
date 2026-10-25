@@ -129,7 +129,7 @@ async function readCodexArchivedHookPage(
 ) {
   ctx.abortSignal.throwIfAborted()
   const inbox = codexRuntimeInternals.inboxDirectory()
-  const archive = await readArchivedHookInboxPage({ inbox, nativeSessionId, limit: 16, ...(cursor ? {cursor} : {}) })
+  const archive = await readArchivedHookInboxPage({ inbox, nativeSessionId, installationId: ctx.installation.id, limit: 16, ...(cursor ? {cursor} : {}) })
   const records = archive.items.map(item => {
     const envelope = codexRuntimeInternals.parseEnvelope(item.content, item.fileName)
     const archivePath = join(inbox, 'archive',
