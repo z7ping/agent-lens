@@ -813,3 +813,71 @@ test('native Hook Review preserves bounded cursor and rejects attempts to overri
   }finally{await app.dispose()}
 })
 
+test('native Review preserves completed turns while the following live tool is pending',async()=>{
+  const at='2026-10-25T00:00:00Z'
+  const records:Array<{kind:'message.user'|'message.assistant'|'tool.call'|'tool.result';
+    payload:Record<string,unknown>}>= [
+      {kind:'message.user',payload:{text:'first'}},
+      {kind:'message.assistant',payload:{text:'finished one'}},
+      {kind:'message.user',payload:{text:'second'}},
+      {kind:'tool.call',payload:{callId:'still-running',nativeToolName:'shell'}},
+    ]
+  const reader:NativeSessionWindowReader={
+    async read(query){
+      const start=(query.cursor?.offset??0)/64
+      const selected=records.slice(start,start+2)
+      const next=start+selected.length
+      return {
+        state:'available',observations:selected.map((item,i)=>({
+          ...item,capturedAt:at,sourceSequence:start+i,
+          identityHints:{nativeSessionId:'S-live'},
+        })),
+        observationRecordIds:selected.map((_,i)=>'row-'+(start+i)),
+        observationCursors:selected.map((_,i)=>({
+          offset:(start+i)*64,sequence:start+i,fileIdentity:'session-inode',
+        })),
+        evidenceCandidates:[],
+        nextCursor:{offset:next*64,sequence:next,fileIdentity:'session-inode'},
+        hasMore:next<records.length,pendingTail:false,
+      }
+    },
+  }
+  const http=await startHttpSurface(noopStorage,{port:0,nativeSessionReader:reader})
+  const url=`http://${http.host}:${http.port}/api/v1/native-sessions/window?sourceId=pi&installationId=inst&nativeSessionId=S-live&format=review-turns&turnLimit=4`
+  try{
+    const first=await fetch(url)
+    assert.equal(first.status,200)
+    const p1=await first.json() as {
+      state:string;boundaryIntegrity:string;hasMore:boolean;nextCursor:string;
+      interactions:Array<{ordinal:number;nodes:Array<{type:string;text?:string}>}>
+    }
+    assert.equal(p1.state,'available')
+    assert.equal(p1.boundaryIntegrity,'complete')
+    assert.deepEqual(p1.interactions.map(item=>item.ordinal),[1])
+    assert.equal(p1.hasMore,true)
+    assert.ok(p1.nextCursor)
+    assert.equal(JSON.stringify(p1).includes('still-running'),false)
+
+    const pending=await fetch(url+'&cursor='+encodeURIComponent(p1.nextCursor))
+    const blocked=await pending.json() as {state:string;reason:string}
+    assert.equal(blocked.state,'unsupported')
+    assert.equal(blocked.reason,'native-review-turn-tool-pending')
+
+    records.push(
+      {kind:'tool.result',payload:{callId:'still-running',success:true,output:'ok'}},
+      {kind:'message.assistant',payload:{text:'finished two'}},
+    )
+    const final=await fetch(url+'&cursor='+encodeURIComponent(p1.nextCursor))
+    assert.equal(final.status,200)
+    const p2=await final.json() as {
+      state:string;boundaryIntegrity:string;hasMore:boolean;
+      interactions:Array<{ordinal:number;nodes:Array<{type:string;status?:string}>}>
+    }
+    assert.equal(p2.state,'available')
+    assert.equal(p2.boundaryIntegrity,'complete')
+    assert.deepEqual(p2.interactions.map(item=>item.ordinal),[2])
+    assert.equal(p2.hasMore,false)
+    assert.equal(p2.interactions[0]?.nodes.find(item=>item.type==='tool')?.status,'success')
+  } finally { await http.dispose() }
+})
+

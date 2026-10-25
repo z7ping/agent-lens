@@ -292,7 +292,23 @@ async function readCompleteNativeTurns(
   let assembled: NativeReviewWindowDto | undefined
   for (let turn = 0; turn < turnLimit; turn++) {
     const next = await readCompleteNativeTurn(boundedReader, queryAt, page, ordinal)
-    if (next.state !== 'available') return next
+    if (next.state !== 'available') {
+      // A later, unfinished live turn must not erase previously verified
+      // complete turns in this same request. Keep the last proven cursor,
+      // which points to the unconsumed turn's exact native record boundary.
+      // Identity drift, invalid cursors and other integrity failures still
+      // abort the entire response; never present stale data as complete.
+      const incomplete = next.state === 'unsupported' && [
+        'native-review-turn-tool-pending',
+        'native-review-turn-pending-tail',
+        'native-review-turn-exceeds-budget',
+        'native-review-request-page-budget',
+      ].includes(next.reason)
+      if (assembled && incomplete && assembled.hasMore) {
+        return {state:'available',dto:assembled}
+      }
+      return next
+    }
     const value = next.dto
     assembled = assembled
       ? {
