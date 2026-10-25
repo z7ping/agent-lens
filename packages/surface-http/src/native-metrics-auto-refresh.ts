@@ -61,6 +61,35 @@ export class NativeMetricsAutoRefresh {
     const sourceId=source.manifest.sourceId
     this.nextSourceId=eligible[(nextIndex<0?0:nextIndex)+1]?.manifest.sourceId
       ?? eligible[0]!.manifest.sourceId
+    // Continue unfinished long sessions before advancing the metadata keyset.
+    // Otherwise an in-progress session disappears from the next candidate page
+    // and may never reach EOF when the catalog contains many newer sessions.
+    const pending=[...this.ongoing.entries()].find(([,progress])=>
+      progress.sourceId===sourceId)
+    if(pending){
+      const [key,progress]=pending
+      const entry=await this.catalog!.getByReviewSessionId(
+        // The stable native review ID is resolved from the Catalog rather
+        // than synthesized from the Source session ID.
+        progress.reviewSessionId,
+      )
+      if(entry && entry.locationKind==='native'
+        && entry.sourceId===progress.sourceId
+        && entry.installationId===progress.installationId
+        && entry.nativeSessionId===progress.nativeSessionId){
+        try{
+          const result=await rebuildNativeSessionMetrics(
+            entry,this.metrics!,this.reader!,source,this.abort.signal,
+            {enabled:true,progress},
+          )
+          this.ongoing.delete(key)
+          if(result.state==='in_progress')this.ongoing.set(key,result.progress)
+        }catch{
+          if(this.abort.signal.aborted)return
+        }
+      }else this.ongoing.delete(key)
+      return
+    }
     const candidates=await this.metrics!.findRebuildCandidates!({
       sourceId,parserVersion:source.manifest.parserVersion,
     },MAX_SESSIONS_PER_TRIGGER,this.beforeBySource.get(sourceId))
