@@ -37,6 +37,11 @@ export function useReviewSession(model: AgentLensClientModel, embedded: boolean)
   const [nativeSessions, setNativeSessions] = useState<NativeSessionSummaryDto[]>([])
   const [nativeCursor, setNativeCursor] = useState<string | undefined>()
   const [nativeLoadingMore, setNativeLoadingMore] = useState(false)
+  const [nativeBodySessions, setNativeBodySessions] = useState<NativeSessionSummaryDto[]>([])
+  const [nativeBodyCursor, setNativeBodyCursor] = useState<string | undefined>()
+  const [nativeBodyPartial, setNativeBodyPartial] = useState(false)
+  const [nativeBodyLoading, setNativeBodyLoading] = useState(false)
+  const [nativeBodyError, setNativeBodyError] = useState('')
   const nativeRequestKeyRef = useRef('')
   const [liveProducts, setLiveProducts] = useState<LiveProductMetadata[]>([])
   const [historyInteractionPending, setHistoryInteractionPending] = useState<'' | 'resume' | 'fork-at'>('')
@@ -74,11 +79,13 @@ export function useReviewSession(model: AgentLensClientModel, embedded: boolean)
       : range === 'today'
         ? new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime()
         : now.getTime() - (range === '7d' ? 7 : 30) * 86_400_000
-    return nativeSessions.filter(item =>
+    const combined = new Map(nativeSessions.map(item => [item.id, item]))
+    for (const item of nativeBodySessions) combined.set(item.id,item)
+    return [...combined.values()].filter(item =>
       (sourceIds === null || sourceIds.includes(item.sourceId))
       && Number.isFinite(Date.parse(item.lastActivityAt))
       && Date.parse(item.lastActivityAt) >= start)
-  }, [nativeSessions, nativeFilterKey])
+  }, [nativeSessions, nativeBodySessions, nativeFilterKey])
 
   useEffect(() => {
     const filters = review.filters
@@ -118,30 +125,109 @@ export function useReviewSession(model: AgentLensClientModel, embedded: boolean)
     return () => controller.abort()
   }, [embedded, nativeFilterKey, review.response?.meta.generatedAt, model])
 
+  // Search sanitized Source content on demand without ever indexing
+  // message bodies in the Catalog/SQLite. Every response scans one bounded
+  // native Source page, so empty results are explicitly incomplete until
+  // the continuation reaches the end of the filtered Catalog.
+  useEffect(() => {
+    const filters=review.filters
+    const text=filters.search.trim()
+    const allowed=!embedded && !filters.projectId && filters.status==='all'
+      && (filters.sourceIds===null || filters.sourceIds.length>0)
+      && text.length>=2
+    setNativeBodySessions([])
+    setNativeBodyCursor(undefined)
+    setNativeBodyPartial(false)
+    setNativeBodyError('')
+    if(!allowed){setNativeBodyLoading(false);return}
+    const controller=new AbortController()
+    const sourceId=filters.sourceIds?.length===1?filters.sourceIds[0]:undefined
+    setNativeBodyLoading(true)
+    void model.nativeBodySearch(text,{
+      ...(sourceId?{sourceId}:{}),signal:controller.signal,
+    }).then(page=>{
+      if(controller.signal.aborted)return
+      if(page.state!=='available'){
+        setNativeBodyPartial(true)
+        setNativeBodyError(page.reason)
+        return
+      }
+      const sessions=new Map<string,NativeSessionSummaryDto>()
+      for(const hit of page.items)sessions.set(hit.sessionId,{
+        id:hit.sessionId,sourceId:hit.sourceId,
+        installationId:hit.installationId,nativeSessionId:hit.nativeSessionId,
+        locationKind:'native',lastActivityAt:hit.lastActivityAt,
+        ...(hit.title?{title:hit.title}:{}),
+      })
+      setNativeBodySessions([...sessions.values()])
+      setNativeBodyPartial(page.hasMore || page.pendingTail)
+      setNativeBodyCursor(page.pendingTail?undefined:page.nextCursor)
+    },error=>{
+      if(controller.signal.aborted)return
+      setNativeBodyPartial(true)
+      setNativeBodyError(error instanceof Error?error.message:String(error))
+    }).finally(()=>{
+      if(!controller.signal.aborted)setNativeBodyLoading(false)
+    })
+    return ()=>controller.abort()
+  },[embedded,nativeFilterKey,model])
+
   const loadMoreNativeSessions = useCallback(async () => {
-    if (!nativeCursor || nativeLoadingMore) return
-    const requestKey = nativeRequestKeyRef.current
+    if ((!nativeCursor && !nativeBodyCursor) || nativeLoadingMore) return
+    const requestKey=nativeRequestKeyRef.current
     setNativeLoadingMore(true)
     try {
-      const selected = review.filters.sourceIds
-      const page = await model.nativeSessions({
-        ...(selected?.length === 1 && selected[0] ? { sourceId: selected[0] } : {}),
-        onlyWithoutLegacyReview: true, search: review.filters.search.trim(), limit: 100, cursor: nativeCursor,
-      })
-      if (nativeRequestKeyRef.current !== requestKey) return
-      setNativeSessions(current => {
-        const rows = new Map(current.map(item => [item.id, item]))
-        for (const item of page.items) rows.set(item.id, item)
-        return [...rows.values()]
-      })
-      setNativeCursor(page.hasMore ? page.nextCursor : undefined)
-    } catch {
-      // Keep already displayed sessions and preserve cursor for manual retry.
-      // A temporary Source/Catalog failure must not hide SQL history.
-    } finally {
-      setNativeLoadingMore(false)
-    }
-  }, [nativeCursor, nativeLoadingMore, nativeFilterKey, model])
+      const selected=review.filters.sourceIds
+      const sourceId=selected?.length===1?selected[0]:undefined
+      if(nativeCursor){
+        try{
+          const page=await model.nativeSessions({
+            ...(sourceId?{sourceId}:{}),
+            onlyWithoutLegacyReview:true,search:review.filters.search.trim(),
+            limit:100,cursor:nativeCursor,
+          })
+          if(nativeRequestKeyRef.current!==requestKey)return
+          setNativeSessions(current=>{
+            const rows=new Map(current.map(item=>[item.id,item]))
+            for(const item of page.items)rows.set(item.id,item)
+            return [...rows.values()]
+          })
+          setNativeCursor(page.hasMore?page.nextCursor:undefined)
+        }catch{
+          // Keep existing Catalog results and cursor for manual retry.
+        }
+      }
+      if(nativeBodyCursor && review.filters.search.trim().length>=2){
+        try{
+          const page=await model.nativeBodySearch(review.filters.search.trim(),{
+            ...(sourceId?{sourceId}:{}),cursor:nativeBodyCursor,
+          })
+          if(nativeRequestKeyRef.current!==requestKey)return
+          if(page.state!=='available'){
+            setNativeBodyError(page.reason)
+            setNativeBodyPartial(true)
+          }else{
+            setNativeBodySessions(current=>{
+              const rows=new Map(current.map(item=>[item.id,item]))
+              for(const hit of page.items)rows.set(hit.sessionId,{
+                id:hit.sessionId,sourceId:hit.sourceId,
+                installationId:hit.installationId,nativeSessionId:hit.nativeSessionId,
+                locationKind:'native',lastActivityAt:hit.lastActivityAt,
+                ...(hit.title?{title:hit.title}:{}),
+              })
+              return [...rows.values()]
+            })
+            setNativeBodyPartial(page.hasMore || page.pendingTail)
+            setNativeBodyCursor(page.pendingTail?undefined:page.nextCursor)
+            setNativeBodyError('')
+          }
+        }catch(error){
+          setNativeBodyError(error instanceof Error?error.message:String(error))
+          setNativeBodyPartial(true)
+        }
+      }
+    }finally{setNativeLoadingMore(false)}
+  },[nativeCursor,nativeBodyCursor,nativeLoadingMore,review.filters,model])
 
   const sessionGroups = useMemo(() => {
     const groups = new Map<ReviewDayGroup, UnifiedReviewSessionListEntry[]>()
@@ -709,8 +795,12 @@ export function useReviewSession(model: AgentLensClientModel, embedded: boolean)
     detailLiveInteraction,
     visibleHubSessions,
     visibleNativeSessions,
-    nativeHasMore: Boolean(nativeCursor),
-    nativeLoadingMore,
+    nativeHasMore: Boolean(nativeCursor || nativeBodyCursor),
+    nativeLoadingMore: nativeLoadingMore || nativeBodyLoading,
+    nativeBodySearchActive: review.filters.search.trim().length>=2
+      && !embedded && !review.filters.projectId && review.filters.status==='all',
+    nativeBodyPartial,
+    nativeBodyError,
     loadMoreNativeSessions,
     sessionGroups,
     loadOlder,
