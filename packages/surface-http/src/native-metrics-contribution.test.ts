@@ -17,7 +17,7 @@ const overview=(sourceId:string,ready=1):NativeSessionMetricOverview=>({
 })
 const sources={
   list:()=>[
-    {manifest:{sourceId:'pi',parserVersion:'pi-v2'}},
+    {manifest:{sourceId:'pi',parserVersion:'pi-v2'},nativeSessionCoverageComplete:true},
     {manifest:{sourceId:'codex',parserVersion:'codex-v2'}},
   ],
 } as unknown as SourceService
