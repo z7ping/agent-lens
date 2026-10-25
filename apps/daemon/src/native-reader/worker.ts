@@ -3,6 +3,8 @@ import type { SourceCheckpointService, SourceDefinition } from '@agent-lens/core
 import { piSourceDefinition } from '@agent-lens/source-pi'
 import { codexSourceDefinition } from '@agent-lens/source-codex'
 import { claudeSourceDefinition } from '@agent-lens/source-claude'
+import { hermesSourceDefinition } from '@agent-lens/source-hermes'
+import { openCodeSourceDefinition } from '@agent-lens/source-opencode'
 import type {
   NativeWorkerReadInput,
   NativeWorkerReadResult,
@@ -18,6 +20,8 @@ const sources = new Map<string, SourceDefinition>([
   [piSourceDefinition.manifest.sourceId, piSourceDefinition],
   [codexSourceDefinition.manifest.sourceId, codexSourceDefinition],
   [claudeSourceDefinition.manifest.sourceId, claudeSourceDefinition],
+  [hermesSourceDefinition.manifest.sourceId, hermesSourceDefinition],
+  [openCodeSourceDefinition.manifest.sourceId, openCodeSourceDefinition],
 ])
 const aborts = new Map<number, AbortController>()
 const checkpoint: SourceCheckpointService = {

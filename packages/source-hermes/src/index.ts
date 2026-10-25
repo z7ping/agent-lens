@@ -4,6 +4,8 @@ import {
   mkdir,
   readFile,
   readdir,
+  realpath,
+  stat,
   unlink,
 } from 'node:fs/promises'
 import { homedir } from 'node:os'
@@ -215,6 +217,7 @@ function messageQuery(
   tail: boolean,
   activeSinceMs?: number,
   sessionLimit?: number,
+  nativeSessionId?: string,
 ): ReturnType<DatabaseSync['prepare']> {
   const messageColumns = tableColumns(db, 'messages')
   if (!messageColumns.has('session_id')) throw new Error('Hermes state.db messages table has no session_id column')
@@ -237,6 +240,7 @@ function messageQuery(
     : 'LEFT JOIN (SELECT NULL AS id, NULL AS cwd, NULL AS title) s ON 1 = 0'
   const order = tail ? 'DESC' : 'ASC'
   const filters: string[] = []
+  if (nativeSessionId !== undefined) filters.push('m.session_id = ?')
   if (!tail) {
     filters.push('m.rowid > ?')
     if (activeSinceMs !== undefined) {
@@ -279,6 +283,17 @@ function selectRows(
   }
   params.push(limit)
   return statement.all(...params).map(hermesRow)
+}
+
+/**
+ * Reuse the existing dynamic Hermes columns and schema-compatible message
+ * projection, but query ONE native session in its own read-only snapshot.
+ * A native rowid is only a transient positioning hint, never a durable
+ * business identity or permission to delete an individual SQLite row.
+ */
+function nativeSessionRows(db: DatabaseSync, nativeSessionId: string, afterRowId: number, limit: number): HermesRow[] {
+  return messageQuery(db, false, undefined, undefined, nativeSessionId)
+    .all(nativeSessionId, afterRowId, limit).map(hermesRow)
 }
 
 function recentRows(db: DatabaseSync, limit: number): HermesRow[] {
@@ -904,6 +919,74 @@ export const hermesSourceDefinition: SourceDefinition = {
   detect: detectHermes,
   declareCapabilities: declareHermesCapabilities,
   rawRecovery: databaseRawRecovery,
+  async readNativeSessionPage(query, ctx) {
+    const root = ctx.installation.dataRoot
+    const limit = query.limit ?? 32
+    const fromRow = query.cursor?.offset ?? 0
+    if (!root || !Number.isSafeInteger(limit) || limit < 1 || limit > 64
+      || !Number.isSafeInteger(fromRow) || fromRow < 0) {
+      return { state: 'unsupported', reason: 'native-database-window-invalid' }
+    }
+    ctx.abortSignal.throwIfAborted()
+    // A caller may supply only the Source-owned catalog identity. Check that
+    // it resolves to the ONE Hermes database under this Installation.
+    let authorized: string
+    try {
+      authorized = await realpath(join(root, DB_NAME))
+      if (await realpath(query.filePath) !== authorized) {
+        return { state: 'unsupported', reason: 'source-path-not-authorized' }
+      }
+    } catch (error) {
+      const code = (error as NodeJS.ErrnoException).code
+      if (code === 'ENOENT' || code === 'ENOTDIR') {
+        return { state: 'unavailable', reason: 'native-database-missing' }
+      }
+      if (code === 'EACCES' || code === 'EPERM') {
+        return { state: 'unavailable', reason: 'native-database-not-readable' }
+      }
+      throw error
+    }
+    const initial = await stat(authorized)
+    if (!initial.isFile()) return { state: 'unsupported', reason: 'native-source-is-not-a-file' }
+    const identity = `${initial.dev}:${initial.ino}`
+    if (query.cursor && query.cursor.fileIdentity !== identity) {
+      return { state: 'drifted', reason: 'native-file-identity-changed' }
+    }
+    const db = new DatabaseSync(authorized, { readOnly: true, timeout: 1_500 })
+    let rows: HermesRow[]
+    try {
+      db.exec('BEGIN')
+      try {
+        rows = nativeSessionRows(db, query.nativeSessionId, fromRow, limit + 1)
+        ctx.abortSignal.throwIfAborted()
+        db.exec('COMMIT')
+      } catch (error) {
+        db.exec('ROLLBACK')
+        throw error
+      }
+    } finally {
+      db.close()
+    }
+    if ((await stat(authorized)).ino !== initial.ino) {
+      return { state: 'drifted', reason: 'native-file-identity-changed' }
+    }
+    const selected = rows.slice(0, limit)
+    const records = selected.map(row => dbRecord(row, ctx, 'history'))
+    if (records.some(record => record.sourceSessionNativeId !== query.nativeSessionId)) {
+      return { state: 'drifted', reason: 'native-session-record-identity-changed' }
+    }
+    const endRow = selected.at(-1)?.row_id ?? fromRow
+    return {
+      state: 'available',
+      records,
+      recordCursors: selected.map(row => ({
+        offset: row.row_id - 1, sequence: row.row_id - 1, fileIdentity: identity,
+      })),
+      nextCursor: { offset: endRow, sequence: endRow, fileIdentity: identity },
+      hasMore: rows.length > limit,
+      pendingTail: false,
+    }
+  },
   discoverAssets: discoverHermesAssets,
   ingestHistory: ingestHermesHistory,
   startCapture: startHermesRuntimeCapture,

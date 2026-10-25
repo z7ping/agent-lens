@@ -6,7 +6,7 @@ import type {
   SourceNativeSessionCursor,
 } from '@agent-lens/core'
 
-export type NativeWorkerSourceId = 'pi' | 'codex' | 'claude-code'
+export type NativeWorkerSourceId = 'pi' | 'codex' | 'claude-code' | 'hermes' | 'opencode'
 
 export interface NativeWorkerReadInput {
   sourceId: string

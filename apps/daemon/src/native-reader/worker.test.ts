@@ -8,6 +8,10 @@ import { NativeReaderWorkerClient } from '@agent-lens/core-services'
 import { piManifest } from '@agent-lens/source-pi'
 import { codexManifest } from '@agent-lens/source-codex'
 import { claudeManifest } from '@agent-lens/source-claude'
+import { hermesManifest } from '@agent-lens/source-hermes'
+import { openCodeManifest } from '@agent-lens/source-opencode'
+import { HERMES_STATE_DB_NAME, OPENCODE_DB_NAME } from '@agent-lens/runtime-cordis'
+import { DatabaseSync } from 'node:sqlite'
 
 const now = '2026-10-25T00:00:00Z'
 const host: Host = {
@@ -60,6 +64,51 @@ test('isolated Pi native Worker reads and normalizes actual JSONL without a data
   } finally {
     await worker.dispose()
     await rm(root, { recursive: true, force: true })
+  }
+})
+
+test('isolated native Reader supports two shared SQLite sources by session identity',async()=>{
+  const root=await mkdtemp(join(tmpdir(),'agent-lens-native-sqlite-worker-'))
+  const worker=new NativeReaderWorkerClient()
+  try{
+    const hermesDbPath=join(root,HERMES_STATE_DB_NAME)
+    const hermesDb=new DatabaseSync(hermesDbPath)
+    hermesDb.exec(`CREATE TABLE sessions(id TEXT PRIMARY KEY,cwd TEXT,title TEXT);
+      CREATE TABLE messages(id TEXT,session_id TEXT,role TEXT,content TEXT,timestamp TEXT)`)
+    hermesDb.prepare('INSERT INTO sessions VALUES (?,?,?)').run('H1',root,'Hermes')
+    hermesDb.prepare('INSERT INTO messages VALUES (?,?,?,?,?)').run('h1','H1','user','"test"',now)
+    hermesDb.close()
+    const openCodeDbPath=join(root,OPENCODE_DB_NAME)
+    const openCodeDb=new DatabaseSync(openCodeDbPath)
+    openCodeDb.exec(`CREATE TABLE session(id TEXT,directory TEXT,title TEXT);
+      CREATE TABLE message(id TEXT,data TEXT);
+      CREATE TABLE part(id TEXT,message_id TEXT,session_id TEXT,time_created INTEGER,data TEXT)`)
+    openCodeDb.prepare('INSERT INTO session VALUES (?,?,?)').run('O1',root,'OpenCode')
+    openCodeDb.prepare('INSERT INTO message VALUES (?,?)').run('m1','{"role":"user"}')
+    openCodeDb.prepare('INSERT INTO part VALUES (?,?,?,?,?)').run('p1','m1','O1',1234,'{"type":"text","text":"test"}')
+    openCodeDb.close()
+    for(const item of [
+      {sourceId:'hermes',parserVersion:hermesManifest.parserVersion,filePath:hermesDbPath,nativeSessionId:'H1'},
+      {sourceId:'opencode',parserVersion:openCodeManifest.parserVersion,filePath:openCodeDbPath,nativeSessionId:'O1'},
+    ]){
+      const info=await stat(item.filePath)
+      const result=await worker.read({
+        sourceId:item.sourceId,
+        parserVersion:item.parserVersion,
+        expectedFileIdentity:`${info.dev}:${info.ino}`,
+        host,installation:installation(item.sourceId,root),
+        query:{filePath:item.filePath,nativeSessionId:item.nativeSessionId,limit:8},
+      },new AbortController().signal)
+      assert.equal(result.state,'available',item.sourceId)
+      if(result.state!=='available')continue
+      assert.equal(result.entries.length,1,item.sourceId)
+      assert.equal(result.entries[0]?.sourceSessionNativeId,item.nativeSessionId)
+      assert.equal(result.entries[0]?.recordCursor?.offset,0)
+      assert.equal(result.hasMore,false)
+    }
+  }finally{
+    await worker.dispose()
+    await rm(root,{recursive:true,force:true})
   }
 })
 

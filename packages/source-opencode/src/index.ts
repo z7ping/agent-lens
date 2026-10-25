@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto'
-import { access } from 'node:fs/promises'
+import { access, realpath, stat } from 'node:fs/promises'
 import { basename, dirname, isAbsolute, join, resolve } from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
 import {
@@ -222,9 +222,14 @@ function selectRows(
   limit: number,
   activeSinceMs?: number,
   sessionLimit?: number,
+  nativeSessionId?: string,
 ): OpenCodeRow[] {
-  const params: number[] = [afterRowId]
+  const params: Array<number | string> = [afterRowId]
   const filters: string[] = []
+  if (nativeSessionId !== undefined) {
+    filters.push('p.session_id = ?')
+    params.push(nativeSessionId)
+  }
   if (activeSinceMs !== undefined) {
     filters.push(`${timestampMillisSql('p.time_created')} >= ?`)
     params.push(activeSinceMs)
@@ -822,6 +827,74 @@ export const openCodeSourceDefinition: SourceDefinition = {
   detect: detectOpenCode,
   declareCapabilities: declareOpenCodeCapabilities,
   rawRecovery: databaseRawRecovery,
+  async readNativeSessionPage(query, ctx) {
+    const root = ctx.installation.dataRoot ?? ctx.installation.configRoot
+    const limit = query.limit ?? 32
+    const fromRow = query.cursor?.offset ?? 0
+    if (!root || !Number.isSafeInteger(limit) || limit < 1 || limit > 64
+      || !Number.isSafeInteger(fromRow) || fromRow < 0) {
+      return { state: 'unsupported', reason: 'native-database-window-invalid' }
+    }
+    ctx.abortSignal.throwIfAborted()
+    let authorized: string
+    try {
+      authorized = await realpath(join(root, DB_NAME))
+      if (await realpath(query.filePath) !== authorized) {
+        return { state: 'unsupported', reason: 'source-path-not-authorized' }
+      }
+    } catch (error) {
+      const code = (error as NodeJS.ErrnoException).code
+      if (code === 'ENOENT' || code === 'ENOTDIR') {
+        return { state: 'unavailable', reason: 'native-database-missing' }
+      }
+      if (code === 'EACCES' || code === 'EPERM') {
+        return { state: 'unavailable', reason: 'native-database-not-readable' }
+      }
+      throw error
+    }
+    const initial = await stat(authorized)
+    if (!initial.isFile()) return { state: 'unsupported', reason: 'native-source-is-not-a-file' }
+    const identity = `${initial.dev}:${initial.ino}`
+    if (query.cursor && query.cursor.fileIdentity !== identity) {
+      return { state: 'drifted', reason: 'native-file-identity-changed' }
+    }
+    const db = new DatabaseSync(authorized, { readOnly: true, timeout: 1_500 })
+    let rows: OpenCodeRow[]
+    try {
+      db.exec('BEGIN')
+      try {
+        // This is the existing part -> message -> session projection inside
+        // a consistent read-only SQLite snapshot, not a second parser.
+        rows = selectRows(db, fromRow, limit + 1, undefined, undefined, query.nativeSessionId)
+        ctx.abortSignal.throwIfAborted()
+        db.exec('COMMIT')
+      } catch (error) {
+        db.exec('ROLLBACK')
+        throw error
+      }
+    } finally {
+      db.close()
+    }
+    if ((await stat(authorized)).ino !== initial.ino) {
+      return { state: 'drifted', reason: 'native-file-identity-changed' }
+    }
+    const selected = rows.slice(0, limit)
+    const records = selected.map(row => recordFromRow(row, ctx, 'history'))
+    if (records.some(record => record.sourceSessionNativeId !== query.nativeSessionId)) {
+      return { state: 'drifted', reason: 'native-session-record-identity-changed' }
+    }
+    const endRow = selected.at(-1)?.row_id ?? fromRow
+    return {
+      state: 'available',
+      records,
+      recordCursors: selected.map(row => ({
+        offset: row.row_id - 1, sequence: row.row_id - 1, fileIdentity: identity,
+      })),
+      nextCursor: { offset: endRow, sequence: endRow, fileIdentity: identity },
+      hasMore: rows.length > limit,
+      pendingTail: false,
+    }
+  },
   discoverAssets: discoverOpenCodeAssets,
   ingestHistory: ingestOpenCodeHistory,
   startCapture: startOpenCodeRuntimeCapture,

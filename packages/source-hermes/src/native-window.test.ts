@@ -1,0 +1,71 @@
+import assert from 'node:assert/strict'
+import { mkdtemp, rm, stat } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { DatabaseSync } from 'node:sqlite'
+import test from 'node:test'
+import type { SourceRawRecoveryContext } from '@agent-lens/core'
+import { HERMES_STATE_DB_NAME } from '@agent-lens/runtime-cordis'
+import { hermesSourceDefinition } from './index'
+
+const at='2026-10-25T07:00:00Z'
+
+test('Hermes native SQLite pages isolate session rows and normalize with no checkpoints',async()=>{
+  const root=await mkdtemp(join(tmpdir(),'agent-lens-hermes-native-'))
+  const path=join(root,HERMES_STATE_DB_NAME)
+  const db=new DatabaseSync(path)
+  try {
+    db.exec(`CREATE TABLE sessions (id TEXT PRIMARY KEY,cwd TEXT,title TEXT);
+      CREATE TABLE messages (
+        id TEXT PRIMARY KEY,session_id TEXT,role TEXT,content TEXT,
+        timestamp TEXT,tool_calls TEXT,tool_call_id TEXT,tool_name TEXT
+      )`)
+    db.prepare('INSERT INTO sessions (id,cwd,title) VALUES (?,?,?)').run('S1',root,'Session')
+    for(const [id,sid,text] of [['m1','S1','first'],['m2','OTHER','unrelated'],['m3','S1','second']]){
+      db.prepare('INSERT INTO messages (id,session_id,role,content,timestamp) VALUES (?,?,?,?,?)')
+        .run(id,sid,'user',JSON.stringify(text),at)
+    }
+    const host:SourceRawRecoveryContext['host']={
+      id:'host',name:'local',platform:process.platform,arch:process.arch,createdAt:at,lastSeenAt:at,
+    }
+    const installation:SourceRawRecoveryContext['installation']={
+      id:'hermes-inst',hostId:host.id,productId:'hermes',
+      dataRoot:root,firstSeenAt:at,lastSeenAt:at,
+    }
+    let checkpointWrites=0
+    const ctx:SourceRawRecoveryContext={
+      host,installation,abortSignal:new AbortController().signal,
+      checkpoint:{async get(){return null},async set(){checkpointWrites++},async clear(){checkpointWrites++}},
+    }
+    const first=await hermesSourceDefinition.readNativeSessionPage!({
+      filePath:path,nativeSessionId:'S1',limit:1,
+    },ctx)
+    assert.equal(first.state,'available')
+    if(first.state!=='available')return
+    assert.deepEqual(first.records.map(x=>x.nativeId),['m1'])
+    assert.deepEqual(first.recordCursors?.map(x=>x.offset),[0])
+    assert.equal(first.hasMore,true)
+    const second=await hermesSourceDefinition.readNativeSessionPage!({
+      filePath:path,nativeSessionId:'S1',limit:1,cursor:first.nextCursor,
+    },ctx)
+    assert.equal(second.state,'available')
+    if(second.state!=='available')return
+    assert.deepEqual(second.records.map(x=>x.nativeId),['m3'])
+    assert.deepEqual(second.recordCursors?.map(x=>x.offset),[2])
+    assert.equal(second.nextCursor.offset,3)
+    assert.equal(second.hasMore,false)
+    assert.equal(checkpointWrites,0)
+    const normalized=await hermesSourceDefinition.normalize(second.records[0]!,{host,installation})
+    assert.ok(Array.isArray(normalized.observations))
+    const info=await stat(path)
+    assert.equal(second.nextCursor.fileIdentity,`${info.dev}:${info.ino}`)
+    const mismatch=await hermesSourceDefinition.readNativeSessionPage!({
+      filePath:path,nativeSessionId:'S1',cursor:{...second.nextCursor,fileIdentity:'forged'},
+    },ctx)
+    assert.deepEqual(mismatch,{state:'drifted',reason:'native-file-identity-changed'})
+    const foreign=await hermesSourceDefinition.readNativeSessionPage!({
+      filePath:join(root,'foreign.db'),nativeSessionId:'S1',
+    },ctx)
+    assert.notEqual(foreign.state,'available')
+  }finally{db.close();await rm(root,{recursive:true,force:true})}
+})
