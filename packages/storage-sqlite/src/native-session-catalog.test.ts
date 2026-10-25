@@ -214,8 +214,9 @@ test('Native-only rail excludes a durable Legacy owner even before any Review Ob
     assert.deepEqual(raw.items.map(row=>row.nativeSessionId),[
       'legacy-without-observation','native-verified','unclaimed-catalog-only',
     ])
-    assert.equal(await catalog.getByReviewSessionId(nativeReviewSessionId(
+    const direct=await catalog.getByReviewSessionId(nativeReviewSessionId(
       legacy.sourceId,legacy.installationId,legacy.nativeSessionId,
-    ))?.then(row=>row?.nativeSessionId),'legacy-without-observation')
+    ))
+    assert.equal(direct?.nativeSessionId,'legacy-without-observation')
   }finally{await storage.close()}
 })
