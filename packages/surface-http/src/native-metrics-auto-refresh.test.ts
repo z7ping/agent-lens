@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { appendFile, mkdtemp, rm, stat, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { nativeSqliteRevision } from '@agent-lens/source-support'
@@ -410,5 +410,48 @@ test('mutable native SQLite metrics reject a WAL revision written during multi-p
     assert.equal(second.state,'available')
     assert.equal(snapshots.length,1)
     assert.equal(snapshots[0]?.fileSize,latest.fileSize)
+  }finally{await rm(root,{recursive:true,force:true})}
+})
+
+test('certified JSONL metrics reject append after native EOF before publishing complete totals',async()=>{
+  const root=await mkdtemp(join(tmpdir(),'al-jsonl-metric-revision-'))
+  const path=join(root,'session.jsonl')
+  const snapshots:NativeSessionMetricSnapshot[]=[]
+  const metrics={replace:async(value:NativeSessionMetricSnapshot)=>{
+    snapshots.push(value);return true
+  }} as unknown as NativeSessionMetricsStore
+  const nativeSource={
+    manifest:{sourceId:'pi',parserVersion:'pi-v1'},
+    nativeSessionCoverageComplete:true,
+    rawRecovery:{async verify(){return{state:'verified' as const,checkedAt:at}}},
+  } as unknown as ReturnType<SourceService['list']>[number]
+  try{
+    await writeFile(path,'{"type":"session"}\n')
+    const initial=await stat(path)
+    const nativeEntry:NativeSessionCatalogEntry={
+      ...entry,filePath:path,fileIdentity:`${initial.dev}:${initial.ino}`,
+      fileSize:initial.size,fileMtimeMs:initial.mtimeMs,
+    }
+    let appended=false
+    const reader:NativeSessionWindowReader={async read(){
+      if(!appended){
+        await appendFile(path,'{"type":"message","text":"new"}\n')
+        appended=true
+      }
+      return {state:'available',observations:[],observationRecordIds:[],
+        evidenceCandidates:[],hasMore:false,pendingTail:false,
+        nextCursor:{offset:initial.size,sequence:1,fileIdentity:nativeEntry.fileIdentity}}
+    }}
+    const first=await rebuildNativeSessionMetrics(nativeEntry,metrics,reader,nativeSource,
+      new AbortController().signal)
+    assert.deepEqual(first,{state:'drifted',reason:'native-metrics-source-revision-changed'})
+    assert.equal(snapshots.length,0,'old Catalog revision must not publish stale complete numbers')
+    const changed=await stat(path)
+    const updated={...nativeEntry,fileSize:changed.size,fileMtimeMs:changed.mtimeMs}
+    const second=await rebuildNativeSessionMetrics(updated,metrics,reader,nativeSource,
+      new AbortController().signal)
+    assert.equal(second.state,'available')
+    assert.equal(snapshots.length,1)
+    assert.equal(snapshots[0]?.fileSize,changed.size)
   }finally{await rm(root,{recursive:true,force:true})}
 })
