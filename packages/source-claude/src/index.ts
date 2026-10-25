@@ -179,14 +179,18 @@ async function* walkJsonlFiles(root: string): AsyncIterable<string> {
 async function listJsonlFiles(root: string, historyWindow?: SourceHistoryWindow): Promise<string[]> {
   const paths: string[] = []
   for await (const file of walkJsonlFiles(root)) paths.push(file)
-  const candidates = (await Promise.all(paths.map(async path => {
-    try {
-      return { path, mtimeMs: (await stat(path)).mtimeMs }
-    } catch (error) {
-      if (isMissingPathError(error)) return null
-      throw error
-    }
-  }))).filter((candidate): candidate is { path: string; mtimeMs: number } => candidate !== null)
+  const candidates: Array<{ path: string; mtimeMs: number }> = []
+  for (let offset = 0; offset < paths.length; offset += 256) {
+    const batch = await Promise.all(paths.slice(offset, offset + 256).map(async path => {
+      try {
+        return { path, mtimeMs: (await stat(path)).mtimeMs }
+      } catch (error) {
+        if (isMissingPathError(error)) return null
+        throw error
+      }
+    }))
+    for (const candidate of batch) if (candidate) candidates.push(candidate)
+  }
 
   const activeSince = historyWindow?.activeSince ? Date.parse(historyWindow.activeSince) : Number.NaN
   const filtered = Number.isFinite(activeSince)
@@ -467,7 +471,9 @@ export async function* ingestClaudeHistory(
       const cwd = await readClaudeSessionCwd(filePath)
       if (cwd) rememberWorkspace(cwd, filePath)
     }
-    yield* ingestClaudeFile(ctx, filePath, cwd => rememberWorkspace(cwd, filePath))
+    if (!ctx.skipNativeSessionFile?.(filePath)) {
+      yield* ingestClaudeFile(ctx, filePath, cwd => rememberWorkspace(cwd, filePath))
+    }
     if (!ctx.abortSignal.aborted) await ctx.reportProgress?.({ phase: 'processing', processedUnits: ++processedUnits })
   }
 
@@ -1036,6 +1042,36 @@ export const claudeSourceDefinition: SourceDefinition = {
   detect: detectClaudeCode,
   declareCapabilities: declareClaudeCapabilities,
   rawRecovery: jsonlRawRecovery,
+  async *discoverNativeSessions(ctx) {
+    const root = ctx.installation.dataRoot
+      ?? (ctx.installation.configRoot ? join(ctx.installation.configRoot, 'projects') : undefined)
+    if (!root) return
+    for (const filePath of await listJsonlFiles(root, ctx.historyWindow)) {
+      ctx.abortSignal.throwIfAborted()
+      try {
+        const before = await stat(filePath)
+        if (!before.isFile()) continue
+        const nativeSessionId = await readClaudeNativeSessionIdentity(filePath)
+        const after = await stat(filePath)
+        if (!after.isFile() || before.dev !== after.dev || before.ino !== after.ino
+          || before.size !== after.size || before.mtimeMs !== after.mtimeMs) continue
+        yield {
+          sourceId: SOURCE_ID,
+          installationId: ctx.installation.id,
+          nativeSessionId,
+          locationKind: 'native' as const,
+          filePath,
+          fileIdentity: sourceFileIdentity(after),
+          fileSize: after.size,
+          fileMtimeMs: after.mtimeMs,
+          lastActivityAt: new Date(after.mtimeMs).toISOString(),
+          updatedAt: new Date().toISOString(),
+        }
+      } catch (error) {
+        if (!isMissingPathError(error)) throw error
+      }
+    }
+  },
   async readNativeSessionPage(query, ctx) {
     const dataRoot = ctx.installation.dataRoot
       ?? (ctx.installation.configRoot ? join(ctx.installation.configRoot, 'projects') : undefined)
