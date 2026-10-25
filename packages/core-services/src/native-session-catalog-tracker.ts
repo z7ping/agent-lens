@@ -20,11 +20,16 @@ export class NativeSessionCatalogTracker {
   ) {}
 
   async observe(source: SourceDefinition, record: SourceRecord): Promise<boolean> {
+    const originalFile = record.locator.kind === 'file'
+      && extname(record.locator.path ?? '').toLowerCase() === '.jsonl'
+    const originalDatabase = record.locator.kind === 'database'
+      && (record.locator.table === 'messages' || record.locator.table === 'part')
+      && (extname(record.locator.path ?? '').toLowerCase() === '.db'
+        || extname(record.locator.path ?? '').toLowerCase() === '.sqlite')
     if (!this.catalog || !source.readNativeSessionPage || record.sourceId !== source.manifest.sourceId
       || !record.sourceSessionNativeId
-      || record.locator.kind !== 'file'
+      || (!originalFile && !originalDatabase)
       || !record.locator.path || !isAbsolute(record.locator.path)
-      || extname(record.locator.path).toLowerCase() !== '.jsonl'
       || !source.rawRecovery?.describe(record).canReread) return false
 
     const path = record.locator.path
@@ -62,7 +67,12 @@ export class NativeSessionCatalogTracker {
       fileIdentity: `${file.dev}:${file.ino}`,
       fileSize: file.size,
       fileMtimeMs: file.mtimeMs,
-      lastActivityAt: new Date(file.mtimeMs).toISOString(),
+      // SQLite can be in WAL mode: the main DB mtime need not advance on
+      // a new session message. Prefer the native event clock when valid.
+      lastActivityAt: originalDatabase && record.occurredAt
+        && Number.isFinite(Date.parse(record.occurredAt))
+        ? new Date(record.occurredAt).toISOString()
+        : new Date(file.mtimeMs).toISOString(),
       updatedAt: new Date(now).toISOString(),
     })
     return true
