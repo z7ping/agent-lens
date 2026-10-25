@@ -341,3 +341,64 @@ test('Hook at overlapping user-turn boundary is never assigned by first-match ti
   assert.equal(JSON.stringify(result.interactions[0]).includes('uniquely-second'),false)
   assert.equal(JSON.stringify(result.interactions[1]).includes('uniquely-second'),true)
 })
+
+
+test('Hook identity binds to a unique native tool even when neighboring turns share a timestamp',()=>{
+  const native=projectNativeReviewWindow({
+    ...page,completeBoundaries:true,
+    observations:[
+      {...candidate('message.user',1,{text:'first'}),occurredAt:'2026-10-25T04:00:00Z'},
+      {...candidate('tool.call',2,{callId:'call-first',nativeToolName:'shell'}),nativeCallId:'call-first',occurredAt:'2026-10-25T04:00:01Z'},
+      {...candidate('message.assistant',3,{text:'first done'}),occurredAt:'2026-10-25T04:00:03Z'},
+      {...candidate('message.user',4,{text:'second'}),occurredAt:'2026-10-25T04:00:03Z'},
+      {...candidate('tool.call',5,{callId:'call-second',nativeToolName:'shell'}),nativeCallId:'call-second',nativeEventId:'second-event',occurredAt:'2026-10-25T04:00:04Z'},
+      {...candidate('message.assistant',6,{text:'second done'}),occurredAt:'2026-10-25T04:00:05Z'},
+    ],
+    observationRecordIds:['u1','t1','a1','u2','t2','a2'],
+  })
+  const hooks:ObservationCandidate[]=[
+    {...candidate('permission.response',7,{decision:'first'}),nativeCallId:'call-first',occurredAt:'2026-10-25T04:00:03Z'},
+    {...candidate('permission.request',8,{decision:'identity-only'}),nativeCallId:'call-first'},
+    {...candidate('permission.request',9,{decision:'unknown'}),nativeCallId:'missing-call',occurredAt:'2026-10-25T04:00:04Z'},
+    {...candidate('permission.response',10,{decision:'conflict'}),nativeCallId:'call-first',nativeParentEventId:'second-event',occurredAt:'2026-10-25T04:00:04Z'},
+  ]
+  const result=overlayNativeHookEvents({
+    window:native,observations:hooks,
+    observationRecordIds:['hook-1','hook-2','hook-3','hook-4'],truncated:false,
+  })
+  assert.equal(result.observationCount,native.observationCount+2)
+  const first=JSON.stringify(result.interactions[0])
+  const second=JSON.stringify(result.interactions[1])
+  assert.equal(first.includes('decision":"first"'),true)
+  assert.equal(first.includes('identity-only'),true,
+    'exact native ID may prove ownership without a trustworthy Hook clock')
+  assert.equal(second.includes('identity-only'),false)
+  assert.equal(JSON.stringify(result).includes('missing-call'),false,
+    'unknown native ID must never fall back to timestamp')
+  assert.equal(JSON.stringify(result).includes('decision":"conflict"'),false,
+    'contradictory event and tool ownership must remain unassigned')
+  assert.equal(result.hookFactsPartial,true)
+})
+
+test('reused native call ID across user turns cannot claim an ambiguous Hook',()=>{
+  const native=projectNativeReviewWindow({
+    ...page,completeBoundaries:true,
+    observations:[
+      {...candidate('message.user',1,{text:'one'}),occurredAt:'2026-10-25T04:00:00Z'},
+      {...candidate('tool.call',2,{callId:'reused',nativeToolName:'shell'}),nativeCallId:'reused',occurredAt:'2026-10-25T04:00:01Z'},
+      {...candidate('message.assistant',3,{text:'done'}),occurredAt:'2026-10-25T04:00:02Z'},
+      {...candidate('message.user',4,{text:'two'}),occurredAt:'2026-10-25T04:00:03Z'},
+      {...candidate('tool.call',5,{callId:'reused',nativeToolName:'shell'}),nativeCallId:'reused',occurredAt:'2026-10-25T04:00:04Z'},
+      {...candidate('message.assistant',6,{text:'done'}),occurredAt:'2026-10-25T04:00:05Z'},
+    ],
+    observationRecordIds:['u1','t1','a1','u2','t2','a2'],
+  })
+  const result=overlayNativeHookEvents({
+    window:native,
+    observations:[{...candidate('permission.request',7,{decision:'ambiguous'}),nativeCallId:'reused',occurredAt:'2026-10-25T04:00:04Z'}],
+    observationRecordIds:['hook-reused'],truncated:false,
+  })
+  assert.deepEqual(result.interactions,native.interactions)
+  assert.equal(result.observationCount,native.observationCount)
+  assert.equal(result.hookFactsPartial,true)
+})
