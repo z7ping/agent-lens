@@ -18,6 +18,33 @@ export interface NativeSessionCatalogResponseDto {
   nextCursor?: string
 }
 
+/** Progressive source-owned text search: one native Catalog session/page per request.
+ * Empty items with hasMore=true is NOT a completed search or no-match result.
+ */
+export interface NativeBodySearchHitDto {
+  sessionId: string
+  sourceId: string
+  installationId: string
+  nativeSessionId: string
+  observationId: string
+  kind: string
+  at: string
+  excerpt: string
+}
+
+export type NativeBodySearchResponseDto =
+  | {
+      state: 'available'
+      coverage: 'bounded'
+      items: NativeBodySearchHitDto[]
+      scannedSessions: number
+      scannedObservations: number
+      hasMore: boolean
+      pendingTail: boolean
+      nextCursor?: string
+    }
+  | { state: 'unavailable' | 'drifted' | 'unsupported'; reason: string }
+
 export type NativeReviewWindowResponseDto =
   | NativeReviewWindowDto
   | { state: 'unavailable' | 'drifted' | 'unsupported'; reason: string }
