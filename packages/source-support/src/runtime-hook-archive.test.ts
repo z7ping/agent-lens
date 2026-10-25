@@ -83,7 +83,7 @@ test('Hook sidecar pages preserve every source file, reject cross-session cursor
     assert.equal(third.hasMore,false)
     assert.equal(third.nextCursor,undefined)
     await assert.rejects(
-      readArchivedHookInboxPage({inbox,nativeSessionId:'S2',limit:2,cursor:first.nextCursor}),
+      readArchivedHookInboxPage({inbox,nativeSessionId:'S2',limit:2,cursor:first.nextCursor!}),
       /Invalid archived Hook cursor/,
     )
     await assert.rejects(
