@@ -263,3 +263,61 @@ test('a competing native-only claim never discards this writers unverified recor
     assert.equal(writes,0)
 })
 
+
+test('preexisting Legacy claim continues to persist a verified Pi session after default Native-only cutover',async()=>{
+  const previous:{sourceId:string;installationId:string;nativeSessionId:string}={
+    sourceId:'pi',installationId:'pi-local',nativeSessionId:'old-session',
+  }
+  const record:SourceRecord={
+    id:'old-original',sourceId:previous.sourceId,installationId:previous.installationId,
+    sourceSessionNativeId:previous.nativeSessionId,
+    nativeType:'message',capturedAt:at,parserVersion:'1',fingerprint:'hash',
+    locator:{kind:'file',path:'/original/old-session.jsonl',offset:0},
+    payload:{text:'ORIGINAL PRIVATE CONTENT'},
+  }
+  let rawWrites=0,normalizes=0,verifies=0,claims=0
+  const storage={
+    nativeSessionCatalog:{
+      async getSessionWriteMode(){return 'legacy' as const},
+      async claimNativeOnlyWrite(){claims++;return true},
+      async claimLegacyWrite(){claims++;return 'legacy' as const},
+    },
+    repositories:{sourceRecords:{async put(){rawWrites++}}},
+    async transaction<T>(action:()=>Promise<T>){return action()},
+  } as unknown as StorageService
+  const source={
+    manifest:{sourceId:'pi',productId:'pi',parserVersion:'1'},
+    nativeSessionCoverageComplete:true,
+    rawRecovery:{
+      describe(){return{
+        authority:'native-store',locatorStability:'stable',mutability:'append-oriented',
+        verification:'fingerprint',canReread:true,canReparse:true,
+        replayable:true,persistencePreference:'reference',
+      }},
+      async verify(){verifies++;return {state:'verified',checkedAt:at}},
+    },
+    async readNativeSessionPage(){throw Error('Established Legacy sessions must not probe new claims')},
+    async normalize(){
+      normalizes++
+      return {observations:[],evidenceCandidates:[]}
+    },
+  } as unknown as SourceDefinition
+  const result=await sourceRunnerInternals.processSourceRecordWithOwnership(
+    storage,
+    {async commit(){throw Error('Unexpected observation')}} as unknown as ObservationService,
+    {async declare(){throw Error('Unexpected coverage')}} as unknown as CoverageService,
+    {sanitizeSourceRecord:(row:SourceRecord)=>row,
+      sanitizeNormalizedOutput:(value:unknown)=>value} as unknown as CapturePolicyService,
+    new NativeSessionCatalogTracker(storage.nativeSessionCatalog),
+    source,{id:'host',name:'host',platform:'linux',arch:'x64',
+      createdAt:at,lastSeenAt:at},
+    {id:previous.installationId,hostId:'host',productId:'pi',
+      firstSeenAt:at,lastSeenAt:at},
+    undefined,record,new AbortController().signal,
+  )
+  assert.equal(result.observationsCreated,0)
+  assert.equal(rawWrites,1,'Existing SQL history retains its original storage ownership')
+  assert.equal(normalizes,1)
+  assert.equal(verifies,0)
+  assert.equal(claims,0)
+})
