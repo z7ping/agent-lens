@@ -878,6 +878,7 @@ export class SourceHistoryRunner {
         checkpointScope(source.manifest.sourceId, installation.id, runtimeProfile),
       )
       const verifiedNativePaths = new Set<string>()
+      const verifiedNativeSessionIds = new Set<string>()
       // Certified Sources claim only after original Source verification.
       // Existing SQL sessions refuse the claim and preserve Legacy ownership.
       if (source.nativeSessionCoverageComplete === true
