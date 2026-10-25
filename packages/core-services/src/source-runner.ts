@@ -510,11 +510,10 @@ async function shouldReadNativeOnly(
   }
   // Two independent runners may race for the same session. Every path must
   // claim an immutable owner BEFORE persisting legacy events or skipping them.
-  const established = await tracker.getWriteMode(key)
-  if (established === 'native-only') {
-    // A durable claim is NOT proof that every later emitted record survived
-    // in its native store. Otherwise a replaced/truncated JSONL could cause
-    // SourceRecord/Observation/Evidence to be silently discarded.
+  const verifyClaimedNativeRecord = async (): Promise<boolean> => {
+    // A competing history/runtime writer may have claimed native-only between
+    // our ownership read and claimLegacyWrite(). Its claim is NOT permission to
+    // skip this particular record without verifying the original bytes.
     if (!isDurablyNativeRecoverable(source, record)
       || !source.rawRecovery?.verify || !record.locator.path || !record.fingerprint) {
       throw new Error('native-only-source-recovery-coverage-drift')
@@ -539,11 +538,17 @@ async function shouldReadNativeOnly(
     }
     return true
   }
+  const established = await tracker.getWriteMode(key)
+  if (established === 'native-only') return verifyClaimedNativeRecord()
   if (established === 'legacy') return false
   const claimLegacy = async () => {
     const mode = await catalog.claimLegacyWrite(key)
     tracker.rememberWriteMode(key, mode)
-    return mode === 'native-only'
+    // claimLegacyWrite is an atomic first-writer-wins operation. A competing
+    // native-only owner can win while this writer is deciding on Legacy.
+    // Revalidate this record before skipping it; never treat the competing
+    // *session* claim as proof of *this event's* durable recoverability.
+    return mode === 'native-only' ? verifyClaimedNativeRecord() : false
   }
   if (process.env[NATIVE_ONLY_WRITER_OPT_IN] !== '1'
     || !source.readNativeSessionPage || !source.rawRecovery?.verify
