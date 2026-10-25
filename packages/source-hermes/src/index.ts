@@ -411,7 +411,11 @@ export async function* ingestHermesHistory(ctx: SourceHistoryExecutionContext): 
       for (const row of rows) {
         if (ctx.abortSignal.aborted) return
         rememberWorkspace(row.cwd)
-        yield dbRecord(row, ctx, 'history')
+        // Preserve workspace metadata, but do not re-ingest a certified native
+        // session. The same DB may also contain Legacy-owned sessions.
+        if (!row.session_id || !ctx.skipNativeSessionId?.(row.session_id)) {
+          yield dbRecord(row, ctx, 'history')
+        }
         rowId = row.row_id
         await ctx.checkpoint.set(checkpointKey, rowId)
       }
