@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { createHash } from 'node:crypto'
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, rename, rm, stat, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import test from 'node:test'
@@ -118,6 +118,14 @@ test('Pi session page reads native messages by cursor without checkpoints or eve
     assert.equal(normalized.observations[0]?.kind, 'message.user')
     assert.deepEqual(await read({ filePath: path, nativeSessionId: 'wrong' }, ctx),
       { state: 'drifted', reason: 'native-session-identity-changed' })
+    assert.equal(first.nextCursor.fileIdentity,`${(await stat(path)).dev}:${(await stat(path)).ino}`)
+    // Even when the new file reproduces the exact content/session metadata,
+    // a cursor anchored to the prior inode cannot silently cross the rename.
+    const replacement=join(root,'replacement.jsonl')
+    await writeFile(replacement,[header,message(1),message(2)].join('\n')+'\n')
+    await rename(replacement,path)
+    assert.deepEqual(await read({filePath:path,nativeSessionId:'pi-page',cursor:first.nextCursor},ctx),
+      {state:'drifted',reason:'native-file-identity-changed'})
   } finally {
     await rm(root, { recursive: true, force: true })
   }
