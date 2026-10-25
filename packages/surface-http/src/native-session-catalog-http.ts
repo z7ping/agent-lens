@@ -96,6 +96,7 @@ export async function handleNativeSessionCatalogRequest(
   }
   // Client never receives local file paths or file identities. This index is
   // intentionally independent of the legacy Review's event-store projection.
+  const search = parseIdentifier(url.searchParams, 'search', 256)
   const sourceId = parseIdentifier(url.searchParams, 'sourceId')
   const installationId = parseIdentifier(url.searchParams, 'installationId')
   const rawLimit = parseIdentifier(url.searchParams, 'limit')
@@ -117,6 +118,7 @@ export async function handleNativeSessionCatalogRequest(
     ...(sourceId ? { sourceId } : {}),
     ...(installationId ? { installationId } : {}),
     ...(onlyWithoutLegacyReview ? { onlyWithoutLegacyReview } : {}),
+    ...(search ? { search } : {}),
     ...(before ? { before } : {}),
     limit,
   })
