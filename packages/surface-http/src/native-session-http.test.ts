@@ -962,6 +962,22 @@ test('Catalog native Review shares one Task DTO with bounded Hook-exclusive fact
     const native=await ordinary.json() as typeof dto
     assert.equal(native.interactions[0]?.nodes.length,2,'raw native window must remain Hook-free')
     assert.equal(hookReads,2)
+    // The same Source transcript remains readable without a Hook reader,
+    // but must never masquerade as complete Hook coverage.
+    const readerUnavailable=await startHttpSurface(storage,{
+      port:0,nativeSessionReader:{read:reader.read},
+    })
+    try {
+      const noHook=await fetch(`http://${readerUnavailable.host}:${readerUnavailable.port}/api/v1/native-sessions/${encodeURIComponent(nativeId)}/review`)
+      const noHookDto=await noHook.json() as typeof dto
+      assert.equal(noHook.status,200)
+      assert.equal(noHookDto.boundaryIntegrity,'complete')
+      assert.equal(noHookDto.hookFactsPartial,true)
+      assert.equal(noHookDto.hookEventsTruncated,true)
+      assert.deepEqual(noHookDto.interactions[0]?.nodes.map(node=>node.kind??node.type),
+        ['message','message'])
+      assert.equal(hookReads,2,'missing Hook Reader never claims source facts')
+    }finally{await readerUnavailable.dispose()}
     process.env.AGENT_LENS_NATIVE_HOOK_ARCHIVE='0'
     const disabled = await fetch(base+'/'+encodeURIComponent(nativeId)+'/review')
     assert.equal(disabled.status,200)
