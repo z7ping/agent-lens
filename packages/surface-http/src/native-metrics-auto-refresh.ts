@@ -3,11 +3,12 @@ import type {
   NativeSessionMetricRebuildCursor, SourceService,
 } from '@agent-lens/core'
 import type { NativeSessionWindowReader } from './native-session-http'
-import { rebuildNativeSessionMetrics } from './native-session-metrics-http'
+import { rebuildNativeSessionMetrics, type NativeMetricRebuildProgress } from './native-session-metrics-http'
 
 const MAX_SESSIONS_PER_TRIGGER=4
 const RETRY_COOLDOWN_MS=30_000
 const MAX_RECENT=128
+const MAX_RESUMABLE=8
 
 /**
  * Lazy, bounded, single-flight repair of lightweight Native-only metrics.
@@ -20,6 +21,9 @@ const MAX_RECENT=128
 export class NativeMetricsAutoRefresh {
   private readonly abort=new AbortController()
   private readonly recent=new Map<string,number>()
+  // A restart safely replays from the original Source; no event/ID checkpoint
+  // is persisted. Bound open sessions to avoid retaining large call maps.
+  private readonly ongoing=new Map<string,NativeMetricRebuildProgress>()
   private active:Promise<void>|null=null
   private before:NativeSessionMetricRebuildCursor|undefined
 
@@ -61,7 +65,8 @@ export class NativeMetricsAutoRefresh {
         candidate.sourceId,candidate.installationId,candidate.nativeSessionId,
       ])
       const now=Date.now()
-      if((this.recent.get(key)??0)>now)continue
+      const resume=this.ongoing.get(key)
+      if(!resume && (this.recent.get(key)??0)>now)continue
       if(this.recent.size>=MAX_RECENT){
         const oldest=this.recent.keys().next().value
         if(oldest!==undefined)this.recent.delete(oldest)
@@ -74,9 +79,18 @@ export class NativeMetricsAutoRefresh {
         || entry.installationId!==candidate.installationId
         || entry.nativeSessionId!==candidate.nativeSessionId)continue
       try{
-        await rebuildNativeSessionMetrics(
+        const result=await rebuildNativeSessionMetrics(
           entry,this.metrics!,this.reader!,source,this.abort.signal,
+          {enabled:true, ...(resume?{progress:resume}:{})},
         )
+        if(result.state==='in_progress'){
+          if(!this.ongoing.has(key) && this.ongoing.size>=MAX_RESUMABLE){
+            const oldest=this.ongoing.keys().next().value
+            if(oldest!==undefined)this.ongoing.delete(oldest)
+          }
+          this.ongoing.delete(key)
+          this.ongoing.set(key,result.progress)
+        }else this.ongoing.delete(key)
       }catch{
         if(this.abort.signal.aborted)return
         // Failure stays missing/stale; no unverified totals are published.
@@ -87,6 +101,7 @@ export class NativeMetricsAutoRefresh {
   dispose():void {
     this.abort.abort()
     this.recent.clear()
+    this.ongoing.clear()
     this.before=undefined
   }
 }

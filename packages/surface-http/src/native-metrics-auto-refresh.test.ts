@@ -6,6 +6,7 @@ import type {
 } from '@agent-lens/core'
 import type { NativeSessionWindowReader } from './native-session-http'
 import { NativeMetricsAutoRefresh } from './native-metrics-auto-refresh'
+import { rebuildNativeSessionMetrics } from './native-session-metrics-http'
 
 const at='2026-10-25T00:00:00Z'
 const entry:NativeSessionCatalogEntry={
@@ -169,4 +170,101 @@ test('failed or cooled-down recent sessions do not starve older Native-only metr
     await flush()
     assert.deepEqual(readIds,all.map(row=>row.nativeSessionId))
   }finally{refresh.dispose()}
+})
+
+test('a 65-page native session resumes the numerical accumulator instead of rescanning page zero',async()=>{
+  const key='native:0123456789abcdef0123456789abcdef'
+  const pageCount=65
+  let pages=0
+  const readOffsets:number[]=[]
+  const snapshots:NativeSessionMetricSnapshot[]=[]
+  const metrics={
+    findRebuildCandidates:async()=>[{
+      reviewSessionId:key,sourceId:'pi',installationId:'pi-local',
+      nativeSessionId:'session-1',lastActivityAt:at,
+    }],
+    replace:async(snapshot:NativeSessionMetricSnapshot)=>{
+      snapshots.push(snapshot)
+      return true
+    },
+  } as unknown as NativeSessionMetricsStore
+  const reader:NativeSessionWindowReader={
+    async read(query){
+      const index=query.cursor?.sequence??0
+      readOffsets.push(index)
+      pages++
+      return {
+        state:'available',
+        observations:[{kind:'message.user' as const,capturedAt:at,
+          identityHints:{nativeSessionId:'session-1'},payload:{text:'private user text'}}],
+        observationRecordIds:[`source-record-${index}`],
+        evidenceCandidates:[],
+        nextCursor:{offset:(index+1)*32,sequence:index+1,fileIdentity:'dev:1'},
+        hasMore:index+1<pageCount,pendingTail:false,
+      }
+    },
+  }
+  const refresh=new NativeMetricsAutoRefresh(catalog,metrics,reader,source,policy)
+  try{
+    refresh.schedule()
+    await flush()
+    assert.equal(pages,64)
+    assert.equal(snapshots.length,0,'never publish a 64-page prefix as full totals')
+    refresh.schedule()
+    await flush()
+    assert.equal(pages,65,'second trigger reads only the remaining page')
+    assert.deepEqual(readOffsets,Array.from({length:65},(_,i)=>i))
+    assert.equal(snapshots.length,1)
+    assert.equal(snapshots[0]?.coverage,'complete')
+    assert.equal(snapshots[0]?.interactionCount,65)
+    assert.equal(JSON.stringify(snapshots).includes('private user text'),false)
+    assert.equal(JSON.stringify(snapshots).includes('source-record-'),false)
+    refresh.schedule()
+    await flush()
+    assert.equal(pages,65,'cooldown prevents immediately scanning a completed session')
+  }finally{refresh.dispose()}
+})
+
+test('a changed native Catalog revision discards in-memory progress before any new counting',async()=>{
+  const readOffsets:number[]=[]
+  const snapshots:NativeSessionMetricSnapshot[]=[]
+  const reader:NativeSessionWindowReader={
+    async read(query){
+      const index=query.cursor?.sequence??0
+      readOffsets.push(index)
+      return {
+        state:'available',
+        observations:[{kind:'message.user' as const,capturedAt:at,
+          identityHints:{nativeSessionId:'session-1'},payload:{text:'private'}}],
+        observationRecordIds:[`record-${index}`],evidenceCandidates:[],
+        nextCursor:{offset:(index+1)*32,sequence:index+1,fileIdentity:'dev:1'},
+        hasMore:index<64,pendingTail:false,
+      }
+    },
+  }
+  const metrics={
+    replace:async(snapshot:NativeSessionMetricSnapshot)=>{snapshots.push(snapshot);return true},
+  } as unknown as NativeSessionMetricsStore
+  const nativeSource=source.list()[0]!
+  const abort=new AbortController()
+  const first=await rebuildNativeSessionMetrics(entry,metrics,reader,nativeSource,abort.signal,{enabled:true})
+  if(first.state!=='in_progress')assert.fail('Expected first bounded read to pause')
+  assert.equal(readOffsets.length,64)
+  readOffsets.length=0
+  const revised={...entry,fileSize:entry.fileSize+1}
+  const second=await rebuildNativeSessionMetrics(revised,metrics,reader,nativeSource,abort.signal,{
+    enabled:true,progress:first.progress,
+  })
+  if(second.state!=='in_progress')assert.fail('Expected re-read of changed Catalog revision')
+  assert.equal(readOffsets[0],0,'never reuse an old revision cursor')
+  assert.equal(readOffsets.length,64)
+  readOffsets.length=0
+  const done=await rebuildNativeSessionMetrics(revised,metrics,reader,nativeSource,abort.signal,{
+    enabled:true,progress:second.progress,
+  })
+  assert.equal(done.state,'available')
+  assert.deepEqual(readOffsets,[64])
+  assert.equal(snapshots.length,1)
+  assert.equal(snapshots[0]?.fileSize,revised.fileSize)
+  assert.equal(snapshots[0]?.interactionCount,65)
 })
