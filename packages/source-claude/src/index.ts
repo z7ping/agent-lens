@@ -179,14 +179,18 @@ async function* walkJsonlFiles(root: string): AsyncIterable<string> {
 async function listJsonlFiles(root: string, historyWindow?: SourceHistoryWindow): Promise<string[]> {
   const paths: string[] = []
   for await (const file of walkJsonlFiles(root)) paths.push(file)
-  const candidates = (await Promise.all(paths.map(async path => {
-    try {
-      return { path, mtimeMs: (await stat(path)).mtimeMs }
-    } catch (error) {
-      if (isMissingPathError(error)) return null
-      throw error
-    }
-  }))).filter((candidate): candidate is { path: string; mtimeMs: number } => candidate !== null)
+  const candidates: Array<{ path: string; mtimeMs: number }> = []
+  for (let offset = 0; offset < paths.length; offset += 256) {
+    const batch = await Promise.all(paths.slice(offset, offset + 256).map(async path => {
+      try {
+        return { path, mtimeMs: (await stat(path)).mtimeMs }
+      } catch (error) {
+        if (isMissingPathError(error)) return null
+        throw error
+      }
+    }))
+    for (const candidate of batch) if (candidate) candidates.push(candidate)
+  }
 
   const activeSince = historyWindow?.activeSince ? Date.parse(historyWindow.activeSince) : Number.NaN
   const filtered = Number.isFinite(activeSince)
