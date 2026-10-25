@@ -174,6 +174,19 @@ export const piSourceDefinition: SourceDefinition = {
     if (session.nativeSessionId !== query.nativeSessionId) {
       return { state: 'drifted', reason: 'native-session-identity-changed' }
     }
+    // Session metadata is read through a second open. A replace/rename race
+    // must not splice metadata from a different inode onto verified page bytes.
+    let current: Awaited<ReturnType<typeof stat>>
+    try { current = await stat(query.filePath) }
+    catch (error) {
+      if (['ENOENT','ENOTDIR'].includes((error as NodeJS.ErrnoException).code ?? '')) {
+        return { state: 'drifted', reason: 'native-file-disappeared-after-page-read' }
+      }
+      throw error
+    }
+    if (!current.isFile() || `${current.dev}:${current.ino}` !== page.nextCursor.fileIdentity) {
+      return { state: 'drifted', reason: 'native-file-identity-changed' }
+    }
     const records = page.lines.map(line => {
       const entry = line.entry
       const nativeId = typeof entry.id === 'string' && entry.id ? entry.id : undefined
