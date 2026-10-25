@@ -99,13 +99,13 @@ test('native Worker cancellation and termination cannot leave a pending read ali
   const aborted = new AbortController()
   aborted.abort()
   await assert.rejects(client.read({
-    sourceId: 'pi', parserVersion: piManifest.parserVersion,
+    sourceId: 'pi', parserVersion: piManifest.parserVersion, expectedFileIdentity: 'missing',
     host, installation: installation('pi', '/missing'),
     query: { filePath: '/missing.jsonl', nativeSessionId: 'session' },
   }, aborted.signal))
   await client.dispose()
   await assert.rejects(client.read({
-    sourceId: 'pi', parserVersion: piManifest.parserVersion,
+    sourceId: 'pi', parserVersion: piManifest.parserVersion, expectedFileIdentity: 'missing',
     host, installation: installation('pi', '/missing'),
     query: { filePath: '/missing.jsonl', nativeSessionId: 'session' },
   }, new AbortController().signal))
