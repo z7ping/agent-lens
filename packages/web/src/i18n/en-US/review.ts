@@ -38,6 +38,7 @@ export const englishReviewMessages: LocaleMessagesDto = {
         projectSession: '{{project}} session',
         agentSession: '{{agent}} session',
         noProject: 'No project',
+        nativeIndexed: 'Native session',
         unlinkedProject: 'Unlinked project',
         resumable: 'Resume available to try',
         remoteSource: 'Remote · {{node}}',
