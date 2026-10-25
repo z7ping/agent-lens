@@ -22,7 +22,7 @@ test('native Catalog HTTP exposes only authorized session identities, no physica
   } as NativeSessionCatalogStore
   const policy = {
     isSourceEnabled: (id: string) => id === 'pi',
-  } as CapturePolicyService
+  } as unknown as CapturePolicyService
   const storage = {
     nativeSessionCatalog: catalog,
     async health() { return { ok: true } },
