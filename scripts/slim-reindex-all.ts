@@ -87,6 +87,7 @@ export async function runNativeReindexAll(args:readonly string[]):Promise<Reinde
           const report=await indexNativeInstallation(slim,{
             source,installationId:row.id,signal:new AbortController().signal,
             maxSessions:input.limit,
+            fullEnumeration:true,
             ...(profile?{runtimeProfile:profile}:{}),
           })
           reports.push({
