@@ -134,3 +134,11 @@ npm run storage:slim:assets -- --staging /path/to/slim-staging.sqlite --source p
 `SlimDataRuntime.nativePort()` 已建立通过现有 Writer/Reader IPC 的最小存储端口：主机和安装身份由只读 Worker 查询；会话 Catalog、Runtime Profile 上下文、数值缓存失效和有界 Source Checkpoint 交由 Writer Worker。它可直接传给 `NativeSessionReader`、`indexNativeInstallation`，不需要旧 `RepositorySet` 或任何 Write Claim。
 
 `SlimDataRuntime.reindexInstallation(...)` 和 `captureInstallation(...)` 接入了新的原生 Source 扫描/实时捕获实现，保留 Source-owned 原始文件作为唯一会话正文。**仍未把整个旧 HTTP/Live 运行入口切换为此服务**，在完成所有页面消费者之前不得直接启用默认安装切库。
+
+## 切库前旧数据追平对账（只读）
+
+```bash
+npm run storage:slim:reconcile -- --legacy /path/to/legacy.sqlite --backup /path/to/backup-v38.sqlite --staging /path/to/staged-v1.sqlite
+```
+
+逐表只读对比旧库与一致性备份的实际行摘要及行数，不输出记录正文、原始文件路径或 SQL 内容；非空旧 WAL/rollback journal 也会报告。旧库自备份后发生任意变化，`unchangedSinceBackup=false`。即使报告未发现变化，**也不表示 Writer 已停止或文件可安全替换**，始终 `readyToSwitch=false`；只有单独完成冻结旧写入、末次快照、原生恢复核验、文件安装与失败回滚流程后才允许最终切库。
