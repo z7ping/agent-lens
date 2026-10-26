@@ -132,7 +132,7 @@ export class SqliteNativeSessionCatalog {
       return Boolean(this.executor.db.prepare(`
       SELECT 1 FROM native_session_write_claims
       WHERE source_id=? AND installation_id=? AND native_session_id=? AND mode='native-only'
-    `).get(input.sourceId,input.installationId,input.nativeSessionId)))
+    `).get(input.sourceId,input.installationId,input.nativeSessionId))
     })
   }
 
