@@ -5,6 +5,7 @@ import {
   HubUnifiedObservationReader,
   SqliteHubRemoteReadRepository,
   SqliteStorageService,
+  SqliteSlimStorage,
   sqliteStorageProvider,
 } from '@agent-lens/storage-sqlite'
 import { isStorageBudgetPolicy, type StorageBudgetPolicy } from '@agent-lens/core'
@@ -28,6 +29,7 @@ interface DataRuntimeWorkerData {
   dbPath?: string
   nodeId?: string
   budget?: StorageBudgetPolicy
+  schemaKind?: 'legacy'|'slim'
 }
 
 function asRecord(value: unknown, label: string): Record<string, unknown> {
@@ -45,6 +47,7 @@ function parseWorkerData(value: unknown): DataRuntimeWorkerData {
   const dbPath = record.dbPath
   const nodeId = record.nodeId
   const budget = record.budget
+  const schemaKind=record.schemaKind
   if (allowDiagnostics !== undefined && typeof allowDiagnostics !== 'boolean') {
     throw new TypeError('Data Runtime workerData.allowDiagnostics must be a boolean')
   }
@@ -57,6 +60,9 @@ function parseWorkerData(value: unknown): DataRuntimeWorkerData {
   if (nodeId !== undefined && typeof nodeId !== 'string') {
     throw new TypeError('Data Runtime workerData.nodeId must be a string')
   }
+  if (schemaKind!==undefined && schemaKind!=='slim' && schemaKind!=='legacy') {
+    throw new TypeError('Data Runtime workerData.schemaKind must be slim or legacy')
+  }
   if (budget !== undefined && !isStorageBudgetPolicy(budget)) {
     throw new TypeError('Data Runtime workerData.budget must be a valid StorageBudgetPolicy')
   }
@@ -66,6 +72,7 @@ function parseWorkerData(value: unknown): DataRuntimeWorkerData {
     ...(dbPath === undefined ? {} : { dbPath }),
     ...(nodeId === undefined ? {} : { nodeId }),
     ...(budget === undefined ? {} : { budget }),
+    ...(schemaKind===undefined?{}:{schemaKind}),
   }
 }
 
@@ -75,8 +82,9 @@ const allowDiagnostics = Boolean(config.allowDiagnostics)
 const role: DataRuntimeRole = config.role ?? 'writer'
 const dbPath = config.dbPath
 const nodeId = config.nodeId ?? 'local'
+const schemaKind=config.schemaKind??'legacy'
 const SLOW_OPERATION_LOG_MS = 500
-let storage: SqliteStorageService | null = null
+let storage: SqliteStorageService | SqliteSlimStorage | null = null
 let unifiedRead: {
   logicalSessions: HubUnifiedLogicalSessionReader
   observations: HubUnifiedObservationReader
@@ -85,23 +93,33 @@ let activeTransactionId: string | null = null
 let requestTail: Promise<void> = Promise.resolve()
 
 if (dbPath) {
-  storage = await sqliteStorageProvider.create({ path: dbPath, readonly: role === 'reader', ...(config.budget ? { budget: config.budget } : {}) })
-  await sqliteStorageProvider.initialize?.(storage, { path: dbPath, readonly: role === 'reader', ...(config.budget ? { budget: config.budget } : {}) })
-  const remote = new SqliteHubRemoteReadRepository(storage.executor)
+  if (schemaKind==='slim') {
+    // This branch NEVER calls old migrations, builds canonical repositories or
+    // silently falls back to the v38 database. Caller must provide an existing
+    // verified slim SQLite path.
+    storage = SqliteSlimStorage.openExisting(dbPath,role==='reader')
+  } else {
+    storage = await sqliteStorageProvider.create({ path: dbPath, readonly: role === 'reader', ...(config.budget ? { budget: config.budget } : {}) })
+    await sqliteStorageProvider.initialize?.(storage, { path: dbPath, readonly: role === 'reader', ...(config.budget ? { budget: config.budget } : {}) })
+  }
+  if(schemaKind==='legacy') {
+  const legacy=storage as SqliteStorageService
+  const remote = new SqliteHubRemoteReadRepository(legacy.executor)
   const logicalSessions = new HubUnifiedLogicalSessionReader(
     nodeId,
-    storage.repositories.sessions,
+    legacy.repositories.sessions,
     remote,
-    storage.sessionSummaries,
+    legacy.sessionSummaries,
   )
   unifiedRead = {
     logicalSessions,
     observations: new HubUnifiedObservationReader(
       nodeId,
-      storage.repositories.observations,
+      legacy.repositories.observations,
       logicalSessions,
       remote,
     ),
+  }
   }
 }
 
@@ -206,7 +224,7 @@ async function invoke(root: unknown, path: readonly string[], args: readonly unk
   return Reflect.apply(current, parent, [...args])
 }
 
-function requireStorage(): SqliteStorageService {
+function requireStorage(): SqliteStorageService | SqliteSlimStorage {
   if (!storage) throw new Error('Data Runtime storage is not configured')
   return storage
 }
@@ -297,6 +315,7 @@ async function handleRequest(value: unknown, queuedAt: number): Promise<void> {
       reply(value.requestId, {
         ok: true,
         role,
+        schemaKind,
         storageConfigured: Boolean(storage),
         protocolVersion: DATA_RUNTIME_PROTOCOL_VERSION,
         threadId,
@@ -365,7 +384,7 @@ async function handleRequest(value: unknown, queuedAt: number): Promise<void> {
     if (value.method === 'storage.call') {
       const local = requireStorage()
       const path = stringArray(value.params?.path, 'path')
-      if (!storageRootAllowed(path)) throw new Error(`Storage RPC root is not allowed: ${path[0]}`)
+      if (!storageRootAllowed(path, schemaKind)) throw new Error(`Storage RPC root is not allowed: ${path[0]}`)
       const requestedId = transactionId(value.params?.transactionId)
       if (activeTransactionId && requestedId !== activeTransactionId) {
         throw new Error('Data Runtime storage call cannot cross an active transaction')
@@ -404,7 +423,8 @@ async function handleRequest(value: unknown, queuedAt: number): Promise<void> {
           storage.executor.rollbackExternalTransaction()
           activeTransactionId = null
         }
-        await sqliteStorageProvider.dispose(storage)
+        if(schemaKind==='slim') await storage.close()
+        else await sqliteStorageProvider.dispose(storage as SqliteStorageService)
         storage = null
       }
       reply(value.requestId, { ok: true })
