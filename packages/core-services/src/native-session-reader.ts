@@ -10,6 +10,17 @@ import type {
 import type { NativeReaderWorkerPort } from './native-reader-worker-client'
 import type { NativeWorkerNormalizedRecord } from './native-reader-worker-protocol'
 
+/** Native history needs only Source identity and a verified file Catalog.
+ * It must not require the Legacy Canonical/Observation RepositorySet.
+ */
+export type NativeSessionReaderStorage =
+  Pick<StorageService,'nativeSessionCatalog'> & {
+    repositories: {
+      installations: Pick<StorageService['repositories']['installations'],'get'>
+      hosts: Pick<StorageService['repositories']['hosts'],'get'>
+    }
+  }
+
 /** Read-only checkpoint to ensure native review cannot update ingestion state. */
 const readOnlyCheckpoint: SourceCheckpointService = {
   async get() { return null },
@@ -60,7 +71,7 @@ export type NativeArchivedHookReadResult =
  */
 export class NativeSessionReader {
   constructor(
-    private readonly storage: StorageService,
+    private readonly storage: NativeSessionReaderStorage,
     private readonly sources: SourceService,
     private readonly capturePolicy: CapturePolicyService,
     private readonly nativeWorker?: NativeReaderWorkerPort,

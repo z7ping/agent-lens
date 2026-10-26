@@ -4,6 +4,7 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { SqliteSlimStorage } from './slim-storage'
+import type { NativeSessionReaderStorage } from '@agent-lens/core-services'
 import { SqliteStorageService } from './storage'
 import { assertSlimSchema } from './slim-schema'
 
@@ -20,6 +21,18 @@ test('new slim runtime composes only native/metadata repositories and reopens wi
       for(const key of forbidden) {
         assert.equal(key in slim,false,key)
       }
+      slim.db.prepare(`INSERT INTO hosts(id,name,platform,arch,created_at,last_seen_at)
+        VALUES ('host','localhost','win32','x64','2026-10-26','2026-10-26')`).run()
+      slim.db.prepare(`INSERT INTO agent_products(id,name) VALUES ('pi','Pi')`).run()
+      slim.db.prepare(`INSERT INTO agent_installations(
+        id,host_id,product_id,first_seen_at,last_seen_at
+      ) VALUES ('install','host','pi','2026-10-26','2026-10-26')`).run()
+      // Compile-time port compatibility: the NativeSessionReader accepts slim
+      // metadata readers without the retired full RepositorySet.
+      const nativeReaderStorage: NativeSessionReaderStorage = slim
+      assert.equal((await nativeReaderStorage.repositories.hosts.get('host'))?.name,'localhost')
+      assert.equal((await nativeReaderStorage.repositories.installations.get('install'))?.productId,'pi')
+      assert.equal(await nativeReaderStorage.repositories.hosts.get('missing'),null)
       const session={sourceId:'pi',installationId:'install',nativeSessionId:'s',
         locationKind:'native' as const,filePath:resolve('sessions/s.jsonl'),
         fileIdentity:'1:2',fileSize:100,fileMtimeMs:1,
