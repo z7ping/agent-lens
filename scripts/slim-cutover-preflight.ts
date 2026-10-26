@@ -5,9 +5,10 @@ import {
   inspectLegacyCutover,
   stageSlimCutover,
   auditSlimNativeCoverage,
+  auditSlimCutoverFreshness,
 } from '../packages/storage-sqlite/src/index'
 
-type Command = 'preflight' | 'stage' | 'verify'
+type Command = 'preflight' | 'stage' | 'verify' | 'reconcile'
 
 export interface CutoverCliArgs {
   command: Command
@@ -18,8 +19,8 @@ export interface CutoverCliArgs {
 
 export function parseCutoverArgs(args: readonly string[]): CutoverCliArgs {
   const command = args[0]
-  if (command !== 'preflight' && command !== 'stage' && command !== 'verify') {
-    throw new Error('Use preflight, stage or verify (never auto-switch or auto-delete)')
+  if (command !== 'preflight' && command !== 'stage' && command !== 'verify' && command !== 'reconcile') {
+    throw new Error('Use preflight, stage, verify or reconcile (never auto-switch or auto-delete)')
   }
   const named = new Map<string,string>()
   for (let i=1;i<args.length;i++) {
@@ -43,6 +44,12 @@ export function parseCutoverArgs(args: readonly string[]): CutoverCliArgs {
   }
   const backupPath=named.get('--backup')
   const stagingPath=named.get('--staging')
+  if(command==='reconcile') {
+    if(!backupPath || !stagingPath) {
+      throw new Error('Reconcile requires --backup and --staging, all read-only')
+    }
+    return {command,legacyPath,backupPath,stagingPath}
+  }
   if(command==='verify') {
     if(!stagingPath || backupPath) {
       throw new Error('Verify requires --staging and rejects --backup; both DBs are read-only')
@@ -67,6 +74,15 @@ export async function runSlimCutoverCli(args: readonly string[]): Promise<object
     } finally {
       db.close()
     }
+  }
+  if(options.command==='reconcile') {
+    if(!options.backupPath || !options.stagingPath){
+      throw new Error('Reconcile source paths required')
+    }
+    return auditSlimCutoverFreshness({
+      legacyPath:options.legacyPath,backupPath:options.backupPath,
+      stagingPath:options.stagingPath,
+    })
   }
   if(options.command==='verify') {
     if(!options.stagingPath) throw new Error('Verify staging path required')
