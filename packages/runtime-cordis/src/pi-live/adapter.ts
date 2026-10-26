@@ -374,9 +374,13 @@ export function normalizePiLiveRuntimeEvent(value: LiveRuntimeEvent): LiveRuntim
  * Pi-only controls stay on PiLiveService while common cross-agent operations
  * are exposed through the Live registry.
  */
+const NO_LEGACY_HISTORY_CAPABILITIES = new Set<LiveCapabilityName>([
+  'resume', 'fork', 'fork-at',
+])
+
 export class PiLiveAdapter implements LiveAdapter {
-  readonly manifest = piLiveAdapterManifest
-  readonly capabilities: ReadonlySet<LiveCapabilityName> = createLiveCapabilitySet(CAPABILITIES)
+  readonly manifest: LiveAdapterManifest
+  readonly capabilities: ReadonlySet<LiveCapabilityName>
   readonly inputCapabilities = INPUT_CAPABILITIES
   readonly startCapabilities = {
     workspace: 'required',
@@ -387,7 +391,19 @@ export class PiLiveAdapter implements LiveAdapter {
     readonly service: PiLiveService,
     private readonly attachments: LiveAttachmentService,
     private readonly storage?: StorageService,
-  ) {}
+    options: { nativeOnly?: boolean } = {},
+  ) {
+    // Slim must not advertise actions whose implementation still needs the
+    // retired SourceRecord/LogicalSession SQL graph. The native Pi Worker
+    // continues to support create, stream, send, queue, and recovery.
+    const features=options.nativeOnly
+      ? CAPABILITIES.filter(capability=>!NO_LEGACY_HISTORY_CAPABILITIES.has(capability))
+      : [...CAPABILITIES]
+    this.manifest=options.nativeOnly
+      ? {...piLiveAdapterManifest,capabilities:[...features]}
+      : piLiveAdapterManifest
+    this.capabilities=createLiveCapabilitySet(features)
+  }
 
   availability() {
     return this.service.availability()

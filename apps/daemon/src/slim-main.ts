@@ -4,7 +4,7 @@ import { startLocalVault } from '@agent-lens/backup-local'
 import { isAbsolute, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { DefaultCapturePolicyService, resolveCapturePolicyPluginState } from '@agent-lens/capture-policy'
-import type { BackupService, CapturePolicyService, SourceService } from '@agent-lens/core'
+import type { BackupService, CapturePolicyService, SourceService, LiveService, LiveAttachmentService } from '@agent-lens/core'
 import { DefaultSourceService } from '@agent-lens/core-services'
 import { piSourceDefinition } from '@agent-lens/source-pi'
 import { codexSourceDefinition } from '@agent-lens/source-codex'
@@ -14,6 +14,7 @@ import { openCodeSourceDefinition } from '@agent-lens/source-opencode'
 import { startNativeOnlyHttpSurface } from '@agent-lens/surface-http'
 import { SlimDataRuntime } from './data-runtime/slim-runtime.js'
 import { SlimSourceCoordinator } from './slim-source-coordinator.js'
+import { startSlimPiLive } from './slim-live.js'
 
 export interface SlimDaemonOptions {
   /** Existing slim v1 only; absent/v38 paths are never upgraded at boot. */
@@ -24,6 +25,9 @@ export interface SlimDaemonOptions {
   vaultPath?:string
   /** Test-only external existing Vault; otherwise compose the same Local Vault as Cordis. */
   backup?:BackupService
+  /** Test-only injected Live Registry/attachments; real runtime is Pi Worker. */
+  lives?:LiveService
+  liveAttachments?:LiveAttachmentService
   /** Testable injection, not a Legacy StorageService adapter. */
   runtime?:SlimDataRuntime
   sources?:SourceService
@@ -62,8 +66,12 @@ export async function startSlimNativeDaemon(options:SlimDaemonOptions){
       configuredEnabledSources:resolved.settings.enabledSources,
     },
   )
+  if(Boolean(options.lives)!==Boolean(options.liveAttachments)){
+    throw new TypeError('Slim Live Registry and attachment store must be injected together')
+  }
   await runtime.start()
   let vault:ReturnType<typeof startLocalVault>|undefined
+  let live:ReturnType<typeof startSlimPiLive>|undefined
   try {
     if(!options.backup){
       const vaultPath=options.vaultPath??process.env.AGENT_LENS_VAULT_PATH
@@ -85,10 +93,13 @@ export async function startSlimNativeDaemon(options:SlimDaemonOptions){
         {vaultPath,sourceOrder},
       )
     }
+    if(!options.lives)live=startSlimPiLive(runtime.nativePort().checkpoints)
     const http=await startNativeOnlyHttpSurface(runtime.nativeHttpPort(),{
       ...(options.port===undefined?{}:{port:options.port}),
       sources,capturePolicy:policy,
       backup:options.backup??vault!.service,
+      lives:options.lives??live!.lives,
+      liveAttachments:options.liveAttachments??live!.attachments,
       staticDir:resolveSlimWebRoot(options.webRoot),
       reader:runtime.nativeReader(sources,policy),
     })
@@ -105,14 +116,14 @@ export async function startSlimNativeDaemon(options:SlimDaemonOptions){
         try{await http.dispose()}finally{
           try{await coordinator.dispose()}finally{
             vault?.stop()
-            await runtime.shutdown()
+            try{await live?.dispose()}finally{await runtime.shutdown()}
           }
         }
       },
     }
   }catch(error){
     vault?.stop()
-    await runtime.shutdown()
+    try{await live?.dispose()}finally{await runtime.shutdown()}
     throw error
   }
 }

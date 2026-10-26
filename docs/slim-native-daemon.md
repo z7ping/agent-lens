@@ -20,13 +20,18 @@ APIs (501), so this is for incremental development, **not production cutover**.
 
 Available: native sessions and deep links, native windows, authorized body search,
 attachments, archived Hook pages, native statistics/rebuild, aggregate Usage/Insights,
-Facets, the existing Local Vault `/api/v1/backups` endpoints and
+the existing Pi Live create/send/stream/runtime controls and ephemeral attachment
+API, Facets, the existing Local Vault `/api/v1/backups` endpoints and
 `/api/v1/projects/launchable` project picker (with
-validated workspace paths), health and readiness. Other /api/v1/ routes explicitly return 501 instead
-of fake empty data or a Legacy fallback.
+validated workspace paths), health and readiness. **Legacy logical-session
+Resume/Fork/Fork-at is intentionally not advertised in native-only mode**
+until native Catalog-based input authorization replaces SourceRecord SQL. No
+startup audit event is written to an old Observation table. Other /api/v1/
+routes explicitly return 501 instead of fake empty data or a Legacy fallback.
 
 **Cutover not authorized:** default `start` still runs the old Daemon;
-Slim standalone does not yet expose Live/Backup/Task Center or replace the active installed DB. Do not serve the full desktop
+Slim standalone does not yet expose complete Live history continuation, full Task Center
+or replace the active installed DB. Do not serve the full desktop
 experience from this partial surface and do not delete any old DB. #617 remains open.
 
 On explicit Slim startup, the existing registered Source.detect() contracts
