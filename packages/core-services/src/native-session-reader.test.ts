@@ -361,3 +361,75 @@ test('Hook reader delegates isolated Source normalization to Worker then applies
   assert.equal(workerCalls,1)
 })
 
+
+test('native reader uses persisted Slim profile roots across Worker, Hook and media reads',async()=>{
+  const resolvedRoots:string[]=[]
+  const scopedProfile={
+    id:'profile-1',installationId:'install',nativeProfileId:'profile-1',
+    dataRoot:'/scoped-sessions',configRoot:'/profile-config',
+    firstSeenAt:at,lastSeenAt:at,
+  }
+  const scopedCatalog={...catalog,filePath:'/scoped-sessions/S1.jsonl'}
+  const storage={
+    nativeSessionCatalog:{async get(){return scopedCatalog}},
+    nativeSessionContexts:{async get(){return {runtimeProfileId:'profile-1'}}},
+    runtimeProfiles:{async get(){return scopedProfile}},
+    repositories:{
+      installations:{async get(){return installation}},
+      hosts:{async get(){return host}},
+    },
+  }
+  const worker={
+    supports(){return true},
+    async read(input:{
+      installation:{dataRoot?:string};runtimeProfile?:{id:string}
+    }){
+      resolvedRoots.push(input.installation.dataRoot??'')
+      assert.equal(input.runtimeProfile?.id,'profile-1')
+      return {
+        state:'available' as const,entries:[],
+        nextCursor:{offset:10,sequence:1,fileIdentity:'1:9'},
+        hasMore:false,pendingTail:false,
+      }
+    },
+    async readHooks(input:{
+      installation:{dataRoot?:string};runtimeProfile?:{id:string}
+    }){
+      resolvedRoots.push(input.installation.dataRoot??'')
+      assert.equal(input.runtimeProfile?.id,'profile-1')
+      return {state:'available' as const,entries:[],hasMore:false}
+    },
+  }
+  const source={
+    manifest:{sourceId:'pi',productId:'pi',parserVersion:'v1'},
+    readNativeSessionPage:async(_query,ctx)=>{
+      resolvedRoots.push(ctx.installation.dataRoot??'')
+      assert.equal(ctx.runtimeProfile?.id,'profile-1')
+      return {state:'available' as const,records:[],
+        recordCursors:[],nextCursor:{offset:10,sequence:1,fileIdentity:'1:9'},
+        hasMore:false,pendingTail:false}
+    },
+    readArchivedNativeHooksPage:async()=>({records:[],hasMore:false}),
+  } as unknown as SourceDefinition
+  const policy={
+    isSourceEnabled:()=>true,isEnabled:()=>true,
+    sanitizeNormalizedOutput:(value:unknown)=>value,
+  } as unknown as CapturePolicyService
+  const scoped=new NativeSessionReader(storage as never,
+    {list:()=>[source]} as unknown as SourceService,policy,worker)
+  assert.equal((await scoped.read(query)).state,'available')
+  assert.equal((await scoped.readArchivedHooks(query)).state,'available')
+  assert.equal((await scoped.readUnpersistedMediaPage({
+    ...query,cursor:{offset:0,sequence:0,fileIdentity:'1:9'},
+  })).state,'drifted') // A valid profile root is necessary but not sufficient to hydrate a record.
+  assert.deepEqual(resolvedRoots,['/scoped-sessions','/scoped-sessions','/scoped-sessions'])
+  const missingProfile=new NativeSessionReader({
+    ...storage,runtimeProfiles:{async get(){return null}},
+  } as never,{list:()=>[source]} as unknown as SourceService,policy,worker)
+  assert.deepEqual(await missingProfile.read(query),{
+    state:'unavailable',reason:'native-runtime-profile-missing',
+  })
+  assert.deepEqual(await missingProfile.readArchivedHooks(query),{
+    state:'unavailable',reason:'native-runtime-profile-missing',
+  })
+})
