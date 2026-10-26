@@ -40,6 +40,12 @@ Slim standalone does not yet expose complete Live history continuation, full Tas
 or replace the active installed DB. Do not serve the full desktop
 experience from this partial surface and do not delete any old DB. #617 remains open.
 
+Source current-state asset discovery is attached to the same bounded startup
+scope as native session indexing. It reuses `NativeOnlyAssetScanner`
+and writes only definition/binding/current-state metadata plus a small scan
+checkpoint through Slim worker methods. Assets/Evidence payloads are not
+duplicated into event tables; discovery failure is isolated from session Capture.
+
 On explicit Slim startup, the existing registered Source.detect() contracts
 first discover local installations and Profiles into minimal Slim identities;
 then indexed installations and their Profiles are processed **after HTTP listen**.
