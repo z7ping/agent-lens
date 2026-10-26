@@ -105,7 +105,7 @@ test('native indexer enforces bounded sessions and preserves write errors',async
   assert.equal(stored,2)
   assert.equal(report.exhausted,false)
   await assert.rejects(indexer.scan({
-    source,host,installation,signal:new AbortController().signal,maxSessions:1000,
+    source,host,installation,signal:new AbortController().signal,maxSessions:5001,
   }),/budget/)
   const failing=new NativeOnlySourceIndexer({async upsert(){throw new Error('sqlite write failed')}})
   await assert.rejects(failing.scan({
