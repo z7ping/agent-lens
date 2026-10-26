@@ -81,3 +81,72 @@ test('Slim Pi denies disabled Source, drifted Reader and wrong native session he
     await assert.rejects(()=>mismatched.resolve('legacy-logical-id','continue'),/无效/)
   }finally{await rm(root,{recursive:true,force:true})}
 })
+
+
+test('Pi fork-at validates a unique assistant native event with bounded Source Reader pagination',async()=>{
+  const root=await mkdtemp(join(tmpdir(),'al-pi-native-fork-at-'))
+  const filePath=join(root,'native.jsonl')
+  try{
+    await writeFile(filePath,JSON.stringify({type:'session',id:'s1',cwd:root})+'\n')
+    const meta=await stat(filePath)
+    const catalog={async getByReviewSessionId(){
+      return {sourceId:'pi',installationId:'install',nativeSessionId:'s1',
+        locationKind:'native',filePath,fileIdentity:`${meta.dev}:${meta.ino}`}
+    }} as never
+    const policy={isSourceEnabled:()=>true}
+    const reads:number[]=[]
+    const reader={async read(input:{limit?:number;cursor?:{offset:number}}){
+      reads.push(input.limit??0)
+      if(input.limit===1)return {state:'available'}
+      if(!input.cursor)return {
+        state:'available',pendingTail:false,hasMore:true,
+        nextCursor:{offset:100,sequence:2,fileIdentity:`${meta.dev}:${meta.ino}`},
+        observations:[{kind:'message.user',nativeEventId:'assistant-entry'}],
+      }
+      return {
+        state:'available',pendingTail:false,hasMore:false,
+        nextCursor:{offset:200,sequence:4,fileIdentity:`${meta.dev}:${meta.ino}`},
+        observations:[{kind:'message.assistant',nativeEventId:'assistant-entry'}],
+      }
+    }} as never
+    const resolver=createSlimPiHistoryResolver(catalog,reader,policy)
+    assert.ok(resolver.resolveForkAt)
+    const result=await resolver.resolveForkAt!(REVIEW,'assistant-entry')
+    assert.equal(result.branchFromEntryId,'assistant-entry')
+    assert.equal(result.historyAction,'fork')
+    assert.equal(result.sessionPath,filePath)
+    assert.deepEqual(reads,[1,32,32])
+  }finally{await rm(root,{recursive:true,force:true})}
+})
+
+test('Pi fork-at rejects unverified user messages, duplicates and incomplete tail',async()=>{
+  const root=await mkdtemp(join(tmpdir(),'al-pi-native-fork-deny-'))
+  const filePath=join(root,'native.jsonl')
+  try{
+    await writeFile(filePath,JSON.stringify({type:'session',id:'s1',cwd:root})+'\n')
+    const meta=await stat(filePath)
+    const catalog={async getByReviewSessionId(){
+      return {sourceId:'pi',installationId:'install',nativeSessionId:'s1',
+        locationKind:'native',filePath,fileIdentity:`${meta.dev}:${meta.ino}`}
+    }} as never
+    const resolve=(observations:unknown[],pendingTail=false,hasMore=false)=>{
+      const reader={async read(input:{limit?:number}){
+        if(input.limit===1)return {state:'available'}
+        return {state:'available',observations,pendingTail,hasMore,
+          nextCursor:{offset:0,sequence:0,fileIdentity:`${meta.dev}:${meta.ino}`}}
+      }} as never
+      return createSlimPiHistoryResolver(catalog,reader,{isSourceEnabled:()=>true})
+    }
+    await assert.rejects(()=>resolve([{kind:'message.user',nativeEventId:'u'}])
+      .resolveForkAt!(REVIEW,'u'),/未验证到唯一/)
+    await assert.rejects(()=>resolve([
+      {kind:'message.assistant',nativeEventId:'dup'},
+      {kind:'message.assistant',nativeEventId:'dup'},
+    ]).resolveForkAt!(REVIEW,'dup'),/不唯一/)
+    await assert.rejects(()=>resolve([
+      {kind:'message.assistant',nativeEventId:'tail'},
+    ],true).resolveForkAt!(REVIEW,'tail'),/尾部/)
+    await assert.rejects(()=>resolve([],false,true)
+      .resolveForkAt!(REVIEW,'missing'),/游标无进展/)
+  }finally{await rm(root,{recursive:true,force:true})}
+})
