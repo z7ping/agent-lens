@@ -100,3 +100,11 @@ npm run storage:slim:reindex-all -- --staging /path/to/slim-staging.sqlite --all
 `auditNativeSessionOriginal` 在 CoreServices 层通过真正的 Source Reader 逐页恢复原始记录，每条验证原生 ID、文件位置和 `rawRecovery.verify` 指纹；会话尾部再次对比真实文件或 SQLite/WAL revision。**只返回每个会话的验证结果和记录/页数，不保存任何原始正文。**
 
 扫描上限与待完成尾部返回 `partial`，Source 文件丢失或身份漂移返回 `unavailable/drifted`。这项证明仅适用于**当时可读取的原生当前态**；对覆盖不完整的运行时 Hook、已覆盖或被删除的历史版本不宣称完整。切换门禁必须再汇总逐会话验收结果，而非只用 Catalog 行数。当前为独立服务，尚未自动切库。
+
+## 全库原生当前态深度检查
+
+```bash
+npm run storage:slim:audit-originals -- --staging /path/to/slim-staging.sqlite --max-sessions 5000 --max-pages 16384
+```
+
+**只读**打开指定精简暂存库，按原生 Catalog 逐会话调用 `auditNativeSessionOriginal`，原生记录逐页/逐条核验直到 EOF；返回 verified/partial/drifted/unavailable/unsupported 计数、额度截断标记和最多 32 个不包含路径的摘要样本。即使 `allCurrentOriginalsVerified:true`，也不表示已删除的历史版本或缺失 Hook 被恢复，`readyToSwitch:false` 保持不变。
