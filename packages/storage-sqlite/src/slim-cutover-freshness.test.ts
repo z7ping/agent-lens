@@ -1,10 +1,11 @@
+import { LegacyV38TestDatabase } from './legacy-v38-test-fixture'
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { copyFile, mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import Database from 'better-sqlite3'
-import { SqliteStorageService } from './storage'
+
 import { SqliteSlimStorage } from './slim-storage'
 import { auditSlimCutoverFreshness } from './slim-cutover-freshness'
 
@@ -14,7 +15,7 @@ test('frozen old/backup row-digest agreement is reported without exposing row da
   const backupPath=join(dir,'backup.sqlite')
   const stagingPath=join(dir,'staging.sqlite')
   try{
-    const legacy=new SqliteStorageService({path:legacyPath})
+    const legacy=new LegacyV38TestDatabase({path:legacyPath})
     await legacy.migrate()
     await legacy.close()
     await copyFile(legacyPath,backupPath)
@@ -59,7 +60,7 @@ test('freshness detects every v38 event/sidecar table and schema-only change',as
   const backupPath=join(dir,'backup.sqlite')
   const stagingPath=join(dir,'staging.sqlite')
   try{
-    const service=new SqliteStorageService({path:legacyPath})
+    const service=new LegacyV38TestDatabase({path:legacyPath})
     await service.migrate()
     await service.close()
     await copyFile(legacyPath,backupPath)
