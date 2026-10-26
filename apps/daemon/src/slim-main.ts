@@ -111,7 +111,7 @@ export async function startSlimNativeDaemon(options:SlimDaemonOptions){
       ...(options.localePackDirectory?{localePackDirectory:options.localePackDirectory}:{}),
       reader:nativeReader,
     })
-    const coordinator=new SlimSourceCoordinator(runtime,sources,policy)
+    const coordinator=new SlimSourceCoordinator(runtime,sources,policy,policy)
     // HTTP is already ready; directory scans are now isolated, bounded and
     // asynchronous, so startup never waits for large original Source roots.
     coordinator.start()
