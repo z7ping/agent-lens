@@ -274,6 +274,19 @@ export class SqliteNativeSessionCatalog {
       if (input.sourceId) { predicates.push('source_id=?'); values.push(input.sourceId) }
       if (input.installationId) { predicates.push('installation_id=?'); values.push(input.installationId) }
       if (input.locationKind) { predicates.push('location_kind=?'); values.push(input.locationKind) }
+      if (input.projectId) {
+        if (!this.executor.slimSchema) {
+          throw new Error('Project-filtered native Catalog requires slim SQLite')
+        }
+        predicates.push(`EXISTS (
+          SELECT 1 FROM native_session_context AS ctx
+          WHERE ctx.source_id=native_session_catalog.source_id
+            AND ctx.installation_id=native_session_catalog.installation_id
+            AND ctx.native_session_id=native_session_catalog.native_session_id
+            AND ctx.project_id=?
+        )`)
+        values.push(input.projectId)
+      }
       const search = input.search?.trim().slice(0, 256)
       if (search) {
         // Parametrized substring search: literal '%' and '_' are NOT SQL wildcards.
