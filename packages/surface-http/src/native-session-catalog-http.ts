@@ -109,11 +109,6 @@ export async function handleNativeSessionCatalogRequest(
   const limit = rawLimit === undefined ? 50 : Number(rawLimit)
   if (!Number.isSafeInteger(limit) || limit < 1 || limit > MAX_PAGE) throw badRequest('Invalid catalog page limit')
   const before = decodeCatalogCursor(parseIdentifier(url.searchParams, 'cursor', MAX_CURSOR))
-  const rawOnlyWithoutLegacyReview = parseIdentifier(url.searchParams, 'onlyWithoutLegacyReview')
-  if (rawOnlyWithoutLegacyReview && rawOnlyWithoutLegacyReview !== '1') {
-    throw badRequest('Invalid onlyWithoutLegacyReview filter')
-  }
-  const onlyWithoutLegacyReview = rawOnlyWithoutLegacyReview === '1'
 
   if (sourceId && !policy.isSourceEnabled(sourceId)) {
     writeJson(response, 200, { items: [], hasMore: false })
@@ -178,7 +173,6 @@ export async function handleNativeSessionCatalogRequest(
     ...(sourceId ? { sourceId } : {}),
     ...(installationId ? { installationId } : {}),
     ...(projectId ? { projectId } : {}),
-    ...(onlyWithoutLegacyReview ? { onlyWithoutLegacyReview } : {}),
     ...(search ? { search } : {}),
     ...(before ? { before } : {}),
     limit,
