@@ -74,8 +74,11 @@ export function assertSlimSchema(db: Database.Database): void {
 
 /** Distinguish v1 slim database from the older migration chain (also has version 1). */
 export function isSlimDatabase(db: Database.Database): boolean {
-  const table = db.prepare(`SELECT 1 FROM sqlite_master WHERE type='table' AND name='schema_migrations'`).get()
-  if (!table) return false
+  const probe = db.prepare(`SELECT 1 FROM sqlite_master WHERE type='table' AND name='schema_migrations'`)
+  // Certain readers use a partial SQL test double (SELECT/all only). It
+  // cannot represent a migrated database, so use the Legacy query branch.
+  if (typeof probe.get !== 'function') return false
+  if (!probe.get()) return false
   return Boolean(db.prepare(`SELECT 1 FROM schema_migrations
     WHERE version=1 AND name='slim-native-session-v1'`).get())
 }
