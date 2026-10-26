@@ -18,6 +18,8 @@ export interface NativeSessionCatalogEntry {
 export interface NativeSessionCatalogQuery {
   sourceId?: string
   installationId?: string
+  /** Slim-only project filter through native_session_context (no Legacy Session SQL). */
+  projectId?: string
   locationKind?: NativeSessionLocationKind
   /** Only Catalog sessions without any historical SQL Review observations.
    * Filter in SQL before pagination, not in the client after LIMIT.

@@ -5,6 +5,7 @@ import type { RepositorySet } from '@agent-lens/core'
 import { SqliteExecutor } from './executor'
 import { mapHost, mapInstallation } from './repository-row-mappers'
 import { SqliteNativeSessionCatalog } from './native-session-catalog'
+import { SqliteSlimNativeSessionContexts } from './slim-native-session-contexts'
 import { SqliteNativeSessionMetrics } from './native-session-metrics'
 import { SqliteRuntimeProfileRepository } from './runtime-profiles'
 import { SqliteAssetInventoryReader } from './asset-inventory'
@@ -31,6 +32,7 @@ export class SqliteSlimStorage {
     installations: Pick<RepositorySet['installations'],'get'>
   }
   readonly nativeSessionCatalog: SqliteNativeSessionCatalog
+  readonly nativeSessionContexts: SqliteSlimNativeSessionContexts
   readonly nativeSessionMetrics: SqliteNativeSessionMetrics
   readonly runtimeProfiles: SqliteRuntimeProfileRepository
   readonly assetInventory: SqliteAssetInventoryReader
@@ -63,6 +65,7 @@ export class SqliteSlimStorage {
       },
     }
     this.nativeSessionCatalog = new SqliteNativeSessionCatalog(this.executor)
+    this.nativeSessionContexts = new SqliteSlimNativeSessionContexts(this.executor)
     this.nativeSessionMetrics = new SqliteNativeSessionMetrics(this.executor)
     this.runtimeProfiles = new SqliteRuntimeProfileRepository(this.executor)
     this.assetInventory = new SqliteAssetInventoryReader(this.executor)
