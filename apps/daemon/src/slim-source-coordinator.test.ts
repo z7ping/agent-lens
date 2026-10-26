@@ -145,3 +145,40 @@ test('failed Source.detect preserves pre-existing Slim catalog and never invokes
   assert.deepEqual(calls,['facets'])
   await coordinator.dispose()
 })
+
+
+test('Slim asset scan runs after bounded native Catalog indexing and never blocks capture on failure',async()=>{
+  const calls:string[]=[]
+  const runtime={
+    async resolveHost(){return {id:'host'}},
+    async resolveInstallation(){return {id:'install'}},
+    async resolveProfile(){return {id:'profile'}},
+    async facets(){return {installedProducts:[{productId:'pi',installationIds:['install']}]}},
+    async profiles(){return []},
+    async reindexInstallation(){calls.push('index');return {indexed:1}},
+    async scanInstallationAssets(input:{source:{manifest:{sourceId:string}}}){
+      assert.equal(input.source.manifest.sourceId,'pi')
+      calls.push('assets')
+      throw new Error('asset source temporarily unavailable')
+    },
+    async captureInstallation(){calls.push('capture');return {dispose:async()=>{
+      calls.push('dispose')
+    }}},
+  }
+  const source={
+    manifest:{sourceId:'pi',productId:'pi'},detect:async()=>[],
+    discoverAssets:async function*(){yield {definition:{type:'skill',canonicalName:'demo'}}},
+    startCapture:async()=>({dispose(){}}),
+  }
+  const policy={isSourceEnabled:()=>true,isEnabled:()=>true,
+    sanitizeDiscoveredAsset:(x:unknown)=>x}
+  const coordinator=new SlimSourceCoordinator(runtime as never,{list:()=>[source]} as never,
+    policy,policy as never)
+  coordinator.start()
+  for(let i=0;i<100&&!coordinator.snapshot().finished;i++)await new Promise(
+    resolve=>setImmediate(resolve))
+  assert.deepEqual(calls,['index','assets','capture'])
+  assert.equal(coordinator.snapshot().failedScopes,1)
+  await coordinator.dispose()
+  assert.equal(calls.at(-1),'dispose')
+})
