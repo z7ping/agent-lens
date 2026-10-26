@@ -50,6 +50,8 @@ export interface SlimCutoverGateReport {
   missingSessionContexts:number
   oldDatabaseChanged:boolean
   unfinishedNativeMetrics:number
+  partialNativeMetrics:number
+  legacyHookRecords:number
   /** Unmapped legacy SourceRecords cannot be certified by native session catalog. */
   legacyRecordsWithoutSession:number
   blockedBy:readonly string[]
@@ -63,6 +65,8 @@ export function summarizeSlimGate(input:{
     missingFromNativeCatalog:number;missingContext:number
     invalidOldIdentities:number;legacyRecordsWithoutSession:number
     nativeMetricsMissingOrStale:number
+    nativeMetricsPartial?:number
+    legacyHookRecords?:number
   }
   originals:Pick<OriginalsAuditReport,
     'verified'|'partial'|'unavailable'|'drifted'|'unsupported'
@@ -79,6 +83,9 @@ export function summarizeSlimGate(input:{
   if(!originals.catalogEnumerationComplete)blockedBy.push('native-audit-budget-or-enumeration-incomplete')
   if(!originals.allCurrentOriginalsVerified)blockedBy.push('original-session-content-unverified')
   if(identities.nativeMetricsMissingOrStale)blockedBy.push('native-metrics-missing-or-stale')
+  if(identities.nativeMetricsPartial)blockedBy.push('native-metrics-partial-not-certified')
+  if(identities.legacyHookRecords)blockedBy.push('legacy-hook-records-require-archive-verification')
+  if(identities.archivedOnly)blockedBy.push('archived-only-sessions-not-deep-audited')
   // Hook-only history, application configuration, daemon writer ownership,
   // cleanup/rollback and migration ownership have separate mandatory gates.
   blockedBy.push('hook-and-archival-coverage-not-certified')
@@ -95,6 +102,8 @@ export function summarizeSlimGate(input:{
     missingSessionContexts:identities.missingContext,
     oldDatabaseChanged:!input.oldDatabaseUnchanged,
     unfinishedNativeMetrics:identities.nativeMetricsMissingOrStale,
+    partialNativeMetrics:identities.nativeMetricsPartial??0,
+    legacyHookRecords:identities.legacyHookRecords??0,
     legacyRecordsWithoutSession:identities.legacyRecordsWithoutSession,
     blockedBy,
     readyToSwitch:false,

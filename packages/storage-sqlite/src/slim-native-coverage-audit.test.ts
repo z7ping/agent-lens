@@ -53,6 +53,8 @@ test('read-only cutover coverage differentiates native, archive and missing orig
       assert.equal(report.missingContext,3)
       assert.equal(report.legacyRecordsWithoutSession,2)
       assert.equal(report.nativeMetricsMissingOrStale,1)
+      assert.equal(report.nativeMetricsPartial,0)
+      assert.equal(report.legacyHookRecords,0)
       assert.equal(report.nativeContentFullyVerified,false)
       assert.equal(report.readyToSwitch,false)
       assert.equal(report.missingExamples.length,1)
@@ -71,4 +73,41 @@ test('cutover coverage audit refuses writeable input and does not create fallbac
   try{
     assert.throws(()=>auditSlimNativeCoverage(db,db),/read-only/)
   }finally{db.close()}
+})
+
+
+test('cutover reports old Hook original gaps and partial metric coverage without exposing payloads',async()=>{
+  const root=await mkdtemp(join(tmpdir(),'agent-lens-hooks-gap-'))
+  const oldPath=join(root,'legacy.sqlite'),slimPath=join(root,'slim.sqlite')
+  try{
+    const old=new Database(oldPath)
+    try{
+      old.exec(`CREATE TABLE schema_migrations(version INTEGER PRIMARY KEY);
+        INSERT INTO schema_migrations VALUES(38);
+        CREATE TABLE source_sessions(source_id TEXT,installation_id TEXT,native_session_id TEXT);
+        CREATE TABLE source_records(source_id TEXT,installation_id TEXT,
+          source_session_native_id TEXT,native_type TEXT,locator_json TEXT,payload_json TEXT);
+        INSERT INTO source_records VALUES('codex','i','s','permission',
+          '{"kind":"runtime-hook"}','PRIVATE HOOK CONTENT');`)
+    }finally{old.close()}
+    const slim=await SqliteSlimStorage.createFresh(slimPath)
+    try{
+      slim.db.prepare(`INSERT INTO native_session_catalog(source_id,installation_id,
+        native_session_id,location_kind,file_path,file_identity,file_size,
+        file_mtime_ms,last_activity_at,updated_at)
+        VALUES('codex','i','s','native','/s','1:2',1,1,'2026-10-26','2026-10-26')`).run()
+      slim.db.prepare(`INSERT INTO native_session_metrics(source_id,installation_id,native_session_id,
+        file_identity,file_size,file_mtime_ms,parser_version,projection_version,coverage,
+        interaction_count,tool_call_count,tool_result_count,tool_error_count,error_count,computed_at)
+        VALUES('codex','i','s','1:2',1,1,'v1','v1','partial',0,0,0,0,0,'2026-10-26')`).run()
+    }finally{await slim.close()}
+    const ro=new Database(oldPath,{readonly:true,fileMustExist:true})
+    const sr=new Database(slimPath,{readonly:true,fileMustExist:true})
+    try{
+      const report=auditSlimNativeCoverage(ro,sr)
+      assert.equal(report.legacyHookRecords,1)
+      assert.equal(report.nativeMetricsPartial,1)
+      assert.equal(JSON.stringify(report).includes('PRIVATE HOOK CONTENT'),false)
+    }finally{ro.close();sr.close()}
+  }finally{await rm(root,{recursive:true,force:true})}
 })

@@ -16,6 +16,10 @@ export interface SlimNativeCoverageAudit {
   /** SourceRecord facts without a native session identity are invisible to Catalog coverage. */
   readonly legacyRecordsWithoutSession: number
   readonly nativeMetricsMissingOrStale: number
+  /** Rows marked partial can never certify full numerical replay. */
+  readonly nativeMetricsPartial: number
+  /** Existing Hook records require original Hook archives, not a Session Catalog row. */
+  readonly legacyHookRecords: number
   /** Opaque digest; no user prompts, raw file paths or session IDs. */
   readonly missingExamples: readonly {sourceId:string;opaqueSession:string}[]
   readonly nextRequiredActions: readonly string[]
@@ -99,6 +103,18 @@ export function auditSlimNativeCoverage(
           AND s.native_session_id=r.source_session_native_id
       )
   `):0
+  // Count only metadata for legacy Hook facts. Never materialize source payloads.
+  // Old databases without the optional columns cannot be taken as proof of
+  // zero Hooks; the final source capability gate remains required regardless.
+  const sourceColumns=hasSourceRecords
+    ?(oldDb.prepare('PRAGMA table_info("source_records")').all() as Array<{name:string}>).map(x=>x.name)
+    :[]
+  const legacyHookRecords=hasSourceRecords && sourceColumns.includes('locator_json')
+    ?count(oldDb,`SELECT COUNT(*) AS n FROM source_records
+      WHERE ${sourceColumns.includes('native_type')?"LOWER(COALESCE(native_type,'')) LIKE '%hook%' OR":''}
+        (CASE WHEN json_valid(locator_json) THEN
+          json_extract(locator_json,'$.kind')='runtime-hook' ELSE 0 END)`)
+    :0
   const migratedContextIdentities=count(slimDb,'SELECT COUNT(*) AS n FROM native_session_context')
   const nativeMetricsMissingOrStale=count(slimDb,`
     SELECT COUNT(*) AS n FROM native_session_catalog AS c
@@ -111,6 +127,11 @@ export function auditSlimNativeCoverage(
       OR m.file_size<>c.file_size
       OR m.file_mtime_ms<>c.file_mtime_ms
     )`)
+  const nativeMetricsPartial=count(slimDb,`SELECT COUNT(*) AS n
+    FROM native_session_catalog AS c
+    JOIN native_session_metrics AS m ON m.source_id=c.source_id
+      AND m.installation_id=c.installation_id AND m.native_session_id=c.native_session_id
+    WHERE c.location_kind='native' AND m.coverage<>'complete'`)
   return {
     nativeContentFullyVerified:false,
     readyToSwitch:false,
@@ -122,7 +143,7 @@ export function auditSlimNativeCoverage(
     missingContext,
     invalidOldIdentities,
     legacyRecordsWithoutSession,
-    nativeMetricsMissingOrStale,
+    nativeMetricsMissingOrStale,nativeMetricsPartial,legacyHookRecords,
     missingExamples,
     nextRequiredActions:[
       'Use Source-owned readers to verify the entire original session, not only the first record',
