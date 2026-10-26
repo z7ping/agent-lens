@@ -158,3 +158,15 @@ npm run storage:slim:gate -- --legacy /path/to/legacy.sqlite --backup /path/to/b
 ## Usage / Insights 消费者按精简模式实际切换
 
 `/api/v1/usage` 和 `/api/v1/insights` 在发现 `nativeSessionList`（独立 Slim Runtime）时，不再调用旧 ToolAssetUsageProjection / UsageInsightsProjection，也不扫描 SourceRecords、Observation 或会话摘要；通过 `NativeSessionMetricsStore.overview` 按 Source/Project/时间过滤获得已验证数字。DTO 显式标 `meta.mode:'native-only'`；过时 Legacy 结构字段保持空壳**不得当作真实的 0**，可信值仅在 `meta.native`。Tools/Insights 页面据此隐藏旧汇总和明细面板，使用原生已验证工具表及数字卡，错误/未覆盖来源按部分/不可用提示；不推断时长、成功率、趋势或不存在的完整会话记录。`/usage/detail` 在 Slim 中明确报告未实现，不再偷偷调用旧事件读取。默认 Daemon 尚未正式切库，完整新详情与备份等消费者仍待收敛。
+
+## 一键离线准备（不切换正式库）
+
+已有的备份、暂存、原生全量目录重建和切库门禁可以按固定顺序串联：
+
+```bash
+npm run storage:slim:prepare -- --legacy /path/to/old.db --backup /path/to/new-backup.db --staging /path/to/new-slim.db --limit 5000
+```
+
+该命令仅复用现有 `stageSlimCutover`、`runNativeReindexAll`、`auditSlimCutoverGate`，不额外创建第二套数据库算法。所有路径必须显式指定、互不相同，备份和暂存文件必须不存在；旧库只读打开，遇到旧库追平差异、原生枚举/内容缺口、Hook 不完整等问题会在报告中列出阻断项。离线 Source 目录以真实迭代器 EOF 判断扫描完成，达到 `--limit` 并不等于完成。
+
+**始终 `readyToSwitch:false`**：本命令不会停止 Daemon、替换正式数据库、删除旧 Writer 或自动回滚，也不能代替最终冻结写入与 Windows 迁移验收。失败时新生成的备份/暂存库原样保留，禁止自动清理。不要在正运行实例上把该命令当作自动升级。
