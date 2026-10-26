@@ -28,7 +28,19 @@ test('Slim-only HTTP reads native Catalog/facets and refuses all old Event APIs'
       async query(){throw new Error('Slim handler should prefer session list')},
       async isNativeMetricsEligible(){return true},
     },
-    nativeSessionList:{async query(input:{limit:number}){
+    nativeSessionList:{async query(input:{limit:number;search?:string;sourceId?:string}){
+      if(input.search){
+        assert.equal(input.search,'native-live-1')
+        assert.equal(input.sourceId,'pi')
+        assert.equal(input.limit,100)
+        return {items:[{
+          sourceId:'pi',installationId:'install',nativeSessionId:'native-live-1',
+          reviewSessionId:'native:0123456789abcdef0123456789abcdef',
+          workspacePath:'/projects/SlowLight',projectId:'project-1',projectName:'SlowLight',
+          lastActivityAt:'2026-10-25T10:00:00.000Z',
+          metricsState:'missing',titleProvenance:'unknown',
+        }],hasMore:false}
+      }
       listed++
       assert.equal(input.limit,5)
       return {items:[],hasMore:false}
@@ -69,9 +81,19 @@ test('Slim-only HTTP reads native Catalog/facets and refuses all old Event APIs'
   }
   const reader={async read(){return {state:'unsupported',reason:'not-indexed'}}}
   const liveAttachments=new DefaultLiveAttachmentService()
+  const liveAdapter={
+    manifest:{liveId:'pi-live',productId:'pi',displayName:'Pi'},
+    capabilities:new Set(['create','stream']),
+    availability:async()=>({available:true}),
+    list:async()=>[{
+      runtimeSessionId:'live-1',nativeSessionId:'native-live-1',
+      workspacePath:'/projects/SlowLight',status:'ready',
+      isStreaming:false,pendingMessageCount:0,
+    }],
+  }
   const surface=await startNativeOnlyHttpSurface(storage as never,{
     port:0,sources,reader:reader as never,capturePolicy:policy,
-    lives:{list:()=>[]} as never,liveAttachments,
+    lives:{list:()=>[liveAdapter]} as never,liveAttachments,
     backup:{async overview(){return {
       vaultPath:'/existing-backup',sources:[],snapshots:[],
     }}} as never,
@@ -83,7 +105,15 @@ test('Slim-only HTTP reads native Catalog/facets and refuses all old Event APIs'
     assert.equal((await backup.json() as {vaultPath:string}).vaultPath,'/existing-backup')
     const live=await fetch(base+'/api/v1/live')
     assert.equal(live.status,200)
-    assert.deepEqual((await live.json() as {items:unknown[]}).items,[])
+    assert.equal((await live.json() as {items:unknown[]}).items.length,1)
+    const runtimeList=await fetch(base+'/api/v1/live/runtimes')
+    assert.equal(runtimeList.status,200)
+    const runtimeBody=await runtimeList.json() as {items:Array<{
+      historySessionId?:string;projectId?:string
+    }>}
+    assert.equal(runtimeBody.items[0]?.historySessionId,
+      'native:0123456789abcdef0123456789abcdef')
+    assert.equal(runtimeBody.items[0]?.projectId,'project-1')
     const upload=await fetch(base+'/api/v1/live/attachments',{
       method:'POST',body:new TextEncoder().encode('native-image-bytes'),
       headers:{'content-type':'image/png'},
