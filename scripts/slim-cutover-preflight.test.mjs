@@ -15,7 +15,7 @@ function run(args) {
 test('slim cutover CLI has no implicit destructive/default action',()=>{
   const result=run([])
   assert.equal(result.status,1)
-  assert.match(result.stderr,/Use preflight or stage/)
+  assert.match(result.stderr,/Use preflight, stage, verify or reconcile/)
 })
 test('preflight refuses write destinations before opening any DB',()=>{
   const result=run(['preflight','--legacy','missing.db','--staging','file.sqlite'])
@@ -43,4 +43,18 @@ test('verify requires explicit staging path and rejects backup/write destination
   ])
   assert.equal(withBackup.status,1)
   assert.match(withBackup.stderr,/rejects --backup/)
+})
+
+test('reconcile requires an old DB, full backup and staged slim DB without implicit writes',()=>{
+  const missingStage=run(['reconcile','--legacy','missing.db','--backup','backup.db'])
+  assert.equal(missingStage.status,1)
+  assert.match(missingStage.stderr,/requires --backup and --staging/)
+  const missingBackup=run(['reconcile','--legacy','missing.db','--staging','slim.db'])
+  assert.equal(missingBackup.status,1)
+  assert.match(missingBackup.stderr,/requires --backup and --staging/)
+  const missingOriginal=run(['reconcile','--legacy','missing.db','--backup','backup.db',
+    '--staging','slim.db'])
+  assert.equal(missingOriginal.status,1)
+  assert.match(missingOriginal.stderr,/Slim cutover refused:/)
+  assert.equal(missingOriginal.stdout,'')
 })
