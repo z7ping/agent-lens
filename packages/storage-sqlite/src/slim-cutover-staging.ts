@@ -124,7 +124,10 @@ function copySessionContexts(snapshot: Database.Database, stage: Database.Databa
   const reader = snapshot.prepare(`
     SELECT old.source_id, old.installation_id, old.native_session_id,
       old.runtime_profile_id, logical.project_id, logical.workspace_id,
-      logical.title, logical.title_kind
+      CASE WHEN logical.title_kind IN ('explicit','generated')
+        THEN substr(logical.title,1,512) ELSE NULL END AS title,
+      CASE WHEN logical.title_kind IN ('explicit','generated')
+        THEN logical.title_kind ELSE NULL END AS title_kind
     FROM source_sessions AS old
     LEFT JOIN logical_sessions AS logical ON logical.id=old.logical_session_id
   `)
