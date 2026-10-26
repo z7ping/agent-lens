@@ -79,6 +79,7 @@ export interface NativeOnlyHttpOptions {
   }
   backup?: BackupService
   piEcosystem?:PiEcosystemQueryService
+  selectProjectDirectory?:()=>Promise<string|undefined>
   openHostPath?:(path:string)=>Promise<'opened'|'revealed'>
   previewHostFile?:(path:string)=>Promise<HostFilePreviewResponseDto>
   lives?: LiveService
@@ -132,7 +133,8 @@ export async function startNativeOnlyHttpSurface(
       if(await handleIntegrationPackageRequest(
         request,response,url,options.integrationPackages))return
       if(await handleLiveAttachmentRequest(request,response,url,options.liveAttachments))return
-      if(await handleLiveRequest(request,response,url,options.lives,undefined,{
+      if(await handleLiveRequest(request,response,url,options.lives,
+        options.selectProjectDirectory,{
         nativeSessions:storage.nativeSessionList,
         sources:options.sources,
         policy:options.capturePolicy,
