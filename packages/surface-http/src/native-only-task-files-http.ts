@@ -43,7 +43,7 @@ export async function handleNativeOnlyTaskFilesRequest(
     return true
   }
   // Turn-level selection cannot be guessed from a whole-session byte window.
-  if(url.searchParams.has('interactionId')||url.searchParams.has('observationId')){
+  if(url.searchParams.size>0){
     writeJson(response,501,{error:'native_interaction_file_changes_unavailable'})
     return true
   }
