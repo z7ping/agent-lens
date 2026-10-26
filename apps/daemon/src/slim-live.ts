@@ -1,6 +1,7 @@
 import type { CheckpointRepository, CapturePolicyService, NativeSessionCatalogStore } from '@agent-lens/core'
 import type { NativeSessionReader } from '@agent-lens/core-services'
 import { createSlimPiHistoryResolver } from './slim-pi-history.js'
+import { createSlimCodexHistoryResolver } from './slim-codex-history.js'
 import { CodexLiveAdapter, CheckpointCodexRecoveryStore } from '@agent-lens/live-codex'
 import { DefaultLiveAttachmentService, DefaultLiveService } from '@agent-lens/core-services'
 import {
@@ -29,7 +30,10 @@ export function startSlimAgentLives(
   })
   const piRegistration=lives.register(piAdapter)
   const codexAdapter=new CodexLiveAdapter(
-    undefined,new CheckpointCodexRecoveryStore(checkpoints),undefined,{nativeOnly:true})
+    undefined,new CheckpointCodexRecoveryStore(checkpoints),undefined,{
+      nativeOnly:true,
+      nativeHistory:createSlimCodexHistoryResolver(catalog,reader,policy),
+    })
   const codexRegistration=lives.register(codexAdapter)
   void piService.preload().catch(error=>{
     console.warn('[AgentLens] Slim Pi Live preload failed',error)
