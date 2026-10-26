@@ -377,6 +377,7 @@ export function normalizePiLiveRuntimeEvent(value: LiveRuntimeEvent): LiveRuntim
  */
 export interface NativePiLiveHistoryResolver {
   resolve(sessionId: string, action: PiLiveHistoryAction): Promise<PiLiveStartInput>
+  resolveForkAt?(sessionId: string, nativeEventId: string): Promise<PiLiveStartInput>
 }
 
 const NO_LEGACY_HISTORY_CAPABILITIES = new Set<LiveCapabilityName>([
@@ -407,7 +408,8 @@ export class PiLiveAdapter implements LiveAdapter {
     const features=options.nativeOnly
       ? CAPABILITIES.filter(capability=>
         !NO_LEGACY_HISTORY_CAPABILITIES.has(capability)
-        || (Boolean(options.nativeHistory) && (capability==='resume'||capability==='fork')))
+        || (Boolean(options.nativeHistory) && (capability==='resume'||capability==='fork'))
+        || (Boolean(options.nativeHistory?.resolveForkAt) && capability==='fork-at'))
       : [...CAPABILITIES]
     this.manifest=options.nativeOnly
       ? {...piLiveAdapterManifest,capabilities:[...features]}
@@ -444,6 +446,9 @@ export class PiLiveAdapter implements LiveAdapter {
   }
 
   async forkAt(logicalSessionId: string, nativeEventId: string): Promise<PiLiveRuntimeState> {
+    if (this.options.nativeHistory?.resolveForkAt) {
+      return this.service.start(await this.options.nativeHistory.resolveForkAt(logicalSessionId,nativeEventId))
+    }
     if (!this.storage) throw new Error('Pi Live history interactions are unavailable')
     if (!nativeEventId || nativeEventId.length > 256) throw new Error('Invalid history fork anchor')
     const input = await resolvePiLiveHistoryInput(this.storage, logicalSessionId, 'fork')
