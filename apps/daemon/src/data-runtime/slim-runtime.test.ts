@@ -1,9 +1,10 @@
+import { LegacyV38TestDatabase } from '../../../../packages/storage-sqlite/src/legacy-v38-test-fixture'
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { SqliteSlimStorage, SqliteStorageService } from '@agent-lens/storage-sqlite'
+import { SqliteSlimStorage } from '@agent-lens/storage-sqlite'
 import { SlimDataRuntime } from './slim-runtime'
 import type { NativeSessionReaderStorage } from '@agent-lens/core-services'
 
@@ -51,7 +52,7 @@ test('dedicated slim worker port exposes bounded Native read/metadata writes onl
 test('slim runtime refuses legacy v38 and absent databases before worker start',async()=>{
   const directory=await mkdtemp(join(tmpdir(),'al-slim-guard-'))
   const dbPath=join(directory,'legacy.sqlite')
-  const old=new SqliteStorageService({path:dbPath})
+  const old=new LegacyV38TestDatabase({path:dbPath})
   await old.migrate()
   await old.close()
   const writer=args('writer'),reader=args('reader')
