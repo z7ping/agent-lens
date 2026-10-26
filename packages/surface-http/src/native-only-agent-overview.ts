@@ -52,7 +52,7 @@ export async function nativeOnlyAgentOverview(
         firstSeenAt:item.firstSeenAt,lastSeenAt:item.lastSeenAt,
       })),
       // Missing event-derived enrichment is unknown, not evidence of zero tool use.
-      capabilities:[],usedAssets:[],
+      capabilities:[],usedAssets:[],usedAssetsStatus:'unavailable',
       assetInventory:projectAgentAssetInventory(assetPages),
       assetInventoryStatus:enabled?'available':'unavailable',
     } satisfies AgentOverviewDto

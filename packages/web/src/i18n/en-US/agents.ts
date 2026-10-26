@@ -169,6 +169,7 @@ export const englishAgentsMessages: LocaleMessagesDto = {
     collapse: 'Collapse',
     showMoreItems: 'Show {{count}} more',
     noReliableSkillMcpUsage: 'No skill or MCP (Model Context Protocol) usage can be reliably attributed yet',
+    usageUnavailable: 'Original-session usage is not yet verified; this does not mean zero calls',
     lifecycle: {
       title: 'Skill lifecycle',
       description: 'From local asset discovery, to agent discoverability, to evidence-backed real usage.',

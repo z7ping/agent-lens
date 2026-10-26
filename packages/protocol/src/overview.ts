@@ -103,6 +103,8 @@ export interface AgentOverviewDto {
   capabilities: AgentCapabilityDto[]
   assetInventory: AgentAssetInventoryDto[]
   usedAssets: AgentUsedAssetDto[]
+  /** Native-only source may have indexed assets but cannot certify invocation usage. */
+  usedAssetsStatus?: 'available' | 'unavailable'
   assetInventoryStatus: 'available' | 'unavailable'
 }
 

@@ -59,3 +59,9 @@ test('agent and backup tab switches reset the reading position instead of hiding
   assert.match(overview, /shellRef\.current\.scrollTop = 0/)
   assert.match(backupPage, /contentRef\.current\.scrollTop = 0/)
 })
+
+test('Slim Agent detail never renders unavailable usage as zero verified calls', () => {
+  assert.match(agent, /agent\.usedAssetsStatus === 'unavailable'/)
+  assert.match(agent, /used === null \? 0/)
+  assert.match(agent, /t\('usageUnavailable'\)/)
+})
