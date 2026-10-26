@@ -3,7 +3,8 @@ import { homedir } from 'node:os'
 import { startLocalVault } from '@agent-lens/backup-local'
 import { isAbsolute, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { DefaultCapturePolicyService, resolveCapturePolicyPluginState } from '@agent-lens/capture-policy'
+import { DefaultCapturePolicyService, resolveCapturePolicyPluginState, writeCapturePolicyConfiguration } from '@agent-lens/capture-policy'
+import { authorizedIntegrationCapabilities, integrationAuthorizationPath, readIntegrationAuthorizationSync } from '@agent-lens/runtime-cordis'
 import type { BackupService, CapturePolicyService, SourceService, LiveService, LiveAttachmentService } from '@agent-lens/core'
 import { DefaultSourceService } from '@agent-lens/core-services'
 import { piSourceDefinition } from '@agent-lens/source-pi'
@@ -14,7 +15,7 @@ import { openCodeSourceDefinition } from '@agent-lens/source-opencode'
 import { startNativeOnlyHttpSurface } from '@agent-lens/surface-http'
 import { SlimDataRuntime } from './data-runtime/slim-runtime.js'
 import { SlimSourceCoordinator } from './slim-source-coordinator.js'
-import { startSlimAgentLives } from './slim-live.js'
+import { startSlimLive } from './slim-live.js'
 
 export interface SlimDaemonOptions {
   /** Existing slim v1 only; absent/v38 paths are never upgraded at boot. */
@@ -63,8 +64,12 @@ export async function startSlimNativeDaemon(options:SlimDaemonOptions){
   const policy=options.capturePolicy??new DefaultCapturePolicyService(
     resolved.settings,{
       source:resolved.configurationSource,
-      editable:false,
+      editable:resolved.editable,
+      configurationPath:resolved.configurationPath,
       configuredEnabledSources:resolved.settings.enabledSources,
+      writeEnabledSources:async next=>{
+        await writeCapturePolicyConfiguration(resolved.configurationPath,next)
+      },
     },
   )
   if(Boolean(options.lives)!==Boolean(options.liveAttachments)){
@@ -72,7 +77,7 @@ export async function startSlimNativeDaemon(options:SlimDaemonOptions){
   }
   await runtime.start()
   let vault:ReturnType<typeof startLocalVault>|undefined
-  let live:ReturnType<typeof startSlimAgentLives>|undefined
+  let live:Awaited<ReturnType<typeof startSlimLive>>|undefined
   try {
     if(!options.backup){
       const vaultPath=options.vaultPath??process.env.AGENT_LENS_VAULT_PATH
@@ -96,11 +101,15 @@ export async function startSlimNativeDaemon(options:SlimDaemonOptions){
     }
     const httpPort=runtime.nativeHttpPort()
     const nativeReader=runtime.nativeReader(sources,policy)
-    if(!options.lives)live=startSlimAgentLives(
-      runtime.nativePort().checkpoints,
-      httpPort.nativeSessionCatalog,
-      nativeReader,policy,
-    )
+    if(!options.lives){
+      const permissions=readIntegrationAuthorizationSync(integrationAuthorizationPath())
+      const enabledLiveProducts=new Set(['pi','codex','hermes'].filter(productId=>
+        authorizedIntegrationCapabilities(permissions,productId).includes('live')))
+      live=await startSlimLive(
+        runtime.nativePort().checkpoints,
+        httpPort.nativeSessionCatalog,nativeReader,policy,enabledLiveProducts,
+      )
+    }
     const http=await startNativeOnlyHttpSurface(httpPort,{
       ...(options.port===undefined?{}:{port:options.port}),
       sources,capturePolicy:policy,
