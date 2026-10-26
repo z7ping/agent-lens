@@ -170,16 +170,23 @@ async function waitForState(runtimeSessionId, predicate, label, ms = timeoutMs) 
 
 async function verifyHistory(markerText, sinceIso) {
   const deadline = Date.now() + 60_000
+  const earliest = Date.parse(sinceIso) - 60_000
   while (Date.now() < deadline) {
-    const value = await json('/api/v1/review?limit=500')
-    const items = Array.isArray(value?.items) ? value.items : []
-    const hit = items.find(item => {
-      const timeOk = !item.startedAt || Date.parse(item.startedAt) >= Date.parse(sinceIso) - 60_000
-      const sourceOk = Array.isArray(item.sourceIds) && item.sourceIds.some(value => String(value).toLowerCase().includes('pi'))
-      const text = `${item.title || ''}\n${item.preview || ''}`
-      return timeOk && sourceOk && (text.includes(markerText) || item.workspacePath === cwd)
-    })
-    if (hit) return hit
+    let cursor
+    for (let page = 0; page < 5; page += 1) {
+      const params = new URLSearchParams({ sourceId: 'pi', limit: '100' })
+      if (cursor) params.set('cursor', cursor)
+      const value = await json(`/api/v1/native-sessions?${params}`)
+      const items = Array.isArray(value?.items) ? value.items : []
+      const hit = items.find(item =>
+        item.sourceId === 'pi'
+        && typeof item.title === 'string'
+        && item.title.includes(markerText)
+        && Date.parse(item.lastActivityAt) >= earliest)
+      if (hit) return hit
+      if (!value?.hasMore || typeof value.nextCursor !== 'string' || !value.nextCursor) break
+      cursor = value.nextCursor
+    }
     await new Promise(resolveDelay => setTimeout(resolveDelay, 1000))
   }
   return null
@@ -310,7 +317,7 @@ try {
   if (!keepRuntime) {
     await json(`/api/v1/live/pi/runtimes/${encodeURIComponent(runtimeSessionId)}`, { method: 'DELETE' })
     const runtimes = await json('/api/v1/live/pi/runtimes')
-    check('Terminate Runtime 后从活跃列表移除', !runtimes.some(item => item.runtimeSessionId === runtimeSessionId))
+    check('Terminate Runtime 后从活跃列表移除', Array.isArray(runtimes?.items) && !runtimes.items.some(item => item.runtimeSessionId === runtimeSessionId))
   } else {
     console.log(`• 保留 Runtime：${runtimeSessionId}`)
   }
