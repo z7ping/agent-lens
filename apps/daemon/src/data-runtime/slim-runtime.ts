@@ -118,7 +118,9 @@ export class SlimDataRuntime {
    * no legacy RepositorySet, SourceRecords, Evidence, or Event Writer.
    */
   nativePort():NativeSessionReaderStorage & {
-    nativeSessionContexts:{upsert(input:{
+    nativeSessionContexts:{get(input:{
+      sourceId:string;installationId:string;nativeSessionId:string
+    }):Promise<{runtimeProfileId?:string}|null>;upsert(input:{
       sourceId:string;installationId:string;nativeSessionId:string;
       runtimeProfileId?:string
     }):Promise<void>}
@@ -152,7 +154,11 @@ export class SlimDataRuntime {
         },
       },
       nativeSessionContexts:{
+        get(input){return self.read<{runtimeProfileId?:string}|null>(['nativeSessionContexts','get'],[input])},
         upsert(input){return self.write<void>(['nativeSessionContexts','upsert'],[input])},
+      },
+      runtimeProfiles:{
+        get(id:string){return self.read<RuntimeProfile|null>(['runtimeProfiles','get'],[id])},
       },
       nativeSessionMetrics:{
         invalidate(input){return self.write<void>(['nativeSessionMetrics','invalidate'],[input])},
