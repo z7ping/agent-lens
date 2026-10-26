@@ -27,6 +27,10 @@ export const codexLiveManifest: LiveAdapterManifest = {
   productId: 'codex',
   capabilities: [...CAPABILITIES],
 }
+export interface CodexNativeHistoryResolver {
+  /** Resolve only an authorized native Review ID; never accept a client path. */
+  resolve(reviewSessionId:string):Promise<{threadId:string;cwd:string}>
+}
 interface Session {
   id: string
   cwd: string
@@ -87,10 +91,10 @@ export class CodexLiveAdapter implements LiveAdapter {
     readonly rpc = new CodexRpc(),
     private readonly recovery?: CodexRecoveryStore,
     private readonly storage?: StorageService,
-    options:{nativeOnly?:boolean}={},
+    private readonly options:{nativeOnly?:boolean;nativeHistory?:CodexNativeHistoryResolver}={},
   ) {
     const advertised=options.nativeOnly
-      ?CAPABILITIES.filter(capability=>capability!=='resume')
+      ?CAPABILITIES.filter(capability=>capability!=='resume'||Boolean(options.nativeHistory))
       :[...CAPABILITIES]
     this.manifest=options.nativeOnly
       ?{...codexLiveManifest,capabilities:[...advertised]}
@@ -256,6 +260,30 @@ export class CodexLiveAdapter implements LiveAdapter {
   }
 
   async resume(logicalSessionId: string): Promise<LiveRuntimeState> {
+    if(this.options.nativeHistory){
+      // App Server must acknowledge the original Codex thread before this
+      // process claims it. A Desktop-owned writer remains read-only.
+      const validated=await this.options.nativeHistory.resolve(logicalSessionId)
+      await this.hydrate()
+      await this.verifyHistoricalThread(validated.threadId)
+      const saved=this.sessions.get(validated.threadId)
+      const session=saved??{
+        id:validated.threadId,cwd:validated.cwd,
+        status:'ready' as const,streaming:false,attached:false,
+        channel:new LiveEventChannel(validated.threadId),
+        approvals:new Map(),approvalEvents:new Map(),
+        queuedApprovals:new Map(),toolOutput:new Map(),
+      }
+      if(!saved)this.sessions.set(validated.threadId,session)
+      try{
+        await this.attach(session)
+        await this.persist(session)
+        return this.view(session)
+      }catch(error){
+        if(!saved)this.sessions.delete(validated.threadId)
+        throw explainCodexResumeError(error)
+      }
+    }
     if (!this.storage) throw new Error('Codex history continuation requires canonical storage')
     await this.hydrate()
     const sourceSessions = this.storage.repositories.sessions.listSourceSessionsByLogicalSession

@@ -317,3 +317,33 @@ test('Slim Codex uses existing App Server but does not advertise obsolete SQL lo
   assert.equal(normal.capabilities.has('resume'),true)
   await normal.dispose()
 })
+
+test('Slim Codex native resume authorizes original ID then verifies App Server thread before attaching',async()=>{
+  class NativeRpc extends FakeRpc {
+    override async request(method:string,params:Record<string,unknown>){
+      if(method==='thread/read'){
+        this.calls.push({method,params})
+        return {thread:{id:'thread-1',status:{type:'idle'}}}
+      }
+      if(method==='thread/resume'){
+        this.calls.push({method,params})
+        return {thread:{id:'thread-1',status:{type:'idle'}}}
+      }
+      return super.request(method,params)
+    }
+  }
+  const rpc=new NativeRpc()
+  const adapter=new CodexLiveAdapter(rpc as unknown as CodexRpc,undefined,undefined,{
+    nativeOnly:true,
+    nativeHistory:{async resolve(reviewSessionId){
+      assert.equal(reviewSessionId,'native:0123456789abcdef0123456789abcdef')
+      return {threadId:'thread-1',cwd:'/project'}
+    }},
+  })
+  assert.equal(adapter.capabilities.has('resume'),true)
+  const result=await adapter.resume('native:0123456789abcdef0123456789abcdef')
+  assert.equal(result.nativeSessionId,'thread-1')
+  assert.deepEqual(rpc.calls.filter(x=>x.method==='thread/read'||x.method==='thread/resume')
+    .map(x=>x.method),['thread/read','thread/resume'])
+  await adapter.dispose()
+})
