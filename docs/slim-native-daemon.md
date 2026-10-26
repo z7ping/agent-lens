@@ -20,7 +20,8 @@ APIs (501), so this is for incremental development, **not production cutover**.
 
 Available: native sessions and deep links, native windows, authorized body search,
 attachments, archived Hook pages, native statistics/rebuild, aggregate Usage/Insights,
-Facets, the existing `/api/v1/projects/launchable` project picker (with
+Facets, the existing Local Vault `/api/v1/backups` endpoints and
+`/api/v1/projects/launchable` project picker (with
 validated workspace paths), health and readiness. Other /api/v1/ routes explicitly return 501 instead
 of fake empty data or a Legacy fallback.
 
@@ -38,3 +39,15 @@ Capture always verifies the original Source location. It does not sync old
 transcript payloads into SQLite; missing/partial Hook coverage is not promoted
 to a complete history claim. Stopping the Slim Daemon aborts scans and disposes
 capture handles before terminating storage workers.
+
+### Existing Local Vault on Slim
+
+The same `LocalBackupService` + `ExplainableBackupService` +
+`StaleWhileRevalidateBackupService` implementation now runs in Slim mode.
+Its persisted state is original Vault files, the inventory manifest and **Slim
+checkpoints/Host/Installation identities** only. Restore never writes Canonical
+Observation/Evidence. The vault root is `AGENT_LENS_VAULT_PATH` or the normal
+local default; it is NOT a Slim session archive recovery/cutover certification.
+Snapshot creation/restoration is subject to the existing Vault's source-owned
+path checks and verification contracts. Fully integrated per-session archive
+and restore still requires M5 end-to-end validation.
