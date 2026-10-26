@@ -1,5 +1,6 @@
+/** Test-only full v38 fixture. Never import from a shipped runtime entry. */
 import { readFile } from 'node:fs/promises'
-import type Database from 'better-sqlite3'
+import Database from 'better-sqlite3'
 
 interface Migration {
   version: number
@@ -57,10 +58,7 @@ const migrations: readonly Migration[] = [
 ]
 
 async function readMigrationSql(fileName: string): Promise<string> {
-  const candidates = [
-    new URL(`../migrations/${fileName}`, import.meta.url),
-    new URL(`./migrations/${fileName}`, import.meta.url),
-  ]
+  const candidates = [new URL(`../fixtures/legacy-v38/${fileName}`, import.meta.url)]
 
   let lastError: unknown
   for (const url of candidates) {
@@ -77,7 +75,7 @@ async function readMigrationSql(fileName: string): Promise<string> {
   throw lastError ?? new Error(`Migration file not found: ${fileName}`)
 }
 
-export async function migrateDatabase(
+async function migrateLegacyFixtureDatabase(
   db: Database.Database,
   options: { throughVersion?: number } = {},
 ): Promise<number> {
@@ -142,4 +140,16 @@ export async function migrateDatabase(
 
   const latest = db.prepare('SELECT COALESCE(MAX(version), 0) AS version FROM schema_migrations').get() as { version: number }
   return latest.version
+}
+
+
+/** Builds an isolated historical database for M3 cutover regression. */
+export class LegacyV38TestDatabase {
+  readonly db:Database.Database
+  constructor(options:{path:string}) {
+    this.db=new Database(options.path)
+    this.db.pragma('foreign_keys = ON')
+  }
+  migrate():Promise<number> { return migrateLegacyFixtureDatabase(this.db) }
+  async close():Promise<void> { this.db.close() }
 }

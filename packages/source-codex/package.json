@@ -18,7 +18,6 @@
     "smol-toml": "^1.9.1"
   },
   "devDependencies": {
-    "@agent-lens/core-services": "1.0.0-alpha.7",
-    "@agent-lens/storage-sqlite": "1.0.0-alpha.7"
+    "@agent-lens/core-services": "1.0.0-alpha.7"
   }
 }

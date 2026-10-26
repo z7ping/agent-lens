@@ -1,9 +1,10 @@
+import { LegacyV38TestDatabase } from '../../../packages/storage-sqlite/src/legacy-v38-test-fixture'
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { mkdtemp,rm,writeFile,copyFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { SqliteStorageService, SqliteSlimStorage } from '@agent-lens/storage-sqlite'
+import { SqliteSlimStorage } from '@agent-lens/storage-sqlite'
 import { resolveDefaultSlimDb } from './default-slim-db'
 
 test('default main creates only slim v1 on a fresh installation and reuses it',async()=>{
@@ -20,11 +21,11 @@ test('default main refuses v38 rather than invoking retired migration/Writer',as
   const dataRoot=await mkdtemp(join(tmpdir(),'al-default-old-'))
   try{
     const legacyPath=join(dataRoot,'agent-lens.db')
-    const old=new SqliteStorageService({path:legacyPath})
+    const old=new LegacyV38TestDatabase({path:legacyPath})
     await old.migrate()
     await old.close()
     await assert.rejects(resolveDefaultSlimDb({dataRoot}),/old v38 Writer is retired/)
-    const reopened=new SqliteStorageService({path:legacyPath})
+    const reopened=new LegacyV38TestDatabase({path:legacyPath})
     try{assert.equal((await reopened.health()).schemaVersion,38)}
     finally{await reopened.close()}
   }finally{await rm(dataRoot,{force:true,recursive:true})}
@@ -33,7 +34,7 @@ test('activated Slim pointer takes precedence; rollback/mismatch/malformed point
   const dataRoot=await mkdtemp(join(tmpdir(),'al-default-upgrade-'))
   try{
     const legacyPath=join(dataRoot,'agent-lens.db')
-    const old=new SqliteStorageService({path:legacyPath})
+    const old=new LegacyV38TestDatabase({path:legacyPath})
     await old.migrate()
     await old.close()
     await copyFile(legacyPath,join(dataRoot,'old-backup.sqlite'))
