@@ -20,6 +20,9 @@ import { handleNativeSessionMetricsRequest } from './native-session-metrics-http
 import { handleNativeSessionMetricsOverviewRequest } from './native-session-metrics-overview-http'
 import { NativeMetricsAutoRefresh } from './native-metrics-auto-refresh'
 import { nativeOnlyFacetResponse } from './native-only-facets'
+import {
+  nativeOnlyAgentOverview,nativeAgentDetail,nativeAgentCoverage,nativeAgentEnrichment,
+} from './native-only-agents'
 import { readLaunchableProjects } from './launchable-projects'
 import { handleBackupRequest } from './backup-http'
 import { handleAgentFilesRequest } from './agent-files-http'
@@ -203,6 +206,33 @@ export async function startNativeOnlyHttpSurface(
             generatedAt:new Date().toISOString(),
           },
         })
+        return
+      }
+      if(url.pathname==='/api/v1/agents'
+        ||url.pathname==='/api/v1/agents/coverage'
+        ||/^\\/api\\/v1\\/agents\\/[^/]+(?:\\/enrichment)?$/.test(url.pathname)){
+        if(request.method!=='GET'){
+          response.setHeader('allow','GET')
+          writeJson(response,405,{error:'method_not_allowed'})
+          return
+        }
+        const overview=await nativeOnlyAgentOverview(
+          storage,options.sources,options.capturePolicy)
+        if(url.pathname==='/api/v1/agents'){
+          writeJson(response,200,overview)
+        }else if(url.pathname==='/api/v1/agents/coverage'){
+          writeJson(response,200,nativeAgentCoverage(overview))
+        }else{
+          const enrichment=url.pathname.endsWith('/enrichment')
+          const encoded=url.pathname.slice('/api/v1/agents/'.length)
+            .replace(/\\/enrichment$/,'')
+          let sourceId:string
+          try{sourceId=decodeURIComponent(encoded)}
+          catch{throw badRequest('Invalid Agent source identity')}
+          const body=enrichment?nativeAgentEnrichment(overview,sourceId)
+            :nativeAgentDetail(overview,sourceId)
+          writeJson(response,body?200:404,body??{error:'not_found'})
+        }
         return
       }
       if(url.pathname==='/api/v1/facets'){

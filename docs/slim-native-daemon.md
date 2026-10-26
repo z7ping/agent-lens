@@ -132,3 +132,14 @@ Unsupported Codex Desktop rollouts remain read-only in Review.
 Hermes continues to use its original API Server settings and adapter; no
 separate transcript store is introduced. Changes to Source enablement take
 effect on restart (as in the existing configuration service).
+
+### Agent detail and asset inventory in Slim
+
+The existing `/api/v1/agents`, `/api/v1/agents/:sourceId`,
+`/api/v1/agents/coverage`, and enrichment endpoints read registered
+Source definitions and actual indexed Installation/current Asset states.
+The state-only asset rows pass through the same
+`projectAgentAssetInventory` mapper used by the original overview.
+The Slim response explicitly declares native usage/capability enrichment
+unavailable rather than recreating an event-store projection or claiming
+unknown counters as zero. Disabled Sources do not expose asset contents.
