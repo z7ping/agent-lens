@@ -68,13 +68,14 @@ export class NativeSessionCatalogTracker {
   ): Promise<'legacy' | 'native-only' | null> {
     const cached = this.writeModes.get(this.writeModeKey(input))
     if (cached) return cached
-    const mode = await this.catalog?.getSessionWriteMode(input) ?? null
+    const mode = await this.catalog?.getSessionWriteMode?.(input) ?? null
     if (mode) this.rememberWriteMode(input, mode)
     return mode
   }
 
   constructor(
-    private readonly catalog?: NativeSessionCatalogStore,
+    private readonly catalog?: Pick<NativeSessionCatalogStore,'upsert'>
+      & Partial<Pick<NativeSessionCatalogStore,'getSessionWriteMode'>>,
     private readonly now: () => number = Date.now,
     private readonly minRefreshMs = 30_000,
   ) {}
