@@ -1,6 +1,19 @@
 import { AGENT_LENS_PLUGIN_API_VERSION } from '@agent-lens/core'
 import type {
-  ,
+  AgentLensPluginManifest,
+  CapabilityService,
+  DetectedSource,
+  Disposable,
+  LiveAdapter,
+  LiveRuntimeEvent,
+  LiveRuntimeObserver,
+  LiveRuntimeObserverContext,
+  LiveRuntimeSettledContext,
+  LiveService,
+  ObservationCapability,
+  SourceDefinition,
+  SourceDetectionContext,
+  SourceService,
 } from '@agent-lens/core'
 
 function assertPluginManifest(manifest: AgentLensPluginManifest, type: AgentLensPluginManifest['pluginType']): void {
