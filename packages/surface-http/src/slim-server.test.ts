@@ -34,6 +34,10 @@ test('Slim-only HTTP reads native Catalog/facets and refuses all old Event APIs'
   const storage={
     nativeSessionCatalog:{
       async getByReviewSessionId(id:string){
+        if(id==='native:0123456789abcdef0123456789abcdef')return {
+          sourceId:'pi',installationId:'install',nativeSessionId:'native-live-1',
+          locationKind:'native',
+        }
         return id==='native:ffffffffffffffffffffffffffffffff'
           ?{sourceId:'pi',installationId:'install',nativeSessionId:'native-file-1',
             locationKind:'native'}:null
@@ -108,7 +112,7 @@ test('Slim-only HTTP reads native Catalog/facets and refuses all old Event APIs'
       details:{schemaKind:'slim-native-session-v1'}}},
   }
   const reader={async read(query:{nativeSessionId:string}){
-    if(query.nativeSessionId==='native-file-1')return {
+    if(query.nativeSessionId==='native-file-1'||query.nativeSessionId==='native-live-1')return {
       state:'available',observations:[],observationRecordIds:[],evidenceCandidates:[],
       hasMore:false,pendingTail:false,
       nextCursor:{fileIdentity:'file-1',offset:0},
@@ -268,6 +272,11 @@ test('Slim-only HTTP reads native Catalog/facets and refuses all old Event APIs'
     assert.equal(stream.status,200)
     assert.match(stream.headers.get('content-type')??'',/text\/event-stream/)
     streamController.abort()
+    const liveFileResponse=await fetch(base+'/api/v1/task-file-changes/runtime/live-1')
+    assert.equal(liveFileResponse.status,200)
+    assert.equal((await liveFileResponse.json() as {summary:{count:number}})
+      .summary.count,0)
+    assert.equal((await fetch(base+'/api/v1/task-file-changes/runtime/unknown')).status,404)
     const nativeFileId='native:ffffffffffffffffffffffffffffffff'
     const nativeFileChanges=await fetch(base+'/api/v1/review/'+nativeFileId+'/file-changes')
     assert.equal(nativeFileChanges.status,200)
