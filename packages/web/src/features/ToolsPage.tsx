@@ -99,6 +99,7 @@ export function ToolsPage({ model, toolbarHost }: { model: AgentLensClientModel;
   const navigate = useNavigate()
   const data = usage.response
   const nativeMetrics=data?.meta.native
+  const nativeOnlyMode=data?.meta.mode==='native-only'
   const nativeHasSessions=nativeMetrics?.state==='available'
     && nativeMetrics.eligibleSessions>0
   const nativeTools=nativeMetrics?.state==='available' ? nativeMetrics.tools??[] : []
@@ -249,10 +250,25 @@ export function ToolsPage({ model, toolbarHost }: { model: AgentLensClientModel;
             </table> : <div className="tools-empty-state">{t('page.nativeNoCalls')}</div>}
           </div>
           <small>{nativeMetrics.coverage==='partial' || nativeMetrics.toolsTruncated
-            ? t('page.nativePartialNote') : t('page.nativeSeparateNote')}</small>
+            ? t('page.nativePartialNote') : nativeOnlyMode
+               ? t('page.nativeOnlyModeNote') : t('page.nativeSeparateNote')}</small>
         </section>}
 
-        {blockingError ? null : usage.loading && !data ? <WorkspaceSkeleton kind="tools"/> : <>
+        {blockingError ? null : usage.loading && !data ? <WorkspaceSkeleton kind="tools"/> : nativeOnlyMode ? (
+          nativeHasSessions
+            ? <div className="tool-projection-status" role="status">
+              <span>{t('page.nativeOnlyModeNote')}</span>
+            </div>
+            : <div className="tools-empty-state"><EmptyStatePanel
+              icon={<UiIcon name="search" size={20}/>}
+              title={t('page.emptyTitle')}
+              description={t('page.nativeOnlyEmptyDescription')}
+              action={canRelaxFilters
+                ? {label:t('page.relaxFilters'),onClick:relaxFilters}
+                : {label:t('filters.refresh'),onClick:()=>void model.refreshUsage()}}
+              compact
+            /></div>
+        ) : <>
           <section className="tool-summary-grid">
             <div className="tool-summary-card"><span>{t('page.mostFrequent')}</span><strong>{mostUsed?.nativeToolName ?? '—'}</strong><small>{mostUsed ? t('page.callsAndSessions', { calls: mostUsed.callCount, sessions: mostUsed.sessionCount }) : t('page.noData')}</small></div>
             <div className="tool-summary-card"><span>{t('page.mostFailures')}</span><strong className={mostErrors ? 'is-danger' : ''}>{mostErrors?.nativeToolName ?? '—'}</strong><small>{mostErrors ? t('page.failures', { count: mostErrors.errorCount }) : t('page.noKnownFailures')}</small></div>
