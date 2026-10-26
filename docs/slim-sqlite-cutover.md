@@ -116,3 +116,9 @@ npm run storage:slim:assets -- --staging /path/to/slim-staging.sqlite --source p
 ```
 
 对源自 Pi/Codex/Claude/Hermes/OpenCode 的资产配置调用原生 `discoverAssets`，按 CapturePolicy 脱敏，仅写 `asset_definitions/asset_bindings/asset_current_state` 和安全的资产绑定状态快照，不落 Observation/Evidence。跨次扫描发现不再存在的资产，installed/configured 置 false，其余使用 unknown；源代码/工具正文不入库。Source/安装身份和 Runtime Profile 取自已存在的 Slim 元数据，不能从客户端任意指定文件路径。
+
+## Worker 替换入口（代码已落地，默认 Daemon 尚未切换）
+
+`SlimDataRuntime` 为独立精简库提供真正的 Writer/Reader Worker 入口；启动前强制验证**已存在的 Slim v1**，拒绝用 v38 迁移器打开/覆盖旧库。IPC 用 `schemaKind:'slim'` 隔离，不创建 Hub Unified Legacy Observation Reader；只允许已审计的原生目录、数值统计、项目与资产元数据方法。反射到 `executor/db`、Legacy Claim、SourceRecord、Observation/Evidence、复制日志和任意私有属性均在 Worker 方法白名单处拒绝。
+
+此能力是默认 Daemon 数据服务的**替换基础**，不是开关切库；在 Live/Review/Usage/Insights 等所有消费者完成 Native 迁移前，绝不能直接拿它替换旧 `dataRuntimeStoragePlugin`。当前没有自动操作、删除或迁移用户的正在使用的数据库。
