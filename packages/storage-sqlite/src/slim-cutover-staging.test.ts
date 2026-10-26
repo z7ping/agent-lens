@@ -73,7 +73,9 @@ test('one-time staging backs up v38 and copies only approved metadata, never tra
     assert.equal(report.readyToSwitch, false)
     assert.equal(report.source.legacySchemaVersion, 38)
     assert.equal(report.source.verifiedOriginalSourceRecovery, false)
-    assert.equal(report.copiedRows.native_session_catalog, 1)
+    assert.equal(report.copiedRows.native_session_catalog, 0)
+    assert.equal(report.copiedRows.native_session_metrics, 0)
+    assert.equal(report.nativeCatalogReindexRequired,true)
     assert.equal(report.copiedRows.native_session_context, 2)
     assert.equal(report.copiedRows.asset_current_state, 1)
     const backup = new Database(backupPath, { readonly:true, fileMustExist:true })
@@ -86,6 +88,10 @@ test('one-time staging backs up v38 and copies only approved metadata, never tra
     const stage = new Database(stagingPath, { readonly:true, fileMustExist:true })
     try {
       assertSlimSchema(stage)
+      // Stale old DB file paths must not be advertised as verified native
+      // entries. The new indexer will recreate locations from the Source.
+      assert.equal((stage.prepare('SELECT COUNT(*) AS c FROM native_session_catalog')
+        .get() as {c:number}).c,0)
       const rows = stage.prepare(`SELECT project_id,workspace_id,title_override
         FROM native_session_context WHERE native_session_id='session'`).all()
       assert.deepEqual(rows, [{
