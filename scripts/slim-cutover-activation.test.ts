@@ -1,3 +1,4 @@
+import { LegacyV38TestDatabase } from '../packages/storage-sqlite/src/legacy-v38-test-fixture'
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { copyFile, mkdtemp, stat, rm, writeFile } from 'node:fs/promises'
@@ -5,7 +6,7 @@ import Database from 'better-sqlite3'
 import { createServer } from 'node:net'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { SqliteStorageService, SqliteSlimStorage } from '@agent-lens/storage-sqlite'
+import { SqliteSlimStorage } from '@agent-lens/storage-sqlite'
 import { activateSlimCutover, readActiveDatabasePointer, rollbackSlimCutover } from './slim-cutover-activation'
 
 const allowed={readyToSwitch:true,blockedBy:[],oldDatabaseChanged:false}
@@ -15,7 +16,7 @@ test('M3 activation refuses unfinished coverage before touching any destination'
     const paths={legacyPath:join(dir,'old.sqlite'),backupPath:join(dir,'backup.sqlite'),
       stagingPath:join(dir,'stage.sqlite'),installedSlimPath:join(dir,'installed.sqlite'),
       pointerPath:join(dir,'active.json')}
-    const old=new SqliteStorageService({path:paths.legacyPath})
+    const old=new LegacyV38TestDatabase({path:paths.legacyPath})
     await old.migrate()
     await old.close()
     await assert.rejects(activateSlimCutover(paths,{
@@ -38,7 +39,7 @@ test('guarded activation and rollback preserve the v38 original, backup and Slim
     stagingPath:join(dir,'stage.sqlite'),installedSlimPath:join(dir,'installed.sqlite'),
     pointerPath:join(dir,'active.json')}
   try{
-    const legacy=new SqliteStorageService({path:paths.legacyPath})
+    const legacy=new LegacyV38TestDatabase({path:paths.legacyPath})
     await legacy.migrate()
     await legacy.close()
     await copyFile(paths.legacyPath,paths.backupPath)
@@ -87,7 +88,7 @@ test('M3 cutover rehashes v38 under writer lock, rejecting changes after a previ
     stagingPath:join(root,'stage.sqlite'),installedSlimPath:join(root,'installed.sqlite'),
     pointerPath:join(root,'active.json')}
   try{
-    const legacy=new SqliteStorageService({path:paths.legacyPath})
+    const legacy=new LegacyV38TestDatabase({path:paths.legacyPath})
     await legacy.migrate()
     await legacy.close()
     await copyFile(paths.legacyPath,paths.backupPath)
@@ -110,7 +111,7 @@ test('activation computes the final gate inside the frozen old SQLite transactio
     stagingPath:join(root,'stage.sqlite'),installedSlimPath:join(root,'installed.sqlite'),
     pointerPath:join(root,'active.json')}
   try{
-    const db=new SqliteStorageService({path:paths.legacyPath})
+    const db=new LegacyV38TestDatabase({path:paths.legacyPath})
     await db.migrate();await db.close()
     await copyFile(paths.legacyPath,paths.backupPath)
     const staging=await SqliteSlimStorage.createFresh(paths.stagingPath)
@@ -136,7 +137,7 @@ test('M3 rollback refuses an active Daemon port and preserves the Slim pointer',
     pointerPath:join(root,'active.json')}
   const server=createServer(socket=>socket.end())
   try{
-    const old=new SqliteStorageService({path:paths.legacyPath})
+    const old=new LegacyV38TestDatabase({path:paths.legacyPath})
     await old.migrate();await old.close()
     await copyFile(paths.legacyPath,paths.backupPath)
     const stage=await SqliteSlimStorage.createFresh(paths.stagingPath)
@@ -170,7 +171,7 @@ test('failed pointer publication cleans ONLY the newly created hard link, preser
     // exclusive hard link, recreating an interrupted activation publication.
     pointerPath:join(root,'absent-directory','active.json')}
   try{
-    const old=new SqliteStorageService({path:paths.legacyPath})
+    const old=new LegacyV38TestDatabase({path:paths.legacyPath})
     await old.migrate();await old.close()
     await copyFile(paths.legacyPath,paths.backupPath)
     const stage=await SqliteSlimStorage.createFresh(paths.stagingPath)
