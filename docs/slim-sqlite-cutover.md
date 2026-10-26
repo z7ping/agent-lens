@@ -80,7 +80,15 @@ npm run storage:slim:verify -- --legacy /path/to/legacy.sqlite --staging /path/t
 - 因 Source 发现分页不统一，达到 `--limit` 时报告 `exhausted:false`，不可据此宣称全量恢复。各来源的完整覆盖验收仍需完善。
 - 本命令**只修改用户明确指定的精简暂存库**，不读取/修改旧数据库，也不进行运行时切换、删除和安装目录替换。
 
-## 8. 后续硬阻塞
+## 8. 全部来源离线批量重建
+
+```bash
+npm run storage:slim:reindex-all -- --staging /path/to/slim-staging.sqlite --all-installations --limit 5000
+```
+
+按精简库已迁移的安装身份、来源产品与 Profile 分组，通过真实 Source Adapter 扫描原生会话。不复制旧会话文件路径、不读旧事件正文；所有批次显式报告扫描、索引、失败、部分覆盖、额度是否截断。`discoveryComplete` 仅表示目录枚举完成，不代表原生历史正文全量完整；`readyToSwitch` 始终为 false。**此命令只对明确提供的暂存精简库写目录元数据，不操作正在运行的库。** 超 5000 的单 Scope 需要后续按来源可持续分页。
+
+## 9. 后续硬阻塞
 
 1. 审计 checkpoint、用户标签、项目/资产、文件变更与备份状态的具体保留合同，完善迁移白名单和失联清单。
 2. 全五个 Source 的原生文件真实性、归档、工具/附件/错误、Hook 缺口适配；统计从 Source 重算且不重复。
