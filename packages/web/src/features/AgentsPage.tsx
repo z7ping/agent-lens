@@ -319,7 +319,7 @@ function AssetGroup({
 
 function FrequentAssets({ agent, assets }: { agent: AgentOverviewDto; assets: AgentAssetInventoryDto[] }) {
   const { t } = useTranslation('agents')
-  if (!assets.length) return <div className="muted-empty compact">{t('noReliableSkillMcpUsage')}</div>
+  if (agent.usedAssetsStatus === 'unavailable' || !assets.length) return <div className="muted-empty compact">{agent.usedAssetsStatus === 'unavailable' ? t('usageUnavailable') : t('noReliableSkillMcpUsage')}</div>
   const rows = assets.map(asset => ({ asset, count: assetUsageCount(agent, asset) }))
   const max = Math.max(1, ...rows.map(row => row.count))
   return <div className="frequent-assets">
@@ -344,12 +344,14 @@ function SkillLifecycle({ agent, skills }: { agent: AgentOverviewDto; skills: Ag
   const discoverable = discoverableKnown
     ? skills.filter(asset => stateValue(asset, 'discoverable') === true).length
     : null
-  const used = skills.filter(asset => assetUsageCount(agent, asset) > 0).length
+  const used = agent.usedAssetsStatus === 'unavailable'
+    ? null : skills.filter(asset => assetUsageCount(agent, asset) > 0).length
   const baseline = Math.max(1, installed)
   const rows = [
     { key: 'installed', label: installedReported ? t('lifecycle.installed') : t('lifecycle.discovered'), value: installed, percent: 100, active: false },
     { key: 'discoverable', label: discoverableKnown ? t('lifecycle.discoverable') : t('lifecycle.discoverableUnknown'), value: discoverable, percent: discoverable === null ? 0 : Math.min(100, discoverable / baseline * 100), active: false },
-    { key: 'used', label: t('lifecycle.used'), value: used, percent: Math.min(100, used / baseline * 100), active: true },
+    { key: 'used', label: t('lifecycle.used'), value: used,
+      percent: used === null ? 0 : Math.min(100, used / baseline * 100), active: true },
   ]
 
   return <section className="skill-lifecycle">
@@ -362,6 +364,7 @@ function SkillLifecycle({ agent, skills }: { agent: AgentOverviewDto; skills: Ag
       </div>)}
     </div>
     {!discoverableKnown && <p className="skill-funnel-note">{t('lifecycle.unknownNote')}</p>}
+    {used === null && <p className="skill-funnel-note">{t('usageUnavailable')}</p>}
   </section>
 }
 

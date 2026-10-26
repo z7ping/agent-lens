@@ -169,6 +169,7 @@ export const chineseAgentsMessages: LocaleMessagesDto = {
     collapse: '收起',
     showMoreItems: '查看更多 {{count}} 个',
     noReliableSkillMcpUsage: '暂无能够可靠归因的技能或 MCP（模型上下文协议）使用记录',
+    usageUnavailable: '原生会话使用统计尚未完成认证，不能视为零次调用',
     lifecycle: {
       title: '技能生命周期',
       description: '从本机资产发现，到智能体可发现，再到有证据支撑的真实调用。',

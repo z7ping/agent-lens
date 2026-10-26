@@ -347,6 +347,7 @@ test('Slim-only HTTP reads native Catalog/facets and refuses all old Event APIs'
     assert.equal(agentsView.items[0]?.assetInventory[0]?.canonicalName,'pi-agent')
     assert.equal(agentsView.items[0]?.assetInventory[0]?.bindings.length,1)
     assert.equal(agentsView.meta.native.usedAssets,'unavailable')
+    assert.equal((agentsView.items[0] as {usedAssetsStatus?:string}).usedAssetsStatus,'unavailable')
     const agentDetail=await fetch(base+'/api/v1/agents/pi')
     assert.equal(agentDetail.status,200)
     assert.equal((await agentDetail.json() as {item:{assetInventory:unknown[]}})
