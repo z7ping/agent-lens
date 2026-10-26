@@ -196,10 +196,10 @@ export class SlimSourceCoordinator {
               ...(profile?{runtimeProfileId:profile.id}:{}),
             }
             try{
-              const report=await this.runtime.reindexInstallation({
+              const indexReport=await this.runtime.reindexInstallation({
                 ...scope,maxSessions:MAX_STARTUP_SESSIONS_PER_SCOPE,
               })
-              this.progress.indexedSessions+=report.indexed
+              this.progress.indexedSessions+=indexReport.indexed
               this.onProgress?.()
               if(source.discoverAssets && this.assetPolicy && !this.abort.signal.aborted){
                 try{
