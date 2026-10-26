@@ -1,14 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import { parentPort, threadId, workerData } from 'node:worker_threads'
-import {
-  HubUnifiedLogicalSessionReader,
-  HubUnifiedObservationReader,
-  SqliteHubRemoteReadRepository,
-  SqliteStorageService,
-  SqliteSlimStorage,
-  sqliteStorageProvider,
-} from '@agent-lens/storage-sqlite'
-import { isStorageBudgetPolicy, type StorageBudgetPolicy } from '@agent-lens/core'
+import { SqliteSlimStorage } from '@agent-lens/storage-sqlite'
 import {
   DATA_RUNTIME_MAX_MESSAGE_BYTES,
   DATA_RUNTIME_PROTOCOL_VERSION,
@@ -28,9 +20,7 @@ interface DataRuntimeWorkerData {
   allowDiagnostics?: boolean
   role?: DataRuntimeRole
   dbPath?: string
-  nodeId?: string
-  budget?: StorageBudgetPolicy
-  schemaKind?: 'legacy'|'slim'
+  schemaKind?: 'slim'
 }
 
 function asRecord(value: unknown, label: string): Record<string, unknown> {
@@ -46,9 +36,7 @@ function parseWorkerData(value: unknown): DataRuntimeWorkerData {
   const allowDiagnostics = record.allowDiagnostics
   const role = record.role
   const dbPath = record.dbPath
-  const nodeId = record.nodeId
-  const budget = record.budget
-  const schemaKind=record.schemaKind
+  const schemaKind = record.schemaKind
   if (allowDiagnostics !== undefined && typeof allowDiagnostics !== 'boolean') {
     throw new TypeError('Data Runtime workerData.allowDiagnostics must be a boolean')
   }
@@ -58,22 +46,17 @@ function parseWorkerData(value: unknown): DataRuntimeWorkerData {
   if (dbPath !== undefined && typeof dbPath !== 'string') {
     throw new TypeError('Data Runtime workerData.dbPath must be a string')
   }
-  if (nodeId !== undefined && typeof nodeId !== 'string') {
-    throw new TypeError('Data Runtime workerData.nodeId must be a string')
+  if (schemaKind !== undefined && schemaKind !== 'slim') {
+    throw new TypeError('Legacy Data Runtime has been removed; only Slim is supported')
   }
-  if (schemaKind!==undefined && schemaKind!=='slim' && schemaKind!=='legacy') {
-    throw new TypeError('Data Runtime workerData.schemaKind must be slim or legacy')
-  }
-  if (budget !== undefined && !isStorageBudgetPolicy(budget)) {
-    throw new TypeError('Data Runtime workerData.budget must be a valid StorageBudgetPolicy')
+  if (record.budget !== undefined || record.nodeId !== undefined) {
+    throw new TypeError('Legacy Data Runtime configuration is not supported')
   }
   return {
     ...(allowDiagnostics === undefined ? {} : { allowDiagnostics }),
     ...(role === undefined ? {} : { role }),
     ...(dbPath === undefined ? {} : { dbPath }),
-    ...(nodeId === undefined ? {} : { nodeId }),
-    ...(budget === undefined ? {} : { budget }),
-    ...(schemaKind===undefined?{}:{schemaKind}),
+    ...(schemaKind === undefined ? {} : { schemaKind: 'slim' }),
   }
 }
 
@@ -82,46 +65,15 @@ const startedAt = Date.now()
 const allowDiagnostics = Boolean(config.allowDiagnostics)
 const role: DataRuntimeRole = config.role ?? 'writer'
 const dbPath = config.dbPath
-const nodeId = config.nodeId ?? 'local'
-const schemaKind=config.schemaKind??'legacy'
+const schemaKind = 'slim' as const
 const SLOW_OPERATION_LOG_MS = 500
-let storage: SqliteStorageService | SqliteSlimStorage | null = null
-let unifiedRead: {
-  logicalSessions: HubUnifiedLogicalSessionReader
-  observations: HubUnifiedObservationReader
-} | null = null
+let storage: SqliteSlimStorage | null = null
 let activeTransactionId: string | null = null
 let requestTail: Promise<void> = Promise.resolve()
 
 if (dbPath) {
-  if (schemaKind==='slim') {
-    // This branch NEVER calls old migrations, builds canonical repositories or
-    // silently falls back to the v38 database. Caller must provide an existing
-    // verified slim SQLite path.
-    storage = SqliteSlimStorage.openExisting(dbPath,role==='reader')
-  } else {
-    storage = await sqliteStorageProvider.create({ path: dbPath, readonly: role === 'reader', ...(config.budget ? { budget: config.budget } : {}) })
-    await sqliteStorageProvider.initialize?.(storage, { path: dbPath, readonly: role === 'reader', ...(config.budget ? { budget: config.budget } : {}) })
-  }
-  if(schemaKind==='legacy') {
-    const legacy=storage as SqliteStorageService
-    const remote = new SqliteHubRemoteReadRepository(legacy.executor)
-    const logicalSessions = new HubUnifiedLogicalSessionReader(
-    nodeId,
-    legacy.repositories.sessions,
-    remote,
-    legacy.sessionSummaries,
-  )
-    unifiedRead = {
-      logicalSessions,
-    observations: new HubUnifiedObservationReader(
-      nodeId,
-      legacy.repositories.observations,
-      logicalSessions,
-      remote,
-    ),
-    }
-  }
+  // A live runtime cannot materialize v38, even if given a valid file path.
+  storage = SqliteSlimStorage.openExisting(dbPath, role === 'reader')
 }
 
 function reply(requestId: string, result: unknown): void {
@@ -177,43 +129,6 @@ function argsArray(value: unknown): unknown[] {
   return value
 }
 
-function storageRootAllowed(
-  path:readonly string[],kind:'legacy'|'slim'='legacy',
-):boolean {
-  if(kind==='slim')return slimStorageRootAllowed(path)
-  return [
-    'repositories',
-    'checkpoints',
-    'assetInventory',
-    'launchableProjects',
-    'nativeSessionCatalog',
-    'nativeSessionMetrics',
-    'taskFileChanges',
-    'sessionSummaries',
-    'sessionSummaryProjection',
-    'toolUsageObservations',
-    'unknownObservationProjection',
-    'maintenance',
-    'maintenanceJobs',
-    'projectionBackfill',
-    'runtimeProfiles',
-    'sourceRuntimeStatus',
-    'sourceRawAudit',
-    'sessionRelationshipCandidates',
-    'replication',
-    'replicationBootstrapLifecycle',
-    'replicationCanonicalChanges',
-    'replicationChangeProgress',
-    'replicationJournalLifecycle',
-    'replicationIndependentRoots',
-    'replicationObservationSnapshot',
-    'replicationSnapshotBootstrapProgress',
-    'replicationRuntimeControl',
-    'health',
-    'diagnostics',
-  ].includes(path[0]!)
-}
-
 async function invoke(root: unknown, path: readonly string[], args: readonly unknown[]): Promise<unknown> {
   let parent: unknown = null
   let current: unknown = root
@@ -228,7 +143,7 @@ async function invoke(root: unknown, path: readonly string[], args: readonly unk
   return Reflect.apply(current, parent, [...args])
 }
 
-function requireStorage(): SqliteStorageService | SqliteSlimStorage {
+function requireStorage(): SqliteSlimStorage {
   if (!storage) throw new Error('Data Runtime storage is not configured')
   return storage
 }
@@ -262,7 +177,7 @@ function safeRequestPath(value: DataRuntimeRequest): string | undefined {
 }
 
 function logSlowOperation(
-  method: 'storage.call' | 'unified-read.call',
+  method: 'storage.call',
   path: readonly string[],
   args: readonly unknown[],
   queuedAt: number,
@@ -388,7 +303,7 @@ async function handleRequest(value: unknown, queuedAt: number): Promise<void> {
     if (value.method === 'storage.call') {
       const local = requireStorage()
       const path = stringArray(value.params?.path, 'path')
-      if (!storageRootAllowed(path, schemaKind)) throw new Error(`Storage RPC root is not allowed: ${path[0]}`)
+      if (!slimStorageRootAllowed(path)) throw new Error(`Storage RPC root is not allowed: ${path[0]}`)
       const requestedId = transactionId(value.params?.transactionId)
       if (activeTransactionId && requestedId !== activeTransactionId) {
         throw new Error('Data Runtime storage call cannot cross an active transaction')
@@ -404,31 +319,13 @@ async function handleRequest(value: unknown, queuedAt: number): Promise<void> {
       return
     }
 
-    if (value.method === 'unified-read.call') {
-      if (!unifiedRead) throw new Error('Data Runtime unified read is not configured')
-      if (activeTransactionId) throw new Error('Unified read cannot enter an active write transaction')
-      const path = stringArray(value.params?.path, 'path')
-      if (!['logicalSessions', 'observations'].includes(path[0]!)) {
-        throw new Error(`Unified read RPC root is not allowed: ${path[0]}`)
-      }
-      const args = argsArray(value.params?.args)
-      const executionStartedAt = performance.now()
-      try {
-        reply(value.requestId, await invoke(unifiedRead, path, args))
-      } finally {
-        logSlowOperation('unified-read.call', path, args, queuedAt, executionStartedAt)
-      }
-      return
-    }
-
     if (value.method === 'shutdown') {
       if (storage) {
         if (activeTransactionId) {
           storage.executor.rollbackExternalTransaction()
           activeTransactionId = null
         }
-        if(schemaKind==='slim') await storage.close()
-        else await sqliteStorageProvider.dispose(storage as SqliteStorageService)
+        await storage.close()
         storage = null
       }
       reply(value.requestId, { ok: true })
