@@ -1,4 +1,4 @@
-import { join } from 'node:path'
+import { isAbsolute, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { DefaultCapturePolicyService, resolveCapturePolicyPluginState } from '@agent-lens/capture-policy'
 import type { CapturePolicyService, SourceService } from '@agent-lens/core'
@@ -48,7 +48,8 @@ export async function startSlimNativeDaemon(options:SlimDaemonOptions){
   await runtime.start()
   try {
     const http=await startNativeOnlyHttpSurface(runtime.nativeHttpPort(),{
-      port:options.port,sources,capturePolicy:policy,
+      ...(options.port===undefined?{}:{port:options.port}),
+      sources,capturePolicy:policy,
       reader:runtime.nativeReader(sources,policy),
     })
     let closed=false
@@ -66,11 +67,10 @@ export async function startSlimNativeDaemon(options:SlimDaemonOptions){
   }
 }
 
-if(process.argv[1]&&fileURLToPath(import.meta.url)===join(process.cwd(),
-  process.argv[1].replace(/^\.\//,''))){
+if(process.argv[1]&&fileURLToPath(import.meta.url)===resolve(process.argv[1])){
   const dbPath=process.env.AGENT_LENS_DB_PATH
-  if(!dbPath){
-    throw new Error('Slim-native Daemon requires explicit AGENT_LENS_DB_PATH pointing to a migrated slim-v1 database')
+  if(!dbPath||!isAbsolute(dbPath)){
+    throw new Error('Slim-native Daemon requires absolute AGENT_LENS_DB_PATH pointing to an existing slim-v1 database')
   }
   const port=process.env.AGENT_LENS_PORT
     ?Number(process.env.AGENT_LENS_PORT):undefined
