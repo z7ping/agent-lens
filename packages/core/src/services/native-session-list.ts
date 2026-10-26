@@ -17,6 +17,8 @@ export interface NativeSessionListQuery {
   }
   /** True only when the Source's full history/Hook coverage is independently certified. */
   coverageCertified?: boolean
+  /** Expected live parser version for this Source; omit to mark metrics partial. */
+  parserVersion?: string
 }
 
 export interface NativeSessionListItem {
