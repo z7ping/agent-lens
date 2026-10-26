@@ -1,6 +1,7 @@
 import { isAbsolute } from 'node:path'
 import { createHash } from 'node:crypto'
 import type { SqliteExecutor } from './executor'
+import { isSlimDatabase } from './slim-schema'
 
 import {
   type NativeSessionCatalogEntry,
@@ -124,10 +125,13 @@ export class SqliteNativeSessionCatalog {
   async hasNativeOnlyWriteClaim(input: {
     sourceId: string; installationId: string; nativeSessionId: string
   }): Promise<boolean> {
-    return this.executor.run(() => Boolean(this.executor.db.prepare(`
+    return this.executor.run(() => {
+      if (isSlimDatabase(this.executor.db)) return false
+      return Boolean(this.executor.db.prepare(`
       SELECT 1 FROM native_session_write_claims
       WHERE source_id=? AND installation_id=? AND native_session_id=? AND mode='native-only'
     `).get(input.sourceId,input.installationId,input.nativeSessionId)))
+    })
   }
 
   /**
@@ -140,6 +144,7 @@ export class SqliteNativeSessionCatalog {
     sourceId: string; installationId: string; nativeSessionId: string
   }): Promise<'legacy' | 'native-only' | null> {
     return this.executor.run(() => {
+      if (isSlimDatabase(this.executor.db)) return 'native-only' as const
       const row = this.executor.db.prepare(`
         SELECT mode FROM native_session_write_claims
         WHERE source_id=? AND installation_id=? AND native_session_id=?
@@ -156,6 +161,9 @@ export class SqliteNativeSessionCatalog {
       throw new Error('Invalid legacy session write ownership identity')
     }
     return this.executor.run(() => {
+      if (isSlimDatabase(this.executor.db)) {
+        throw new Error('Legacy Writer is forbidden for slim-native-session-v1')
+      }
       this.executor.db.prepare(`
         INSERT OR IGNORE INTO native_session_write_claims
           (source_id,installation_id,native_session_id,claimed_at,mode)
@@ -180,6 +188,17 @@ export class SqliteNativeSessionCatalog {
       throw new Error('Invalid native write ownership identity')
     }
     return this.executor.run(() => {
+      if (isSlimDatabase(this.executor.db)) {
+        // No ownership-claim table exists after a fully validated cutover.
+        // This compatibility API never changes state in the slim schema.
+        return Boolean(this.executor.db.prepare(`
+          SELECT 1 FROM native_session_catalog
+          WHERE source_id=? AND installation_id=? AND native_session_id=?
+            AND location_kind='native' AND file_path=? AND file_identity=?
+            AND review_session_id IS NOT NULL
+        `).get(input.sourceId,input.installationId,input.nativeSessionId,
+          input.filePath,input.fileIdentity))
+      }
       this.executor.db.prepare(`
         INSERT OR IGNORE INTO native_session_write_claims
           (source_id,installation_id,native_session_id,claimed_at,mode)
@@ -251,31 +270,36 @@ export class SqliteNativeSessionCatalog {
         // Do not advertise pre-v35 metadata rows that cannot be opened by
         // their synthetic Review ID until their next incremental upsert.
         predicates.push('review_session_id IS NOT NULL')
-        // A Legacy owner may already be durable before its first SQL Review
-        // Observation becomes visible. Do not create a synthetic Native-only
-        // rail entry in that in-flight interval (or for SourceRecord-only
-        // legacy sessions) merely because the Review projection is empty.
-        predicates.push(`NOT EXISTS (
-          SELECT 1 FROM native_session_write_claims AS claim
-          WHERE claim.source_id = native_session_catalog.source_id
-            AND claim.installation_id = native_session_catalog.installation_id
-            AND claim.native_session_id = native_session_catalog.native_session_id
-            AND claim.mode = 'legacy'
-        )`)
-        // The existing SourceSession unique triple is the authoritative
-        // association between source-native and legacy logical identities.
-        // EXISTS uses the existing observations logical-session index, with
-        // no payload reads and no scan of unbounded Source records.
-        predicates.push(`NOT EXISTS (
-          SELECT 1 FROM source_sessions AS linked
-          WHERE linked.source_id = native_session_catalog.source_id
-            AND linked.installation_id = native_session_catalog.installation_id
-            AND linked.native_session_id = native_session_catalog.native_session_id
-            AND EXISTS (
-              SELECT 1 FROM observations AS stored
-              WHERE stored.logical_session_id = linked.logical_session_id
-            )
-        )`)
+        // Only the old v38 database has Legacy claims and stored observations.
+        // The standalone slim database contains only native entries, so it
+        // MUST NOT query tables that were deliberately removed at cutover.
+        if (!isSlimDatabase(this.executor.db)) {
+          // A Legacy owner may already be durable before its first SQL Review
+          // Observation becomes visible. Do not create a synthetic Native-only
+          // rail entry in that in-flight interval (or for SourceRecord-only
+          // legacy sessions) merely because the Review projection is empty.
+          predicates.push(`NOT EXISTS (
+            SELECT 1 FROM native_session_write_claims AS claim
+            WHERE claim.source_id = native_session_catalog.source_id
+              AND claim.installation_id = native_session_catalog.installation_id
+              AND claim.native_session_id = native_session_catalog.native_session_id
+              AND claim.mode = 'legacy'
+          )`)
+          // The existing SourceSession unique triple is the authoritative
+          // association between source-native and legacy logical identities.
+          // EXISTS uses the existing observations logical-session index, with
+          // no payload reads and no scan of unbounded Source records.
+          predicates.push(`NOT EXISTS (
+            SELECT 1 FROM source_sessions AS linked
+            WHERE linked.source_id = native_session_catalog.source_id
+              AND linked.installation_id = native_session_catalog.installation_id
+              AND linked.native_session_id = native_session_catalog.native_session_id
+              AND EXISTS (
+                SELECT 1 FROM observations AS stored
+                WHERE stored.logical_session_id = linked.logical_session_id
+              )
+          )`)
+        }
       }
       if (input.before) {
         predicates.push(`(last_activity_at,source_id,installation_id,native_session_id,location_kind) < (?,?,?,?,?)`)
