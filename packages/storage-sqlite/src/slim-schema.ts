@@ -1,5 +1,5 @@
-import { readFile } from 'node:fs/promises'
 import type Database from 'better-sqlite3'
+import { SLIM_SCHEMA_SQL } from './slim-schema-sql'
 
 export const SLIM_SCHEMA_VERSION = 1
 
@@ -19,12 +19,11 @@ export async function initializeSlimSchema(db: Database.Database): Promise<void>
     throw new Error('Slim schema requires an empty staging database; refusing existing table: ' + existing.name)
   }
 
-  // Read the bundled SQL independently of the existing 38-step Legacy migrator.
-  const sql = await readFile(new URL('../slim/001-schema.sql', import.meta.url), 'utf8')
+  // Bundled with the runtime; never resolve source-tree assets at startup.
   db.pragma('foreign_keys = ON')
   db.exec('BEGIN IMMEDIATE')
   try {
-    db.exec(sql)
+    db.exec(SLIM_SCHEMA_SQL)
     db.prepare(`
       INSERT INTO schema_migrations(version,name,applied_at)
       VALUES (?,?,?)
@@ -71,4 +70,12 @@ export function assertSlimSchema(db: Database.Database): void {
   const version = db.prepare('SELECT version FROM schema_migrations ORDER BY version DESC LIMIT 1')
     .get() as {version:number} | undefined
   if (version?.version !== SLIM_SCHEMA_VERSION) throw new Error('Unexpected slim schema version')
+}
+
+/** Distinguish v1 slim database from the older migration chain (also has version 1). */
+export function isSlimDatabase(db: Database.Database): boolean {
+  const table = db.prepare(`SELECT 1 FROM sqlite_master WHERE type='table' AND name='schema_migrations'`).get()
+  if (!table) return false
+  return Boolean(db.prepare(`SELECT 1 FROM schema_migrations
+    WHERE version=1 AND name='slim-native-session-v1'`).get())
 }
