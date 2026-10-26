@@ -1,5 +1,6 @@
 import type {
   AgentInstallation, Host, RuntimeProfile, SourceDefinition,
+  CapturePolicyService, SourceService,
   NativeSessionCatalogEntry,
   NativeSessionCatalogStore,
   NativeSessionListQuery,
@@ -15,6 +16,7 @@ import type {
 import { SqliteSlimStorage } from '@agent-lens/storage-sqlite'
 import {
   indexNativeInstallation, NativeOnlyRuntimeCapture,
+  NativeSessionReader, NativeReaderWorkerClient,
   type NativeCatalogScanReport, type NativeCaptureHandle,
   type NativeSessionReaderStorage,
 } from '@agent-lens/core-services'
@@ -36,6 +38,7 @@ export class SlimDataRuntime {
   private readonly writer:SlimWorkerPort
   private readonly reader:SlimWorkerPort
   private started=false
+  private nativeReaderWorker:NativeReaderWorkerClient|null=null
 
   constructor(private readonly options:SlimRuntimeClientOptions){
     if(!options.dbPath || options.dbPath===':memory:') {
@@ -115,6 +118,16 @@ export class SlimDataRuntime {
 
   replaceMetrics(snapshot:NativeSessionMetricSnapshot):Promise<boolean>{
     return this.write(['nativeSessionMetrics','replace'],[snapshot])
+  }
+
+  /** Create the same trusted NativeSessionReader used by historical Review,
+   * backed only by Slim worker metadata and the isolated source parser worker.
+   * Ownership of the worker belongs to this Slim Runtime, not Legacy Cordis.
+   */
+  nativeReader(sources:SourceService,policy:CapturePolicyService):NativeSessionReader{
+    this.assertStarted()
+    if(!this.nativeReaderWorker)this.nativeReaderWorker=new NativeReaderWorkerClient()
+    return new NativeSessionReader(this.nativePort(),sources,policy,this.nativeReaderWorker)
   }
 
   /** Slim HTTP and review handlers consume this contract directly.
@@ -277,7 +290,10 @@ export class SlimDataRuntime {
 
   async shutdown():Promise<void>{
     this.started=false
+    const worker=this.nativeReaderWorker
+    this.nativeReaderWorker=null
     await Promise.all([
+      worker?.dispose().catch(()=>undefined),
       this.reader.shutdown().catch(()=>undefined),
       this.writer.shutdown().catch(()=>undefined),
     ])
