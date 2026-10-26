@@ -1,4 +1,5 @@
 import { existsSync } from 'node:fs'
+import { readActiveDatabasePointer } from '@agent-lens/storage-sqlite'
 import { homedir } from 'node:os'
 import { startLocalVault } from '@agent-lens/backup-local'
 import { NpmPiEcosystemProvider } from '@agent-lens/integration-pi'
@@ -212,11 +213,28 @@ export async function startSlimNativeDaemon(options:SlimDaemonOptions){
   }
 }
 
-if(process.argv[1]&&fileURLToPath(import.meta.url)===resolve(process.argv[1])){
-  const dbPath=process.env.AGENT_LENS_DB_PATH
-  if(!dbPath||!isAbsolute(dbPath)){
+/** Slim standalone consumes the SAME strict activation pointer as M3.
+ * Default installed Daemon/Desktop selection remains M4 work.
+ */
+export async function resolveSlimDaemonDatabasePath(
+  configuredDbPath:string|undefined,
+  activePointerPath:string|undefined,
+):Promise<string>{
+  if(activePointerPath){
+    if(!isAbsolute(activePointerPath))throw new Error('Active DB pointer must be absolute')
+    const pointer=await readActiveDatabasePointer(activePointerPath)
+    if(!pointer||pointer.mode!=='slim')throw new Error('No activated Slim DB in pointer')
+    return pointer.slimPath
+  }
+  if(!configuredDbPath||!isAbsolute(configuredDbPath)){
     throw new Error('Slim-native Daemon requires absolute AGENT_LENS_DB_PATH pointing to an existing slim-v1 database')
   }
+  return configuredDbPath
+}
+
+if(process.argv[1]&&fileURLToPath(import.meta.url)===resolve(process.argv[1])){
+  const dbPath=await resolveSlimDaemonDatabasePath(
+    process.env.AGENT_LENS_DB_PATH,process.env.AGENT_LENS_ACTIVE_DB_POINTER)
   const port=process.env.AGENT_LENS_PORT
     ?Number(process.env.AGENT_LENS_PORT):undefined
   const running=await startSlimNativeDaemon({dbPath,...(port===undefined?{}:{port})})

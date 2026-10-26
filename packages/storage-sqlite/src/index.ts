@@ -39,3 +39,5 @@ export * from './slim-asset-service'
 export * from './slim-native-session-list'
 export * from './slim-cutover-freshness'
 export * from './slim-native-facets'
+
+export * from './slim-active-pointer'

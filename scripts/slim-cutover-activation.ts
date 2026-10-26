@@ -1,9 +1,10 @@
 import { randomUUID } from 'node:crypto'
-import { link, lstat, open, readFile, rename, stat, unlink } from 'node:fs/promises'
+import { link, lstat, open, rename, stat, unlink } from 'node:fs/promises'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import Database from 'better-sqlite3'
-import { assertSlimSchema } from '@agent-lens/storage-sqlite'
+import { assertSlimSchema,readActiveDatabasePointer,type ActiveDatabasePointer } from '@agent-lens/storage-sqlite'
+export {readActiveDatabasePointer} from '@agent-lens/storage-sqlite'
 import { auditSlimCutoverGate, type SlimCutoverGateReport } from './slim-cutover-gate'
 import { withFrozenLegacyWriter } from './slim-legacy-writer-freeze'
 
@@ -22,14 +23,6 @@ export interface SlimActivationPaths {
   stagingPath:string
   installedSlimPath:string
   pointerPath:string
-}
-export interface ActiveDatabasePointer {
-  schemaVersion:1
-  mode:'slim'|'legacy'
-  legacyPath:string
-  backupPath:string
-  slimPath:string
-  changedAt:string
 }
 function paths(input:SlimActivationPaths):SlimActivationPaths {
   const normalized={
@@ -102,28 +95,6 @@ async function writePointer(path:string,state:ActiveDatabasePointer):Promise<voi
     await unlink(temp).catch(()=>undefined)
     throw error
   }
-}
-export async function readActiveDatabasePointer(path:string):Promise<ActiveDatabasePointer|null>{
-  let body:string
-  try{
-    await regular(path)
-    body=await readFile(path,'utf8')
-  }catch(error){
-    if((error as NodeJS.ErrnoException).code==='ENOENT')return null
-    throw error
-  }
-  const value:unknown=JSON.parse(body)
-  if(!value||typeof value!=='object'||Array.isArray(value))throw new Error('Invalid cutover pointer')
-  const row=value as Record<string,unknown>
-  if(row.schemaVersion!==1||(row.mode!=='legacy'&&row.mode!=='slim')
-    || !['legacyPath','backupPath','slimPath','changedAt'].every(key=>
-      typeof row[key]==='string'&&(row[key] as string).length>0)) {
-    throw new Error('Invalid cutover pointer')
-  }
-  for(const key of ['legacyPath','backupPath','slimPath'] as const){
-    if(resolve(row[key] as string)!==row[key])throw new Error('Cutover pointer path is not absolute')
-  }
-  return value as ActiveDatabasePointer
 }
 /** Reversible activation; original and consistent backup remain untouched.
  * Caller MUST independently attest old Daemon stopped and old writer frozen.
