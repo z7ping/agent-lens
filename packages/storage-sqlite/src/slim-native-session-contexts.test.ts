@@ -52,6 +52,24 @@ test('slim metadata retains project/title association without SQL session or evi
     assert.deepEqual(p1.items.map(item=>item.nativeSessionId),['one'])
     const p2=await storage.nativeSessionCatalog.query({projectId:'p2',limit:10})
     assert.deepEqual(p2.items.map(item=>item.nativeSessionId),['two'])
+    // Native sessions may only know their workspace; the project must still
+    // agree with the session list, Facets and Usage/Insights read models.
+    db.exec(`INSERT INTO workspaces(id,host_id,project_id,path)
+      VALUES('workspace-p2','h','p2','/workspace-p2')`)
+    await storage.nativeSessionCatalog.upsert({...base,nativeSessionId:'workspace-only',
+      locationKind:'native',filePath:resolve('source','workspace-only.jsonl'),
+      fileIdentity:'1:2',fileSize:50,fileMtimeMs:1,
+      lastActivityAt:'2026-10-26',updatedAt:'2026-10-26'})
+    await storage.nativeSessionContexts.upsert({...base,nativeSessionId:'workspace-only',
+      workspaceId:'workspace-p2'})
+    const p2WithWorkspace=await storage.nativeSessionCatalog.query({projectId:'p2',limit:10})
+    assert.deepEqual(p2WithWorkspace.items.map(item=>item.nativeSessionId).sort(),
+      ['two','workspace-only'])
+    const listByProject=await storage.nativeSessionList.query({projectId:'p2',limit:10})
+    assert.deepEqual(listByProject.items.map(item=>item.nativeSessionId).sort(),
+      ['two','workspace-only'])
+    const p1Unchanged=await storage.nativeSessionCatalog.query({projectId:'p1',limit:10})
+    assert.deepEqual(p1Unchanged.items.map(item=>item.nativeSessionId),['one'])
     assert.equal(db.prepare(`SELECT COUNT(*) AS n FROM sqlite_master
       WHERE name IN ('logical_sessions','observations','source_records')`).get() as {n:number}).n,0)
     await assert.rejects(storage.nativeSessionContexts.upsert({...base,nativeSessionId:'one',
