@@ -3,7 +3,7 @@ import test from 'node:test'
 import { mkdtemp, writeFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { startSlimNativeDaemon } from './slim-main'
+import { registeredNativeSources, startSlimNativeDaemon } from './slim-main'
 
 test('Slim standalone entry wires only native Reader and HTTP, and disposes on startup failure',async()=>{
   const actions:string[]=[]
@@ -68,4 +68,30 @@ test('Slim standalone entry wires only native Reader and HTTP, and disposes on s
     await rm(webRoot,{recursive:true,force:true})
   }
   assert.deepEqual(actions,['start','nativeHttpPort','nativeReader','shutdown'])
+})
+
+
+test('Slim registers all five original Source-native readers without a Legacy writer fallback',async()=>{
+  const sources=registeredNativeSources().list()
+  const byId=new Map(sources.map(source=>[source.manifest.sourceId,source]))
+  assert.deepEqual([...byId.keys()].sort(),[
+    'claude-code','codex','hermes','opencode','pi',
+  ])
+  for(const [sourceId,source] of byId){
+    assert.equal(source.manifest.pluginType,'source',sourceId)
+    assert.ok(source.manifest.parserVersion,sourceId)
+    assert.equal(typeof source.discoverNativeSessions,'function',sourceId)
+    assert.equal(typeof source.readNativeSessionPage,'function',sourceId)
+    assert.equal(typeof source.detect,'function',sourceId)
+    assert.equal(typeof source.normalize,'function',sourceId)
+    assert.equal(typeof source.declareCapabilities,'function',sourceId)
+    assert.equal(typeof source.startCapture,'function',sourceId)
+  }
+  // No implied coverage certification for Sources with optional runtime Hooks.
+  for(const sourceId of ['codex','claude-code','hermes']){
+    assert.notEqual(byId.get(sourceId)?.nativeSessionCoverageComplete,true,
+      sourceId+' cannot claim complete aggregate metrics without Hook recovery')
+  }
+  assert.equal(byId.get('pi')?.nativeSessionCoverageComplete,true)
+  assert.equal(byId.get('opencode')?.nativeSessionCoverageComplete,true)
 })
