@@ -30,7 +30,7 @@ test('Slim Vault preserves existing snapshot/verify behavior without a Legacy ev
       async declareCapabilities(){return []},
       async normalize(){return {observations:[],evidenceCandidates:[]}},
     }
-    const sources={list:()=>[source]} as SourceService
+    const sources={list:()=>[source]} as unknown as SourceService
     const local=startLocalVault(storage,sources,storage.identity,{
       vaultPath,sourceOrder:['vault-test'],
     })
