@@ -29,13 +29,13 @@ export interface SlimCutoverFreshness {
  */
 function tableNames(db:Database.Database):string[]{
   return (db.prepare(`SELECT name FROM sqlite_master
-    WHERE type='table' AND name NOT LIKE 'sqlite_%'
+    WHERE type='table' AND name NOT GLOB 'sqlite_*'
     ORDER BY name`).all() as Array<{name:string}>).map(row=>row.name)
 }
 
 function schemaFingerprint(db:Database.Database):string{
   const rows=db.prepare(`SELECT type,name,tbl_name,sql FROM sqlite_master
-    WHERE name NOT LIKE 'sqlite_%' ORDER BY type,name,tbl_name`).all()
+    WHERE name NOT GLOB 'sqlite_*' ORDER BY type,name,tbl_name`).all()
   return createHash('sha256').update(JSON.stringify(rows)).digest('hex')
 }
 
