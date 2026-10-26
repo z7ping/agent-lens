@@ -15,7 +15,6 @@ const DATA_RUNTIME_METHODS = [
   'storage.transaction.begin',
   'storage.transaction.commit',
   'storage.transaction.rollback',
-  'unified-read.call',
 ] as const
 
 export type DataRuntimeMethod = typeof DATA_RUNTIME_METHODS[number]
