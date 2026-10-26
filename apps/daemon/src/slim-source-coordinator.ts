@@ -1,3 +1,4 @@
+import { arch, hostname, platform } from 'node:os'
 import type {
   CapturePolicyService, RuntimeProfile, SourceService,
 } from '@agent-lens/core'
@@ -6,6 +7,7 @@ import type { SlimDataRuntime } from './data-runtime/slim-runtime.js'
 
 const MAX_STARTUP_SCOPES=256
 const MAX_STARTUP_SESSIONS_PER_SCOPE=128
+const MAX_DETECTIONS_PER_SOURCE=64
 
 export interface SlimSourceProgress {
   examinedScopes:number
@@ -30,7 +32,8 @@ export class SlimSourceCoordinator {
 
   constructor(
     private readonly runtime:Pick<SlimDataRuntime,
-      'facets'|'profiles'|'reindexInstallation'|'captureInstallation'>,
+      'facets'|'profiles'|'reindexInstallation'|'captureInstallation'
+      |'resolveHost'|'resolveInstallation'|'resolveProfile'>,
     private readonly sources:SourceService,
     private readonly policy:Pick<CapturePolicyService,'isSourceEnabled'>,
   ) {}
@@ -49,7 +52,59 @@ export class SlimSourceCoordinator {
     }).finally(()=>{this.progress.finished=true})
   }
 
+  /** Same official Source detect() contract as the old application, but only
+   * metadata identities are persisted. Per-source failures do not hide
+   * existing indexed installations or start a Legacy import.
+   */
+  private async discoverInstallations():Promise<void>{
+    const host=await this.runtime.resolveHost({
+      name:hostname(),platform:platform(),arch:arch(),
+    })
+    for(const source of this.sources.list()){
+      if(this.abort.signal.aborted)break
+      try{
+        const detected=await source.detect({host,env:process.env})
+        if(detected.length>MAX_DETECTIONS_PER_SOURCE){
+          throw new Error('Source returned too many native installations')
+        }
+        for(const item of detected){
+          if(this.abort.signal.aborted)break
+          if(item.sourceId!==source.manifest.sourceId
+            || item.productId!==source.manifest.productId){
+            throw new Error('Native Source discovery identity mismatch')
+          }
+          const installation=await this.runtime.resolveInstallation({
+            hostId:host.id,productId:item.productId,
+            ...(item.version?{version:item.version}:{}),
+            ...(item.executable?{executable:item.executable}:{}),
+            ...(item.configRoot?{configRoot:item.configRoot}:{}),
+            ...(item.dataRoot?{dataRoot:item.dataRoot}:{}),
+          })
+          if(item.runtimeProfile){
+            await this.runtime.resolveProfile({
+              installationId:installation.id,
+              nativeProfileId:item.runtimeProfile.nativeProfileId,
+              ...(item.runtimeProfile.name?{name:item.runtimeProfile.name}:{}),
+              ...(item.runtimeProfile.configRoot
+                ?{configRoot:item.runtimeProfile.configRoot}:{}),
+              ...(item.runtimeProfile.dataRoot
+                ?{dataRoot:item.runtimeProfile.dataRoot}:{}),
+            })
+          }
+        }
+      }catch(error){
+        if(this.abort.signal.aborted)break
+        this.progress.failedScopes++
+        console.warn('[AgentLens] Slim native Source discovery failed',{
+          sourceId:source.manifest.sourceId,error,
+        })
+      }
+    }
+  }
+
   private async run():Promise<void>{
+    await this.discoverInstallations()
+    if(this.abort.signal.aborted)return
     const facets=await this.runtime.facets()
     const registered=this.sources.list()
     let scoped=0
