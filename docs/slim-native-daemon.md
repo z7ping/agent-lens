@@ -24,11 +24,13 @@ Facets, health and readiness. Other /api/v1/ routes explicitly return 501 instea
 of fake empty data or a Legacy fallback.
 
 **Cutover not authorized:** default `start` still runs the old Daemon;
-Slim standalone does not yet expose Live/Backup/Task Center, automatically discover new installations, or replace the active installed DB. Do not serve the full desktop
+Slim standalone does not yet expose Live/Backup/Task Center or replace the active installed DB. Do not serve the full desktop
 experience from this partial surface and do not delete any old DB. #617 remains open.
 
-On explicit Slim startup, registered installations and their indexed Profiles
-are processed **after HTTP listen**. Each Scope first runs a bounded 128-session
+On explicit Slim startup, the existing registered Source.detect() contracts
+first discover local installations and Profiles into minimal Slim identities;
+then indexed installations and their Profiles are processed **after HTTP listen**.
+Failed detection does not erase previously indexed installations. Each Scope first runs a bounded 128-session
 native Catalog scan, then starts Source-owned capture only when authorized.
 At most 256 scopes run in one startup; excess scopes are counted as deferred.
 Capture always verifies the original Source location. It does not sync old
