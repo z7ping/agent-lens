@@ -44,6 +44,7 @@ async function read(input: NativeWorkerReadInput, signal: AbortSignal): Promise<
     || !input.host.id || input.installation.hostId !== input.host.id
     || input.installation.productId !== source.manifest.productId
     || !input.installation.id
+    || (input.runtimeProfile && input.runtimeProfile.installationId!==input.installation.id)
     || (input.query.limit !== undefined
       && (!Number.isSafeInteger(input.query.limit) || input.query.limit < 1 || input.query.limit > 64))) {
     return { state: 'unsupported', reason: 'native-worker-request-invalid' }
@@ -55,6 +56,7 @@ async function read(input: NativeWorkerReadInput, signal: AbortSignal): Promise<
   const ctx = {
     host: input.host,
     installation: input.installation,
+    ...(input.runtimeProfile?{runtimeProfile:input.runtimeProfile}:{}),
     abortSignal: signal,
     checkpoint,
   }
@@ -79,6 +81,7 @@ async function read(input: NativeWorkerReadInput, signal: AbortSignal): Promise<
     const normalized = await source.normalize(record, {
       host: input.host,
       installation: input.installation,
+      ...(input.runtimeProfile?{runtimeProfile:input.runtimeProfile}:{}),
     })
     entries.push({
       recordId: record.id,
@@ -116,6 +119,7 @@ async function readHooks(
     || !input.host.id || !input.installation.id
     || input.installation.hostId !== input.host.id
     || input.installation.productId !== source.manifest.productId
+    || (input.runtimeProfile && input.runtimeProfile.installationId!==input.installation.id)
     || (input.cursor !== undefined && (!input.cursor || input.cursor.length > 512
       || !/^[A-Za-z0-9_-]+$/.test(input.cursor)))) {
     return {state:'unsupported',reason:'native-worker-request-invalid'}
@@ -124,7 +128,9 @@ async function readHooks(
   let page: Awaited<ReturnType<NonNullable<SourceDefinition['readArchivedNativeHooksPage']>>>
   try {
     page = await source.readArchivedNativeHooksPage(input.nativeSessionId, {
-      host: input.host, installation: input.installation, checkpoint, abortSignal: signal,
+      host: input.host, installation: input.installation,
+      ...(input.runtimeProfile?{runtimeProfile:input.runtimeProfile}:{}),
+      checkpoint, abortSignal: signal,
     }, input.cursor)
   } catch (error) {
     if (error instanceof TypeError && error.message === 'Invalid archived Hook cursor') {
@@ -155,6 +161,7 @@ async function readHooks(
       sourceSessionNativeId: input.nativeSessionId,
       normalized: await source.normalize(record, {
         host: input.host, installation: input.installation,
+        ...(input.runtimeProfile?{runtimeProfile:input.runtimeProfile}:{}),
       }),
     })
   }
