@@ -50,6 +50,8 @@ export interface SlimCutoverGateReport {
   missingSessionContexts:number
   oldDatabaseChanged:boolean
   unfinishedNativeMetrics:number
+  /** Unmapped legacy SourceRecords cannot be certified by native session catalog. */
+  legacyRecordsWithoutSession:number
   blockedBy:readonly string[]
   /** No automatic promotion is possible while the old full Service is active. */
   readyToSwitch:false
@@ -59,7 +61,8 @@ export function summarizeSlimGate(input:{
   identities:{
     oldSessionIdentities:number;nativeIndexed:number;archivedOnly:number
     missingFromNativeCatalog:number;missingContext:number
-    invalidOldIdentities:number;nativeMetricsMissingOrStale:number
+    invalidOldIdentities:number;legacyRecordsWithoutSession:number
+    nativeMetricsMissingOrStale:number
   }
   originals:Pick<OriginalsAuditReport,
     'verified'|'partial'|'unavailable'|'drifted'|'unsupported'
@@ -70,6 +73,7 @@ export function summarizeSlimGate(input:{
   const blockedBy:string[]=[]
   if(!input.oldDatabaseUnchanged)blockedBy.push('legacy-database-changed-since-snapshot')
   if(identities.invalidOldIdentities)blockedBy.push('invalid-old-session-identities')
+  if(identities.legacyRecordsWithoutSession)blockedBy.push('legacy-source-records-without-native-session')
   if(identities.missingFromNativeCatalog)blockedBy.push('old-sessions-missing-native-catalog')
   if(identities.missingContext)blockedBy.push('old-sessions-missing-slim-context')
   if(!originals.catalogEnumerationComplete)blockedBy.push('native-audit-budget-or-enumeration-incomplete')
@@ -91,6 +95,7 @@ export function summarizeSlimGate(input:{
     missingSessionContexts:identities.missingContext,
     oldDatabaseChanged:!input.oldDatabaseUnchanged,
     unfinishedNativeMetrics:identities.nativeMetricsMissingOrStale,
+    legacyRecordsWithoutSession:identities.legacyRecordsWithoutSession,
     blockedBy,
     readyToSwitch:false,
   }

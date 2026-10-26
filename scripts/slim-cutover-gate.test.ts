@@ -6,7 +6,7 @@ const example={
   identities:{
     oldSessionIdentities:12,nativeIndexed:11,archivedOnly:0,
     missingFromNativeCatalog:1,missingContext:2,
-    invalidOldIdentities:0,nativeMetricsMissingOrStale:3,
+    invalidOldIdentities:0,legacyRecordsWithoutSession:2,nativeMetricsMissingOrStale:3,
   },
   originals:{
     verified:9,partial:1,unavailable:1,drifted:0,unsupported:0,
@@ -23,6 +23,8 @@ test('combined gate never treats metadata-only coverage as a safe cutover',()=>{
   assert.equal(report.missingSessionContexts,2)
   assert.equal(report.originalContentVerified,9)
   assert.ok(report.blockedBy.includes('old-sessions-missing-native-catalog'))
+  assert.equal(report.legacyRecordsWithoutSession,2)
+  assert.ok(report.blockedBy.includes('legacy-source-records-without-native-session'))
   assert.ok(report.blockedBy.includes('legacy-database-changed-since-snapshot'))
   assert.ok(report.blockedBy.includes('native-metrics-missing-or-stale'))
   assert.ok(report.blockedBy.includes('original-session-content-unverified'))
@@ -30,7 +32,8 @@ test('combined gate never treats metadata-only coverage as a safe cutover',()=>{
 test('perfect original coverage still cannot silently bypass legacy Writer/Hook/rollback gates',()=>{
   const report=summarizeSlimGate({
     identities:{...example.identities,oldSessionIdentities:2,nativeIndexed:2,
-      missingFromNativeCatalog:0,missingContext:0,nativeMetricsMissingOrStale:0},
+      missingFromNativeCatalog:0,missingContext:0,legacyRecordsWithoutSession:0,
+      nativeMetricsMissingOrStale:0},
     originals:{...example.originals,verified:2,partial:0,unavailable:0,
       catalogEnumerationComplete:true,allCurrentOriginalsVerified:true},
     oldDatabaseUnchanged:true,

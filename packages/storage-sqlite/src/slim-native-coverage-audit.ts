@@ -13,6 +13,8 @@ export interface SlimNativeCoverageAudit {
   readonly missingFromNativeCatalog: number
   readonly missingContext: number
   readonly invalidOldIdentities: number
+  /** SourceRecord facts without a native session identity are invisible to Catalog coverage. */
+  readonly legacyRecordsWithoutSession: number
   readonly nativeMetricsMissingOrStale: number
   /** Opaque digest; no user prompts, raw file paths or session IDs. */
   readonly missingExamples: readonly {sourceId:string;opaqueSession:string}[]
@@ -81,6 +83,22 @@ export function auditSlimNativeCoverage(
       }
     }
   }
+  // v38 may contain Hook/SourceRecords without a source_sessions identity.
+  // Session Catalog coverage alone must never certify these old-only facts.
+  // Query identifiers and counts only; legacy payload_json is not materialized.
+  const hasSourceRecords=Boolean(oldDb.prepare(`SELECT 1 FROM sqlite_master
+    WHERE type='table' AND name='source_records'`).get())
+  const legacyRecordsWithoutSession=hasSourceRecords?count(oldDb,`
+    SELECT COUNT(*) AS n FROM source_records AS r
+    WHERE r.source_session_native_id IS NULL
+      OR TRIM(r.source_session_native_id) = ''
+      OR NOT EXISTS (
+        SELECT 1 FROM source_sessions AS s
+        WHERE s.source_id=r.source_id
+          AND s.installation_id=r.installation_id
+          AND s.native_session_id=r.source_session_native_id
+      )
+  `):0
   const migratedContextIdentities=count(slimDb,'SELECT COUNT(*) AS n FROM native_session_context')
   const nativeMetricsMissingOrStale=count(slimDb,`
     SELECT COUNT(*) AS n FROM native_session_catalog AS c
@@ -103,12 +121,13 @@ export function auditSlimNativeCoverage(
     missingFromNativeCatalog,
     missingContext,
     invalidOldIdentities,
+    legacyRecordsWithoutSession,
     nativeMetricsMissingOrStale,
     missingExamples,
     nextRequiredActions:[
       'Use Source-owned readers to verify the entire original session, not only the first record',
       'Rebuild missing Catalog and numerical metrics with the Native-only indexer and bounded readers',
-      'Report old-only transcripts and Hook partial coverage without copying event bodies',
+      'Report old-only transcripts, unmapped SourceRecords and Hook partial coverage without copying event bodies',
       'Validate settings, backup identity and all business consumers before freezing old writers',
       'Freeze, reconcile and atomically cut over only after cross-source acceptance',
     ],

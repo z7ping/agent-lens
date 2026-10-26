@@ -22,6 +22,13 @@ test('read-only cutover coverage differentiates native, archive and missing orig
         INSERT INTO source_sessions VALUES('a','pi','install','one');
         INSERT INTO source_sessions VALUES('b','pi','install','two');
         INSERT INTO source_sessions VALUES('c','codex','install','secret-native-id');
+        CREATE TABLE source_records (
+          id TEXT PRIMARY KEY,source_id TEXT,installation_id TEXT,
+          source_session_native_id TEXT,payload_json TEXT
+        );
+        INSERT INTO source_records VALUES ('record1','pi','install','one','private-mapped-message');
+        INSERT INTO source_records VALUES ('record2','pi','install',NULL,'private-unmapped-hook');
+        INSERT INTO source_records VALUES ('record3','pi','install','missing','private-unmapped-session');
       `)
     }finally{old.close()}
     const stage=await SqliteSlimStorage.createFresh(slimPath)
@@ -44,6 +51,7 @@ test('read-only cutover coverage differentiates native, archive and missing orig
       assert.equal(report.archivedOnly,1)
       assert.equal(report.missingFromNativeCatalog,1)
       assert.equal(report.missingContext,3)
+      assert.equal(report.legacyRecordsWithoutSession,2)
       assert.equal(report.nativeMetricsMissingOrStale,1)
       assert.equal(report.nativeContentFullyVerified,false)
       assert.equal(report.readyToSwitch,false)
@@ -51,6 +59,8 @@ test('read-only cutover coverage differentiates native, archive and missing orig
       assert.equal(report.missingExamples[0]?.sourceId,'codex')
       assert.equal(report.missingExamples[0]?.opaqueSession.length,20)
       assert.equal(JSON.stringify(report).includes('secret-native-id'),false)
+      assert.equal(JSON.stringify(report).includes('private-unmapped-hook'),false)
+      assert.equal(JSON.stringify(report).includes('private-unmapped-session'),false)
       assert.equal(JSON.stringify(report).includes('/safe/'),false)
     }finally{oldRead.close();slimRead.close()}
   }finally{await rm(root,{recursive:true,force:true})}
