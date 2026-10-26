@@ -93,15 +93,21 @@ export async function startSlimNativeDaemon(options:SlimDaemonOptions){
         {vaultPath,sourceOrder},
       )
     }
-    if(!options.lives)live=startSlimPiLive(runtime.nativePort().checkpoints)
-    const http=await startNativeOnlyHttpSurface(runtime.nativeHttpPort(),{
+    const httpPort=runtime.nativeHttpPort()
+    const nativeReader=runtime.nativeReader(sources,policy)
+    if(!options.lives)live=startSlimPiLive(
+      runtime.nativePort().checkpoints,
+      httpPort.nativeSessionCatalog,
+      nativeReader,policy,
+    )
+    const http=await startNativeOnlyHttpSurface(httpPort,{
       ...(options.port===undefined?{}:{port:options.port}),
       sources,capturePolicy:policy,
       backup:options.backup??vault!.service,
       lives:options.lives??live!.lives,
       liveAttachments:options.liveAttachments??live!.attachments,
       staticDir:resolveSlimWebRoot(options.webRoot),
-      reader:runtime.nativeReader(sources,policy),
+      reader:nativeReader,
     })
     const coordinator=new SlimSourceCoordinator(runtime,sources,policy)
     // HTTP is already ready; directory scans are now isolated, bounded and
