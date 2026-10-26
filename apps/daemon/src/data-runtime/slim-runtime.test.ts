@@ -164,6 +164,7 @@ test('Slim HTTP bridge serves existing native list, facets, Catalog and aggregat
     })
     await http.nativeSessionList.query({limit:10})
     await http.nativeFacets.query()
+    await http.installations.get('install')
     await http.launchableProjects.query({limit:10})
     await http.launchableProjects.recordWorkspaceValidation?.({
       workspaceId:'workspace-1',workspacePath:'/work/example',
@@ -181,7 +182,7 @@ test('Slim HTTP bridge serves existing native list, facets, Catalog and aggregat
       ['nativeSessionCatalog','get'],['nativeSessionCatalog','getByReviewSessionId'],
       ['nativeSessionCatalog','query'],['nativeSessionCatalog','isNativeMetricsEligible'],
       ['nativeSessionList','query'],['nativeFacets','query'],
-      ['launchableProjects','query'],
+      ['repositories','installations','get'],['launchableProjects','query'],
       ['nativeSessionMetrics','get'],['nativeSessionMetrics','overview'],
       ['nativeSessionMetrics','findRebuildCandidates'],['health'],
     ])

@@ -51,6 +51,14 @@ transcript payloads into SQLite; missing/partial Hook coverage is not promoted
 to a complete history claim. Stopping the Slim Daemon aborts scans and disposes
 capture handles before terminating storage workers.
 
+### Agent source file browser on Slim
+
+Existing `/api/v1/agents/:sourceId/files|file` GET routes use read-only
+Installation identity metadata from Slim, Source enabled-policy checks and the
+same source-support root traversal/secret/native-session-file protections.
+No arbitrary client path is accepted as a root; these handlers do not write
+original files or Legacy events.
+
 ### Existing Local Vault on Slim
 
 The same `LocalBackupService` + `ExplainableBackupService` +

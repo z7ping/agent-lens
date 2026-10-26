@@ -141,6 +141,8 @@ export class SlimDataRuntime {
       'get'|'getByReviewSessionId'|'query'|'isNativeMetricsEligible'>
     nativeSessionList:NativeSessionListReader
     nativeFacets:NativeFacetReader
+    /** Narrow read-only identity: never export the old RepositorySet. */
+    installations:{get(id:string):Promise<AgentInstallation|null>}
     launchableProjects:LaunchableProjectReader
     nativeSessionMetrics:NativeSessionMetricsStore
     health:()=>Promise<StorageHealth>
@@ -161,6 +163,11 @@ export class SlimDataRuntime {
       nativeFacets:{query(input={}){
         return self.read<Awaited<ReturnType<NativeFacetReader['query']>>>(['nativeFacets','query'],[input])
       }},
+      installations:{
+        get(id){
+          return self.read<AgentInstallation|null>(['repositories','installations','get'],[id])
+        },
+      },
       launchableProjects:{
         query(input){
           return self.read<Awaited<ReturnType<LaunchableProjectReader['query']>>>(

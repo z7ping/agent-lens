@@ -1,11 +1,20 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
+import { mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import type { CapturePolicyService, SourceService } from '@agent-lens/core'
 import { startNativeOnlyHttpSurface } from './slim-server'
 import { DefaultLiveAttachmentService } from '@agent-lens/core-services'
 
 test('Slim-only HTTP reads native Catalog/facets and refuses all old Event APIs',async()=>{
   let listed=0
+  const agentRoot=await mkdtemp(join(tmpdir(),'al-slim-agent-files-'))
+  await mkdir(join(agentRoot,'config'),{recursive:true})
+  await mkdir(join(agentRoot,'data'),{recursive:true})
+  await writeFile(join(agentRoot,'config','AGENTS.md'),'# Pi config\n')
+  await writeFile(join(agentRoot,'config','.env'),'SECRET=hidden\n')
+  await writeFile(join(agentRoot,'data','session.jsonl'),'{"type":"session"}\n')
   const source={
     manifest:{sourceId:'pi',productId:'pi',parserVersion:'v1',displayName:'Pi'},
     nativeSessionCoverageComplete:true,
@@ -48,6 +57,11 @@ test('Slim-only HTTP reads native Catalog/facets and refuses all old Event APIs'
     nativeFacets:{async query(){
       return {installedProducts:[{productId:'pi',installationIds:['install']}],
         projects:[],projectsTruncated:false}
+    }},
+    installations:{async get(id:string){
+      if(id!=='install')return null
+      return {id:'install',hostId:'host',productId:'pi',
+        configRoot:join(agentRoot,'config'),dataRoot:join(agentRoot,'data')}
     }},
     launchableProjects:{
       async query(){
@@ -140,6 +154,25 @@ test('Slim-only HTTP reads native Catalog/facets and refuses all old Event APIs'
     assert.deepEqual(localeBody.items,[])
     assert.ok(localeBody.meta.protocolVersion)
     assert.equal((await fetch(base+'/api/v1/locales',{method:'POST'})).status,405)
+    const agentFiles=await fetch(
+      base+'/api/v1/agents/pi/files?installationId=install&root=config')
+    assert.equal(agentFiles.status,200)
+    const preview=await fetch(
+      base+'/api/v1/agents/pi/file?installationId=install&root=config&path=AGENTS.md')
+    assert.equal(preview.status,200)
+    assert.equal((await preview.json() as {content:string}).content,'# Pi config\n')
+    const sensitive=await fetch(
+      base+'/api/v1/agents/pi/file?installationId=install&root=config&path=.env')
+    assert.equal(sensitive.status,403)
+    const original=await fetch(
+      base+'/api/v1/agents/pi/file?installationId=install&root=data&path=session.jsonl')
+    assert.equal(original.status,415)
+    const outside=await fetch(
+      base+'/api/v1/agents/pi/file?installationId=install&root=config&path=../secret.txt')
+    assert.equal(outside.status,400)
+    const wrong=await fetch(
+      base+'/api/v1/agents/pi/files?installationId=other&root=config')
+    assert.equal(wrong.status,404)
     const ready=await fetch(base+'/api/v1/ready')
     assert.equal(ready.status,200)
     assert.equal((await ready.json() as {storageMode:string}).storageMode,'native-only')
@@ -171,5 +204,8 @@ test('Slim-only HTTP reads native Catalog/facets and refuses all old Event APIs'
       assert.equal((await old.json() as {error:string}).error,
         'native_only_route_not_implemented')
     }
-  }finally{await surface.dispose();await liveAttachments.dispose()}
+  }finally{
+    await surface.dispose();await liveAttachments.dispose()
+    await rm(agentRoot,{recursive:true,force:true})
+  }
 })

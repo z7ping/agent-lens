@@ -1,5 +1,5 @@
 import type { IncomingMessage, ServerResponse } from 'node:http'
-import type { SourceService, StorageService } from '@agent-lens/core'
+import type { CapturePolicyService, SourceService, StorageService } from '@agent-lens/core'
 import {
   AGENT_LENS_PROTOCOL_VERSION,
   type AgentManagedDirectoryResponseDto,
@@ -12,6 +12,12 @@ import {
   previewManagedTextFile,
 } from '@agent-lens/source-support'
 import { badRequest, httpError, writeJson } from './http-utils'
+
+type AgentFileStorage = {
+  repositories: {
+    installations: Pick<StorageService['repositories']['installations'],'get'>
+  }
+}
 
 function responseMeta() {
   return {
@@ -59,7 +65,7 @@ async function managedRoot(input: {
   sourceId: string
   installationId: string
   root: AgentManagedRootDto
-  storage: StorageService
+  storage: AgentFileStorage
   sources?: SourceService
 }): Promise<string> {
   const source = input.sources?.list().find(item => item.manifest.sourceId === input.sourceId)
@@ -79,8 +85,9 @@ export async function handleAgentFilesRequest(
   request: IncomingMessage,
   response: ServerResponse,
   url: URL,
-  storage: StorageService,
+  storage: AgentFileStorage,
   sources?: SourceService,
+  policy?: CapturePolicyService,
 ): Promise<boolean> {
   const match = url.pathname.match(/^\/api\/v1\/agents\/([^/]+)\/(files|file)$/)
   if (!match) return false
@@ -91,6 +98,11 @@ export async function handleAgentFilesRequest(
   }
 
   const sourceId = decodeSourceId(match[1]!)
+  // A disabled Source must not leak its installation roots through the
+  // native-only file browser. Default legacy callers keep old behavior.
+  if (policy && !policy.isSourceEnabled(sourceId)) {
+    throw httpError(404,'Agent source is not enabled')
+  }
   const action = match[2]!
   const installationId = requiredQuery(url, 'installationId')
   const root = parseRoot(url.searchParams.get('root'))
