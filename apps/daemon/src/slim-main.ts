@@ -199,6 +199,7 @@ export async function startSlimNativeDaemon(options:SlimDaemonOptions){
       ()=>notifyActivity())
     const http=await startNativeOnlyHttpSurface(httpPort,{
       backgroundProgress:()=>coordinator.snapshot(),
+      rescanAgents:id=>coordinator.rescan(id),
       ...(options.port===undefined?{}:{port:options.port}),
       sources,capturePolicy:policy,
       ...(policy.isSourceEnabled('pi')?{

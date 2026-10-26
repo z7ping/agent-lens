@@ -4,6 +4,7 @@ import type {
 } from '@agent-lens/core'
 import type { NativeCaptureHandle } from '@agent-lens/core-services'
 import type { SlimDataRuntime } from './data-runtime/slim-runtime.js'
+import type { AgentRescanSummaryDto } from '@agent-lens/protocol'
 
 const MAX_STARTUP_SCOPES=256
 const MAX_STARTUP_SESSIONS_PER_SCOPE=128
@@ -25,6 +26,8 @@ export interface SlimSourceProgress {
 export class SlimSourceCoordinator {
   private readonly abort=new AbortController()
   private task:Promise<void>|null=null
+  private rescanQueue:Promise<void>=Promise.resolve()
+  private readonly captureKeys=new Set<string>()
   private readonly captures:NativeCaptureHandle[]=[]
   private progress:Omit<SlimSourceProgress,'runningCaptures'>={
     examinedScopes:0,indexedSessions:0,failedScopes:0,deferredScopes:0,finished:false,
@@ -58,12 +61,48 @@ export class SlimSourceCoordinator {
     })
   }
 
+  /** User-triggered rescan reuses the SAME discover/index/asset/capture path.
+   * Serialized after startup, without spawning duplicate original captures.
+   */
+  async rescan(sourceId?:string):Promise<AgentRescanSummaryDto>{
+    if(this.abort.signal.aborted)throw new Error('Native Source coordinator is stopped')
+    if(sourceId&&!this.sources.list().some(source=>source.manifest.sourceId===sourceId)){
+      throw new Error('Unknown native Source: '+sourceId)
+    }
+    const startedAt=new Date().toISOString()
+    const report:AgentRescanSummaryDto={
+      status:'completed',startedAt,completedAt:startedAt,
+      sourcesDetected:0,assetSourcesScanned:0,assetsDiscovered:0,
+      assetsRemoved:0,statesRecorded:0,statesCleared:0,failures:[],
+    }
+    const work=this.rescanQueue.then(async()=>{
+      await this.task?.catch(()=>undefined)
+      if(this.abort.signal.aborted)throw new Error('Native Source coordinator is stopped')
+      this.progress.finished=false
+      this.onProgress?.()
+      try{
+        await this.run(sourceId,report)
+      }finally{
+        this.progress.finished=true
+        this.onProgress?.()
+      }
+      report.status=report.failures.length
+        ?(report.sourcesDetected||report.assetSourcesScanned?'partial':'failed')
+        :'completed'
+      report.completedAt=new Date().toISOString()
+    })
+    this.rescanQueue=work.then(()=>undefined,()=>undefined)
+    await work
+    return report
+  }
+
   /** Same official Source detect() contract as the old application, but only
    * metadata identities are persisted. Per-source failures do not hide
    * existing indexed installations or start a Legacy import.
    */
-  private async discoverInstallations():Promise<void>{
-    const registered=this.sources.list()
+  private async discoverInstallations(sourceId?:string,report?:AgentRescanSummaryDto):Promise<void>{
+    const registered=this.sources.list().filter(source=>
+      !sourceId||source.manifest.sourceId===sourceId)
     if(!registered.length)return
     const host=await this.runtime.resolveHost({
       name:hostname(),platform:platform(),arch:arch(),
@@ -75,6 +114,7 @@ export class SlimSourceCoordinator {
         if(detected.length>MAX_DETECTIONS_PER_SOURCE){
           throw new Error('Source returned too many native installations')
         }
+        if(detected.length)report&&(report.sourcesDetected++)
         for(const item of detected){
           if(this.abort.signal.aborted)break
           if(item.sourceId!==source.manifest.sourceId
@@ -103,6 +143,8 @@ export class SlimSourceCoordinator {
       }catch(error){
         if(this.abort.signal.aborted)break
         this.progress.failedScopes++
+        report?.failures.push({sourceId:source.manifest.sourceId,stage:'detect',
+          message:error instanceof Error?error.message:String(error)})
         console.warn('[AgentLens] Slim native Source discovery failed',{
           sourceId:source.manifest.sourceId,error,
         })
@@ -110,11 +152,13 @@ export class SlimSourceCoordinator {
     }
   }
 
-  private async run():Promise<void>{
-    await this.discoverInstallations()
+  private async run(sourceId?:string,report?:AgentRescanSummaryDto):Promise<void>{
+    await this.discoverInstallations(sourceId,report)
     if(this.abort.signal.aborted)return
     const facets=await this.runtime.facets()
-    const registered=this.sources.list()
+    const registered=this.sources.list().filter(source=>
+      !sourceId||source.manifest.sourceId===sourceId)
+    const scannedAssets=new Set<string>()
     let scoped=0
     for(const product of facets.installedProducts){
       if(this.abort.signal.aborted)break
@@ -128,6 +172,8 @@ export class SlimSourceCoordinator {
         try{profiles=await this.runtime.profiles(installationId)}catch(error){
           if(this.abort.signal.aborted)break
           this.progress.failedScopes++
+          report?.failures.push({sourceId:sourceId??product.productId,stage:'detect',
+            message:error instanceof Error?error.message:String(error)})
           console.warn('[AgentLens] Slim native Profile enumeration failed',{
             installationId,error,
           })
@@ -157,12 +203,22 @@ export class SlimSourceCoordinator {
               this.onProgress?.()
               if(source.discoverAssets && this.assetPolicy && !this.abort.signal.aborted){
                 try{
-                  await this.runtime.scanInstallationAssets({
+                  const scan=await this.runtime.scanInstallationAssets({
                     ...scope,policy:this.assetPolicy,
                   })
+                  if(report){
+                    scannedAssets.add(source.manifest.sourceId)
+                    report.assetSourcesScanned=scannedAssets.size
+                    report.assetsDiscovered+=scan.assetsDiscovered
+                    report.assetsRemoved+=scan.assetsRemoved
+                    report.statesRecorded+=scan.statesRecorded
+                    report.statesCleared+=scan.statesCleared
+                  }
                 }catch(error){
                   if(!this.abort.signal.aborted){
                     this.progress.failedScopes++
+                    report?.failures.push({sourceId:source.manifest.sourceId,stage:'assets',
+                      message:error instanceof Error?error.message:String(error)})
                     console.warn('[AgentLens] Slim native asset discovery failed',{
                       sourceId:source.manifest.sourceId,installationId,
                       profileId:profile?.id,error,
@@ -173,15 +229,21 @@ export class SlimSourceCoordinator {
               // A partial Catalog scan is NOT a complete history claim.
               // Capture verifies every subsequent original record separately.
               if(this.abort.signal.aborted||!source.startCapture)continue
+              const captureKey=JSON.stringify([source.manifest.sourceId,installationId,
+                profile?.id??'default'])
+              if(this.captureKeys.has(captureKey))continue
               const handle=await this.runtime.captureInstallation(scope)
               if(this.abort.signal.aborted){
                 await handle.dispose()
               }else{
                 this.captures.push(handle)
+                this.captureKeys.add(captureKey)
               }
             }catch(error){
               if(this.abort.signal.aborted)break
               this.progress.failedScopes++
+              report?.failures.push({sourceId:source.manifest.sourceId,stage:'detect',
+                message:error instanceof Error?error.message:String(error)})
               console.warn('[AgentLens] native-only Source scope failed',{
                 sourceId:source.manifest.sourceId,installationId,
                 profileId:profile?.id,error,
@@ -201,7 +263,9 @@ export class SlimSourceCoordinator {
   async dispose():Promise<void>{
     this.abort.abort()
     await this.task?.catch(()=>undefined)
+    await this.rescanQueue
     const captures=this.captures.splice(0).reverse()
+    this.captureKeys.clear()
     await Promise.all(captures.map(handle=>handle.dispose().catch(error=>{
       console.warn('[AgentLens] native-only capture dispose failed',error)
     })))

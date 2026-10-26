@@ -5,7 +5,8 @@ import type {
   SourceService, StorageHealth, BackupService, LiveService, LiveAttachmentService,
   AgentInstallation, AssetInventoryReader, AgentIntegrationRuntimeStatus,
 } from '@agent-lens/core'
-import { AGENT_LENS_PROTOCOL_VERSION, type HostFilePreviewResponseDto, type PiEcosystemQueryService } from '@agent-lens/protocol'
+import { AGENT_LENS_PROTOCOL_VERSION, type HostFilePreviewResponseDto, type PiEcosystemQueryService,
+  type AgentRescanSummaryDto,type AgentRescanResponseDto } from '@agent-lens/protocol'
 import {
   AGENT_LENS_HTTP_HOST, DEFAULT_AGENT_LENS_HTTP_PORT,
   type RunningHttpSurface,
@@ -88,6 +89,7 @@ export interface NativeOnlyHttpOptions {
   integrationAuthorization?:IntegrationAuthorizationController
   integrationPackages?:IntegrationPackageController
   integrationPackages?:IntegrationPackageController
+  rescanAgents?:(sourceId?:string)=>Promise<AgentRescanSummaryDto>
 }
 
 /** Reuse the existing native HTTP handlers, but NEVER construct retired
@@ -265,6 +267,30 @@ export async function startNativeOnlyHttpSurface(
         // Exact existing product route and validation rules, powered by the
         // Slim workspace index rather than old LogicalSession SQL tables.
         writeJson(response,200,await readLaunchableProjects(storage,url.searchParams))
+        return
+      }
+      if(url.pathname==='/api/v1/agents/rescan'){
+        if(request.method!=='POST'){
+          writeJson(response,405,{error:'method_not_allowed'})
+          return
+        }
+        if(!options.rescanAgents){
+          writeJson(response,503,{error:'agents_rescan_unavailable'})
+          return
+        }
+        const sourceId=url.searchParams.get('sourceId')?.trim()||undefined
+        if(sourceId&&!options.sources.list().some(s=>s.manifest.sourceId===sourceId)){
+          writeJson(response,404,{error:'source_not_found'})
+          return
+        }
+        const summary=await options.rescanAgents(sourceId)
+        const [agents,facets]=await Promise.all([
+          nativeOnlyAgentOverview(storage,options.sources,options.capturePolicy),
+          nativeOnlyFacetResponse(storage.nativeFacets,options.sources,options.capturePolicy),
+        ])
+        const payload:AgentRescanResponseDto={...summary,agents,facets}
+        eventHub.notifyBackgroundActivity()
+        writeJson(response,200,payload)
         return
       }
       if(url.pathname==='/api/v1/agents/summary'){
