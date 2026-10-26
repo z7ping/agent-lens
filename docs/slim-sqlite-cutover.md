@@ -122,3 +122,9 @@ npm run storage:slim:assets -- --staging /path/to/slim-staging.sqlite --source p
 `SlimDataRuntime` 为独立精简库提供真正的 Writer/Reader Worker 入口；启动前强制验证**已存在的 Slim v1**，拒绝用 v38 迁移器打开/覆盖旧库。IPC 用 `schemaKind:'slim'` 隔离，不创建 Hub Unified Legacy Observation Reader；只允许已审计的原生目录、数值统计、项目与资产元数据方法。反射到 `executor/db`、Legacy Claim、SourceRecord、Observation/Evidence、复制日志和任意私有属性均在 Worker 方法白名单处拒绝。
 
 此能力是默认 Daemon 数据服务的**替换基础**，不是开关切库；在 Live/Review/Usage/Insights 等所有消费者完成 Native 迁移前，绝不能直接拿它替换旧 `dataRuntimeStoragePlugin`。当前没有自动操作、删除或迁移用户的正在使用的数据库。
+
+## 原生 Runtime Capture 替换（独立入口）
+
+`NativeOnlyRuntimeCapture` 新运行链直接消费 Source 自身的 `startCapture`，逐个核验 `rawRecovery.verify`，可恢复事件只刷新 `NativeSessionCatalogTracker` 的 Source 文件元数据并使数值汇总失效；不执行 `processSourceRecordWithOwnership` 或 Legacy Writer/Observation/Evidence。未证明可恢复的 Hook/文件事件计为 `coverageGaps`，不会静默回退旧存储，亦不宣称“覆盖完整”。
+
+跨次监听 Checkpoint 只允许小于 4KiB、没有正文/提示词/密钥字段的有界进度元数据。捕获队列串行处理，dispose 时先关闭 Source 再排空队列；计数器仅内存，不在 SQLite 复制执行事件。**仍需要新 Daemon 集成启动/停止与 Hook 自有归档覆盖策略**，此独立实现不等于默认运行时已切换。

@@ -874,3 +874,5 @@ export * from './native-only-source-indexer'
 export * from './native-session-deep-audit'
 
 export * from './native-only-asset-scanner'
+
+export * from './native-only-runtime-capture'
