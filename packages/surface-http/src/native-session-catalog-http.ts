@@ -1,5 +1,5 @@
 import type { IncomingMessage, ServerResponse } from 'node:http'
-import type { CapturePolicyService, NativeSessionCatalogQuery, NativeSessionCatalogStore, NativeSessionCatalogEntry } from '@agent-lens/core'
+import type { CapturePolicyService, NativeSessionCatalogQuery, NativeSessionCatalogStore, NativeSessionCatalogEntry, NativeSessionListReader, SourceService } from '@agent-lens/core'
 import { nativeReviewSessionId } from '@agent-lens/projection-review'
 import { badRequest, writeJson } from './http-utils'
 
@@ -39,7 +39,8 @@ function decodeCatalogCursor(value: string | undefined): NativeSessionCatalogQue
   }
 }
 
-export function encodeNativeCatalogCursor(value: NativeSessionCatalogEntry): string {
+export function encodeNativeCatalogCursor(value: Pick<NativeSessionCatalogEntry,
+  'lastActivityAt'|'sourceId'|'installationId'|'nativeSessionId'|'locationKind'>): string {
   return Buffer.from(JSON.stringify([
     value.lastActivityAt, value.sourceId, value.installationId,
     value.nativeSessionId, value.locationKind,
@@ -52,6 +53,8 @@ export async function handleNativeSessionCatalogRequest(
   url: URL,
   catalog?: NativeSessionCatalogStore,
   policy?: CapturePolicyService,
+  nativeList?: NativeSessionListReader,
+  sources?: SourceService,
 ): Promise<boolean> {
   const encodedSessionId = url.pathname.startsWith(`${PATH}/`)
     ? url.pathname.slice(PATH.length + 1)
@@ -114,6 +117,53 @@ export async function handleNativeSessionCatalogRequest(
 
   if (sourceId && !policy.isSourceEnabled(sourceId)) {
     writeJson(response, 200, { items: [], hasMore: false })
+    return true
+  }
+
+  // Once the slim runtime is installed, project/summary queries no longer
+  // pass through the legacy SQL SessionSummary projection. The result has
+  // explicit missing/stale/partial statistics instead of fake zero totals.
+  if (nativeList) {
+    const declaration = sourceId
+      ? sources?.list().find(item=>item.manifest.sourceId===sourceId)
+      : undefined
+    const page = await nativeList.query({
+      ...(sourceId?{sourceId}:{}),
+      ...(installationId?{installationId}:{}),
+      ...(projectId?{projectId}:{}),
+      ...(search?{search}:{}),
+      ...(before?{before:{
+        lastActivityAt:before.lastActivityAt,sourceId:before.sourceId,
+        installationId:before.installationId,
+        nativeSessionId:before.nativeSessionId,
+      }}:{}),
+      ...(declaration?{
+        parserVersion:declaration.manifest.parserVersion,
+        coverageCertified:declaration.nativeSessionCoverageComplete===true,
+      }:{}),
+      limit,
+    })
+    const items=page.items
+      .filter(item=>policy.isSourceEnabled(item.sourceId))
+      .map(item=>({
+        id:item.reviewSessionId,
+        sourceId:item.sourceId,installationId:item.installationId,
+        nativeSessionId:item.nativeSessionId,locationKind:'native' as const,
+        lastActivityAt:item.lastActivityAt,
+        ...(item.title?{title:item.title}:{}),
+        titleProvenance:item.titleProvenance,
+        ...(item.projectId?{projectId:item.projectId}:{}),
+        ...(item.projectName?{projectName:item.projectName}:{}),
+        metricsState:item.metricsState,
+        ...(item.metrics?{metrics:item.metrics}:{}),
+      }))
+    const last=page.items.at(-1)
+    writeJson(response,200,{
+      items,hasMore:page.hasMore,
+      ...(page.hasMore&&last?{
+        nextCursor:encodeNativeCatalogCursor({...last,locationKind:'native'}),
+      }:{}),
+    })
     return true
   }
 
