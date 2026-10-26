@@ -19,7 +19,7 @@ test('native-only asset scan reconciles current state without creating Evidence'
   },{
     async get(_scope,key){return checkpoints.get(key)??null},
     async set(_scope,key,value){checkpoints.set(key,value)},
-  },{
+  } as never,{
     isEnabled(){return true},
     isSourceEnabled(){return true},
     sanitizeDiscoveredAsset(input){return input},
@@ -40,13 +40,13 @@ test('native-only asset scan reconciles current state without creating Evidence'
     host:{id:'h',name:'local',platform:'linux',arch:'x64',createdAt:at,lastSeenAt:at},
     installation:{id:'i',hostId:'h',productId:'pi',firstSeenAt:at,lastSeenAt:at},
   }
-  const first=await scanner.scan(input)
+  const first=await scanner.scan(input as never)
   assert.equal(first.assetsDiscovered,1)
   assert.equal(first.statesRecorded,1)
   assert.deepEqual(stored[0]?.evidenceRefs,[])
   assert.equal(first.eventCopiesWritten,0)
   discover=false
-  const second=await scanner.scan(input)
+  const second=await scanner.scan(input as never)
   assert.equal(second.assetsRemoved,1)
   assert.equal(second.statesCleared,1)
   assert.equal(stored[1]?.value,false)
