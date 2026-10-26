@@ -5,7 +5,6 @@ import type {
   LaunchableWorkspaceCandidate,
 } from '@agent-lens/core'
 import type { SqliteExecutor } from './executor'
-import { rebuildLaunchableProjectIndex } from './launchable-project-index'
 import { rebuildSlimLaunchableProjectIndex } from './slim-launchable-project-rebuild'
 
 const MAX_LIMIT = 100
@@ -135,10 +134,8 @@ function mapSelectedProject(value: unknown): SelectedProject {
 }
 
 /**
- * Incremental read model over Canonical Project / Workspace / Logical Session rows.
- *
- * Canonical writes maintain launchable_*_index in the same SQLite database. Reads therefore
- * avoid re-aggregating the whole logical_sessions history when Task Center opens.
+ * Lightweight project / workspace read model from Slim native session metadata.
+ * No LogicalSession or Observation history is read or persisted.
  */
 export class SqliteLaunchableProjectReader implements LaunchableProjectReader {
   constructor(private readonly executor: SqliteExecutor) {}
@@ -214,8 +211,7 @@ export class SqliteLaunchableProjectReader implements LaunchableProjectReader {
 
   rebuild(): Promise<void> {
     return this.executor.run(() => {
-      if (this.executor.slimSchema) rebuildSlimLaunchableProjectIndex(this.executor.db)
-      else rebuildLaunchableProjectIndex(this.executor.db)
+      rebuildSlimLaunchableProjectIndex(this.executor.db)
     })
   }
 }
