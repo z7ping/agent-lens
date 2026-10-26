@@ -117,15 +117,46 @@ test('OpenCode Source reads native SQLite title/history and observes in-place pa
       abortSignal: new AbortController().signal,
       historyWindow: { activeSince: '2026-08-10T00:00:00.000Z' },
     })
-    assert.equal(historyResult.records, 2)
-
-    let facts = await storage.repositories.observations.query({ installationId: historyResult.installationId, limit: 50 })
-    assert.equal(facts.filter(item => item.kind === 'message.user').length, 1)
-    assert.equal(facts.filter(item => item.kind === 'tool.call').length, 1)
-    assert.equal(facts.filter(item => item.kind === 'tool.result').length, 0)
-
-    const logical = await storage.repositories.sessions.getLogicalSession(facts[0]!.logicalSessionId)
-    assert.equal(logical?.title, 'OpenCode 原生会话标题')
+    // Certified session-current-state OpenCode is now Native-only:
+    // no duplicate SourceRecord/Observation/Evidence event rows.
+    assert.equal(historyResult.records, 0)
+    const catalog = await storage.nativeSessionCatalog.get({
+      sourceId:'opencode',installationId:historyResult.installationId,
+      nativeSessionId:'ses_1',
+    })
+    assert.ok(catalog)
+    assert.equal(catalog.title,'OpenCode 原生会话标题')
+    assert.equal(await storage.nativeSessionCatalog.hasNativeOnlyWriteClaim({
+      sourceId:'opencode',installationId:historyResult.installationId,nativeSessionId:'ses_1',
+    }),true)
+    const installation = await storage.repositories.installations.get(historyResult.installationId)
+    assert.ok(installation)
+    const nativeContext = {
+      host, installation,
+      abortSignal:new AbortController().signal,
+      checkpoint: {
+        async get() {return null},
+        async set() {},
+        async clear() {},
+      },
+    }
+    const readCurrentFacts = async () => {
+      const page = await openCodeSourceDefinition.readNativeSessionPage!({
+        filePath:catalog.filePath,nativeSessionId:'ses_1',limit:16,
+      },nativeContext)
+      assert.equal(page.state,'available')
+      if(page.state!=='available')return []
+      const facts = await Promise.all(page.records.map(record =>
+        openCodeSourceDefinition.normalize(record,{host,installation})))
+      return facts.flatMap(item=>item.observations)
+    }
+    const nativeBefore = await readCurrentFacts()
+    assert.ok(nativeBefore.some(item=>item.kind==='message.user'))
+    assert.ok(nativeBefore.some(item=>item.kind==='tool.call'))
+    assert.equal(nativeBefore.filter(item=>item.kind==='tool.result').length,0)
+    assert.deepEqual(await storage.repositories.observations.query({
+      installationId:historyResult.installationId,limit:50,
+    }),[])
 
     const assetResult = await assetRunner.scan({
       source: openCodeSourceDefinition,
@@ -175,22 +206,23 @@ test('OpenCode Source reads native SQLite title/history and observes in-place pa
         'prt_tool',
       )
 
+      // In-place native SQLite state is read on demand. No Legacy Writer
+      // event mirroring should be needed to observe the completed tool.
       await waitFor(async () => {
-        const results = await storage.repositories.observations.query({
-          installationId: historyResult.installationId,
-          kind: 'tool.result',
-          limit: 10,
-        })
-        return results.length === 1
+        const results=await readCurrentFacts()
+        return results.filter(item=>item.kind==='tool.result').length===1
       })
     } finally {
       controller.abort()
       await handle.dispose()
     }
 
-    facts = await storage.repositories.observations.query({ installationId: historyResult.installationId, limit: 50 })
-    assert.equal(facts.filter(item => item.kind === 'tool.call').length, 1)
-    assert.equal(facts.filter(item => item.kind === 'tool.result').length, 1)
+    const nativeAfter=await readCurrentFacts()
+    assert.ok(nativeAfter.some(item=>item.kind==='tool.call'))
+    assert.ok(nativeAfter.some(item=>item.kind==='tool.result'))
+    assert.deepEqual(await storage.repositories.observations.query({
+      installationId:historyResult.installationId,limit:50,
+    }),[])
 
     const coldHistory = await history.sync({
       source: openCodeSourceDefinition,
@@ -198,7 +230,7 @@ test('OpenCode Source reads native SQLite title/history and observes in-place pa
       detected,
       abortSignal: new AbortController().signal,
     })
-    assert.equal(coldHistory.records, 3)
+    assert.equal(coldHistory.records, 0)
 
     const replay = await history.sync({
       source: openCodeSourceDefinition,
