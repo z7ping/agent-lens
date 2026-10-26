@@ -252,6 +252,9 @@ export async function startNativeOnlyHttpSurface(
         writeJson(response,health.ok?200:503,{
           status:health.ok?'ok':'degraded',
           protocolVersion:AGENT_LENS_PROTOCOL_VERSION,
+          storageMode:'native-only',
+          runtime:{owner:process.env.AGENT_LENS_RUNTIME_OWNER??
+            (process.env.AGENT_LENS_DAEMON_MODE==='managed'?'service':'cli')},
           storage:{ok:health.ok,schemaVersion:health.schemaVersion,
             details:health.details},
         })
