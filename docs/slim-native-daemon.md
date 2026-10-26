@@ -19,6 +19,11 @@ No parallel UI is introduced. The rest of the Web app still calls unported
 APIs (501), so this is for incremental development, **not production cutover**.
 
 Available: native sessions and deep links, native windows, authorized body search,
+the existing Pi Live create/send/stream/runtime controls and ephemeral attachment
+API. **Legacy logical-session Resume/Fork/Fork-at is intentionally not advertised
+in native-only mode** until native Catalog-based input authorization replaces
+SourceRecord SQL. No startup audit event is written to an old Observation table.
+
 attachments, archived Hook pages, native statistics/rebuild, aggregate Usage/Insights,
 Facets, the existing Local Vault `/api/v1/backups` endpoints and
 `/api/v1/projects/launchable` project picker (with
