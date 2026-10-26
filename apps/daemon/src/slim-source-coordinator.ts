@@ -33,9 +33,10 @@ export class SlimSourceCoordinator {
   constructor(
     private readonly runtime:Pick<SlimDataRuntime,
       'facets'|'profiles'|'reindexInstallation'|'captureInstallation'
-      |'resolveHost'|'resolveInstallation'|'resolveProfile'>,
+      |'resolveHost'|'resolveInstallation'|'resolveProfile'|'scanInstallationAssets'>,
     private readonly sources:SourceService,
     private readonly policy:Pick<CapturePolicyService,'isSourceEnabled'>,
+    private readonly assetPolicy?:CapturePolicyService,
   ) {}
 
   snapshot():SlimSourceProgress{
@@ -147,6 +148,21 @@ export class SlimSourceCoordinator {
                 ...scope,maxSessions:MAX_STARTUP_SESSIONS_PER_SCOPE,
               })
               this.progress.indexedSessions+=report.indexed
+              if(source.discoverAssets && this.assetPolicy && !this.abort.signal.aborted){
+                try{
+                  await this.runtime.scanInstallationAssets({
+                    ...scope,policy:this.assetPolicy,
+                  })
+                }catch(error){
+                  if(!this.abort.signal.aborted){
+                    this.progress.failedScopes++
+                    console.warn('[AgentLens] Slim native asset discovery failed',{
+                      sourceId:source.manifest.sourceId,installationId,
+                      profileId:profile?.id,error,
+                    })
+                  }
+                }
+              }
               // A partial Catalog scan is NOT a complete history claim.
               // Capture verifies every subsequent original record separately.
               if(this.abort.signal.aborted||!source.startCapture)continue
