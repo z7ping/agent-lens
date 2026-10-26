@@ -28,6 +28,7 @@ import { handleAgentFilesRequest } from './agent-files-http'
 import { handleHostFilesystemRequest } from './host-filesystem-http'
 import { handleManagedAssetFilesRequest } from './managed-asset-files'
 import { handleNativeOnlyTaskFilesRequest } from './native-only-task-files-http'
+import { handleNativeOnlyRuntimeFilesRequest } from './native-only-runtime-files-http'
 import { handleCapturePolicyRequest } from './capture-policy-http'
 import {
   handleIntegrationDiscoveryRequest,type IntegrationDiscoveryController,
@@ -152,6 +153,10 @@ export async function startNativeOnlyHttpSurface(
         request,response,url,storage.nativeSessionCatalog,
         options.reader,options.capturePolicy))return
       if(await handleHostFilesystemRequest(request,response,url,options))return
+      if(await handleNativeOnlyRuntimeFilesRequest(
+        request,response,url,options.lives,storage.nativeSessionList,
+        storage.nativeSessionCatalog,options.reader,options.sources,
+        options.capturePolicy))return
       if(await handleAgentFilesRequest(request,response,url,{
         repositories:{installations:storage.installations},
       },options.sources,options.capturePolicy))return

@@ -1,9 +1,9 @@
 import type { IncomingMessage, ServerResponse } from 'node:http'
-import type { CapturePolicyService, NativeSessionCatalogStore, TaskFileChangeRecord } from '@agent-lens/core'
+import type { CapturePolicyService, NativeSessionCatalogStore, NativeSessionCatalogEntry, TaskFileChangeRecord } from '@agent-lens/core'
 import { projectNativeReviewWindow } from '@agent-lens/projection-review'
 import { taskFileChangesResponse } from './task-file-changes-http'
 import { readContiguousReviewPages, type NativeSessionWindowReader } from './native-session-http'
-import { badRequest, writeJson } from './http-utils'
+import { badRequest, httpError, writeJson } from './http-utils'
 
 const PATH=/^\/api\/v1\/review\/([^/]+)\/(file-changes|file-diff)$/
 const REVIEW_ID=/^native:[0-9a-f]{32}$/
@@ -47,6 +47,15 @@ export async function handleNativeOnlyTaskFilesRequest(
     writeJson(response,501,{error:'native_interaction_file_changes_unavailable'})
     return true
   }
+  writeJson(response,200,await readNativeOnlyFileChanges(id,entry,reader))
+  return true
+}
+
+/** The one bounded native Source evidence reader for Review AND active Live. */
+export async function readNativeOnlyFileChanges(
+  id:string,entry:NativeSessionCatalogEntry,
+  reader:NativeSessionWindowReader,
+){
   const query={
     sourceId:entry.sourceId,installationId:entry.installationId,
     nativeSessionId:entry.nativeSessionId,limit:16,
@@ -56,8 +65,7 @@ export async function handleNativeOnlyTaskFilesRequest(
   const result=first.state==='available'
     ?await readContiguousReviewPages(reader,query,first):first
   if(result.state!=='available'){
-    writeJson(response,409,{error:'native_file_changes_unavailable',reason:result.reason})
-    return true
+    throw httpError(409,'Native file changes unavailable: '+result.reason)
   }
   const window=projectNativeReviewWindow({
     sourceId:entry.sourceId,installationId:entry.installationId,
@@ -73,9 +81,8 @@ export async function handleNativeOnlyTaskFilesRequest(
     ...(change.oldPath?{oldPath:change.oldPath}:{}),
     firstChangedAt:change.firstChangedAt,lastChangedAt:change.lastChangedAt,
     evidence:change.evidence,confidence:change.confidence,
-  }))
-  writeJson(response,200,taskFileChangesResponse(id,items,null,{
+  })
+  return taskFileChangesResponse(id,items,null,{
     truncated:result.hasMore||result.pendingTail||window.fileChangesTruncated===true,
-  }))
-  return true
+  })
 }
