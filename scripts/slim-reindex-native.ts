@@ -78,6 +78,7 @@ export async function runNativeReindex(args:readonly string[]) {
       ...(profile?{runtimeProfile:profile}:{}),
       signal:new AbortController().signal,
       maxSessions:input.maxSessions,
+      fullEnumeration:true,
       ...(input.activeSince?{historyWindow:{activeSince:input.activeSince}}:{}),
     })
   } finally {
