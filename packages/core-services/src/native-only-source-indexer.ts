@@ -46,6 +46,8 @@ export interface NativeCatalogScanInput {
   historyWindow?: SourceHistoryWindow
   /** Maximum original Source sessions inspected; >128 only for explicit offline migration. */
   maxSessions?: number
+  /** Offline full Source enumeration must not pre-truncate before header validation. */
+  fullEnumeration?: boolean
   onProgress?: (report: NativeCatalogScanReport) => void | Promise<void>
   /** Optional metadata association, invoked before Catalog visibility. */
   beforeCatalogUpsert?: (entry: import('@agent-lens/core').NativeSessionCatalogEntry) => Promise<void>
@@ -121,7 +123,7 @@ export class NativeOnlySourceIndexer {
         ...(input.historyWindow?.activeSince
           ? { activeSince: input.historyWindow.activeSince }
           : {}),
-        sessionLimit: budget,
+        ...(input.fullEnumeration ? {} : {sessionLimit: budget}),
       },
     })
     for await (const entry of discovered) {
@@ -195,7 +197,10 @@ export class NativeOnlySourceIndexer {
       if (input.onProgress) await input.onProgress({ ...report, failures: { ...report.failures } })
       if ((report.scanned & 7) === 0) await new Promise<void>(resolve => setImmediate(resolve))
     }
-    report.exhausted = !hitBudget && report.scanned < budget
+    // Only natural EOF of an uncapped Source enumerator proves completeness.
+    // A pre-truncated directory may hide more sessions after invalid headers.
+    report.exhausted = input.fullEnumeration === true
+      ? !hitBudget : !hitBudget && report.scanned < budget
     return report
   }
 }
@@ -251,6 +256,7 @@ export async function indexNativeInstallation(
     signal: input.signal,
     ...(input.historyWindow ? { historyWindow: input.historyWindow } : {}),
     ...(input.maxSessions === undefined ? {} : { maxSessions: input.maxSessions }),
+    ...(input.fullEnumeration ? { fullEnumeration: true } : {}),
     ...(input.onProgress ? { onProgress: input.onProgress } : {}),
   })
 }
