@@ -871,3 +871,4 @@ export type {
 } from './native-reader-worker-protocol'
 
 export * from './native-only-source-indexer'
+export * from './native-session-deep-audit'

@@ -94,3 +94,9 @@ npm run storage:slim:reindex-all -- --staging /path/to/slim-staging.sqlite --all
 2. 全五个 Source 的原生文件真实性、归档、工具/附件/错误、Hook 缺口适配；统计从 Source 重算且不重复。
 3. 消灭所有 Legacy SQL/Writer/Claims 依赖后，改为新库单一运行时；禁止用旧库兼容模式掩盖缺失功能。
 4. 完成冻结写入、增量追平、原子文件切换、失败回滚及 Windows 真实升级/规模验收后，才能宣布迁移完成并执行旧库清理。
+
+## 全量原生正文可恢复性（独立实现）
+
+`auditNativeSessionOriginal` 在 CoreServices 层通过真正的 Source Reader 逐页恢复原始记录，每条验证原生 ID、文件位置和 `rawRecovery.verify` 指纹；会话尾部再次对比真实文件或 SQLite/WAL revision。**只返回每个会话的验证结果和记录/页数，不保存任何原始正文。**
+
+扫描上限与待完成尾部返回 `partial`，Source 文件丢失或身份漂移返回 `unavailable/drifted`。这项证明仅适用于**当时可读取的原生当前态**；对覆盖不完整的运行时 Hook、已覆盖或被删除的历史版本不宣称完整。切换门禁必须再汇总逐会话验收结果，而非只用 Catalog 行数。当前为独立服务，尚未自动切库。
