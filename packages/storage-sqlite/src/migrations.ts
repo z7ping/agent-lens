@@ -89,6 +89,16 @@ export async function migrateDatabase(
     )
   `)
 
+  // Once #617's replacement database is installed, the historic v1-v38
+  // migrations must NEVER run against it. Slim uses an independent v1 lineage.
+  const slimMarker = db.prepare(`
+    SELECT 1 FROM schema_migrations
+    WHERE version=1 AND name='slim-native-session-v1'
+  `).get()
+  if (slimMarker) {
+    throw new Error('Legacy SQLite migrator cannot upgrade a slim-native-session-v1 database')
+  }
+
   const rows = db.prepare('SELECT version FROM schema_migrations ORDER BY version').all() as Array<{ version: number }>
   const applied = new Set(rows.map(row => row.version))
 

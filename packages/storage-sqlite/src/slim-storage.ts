@@ -1,0 +1,90 @@
+import { mkdir, open } from 'node:fs/promises'
+import { dirname, resolve } from 'node:path'
+import Database from 'better-sqlite3'
+import { SqliteExecutor } from './executor'
+import { SqliteNativeSessionCatalog } from './native-session-catalog'
+import { SqliteNativeSessionMetrics } from './native-session-metrics'
+import { SqliteRuntimeProfileRepository } from './runtime-profiles'
+import { SqliteAssetInventoryReader } from './asset-inventory'
+import { SqliteCheckpointRepository } from './checkpoints'
+import { SqliteLaunchableProjectReader } from './launchable-projects'
+import { SqliteMaintenanceJobStore } from './maintenance-jobs'
+import { assertSlimSchema, initializeSlimSchema } from './slim-schema'
+
+/**
+ * The replacement SQLite composition root: no Canonical Repositories,
+ * Observations, Evidence, SessionSummary projections, replication journal,
+ * Legacy Claims, old migration chain, or Legacy Writer are constructed.
+ *
+ * This is a SEPARATE service from SqliteStorageService until its consumers are
+ * migrated. Never silently downgrade to a v38 database.
+ */
+export class SqliteSlimStorage {
+  readonly executor: SqliteExecutor
+  readonly nativeSessionCatalog: SqliteNativeSessionCatalog
+  readonly nativeSessionMetrics: SqliteNativeSessionMetrics
+  readonly runtimeProfiles: SqliteRuntimeProfileRepository
+  readonly assetInventory: SqliteAssetInventoryReader
+  readonly checkpoints: SqliteCheckpointRepository
+  readonly launchableProjects: SqliteLaunchableProjectReader
+  readonly maintenanceJobs: SqliteMaintenanceJobStore
+
+  constructor(readonly db: Database.Database) {
+    assertSlimSchema(db)
+    db.pragma('foreign_keys = ON')
+    db.pragma('busy_timeout = 5000')
+    this.executor = new SqliteExecutor(db)
+    this.nativeSessionCatalog = new SqliteNativeSessionCatalog(this.executor)
+    this.nativeSessionMetrics = new SqliteNativeSessionMetrics(this.executor)
+    this.runtimeProfiles = new SqliteRuntimeProfileRepository(this.executor)
+    this.assetInventory = new SqliteAssetInventoryReader(this.executor)
+    this.checkpoints = new SqliteCheckpointRepository(this.executor)
+    this.launchableProjects = new SqliteLaunchableProjectReader(this.executor)
+    this.maintenanceJobs = new SqliteMaintenanceJobStore(this.executor)
+  }
+
+  /** Opens ONLY a pre-existing slim database. A legacy database must fail. */
+  static openExisting(path: string, readOnly = false): SqliteSlimStorage {
+    const db = new Database(path, { readonly: readOnly, fileMustExist:true })
+    try {
+      return new SqliteSlimStorage(db)
+    } catch (error) {
+      db.close()
+      throw error
+    }
+  }
+
+  /** Creates a slim DB only on a new path. Never upgrades/overwrites old data. */
+  static async createFresh(path: string): Promise<SqliteSlimStorage> {
+    if (path === ':memory:') {
+      const db = new Database(':memory:')
+      try {
+        await initializeSlimSchema(db)
+        return new SqliteSlimStorage(db)
+      } catch (error) {
+        db.close()
+        throw error
+      }
+    }
+    const destination = resolve(path)
+    await mkdir(dirname(destination), { recursive:true })
+    const reserved = await open(destination,'wx',0o600)
+    await reserved.close()
+    const db = new Database(destination,{fileMustExist:true})
+    try {
+      await initializeSlimSchema(db)
+      const service = new SqliteSlimStorage(db)
+      db.pragma('journal_mode = WAL')
+      return service
+    } catch (error) {
+      db.close()
+      // Keep the reserved staging path for manual diagnosis rather than
+      // risking a cleanup that races with another process.
+      throw error
+    }
+  }
+
+  async close(): Promise<void> {
+    await this.executor.close()
+  }
+}
