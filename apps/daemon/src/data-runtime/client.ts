@@ -101,7 +101,7 @@ export interface DataRuntimeClientOptions {
   dbPath?: string
   nodeId?: string
   budget?: StorageBudgetPolicy
-  /** Explicit staging runtime. Default still remains legacy until cutover. */
+  /** Only Slim v1 is supported. Legacy values are rejected before Worker creation. */
   schemaKind?: 'legacy'|'slim'
   heartbeatIntervalMs?: number
   heartbeatTimeoutMs?: number
@@ -134,6 +134,9 @@ export class DataRuntimeClient {
   readonly role: DataRuntimeRole
 
   constructor(private readonly options: DataRuntimeClientOptions = {}) {
+    if (options.schemaKind === 'legacy' || options.nodeId !== undefined || options.budget !== undefined) {
+      throw new Error('Legacy Data Runtime has been removed; use Slim v1 instead')
+    }
     this.role = options.role ?? 'writer'
   }
 
@@ -149,9 +152,7 @@ export class DataRuntimeClient {
         allowDiagnostics: this.options.allowDiagnostics === true,
         role: this.role,
         ...(this.options.dbPath ? { dbPath: this.options.dbPath } : {}),
-        ...(this.options.nodeId ? { nodeId: this.options.nodeId } : {}),
-        ...(this.options.budget ? { budget: this.options.budget } : {}),
-        ...(this.options.schemaKind === 'slim' ? { schemaKind: 'slim' } : {}),
+        schemaKind: 'slim',
       },
       execArgv: [],
     })
