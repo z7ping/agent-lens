@@ -5,7 +5,6 @@
   "type": "module",
   "exports": {
     ".": "./src/public.ts",
-    "./source-runner": "./src/source-runner.ts",
     "./test-support": "./src/test-support.ts"
   },
   "scripts": {
