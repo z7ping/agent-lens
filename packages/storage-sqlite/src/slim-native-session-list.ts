@@ -48,6 +48,9 @@ export class SqliteSlimNativeSessionList implements NativeSessionListReader {
       || !input.before.nativeSessionId)){
       throw new TypeError('Invalid native session list cursor')
     }
+    if(input.parserVersion!==undefined && (!input.parserVersion.trim() || input.parserVersion.length>512)) {
+      throw new TypeError('Invalid native parser version')
+    }
     if(input.coverageCertified!==undefined&&typeof input.coverageCertified!=='boolean'){
       throw new TypeError('Invalid native coverage certification')
     }
@@ -103,12 +106,13 @@ export class SqliteSlimNativeSessionList implements NativeSessionListReader {
           c.installation_id DESC,c.native_session_id DESC
         LIMIT ?
       `).all(...values,input.limit+1) as ListRow[]
-      const complete=input.coverageCertified===true
+      const complete=input.coverageCertified===true && Boolean(input.parserVersion)
       const items:NativeSessionListItem[]=rows.slice(0,input.limit).map(item=>{
         const stale=item.metric_identity!==null && (
           item.metric_identity!==item.file_identity
           || item.metric_size!==item.file_size || item.metric_mtime!==item.file_mtime_ms
           || item.projection_version!==NATIVE_SESSION_METRIC_PROJECTION_VERSION
+          || (input.parserVersion!==undefined && item.parser_version!==input.parserVersion)
         )
         const status:NativeSessionListItem['metricsState']=item.metric_identity===null
           ?'missing':stale?'stale'
