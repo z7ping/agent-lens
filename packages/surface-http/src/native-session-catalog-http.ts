@@ -99,6 +99,9 @@ export async function handleNativeSessionCatalogRequest(
   const search = parseIdentifier(url.searchParams, 'search', 256)
   const sourceId = parseIdentifier(url.searchParams, 'sourceId')
   const installationId = parseIdentifier(url.searchParams, 'installationId')
+  // Project association is resolved against native_session_context on Slim.
+  // The filter never reads Canonical Observation or legacy session rows.
+  const projectId = parseIdentifier(url.searchParams, 'projectId')
   const rawLimit = parseIdentifier(url.searchParams, 'limit')
   const limit = rawLimit === undefined ? 50 : Number(rawLimit)
   if (!Number.isSafeInteger(limit) || limit < 1 || limit > MAX_PAGE) throw badRequest('Invalid catalog page limit')
@@ -117,6 +120,7 @@ export async function handleNativeSessionCatalogRequest(
   const page = await catalog.query({
     ...(sourceId ? { sourceId } : {}),
     ...(installationId ? { installationId } : {}),
+    ...(projectId ? { projectId } : {}),
     ...(onlyWithoutLegacyReview ? { onlyWithoutLegacyReview } : {}),
     ...(search ? { search } : {}),
     ...(before ? { before } : {}),
