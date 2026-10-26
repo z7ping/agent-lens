@@ -120,6 +120,8 @@ test('Slim-only HTTP reads native Catalog/facets and refuses all old Event APIs'
   }
   const surface=await startNativeOnlyHttpSurface(storage as never,{
     port:0,sources,reader:reader as never,capturePolicy:policy,
+    backgroundProgress:()=>({examinedScopes:2,indexedSessions:14,runningCaptures:1,
+      failedScopes:0,deferredScopes:1,finished:true}),
     integrationDiscovery:{
       snapshot:()=>({status:'idle',items:[],generatedAt:'2026-10-26T00:00:00Z'}),
       async rescan(){return {status:'complete' as const,items:[],generatedAt:'2026-10-26T00:00:00Z'}},
@@ -239,7 +241,16 @@ test('Slim-only HTTP reads native Catalog/facets and refuses all old Event APIs'
     assert.equal(disabledAsset.status,503)
     enabledSources=['pi']
     assert.equal((await fetch(base+'/api/v1/events',{method:'POST'})).status,405)
-    assert.equal((await fetch(base+'/api/v1/background-activity')).status,503)
+    const progress=await fetch(base+'/api/v1/background-activity')
+    assert.equal(progress.status,200)
+    const progressBody=await progress.json() as {active:unknown[];recent:Array<{state:string}>}
+    assert.equal(progressBody.active.length,0)
+    assert.equal(progressBody.recent[0]?.state,'degraded')
+    const streamController=new AbortController()
+    const stream=await fetch(base+'/api/v1/events',{signal:streamController.signal})
+    assert.equal(stream.status,200)
+    assert.match(stream.headers.get('content-type')??'',/text\/event-stream/)
+    streamController.abort()
     const ready=await fetch(base+'/api/v1/ready')
     assert.equal(ready.status,200)
     assert.equal((await ready.json() as {storageMode:string}).storageMode,'native-only')
