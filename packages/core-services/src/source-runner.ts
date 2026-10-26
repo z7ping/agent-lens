@@ -181,6 +181,11 @@ export interface SourceHistorySyncResult {
   records: number
   /** Catalog-only files indexed; no equivalent legacy event rows. */
   nativeSessionsIndexed?: number
+  /** Session identities that could not be verified; do not invent history data. */
+  nativeSessionsFailed?: number
+  /** A bounded native scan cannot claim full coverage when truncated. */
+  nativeCatalogScanExhausted?: boolean
+  nativeCoverage?: 'certified' | 'partial'
   observationsCreated: number
   observationsMerged: number
   observationsUnchanged: number
@@ -876,14 +881,11 @@ export class SourceHistoryRunner {
           ...(input.historyWindow ? { historyWindow:input.historyWindow } : {}),
         })
         result.nativeSessionsIndexed = scanned.indexed
-        // Failure/partial coverage never authorizes a fallback to the
-        // duplicate Canonical event writer; its report remains non-successful.
-        if (scanned.scanned !== scanned.indexed
-          || !scanned.exhausted) {
-          await progress.phase('checkpoint')
-          await progress.settle('completed')
-          return result
-        }
+        result.nativeSessionsFailed = scanned.scanned - scanned.indexed
+        result.nativeCatalogScanExhausted = scanned.exhausted
+        result.nativeCoverage = scanned.nativeCoverage
+        // Partial or truncated scans remain visible to the caller; they
+        // must never trigger a second copy in Canonical SQL.
         input.onNativeCatalogReady?.()
         await progress.phase('checkpoint')
         await progress.settle(abortSignal.aborted ? 'cancelled' : 'completed')
