@@ -45,6 +45,8 @@ export interface ClientSnapshot {
   review: {
     filters: ReviewFilters
     response: ReviewResponseDto | null
+    /** Incremented by native-only Review refresh; no fabricated legacy response. */
+    nativeRefreshRevision: number
     detail: ReviewSessionDetailDto | null
     relationships: SessionRelationshipResponseDto | null
     relationshipError: string
@@ -158,6 +160,7 @@ export abstract class AgentLensModelBase {
     review: {
       filters: { sourceIds: null, projectId: '', range: '7d', status: 'all', search: '' },
       response: null,
+      nativeRefreshRevision: 0,
       detail: null,
       relationships: null,
       relationshipError: '',
@@ -328,7 +331,14 @@ export abstract class AgentLensModelBase {
     }
 
     const health = await this.api.health().catch(() => null)
-    if (health) this.patch({ health })
+    if (health) {
+      this.patch({ health })
+      // Review can have mounted while /health was pending. A newly detected
+      // Slim backend must immediately retire the old /review path in Web.
+      if (health.storage.details?.schemaKind === 'slim-native-session-v1') {
+        this.scheduleReviewRefresh(0)
+      }
+    }
   }
 
   stop(): void {
