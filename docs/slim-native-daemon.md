@@ -63,6 +63,16 @@ Snapshot creation/restoration is subject to the existing Vault's source-owned
 path checks and verification contracts. Fully integrated per-session archive
 and restore still requires M5 end-to-end validation.
 
+### Slim Live ↔ native Review links
+
+Existing `GET /api/v1/live/runtimes` now links a running native session to its
+Review entry using the **same** Slim NativeSessionListReader. It only emits a
+`historySessionId` when Source authorization, exact native ID, workspace
+identity, complete bounded search, and uniqueness across installations all
+agree. Ambiguous, disabled, missing, or truncated indexes return no link
+rather than guessing a LogicalSession/SourceRecord identity. The result is
+metadata-only and does not persist Live bodies.
+
 ### Existing Pi Live on Slim
 
 The existing Pi Worker-backed LiveAdapter and DefaultLiveService serve

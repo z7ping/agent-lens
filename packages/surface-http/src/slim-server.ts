@@ -88,7 +88,11 @@ export async function startNativeOnlyHttpSurface(
       // Deliberately omit the old history.storage argument: session rows and
       // SourceRecord lookup no longer exist on Slim.
       if(await handleLiveAttachmentRequest(request,response,url,options.liveAttachments))return
-      if(await handleLiveRequest(request,response,url,options.lives))return
+      if(await handleLiveRequest(request,response,url,options.lives,undefined,{
+        nativeSessions:storage.nativeSessionList,
+        sources:options.sources,
+        policy:options.capturePolicy,
+      }))return
 
       if(await handleNativeSessionMetricsOverviewRequest(
         request,response,url,storage.nativeSessionMetrics,

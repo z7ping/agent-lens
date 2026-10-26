@@ -21,6 +21,8 @@ import type {
   LiveRuntimeState,
   LiveSnapshot,
   LiveService,
+  NativeSessionListReader,
+  CapturePolicyService,
   LiveSnapshotWindow,
   LiveStartCapabilities,
   LiveStartInput,
@@ -32,7 +34,7 @@ import { httpError, readJsonBody, writeJson } from './http-utils'
 import { readHostProjectDirectory } from './project-directory-host'
 import { validateHostWorkingDirectory } from './host-working-directory'
 import { browseHostWorkingDirectory } from './host-directory-browser'
-import { liveHistoryReference } from './live-history-reference'
+import { liveHistoryReference, nativeLiveHistoryReference } from './live-history-reference'
 
 const MAX_LIVE_JSON_BYTES = 1024 * 1024
 const MAX_LIVE_MESSAGE_ACTIONS = 16
@@ -844,7 +846,11 @@ async function describeProduct(adapter: LiveAdapter): Promise<JsonValue> {
   return liveDescriptor(adapter, availability, [])
 }
 
-async function listKnownRuntimes(service: LiveService, history?: { storage: StorageService; sources?: SourceService | undefined }): Promise<JsonValue> {
+type LiveHistoryContext =
+  | {storage:StorageService;sources?:SourceService | undefined}
+  | {nativeSessions:NativeSessionListReader;sources:SourceService;policy:Pick<CapturePolicyService,'isSourceEnabled'>}
+
+async function listKnownRuntimes(service: LiveService, history?: LiveHistoryContext): Promise<JsonValue> {
   const groups = await Promise.all(service.list().map(async adapter => {
     try {
       const runtimes = await shareAdapterRead(adapter, 'runtimes', () => adapter.list())
@@ -860,7 +866,9 @@ async function listKnownRuntimes(service: LiveService, history?: { storage: Stor
             .map(source => source.manifest.sourceId),
           ...(typeof (state as { startedAt?: unknown }).startedAt === 'string'
             ? { startedAt: (state as { startedAt?: string }).startedAt } : {}),
-          ...(history ? await liveHistoryReference(history.storage, history.sources, adapter, state).catch(() => ({})) : {}),
+          ...(history ? await ('nativeSessions' in history
+             ? nativeLiveHistoryReference(history.nativeSessions,history.sources,history.policy,adapter,state)
+             : liveHistoryReference(history.storage,history.sources,adapter,state)).catch(() => ({})) : {}),
         }))),
       }
     } catch {
@@ -1005,7 +1013,7 @@ export async function handleLiveRequest(
   url: URL,
   service: LiveService | undefined,
   selectProjectDirectory?: () => Promise<string | undefined>,
-  history?: { storage: StorageService; sources?: SourceService | undefined },
+  history?: LiveHistoryContext,
 ): Promise<boolean> {
   if (url.pathname !== '/api/v1/live' && !url.pathname.startsWith('/api/v1/live/')) return false
   if (url.pathname === '/api/v1/live/attachments' || url.pathname.startsWith('/api/v1/live/attachments/')) return false
