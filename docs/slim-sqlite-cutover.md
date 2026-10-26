@@ -47,7 +47,16 @@ npm run storage:slim:stage -- --legacy /path/to/agent-lens-old.sqlite --backup /
 
 `stage` 仅接受 v38；输出 `readyToSwitch:false` 是刻意的强制保护。生成目标后仍必须完成 Source 原生正文可恢复覆盖率、统计重算、用户配置审计、增量追平、旧 Writer 退出、Windows 实机和原子替换验证，才能执行未来单独开发的最终切换动作。
 
-## 5. 后续硬阻塞
+## 5. 原生 Source 索引新入口（独立于旧 Writer）
+
+`NativeOnlySourceIndexer` + `indexNativeInstallation` 已建立单一原生索引入口：从 Slim 身份库只读解析 Installation/Host → 调用 Source 本身的 `discoverNativeSessions`（前台每片默认 32、上限 128 个）→ Source 原生 Reader 读取首条并核对物理文件身份、会话 ID、指纹 → Source-owned `rawRecovery.verify` 认证 → 仅写入 `native_session_catalog` 的路径与元信息。
+
+- 这条新路径**没有**注入 Legacy Writer / Canonical Observations / Evidence，也不做历史事件 Replay。
+- Hook 生命周期覆盖没有认证时，返回 `nativeCoverage: partial`，**仍可索引经验证的原生文件**；不把 Hook 缺口当成 SQL 复制全文的理由。
+- 原始文件缺失、身份/指纹漂移、扫描额度耗尽都有明确报告，不伪装迁移已完成；精简库写入失败会抛错，不吞掉错误。
+- **当前仍为新架构能力，尚未接入 Daemon 默认扫描，也不是正式切换动作。** 用户旧库中的 Legacy-only 会话和需要保留的配置仍必须逐项处理。待其他消费者切换后将此入口替换旧 `SourceHistoryRunner` 的持久化历史链路。
+
+## 6. 后续硬阻塞
 
 1. 审计 checkpoint、用户标签、项目/资产、文件变更与备份状态的具体保留合同，完善迁移白名单和失联清单。
 2. 全五个 Source 的原生文件真实性、归档、工具/附件/错误、Hook 缺口适配；统计从 Source 重算且不重复。
