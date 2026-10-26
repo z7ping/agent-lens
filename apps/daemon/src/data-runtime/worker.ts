@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import { parentPort, threadId, workerData } from 'node:worker_threads'
-import { SqliteSlimStorage } from '@agent-lens/storage-sqlite'
+import { SqliteSlimStorage } from '@agent-lens/storage-sqlite/slim'
 import {
   DATA_RUNTIME_MAX_MESSAGE_BYTES,
   DATA_RUNTIME_PROTOCOL_VERSION,
