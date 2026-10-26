@@ -56,7 +56,15 @@ npm run storage:slim:stage -- --legacy /path/to/agent-lens-old.sqlite --backup /
 - 原始文件缺失、身份/指纹漂移、扫描额度耗尽都有明确报告，不伪装迁移已完成；精简库写入失败会抛错，不吞掉错误。
 - **当前仍为新架构能力，尚未接入 Daemon 默认扫描，也不是正式切换动作。** 用户旧库中的 Legacy-only 会话和需要保留的配置仍必须逐项处理。待其他消费者切换后将此入口替换旧 `SourceHistoryRunner` 的持久化历史链路。
 
-## 6. 后续硬阻塞
+## 6. 旧会话身份对账（只读）
+
+```bash
+npm run storage:slim:verify -- --legacy /path/to/legacy.sqlite --staging /path/to/slim-staging.sqlite
+```
+
+只读打开两份库，输出旧 `source_sessions` 唯一身份数量、新库 `native_session_context` 关联数量、已索引原生会话、仅归档会话、无对应 Catalog、缺失 Context 和需要重算的数值统计。最多附带 32 个带 SHA-256 摘要的差异身份，不输出原始会话 ID、文件路径或内容。**即使差异为 0，`readyToSwitch` 仍是 false**：仅证明目录映射，不等于所有正文完整可读，原生 Source/Hook 证据核验和正式切换仍必须另行验收。
+
+## 7. 后续硬阻塞
 
 1. 审计 checkpoint、用户标签、项目/资产、文件变更与备份状态的具体保留合同，完善迁移白名单和失联清单。
 2. 全五个 Source 的原生文件真实性、归档、工具/附件/错误、Hook 缺口适配；统计从 Source 重算且不重复。
