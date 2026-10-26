@@ -27,9 +27,12 @@ const common = {
   platform: 'node',
   format: 'esm',
   target: 'node22.12',
+  mainFields: ['module', 'main'],
   sourcemap: true,
   legalComments: 'none',
   external: ['@deepseek-ai/cordis', 'better-sqlite3'],
+  // YAML 等 CommonJS 依赖仍需加载 Node 内建模块，所有分发入口统一提供 ESM 兼容桥。
+  banner: { js: 'import { createRequire as __agentLensCreateRequire } from "node:module"; const require = __agentLensCreateRequire(import.meta.url);' },
 }
 
 await build({
@@ -42,7 +45,7 @@ await build({
   ...common,
   entryPoints: [resolve(root, 'apps/cli/src/entry.ts')],
   outfile: resolve(dist, 'cli.mjs'),
-  banner: { js: '#!/usr/bin/env node' },
+  banner: { js: '#!/usr/bin/env node\n' + common.banner.js },
 })
 
 await build({

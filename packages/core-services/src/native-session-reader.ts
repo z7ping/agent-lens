@@ -111,8 +111,8 @@ export class NativeSessionReader {
       state:'available',runtimeProfile:profile,
       installation:{
         ...installation,
-        configRoot:profile.configRoot??installation.configRoot,
-        dataRoot:profile.dataRoot??installation.dataRoot,
+        ...(profile.configRoot !== undefined ? { configRoot: profile.configRoot } : {}),
+        ...(profile.dataRoot !== undefined ? { dataRoot: profile.dataRoot } : {}),
       },
     }
   }

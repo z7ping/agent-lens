@@ -81,7 +81,7 @@ export async function readNativeOnlyFileChanges(
     ...(change.oldPath?{oldPath:change.oldPath}:{}),
     firstChangedAt:change.firstChangedAt,lastChangedAt:change.lastChangedAt,
     evidence:change.evidence,confidence:change.confidence,
-  })
+  }))
   return taskFileChangesResponse(id,items,null,{
     truncated:result.hasMore||result.pendingTail||window.fileChangesTruncated===true,
   })

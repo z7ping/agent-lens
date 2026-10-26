@@ -81,8 +81,8 @@ export async function auditLegacyHookOriginals(args:readonly string[]):Promise<L
         ) ORDER BY r.rowid LIMIT ?`)
       let rowid=0
       while(report.found<input.maxRecords){
-        const rows=statement.all(rowid,Math.min(100,input.maxRecords-report.found))
-          as Array<Record<string,unknown>&{audit_rowid:number;id:string;source_id:string;installation_id:string}>
+        const rows=statement.all(rowid,Math.min(100,input.maxRecords-report.found)) as
+          Array<Record<string,unknown>&{audit_rowid:number;id:string;source_id:string;installation_id:string}>
         if(rows.length===0){report.scanComplete=true;break}
         for(const row of rows){
           rowid=row.audit_rowid

@@ -67,8 +67,8 @@ function database(path:string,kind:'slim'|'legacy'):void{
     if(fk.length)throw new Error('Cutover '+kind+' SQLite foreign keys invalid')
     if(kind==='slim')assertSlimSchema(db)
     else{
-      const row=db.prepare('SELECT MAX(version) AS version FROM schema_migrations').get()
-        as {version:number|null}
+      const row=db.prepare('SELECT MAX(version) AS version FROM schema_migrations').get() as
+        {version:number|null}
       if(row?.version!==38)throw new Error('Cutover requires a v38 original and backup')
     }
   }finally{db.close()}

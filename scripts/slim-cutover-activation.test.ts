@@ -15,6 +15,9 @@ test('M3 activation refuses unfinished coverage before touching any destination'
     const paths={legacyPath:join(dir,'old.sqlite'),backupPath:join(dir,'backup.sqlite'),
       stagingPath:join(dir,'stage.sqlite'),installedSlimPath:join(dir,'installed.sqlite'),
       pointerPath:join(dir,'active.json')}
+    const old=new SqliteStorageService({path:paths.legacyPath})
+    await old.migrate()
+    await old.close()
     await assert.rejects(activateSlimCutover(paths,{
       readyToSwitch:false,blockedBy:['hook-and-archival-coverage-not-certified'],
       oldDatabaseChanged:false,
@@ -24,6 +27,12 @@ test('M3 activation refuses unfinished coverage before touching any destination'
   }finally{await rm(dir,{recursive:true,force:true})}
 })
 test('guarded activation and rollback preserve the v38 original, backup and Slim files',async()=>{
+  const probe=createServer()
+  await new Promise<void>(done=>probe.listen(0,'127.0.0.1',done))
+  const address=probe.address()
+  assert.ok(address&&typeof address!=='string')
+  const port=address.port
+  await new Promise<void>(done=>probe.close(()=>done()))
   const dir=await mkdtemp(join(tmpdir(),'al-m3-activate-'))
   const paths={legacyPath:join(dir,'old.sqlite'),backupPath:join(dir,'backup.sqlite'),
     stagingPath:join(dir,'stage.sqlite'),installedSlimPath:join(dir,'installed.sqlite'),
@@ -45,10 +54,12 @@ test('guarded activation and rollback preserve the v38 original, backup and Slim
     await assert.rejects(rollbackSlimCutover({
       pointerPath:paths.pointerPath,legacyPath:paths.legacyPath,
       backupPath:paths.backupPath,installedSlimPath:join(dir,'foreign.sqlite'),
+      port,
     }),/Rollback identity/)
     const back=await rollbackSlimCutover({
       pointerPath:paths.pointerPath,legacyPath:paths.legacyPath,
       backupPath:paths.backupPath,installedSlimPath:paths.installedSlimPath,
+      port,
     })
     assert.equal(back.mode,'legacy')
     assert.equal((await readActiveDatabasePointer(paths.pointerPath))?.mode,'legacy')
@@ -56,6 +67,7 @@ test('guarded activation and rollback preserve the v38 original, backup and Slim
     await assert.rejects(rollbackSlimCutover({
       pointerPath:paths.pointerPath,legacyPath:paths.legacyPath,
       backupPath:paths.backupPath,installedSlimPath:paths.installedSlimPath,
+      port,
     }),/No active Slim/)
   }finally{await rm(dir,{recursive:true,force:true})}
 })

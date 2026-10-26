@@ -14,6 +14,8 @@ const args=(name:string)=>{
     async shutdown(){log.push({method:'shutdown'})},
     async request(_method:string,params?:Record<string,unknown>){
       log.push({method:name,path:params?.path})
+      if(Array.isArray(params?.path)&&params.path[0]==='repositories'
+        &&Array.isArray(params.args)&&params.args[0]==='missing')return null
       if(Array.isArray(params?.path)&&params.path[0]==='nativeSessionList'){
         return {items:[],hasMore:false}
       }
@@ -159,6 +161,7 @@ test('Slim HTTP bridge serves existing native list, facets, Catalog and aggregat
     })
     await http.nativeSessionCatalog.getByReviewSessionId('native:00000000000000000000000000000000')
     await http.nativeSessionCatalog.query({limit:10})
+    assert.ok(http.nativeSessionCatalog.isNativeMetricsEligible)
     await http.nativeSessionCatalog.isNativeMetricsEligible({
       sourceId:'pi',installationId:'i',nativeSessionId:'s',
     })

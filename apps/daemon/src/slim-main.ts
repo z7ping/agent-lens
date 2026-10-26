@@ -4,7 +4,7 @@ import { homedir } from 'node:os'
 import { startLocalVault } from '@agent-lens/backup-local'
 import { NpmPiEcosystemProvider } from '@agent-lens/integration-pi'
 import { IntegrationPackageService } from '@agent-lens/integration-packages'
-import { isAbsolute, join, resolve } from 'node:path'
+import { basename, isAbsolute, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { DefaultCapturePolicyService, resolveCapturePolicyPluginState, writeCapturePolicyConfiguration } from '@agent-lens/capture-policy'
 import { authorizedIntegrationCapabilities, integrationAuthorizationPath, readIntegrationAuthorizationSync } from '@agent-lens/runtime-cordis'
@@ -213,9 +213,7 @@ export async function startSlimNativeDaemon(options:SlimDaemonOptions){
   }
 }
 
-/** Slim standalone consumes the SAME strict activation pointer as M3.
- * Default installed Daemon/Desktop selection remains M4 work.
- */
+/** 独立 Slim 入口与默认 Daemon/Desktop 使用同一受检活动指针。 */
 export async function resolveSlimDaemonDatabasePath(
   configuredDbPath:string|undefined,
   activePointerPath:string|undefined,
@@ -232,7 +230,8 @@ export async function resolveSlimDaemonDatabasePath(
   return configuredDbPath
 }
 
-if(process.argv[1]&&fileURLToPath(import.meta.url)===resolve(process.argv[1])){
+if(process.argv[1]&&fileURLToPath(import.meta.url)===resolve(process.argv[1])
+  &&['slim-main.ts','slim-main.js','slim-main.mjs'].includes(basename(process.argv[1]))){
   const dbPath=await resolveSlimDaemonDatabasePath(
     process.env.AGENT_LENS_DB_PATH,process.env.AGENT_LENS_ACTIVE_DB_POINTER)
   const port=process.env.AGENT_LENS_PORT

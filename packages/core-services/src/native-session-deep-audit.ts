@@ -64,8 +64,8 @@ export async function auditNativeSessionOriginal(
   }
   const activeInstallation=input.runtimeProfile
     ? {...installation,
-      configRoot:input.runtimeProfile.configRoot??installation.configRoot,
-      dataRoot:input.runtimeProfile.dataRoot??installation.dataRoot}
+      ...(input.runtimeProfile.configRoot !== undefined ? { configRoot: input.runtimeProfile.configRoot } : {}),
+      ...(input.runtimeProfile.dataRoot !== undefined ? { dataRoot: input.runtimeProfile.dataRoot } : {})}
     : installation
   const context={
     host,installation:activeInstallation,

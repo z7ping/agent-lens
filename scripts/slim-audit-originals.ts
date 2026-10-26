@@ -4,6 +4,7 @@ import { resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { auditNativeSessionOriginal } from '@agent-lens/core-services'
 import { SqliteSlimStorage } from '@agent-lens/storage-sqlite'
+import { resolveCapturePolicyPluginState } from '@agent-lens/capture-policy'
 import type { NativeSessionCatalogEntry } from '@agent-lens/core'
 import { NATIVE_REINDEX_SOURCES } from './slim-reindex-native'
 
@@ -63,6 +64,7 @@ export interface OriginalsAuditReport {
  */
 export async function runOriginalsAudit(args:readonly string[]):Promise<OriginalsAuditReport> {
   const input=parseOriginalsAuditOptions(args)
+  const enabled=new Set(resolveCapturePolicyPluginState().settings.enabledSources)
   const storage=SqliteSlimStorage.openExisting(input.stagingPath,true)
   try{
     const report:OriginalsAuditReport={
@@ -95,7 +97,9 @@ export async function runOriginalsAudit(args:readonly string[]):Promise<Original
           ?await storage.runtimeProfiles.get(context.runtimeProfileId):undefined
         let state:'verified'|'partial'|'drifted'|'unavailable'|'unsupported'
         let reason:string
-        if(!source || !install || !host || (context?.runtimeProfileId&&!profile)){
+        if(!enabled.has(entry.sourceId)){
+          state='unsupported';reason='source-disabled-by-capture-policy'
+        }else if(!source || !install || !host || (context?.runtimeProfileId&&!profile)){
           state='unavailable';reason='source-or-installation-metadata-missing'
         }else{
           const result=await auditNativeSessionOriginal({
