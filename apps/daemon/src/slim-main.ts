@@ -66,6 +66,9 @@ export async function startSlimNativeDaemon(options:SlimDaemonOptions){
       configuredEnabledSources:resolved.settings.enabledSources,
     },
   )
+  if(Boolean(options.lives)!==Boolean(options.liveAttachments)){
+    throw new TypeError('Slim Live Registry and attachment store must be injected together')
+  }
   await runtime.start()
   let vault:ReturnType<typeof startLocalVault>|undefined
   let live:ReturnType<typeof startSlimPiLive>|undefined
