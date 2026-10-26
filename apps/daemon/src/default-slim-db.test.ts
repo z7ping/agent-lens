@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { mkdtemp,rm,writeFile } from 'node:fs/promises'
+import { mkdtemp,rm,writeFile,copyFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { SqliteStorageService, SqliteSlimStorage } from '@agent-lens/storage-sqlite'
@@ -36,6 +36,7 @@ test('activated Slim pointer takes precedence; rollback/mismatch/malformed point
     const old=new SqliteStorageService({path:legacyPath})
     await old.migrate()
     await old.close()
+    await copyFile(legacyPath,join(dataRoot,'old-backup.sqlite'))
     const slimPath=join(dataRoot,'slim-active.sqlite')
     const slim=await SqliteSlimStorage.createFresh(slimPath)
     await slim.close()
