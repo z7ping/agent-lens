@@ -1,7 +1,7 @@
 import { resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { DefaultSourceService } from '@agent-lens/core-services'
-import { DefaultCapturePolicyService, capturePolicySettingsFromEnv } from '@agent-lens/capture-policy'
+import { DefaultCapturePolicyService, resolveCapturePolicyPluginState } from '@agent-lens/capture-policy'
 import { rebuildNativeSessionMetrics } from '../packages/surface-http/src/native-session-metrics-http'
 import type { NativeMetricRebuildProgress } from '../packages/surface-http/src/native-session-metrics-http'
 import { SlimDataRuntime } from '../apps/daemon/src/data-runtime/slim-runtime'
@@ -42,6 +42,7 @@ export interface OfflineMetricsReport {
   unfinished:number
   budgetReached:boolean
   sourceResults:Array<{sourceId:string;scanned:number;complete:number;partial:number;failed:number}>
+  disabledSources:string[]
   /** Missing, stalled, uncertified Sources prevent M3 activation. */
   readyToSwitch:false
 }
@@ -57,22 +58,25 @@ export async function rebuildAllSlimMetrics(args:readonly string[]):Promise<Offl
   try{
     const sources=new DefaultSourceService()
     for(const source of NATIVE_REINDEX_SOURCES.values())sources.register(source)
-    const policy=new DefaultCapturePolicyService({
-      ...capturePolicySettingsFromEnv({}),
-      enabledSources:sources.list().map(source=>source.manifest.sourceId),
-    })
+    // Never silently re-enable sources disabled by the user's persisted
+    // CapturePolicy merely because the operator requested an offline scan.
+    const policy=new DefaultCapturePolicyService(resolveCapturePolicyPluginState().settings)
     const reader=runtime.nativeReader(sources,policy)
     const {nativeSessionCatalog:catalog,nativeSessionMetrics:metrics}=runtime.nativeHttpPort()
     if(!metrics.findRebuildCandidates)throw Error('Slim numerical rebuild candidate port missing')
     const report:OfflineMetricsReport={
       scanned:0,complete:0,partial:0,failed:0,unfinished:0,
       budgetReached:false,
-      sourceResults:[],readyToSwitch:false,
+      sourceResults:[],disabledSources:[],readyToSwitch:false,
     }
     const signal=new AbortController().signal
     for(const source of sources.list()){
       const per={sourceId:source.manifest.sourceId,scanned:0,complete:0,partial:0,failed:0}
       report.sourceResults.push(per)
+      if(!policy.isSourceEnabled(source.manifest.sourceId)){
+        report.disabledSources.push(source.manifest.sourceId)
+        continue
+      }
       let before:NonNullable<Parameters<NonNullable<typeof metrics.findRebuildCandidates>>[2]>
         |undefined
       while(report.scanned<options.maxSessions){
@@ -96,9 +100,12 @@ export async function rebuildAllSlimMetrics(args:readonly string[]):Promise<Offl
           let resultState:'complete'|'partial'|'failed'='failed'
           // Each resumed call reads <=64 original pages; all state is in
           // memory until the verified EOF makes a numerical snapshot safe.
-          for(let call=0;call<Math.ceil(options.maxPages/64);call++){
+          let remainingPages=options.maxPages
+          while(remainingPages>0){
+            const pages=Math.min(64,remainingPages)
+            remainingPages-=pages
             const result=await rebuildNativeSessionMetrics(entry,metrics,reader,source,signal,{
-              enabled:true,reviewSessionId:candidate.reviewSessionId,
+              enabled:true,reviewSessionId:candidate.reviewSessionId,maxPages:pages,
               ...(progress?{progress}:{}),
             })
             if(result.state==='in_progress'){
@@ -126,7 +133,7 @@ export async function rebuildAllSlimMetrics(args:readonly string[]):Promise<Offl
       if(report.scanned>=options.maxSessions)break
     }
     report.budgetReached=report.scanned>=options.maxSessions
-    report.unfinished=report.failed+report.partial
+    report.unfinished=report.failed+report.partial+report.disabledSources.length
     return report
   }finally{await runtime.shutdown()}
 }
