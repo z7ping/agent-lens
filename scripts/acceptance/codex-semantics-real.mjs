@@ -6,8 +6,7 @@ import { prepareAcceptanceTaskCenter } from './native-acceptance.mjs'
 const baseUrl = (process.env.AGENT_LENS_ACCEPTANCE_URL || 'http://127.0.0.1:56789').replace(/\/$/, '')
 const path = process.env.AGENT_LENS_ACCEPTANCE_PATH || '/review?range=all&status=all'
 const outputDir = resolve(process.env.AGENT_LENS_ACCEPTANCE_OUTPUT || '.agent-lens/acceptance/task-center')
-// Source / Review API 保留 Codex 原生 thread_name；Task Center 的用户任务标题则来自
-// authoritative event_msg.user_message。两层语义在 workflow 与这里分别验收。
+// Native Catalog、Task Center 与 Review 保留同一原生 thread_name；正文用户请求独立验收。
 const expectedTaskTitle = process.env.AGENT_LENS_ACCEPTANCE_LATEST_TITLE || 'Alpha3 原生标题 B'
 const expectedOlderTitle = process.env.AGENT_LENS_ACCEPTANCE_OLDER_TITLE || 'Alpha3 原生标题 A'
 
@@ -102,9 +101,9 @@ try {
 
   report.value = { ...value, inspectorOpen }
   const errors = report.errors
-  if (value.sessionTitles[0] !== expectedTaskTitle) errors.push(`列表首条未使用结构化真实用户任务标题：${value.sessionTitles[0] ?? '<missing>'}`)
+  if (value.sessionTitles[0] !== expectedTaskTitle) errors.push(`列表首条未使用原生标题：${value.sessionTitles[0] ?? '<missing>'}`)
   if (value.sessionTitles[1] !== expectedOlderTitle) errors.push(`列表第二条未使用原生标题：${value.sessionTitles[1] ?? '<missing>'}`)
-  if (value.headerTitle !== expectedTaskTitle) errors.push(`详情标题未与 Task Center 用户任务标题一致：${value.headerTitle || '<missing>'}`)
+  if (value.headerTitle !== expectedTaskTitle) errors.push(`详情标题未与 Task Center 原生标题一致：${value.headerTitle || '<missing>'}`)
   if (!value.assistantTexts.some(item => item.includes('好的，先跑测试'))) errors.push('未找到期望的 Assistant 可见正文')
   if (value.machineMetadataVisible) errors.push('Chromium 可见正文仍泄漏 Codex machine metadata')
   if (value.processGroupCount < 1) errors.push('未渲染聚合执行过程')
