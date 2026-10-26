@@ -131,7 +131,7 @@ export class NativeOnlySourceIndexer {
         || entry.installationId !== installation.id
         || entry.locationKind !== 'native'
         || !entry.nativeSessionId?.trim()
-        || !isAbsolute(entry.filePath)
+        || typeof entry.filePath !== 'string' || !isAbsolute(entry.filePath)
         || !entry.fileIdentity?.trim()
         || !Number.isSafeInteger(entry.fileSize) || entry.fileSize < 0
         || !Number.isFinite(entry.fileMtimeMs)) {
