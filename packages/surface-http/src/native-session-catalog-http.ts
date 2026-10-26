@@ -51,7 +51,7 @@ export async function handleNativeSessionCatalogRequest(
   request: IncomingMessage,
   response: ServerResponse,
   url: URL,
-  catalog?: NativeSessionCatalogStore,
+  catalog?: Pick<NativeSessionCatalogStore,'getByReviewSessionId'|'query'>,
   policy?: CapturePolicyService,
   nativeList?: NativeSessionListReader,
   sources?: SourceService,

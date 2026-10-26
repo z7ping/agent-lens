@@ -32,7 +32,7 @@ export class NativeMetricsAutoRefresh {
   private nextSourceId:string|undefined
 
   constructor(
-    private readonly catalog:NativeSessionCatalogStore|undefined,
+    private readonly catalog:Pick<NativeSessionCatalogStore,'getByReviewSessionId'>|undefined,
     private readonly metrics:NativeSessionMetricsStore|undefined,
     private readonly reader:NativeSessionWindowReader|undefined,
     private readonly sources:SourceService|undefined,

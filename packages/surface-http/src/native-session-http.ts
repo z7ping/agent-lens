@@ -437,7 +437,7 @@ export function encodeNativeSessionCursor(cursor: EncodedNativeCursor): string {
 /** A distinct, explicitly partial read-only Hook lane, never a full user turn. */
 export async function handleNativeSessionHookRequest(
   request:IncomingMessage,response:ServerResponse,url:URL,
-  reader?:NativeSessionWindowReader,catalog?:NativeSessionCatalogStore,
+  reader?:NativeSessionWindowReader,catalog?:Pick<NativeSessionCatalogStore,'getByReviewSessionId'>,
 ):Promise<boolean>{
   const match=url.pathname.match(/^\/api\/v1\/native-sessions\/([^/]+)\/hooks$/)
   if(!match) return false
@@ -506,7 +506,7 @@ export async function handleNativeSessionAttachmentRequest(
   response: ServerResponse,
   url: URL,
   reader?: NativeSessionWindowReader,
-  catalog?: NativeSessionCatalogStore,
+  catalog?: Pick<NativeSessionCatalogStore,'getByReviewSessionId'>,
 ): Promise<boolean> {
   const match = url.pathname.match(/^\/api\/v1\/native-sessions\/([^/]+)\/observations\/([^/]+)\/attachments$/)
   if (!match) return false
@@ -594,7 +594,7 @@ export async function handleNativeSessionWindowRequest(
   response: ServerResponse,
   url: URL,
   reader?: NativeSessionWindowReader,
-  catalog?: NativeSessionCatalogStore,
+  catalog?: Pick<NativeSessionCatalogStore,'getByReviewSessionId'>,
 ): Promise<boolean> {
   const byId = url.pathname.match(/^\/api\/v1\/native-sessions\/([^/]+)\/review$/)
   if (url.pathname !== PATH && !byId) return false
