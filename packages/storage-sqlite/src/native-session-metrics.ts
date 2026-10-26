@@ -280,7 +280,7 @@ export class SqliteNativeSessionMetrics implements NativeSessionMetricsStore {
   }
 
   /** Only NEW Native-only sessions needing (re)projection. No event reads. */
-  findRebuildCandidates(
+  async findRebuildCandidates(
     input:NativeSessionMetricOverviewQuery,limit:number,
     before?:NativeSessionMetricRebuildCursor,
   ):Promise<NativeSessionMetricRebuildCandidate[]>{
