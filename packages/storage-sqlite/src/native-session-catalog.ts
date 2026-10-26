@@ -122,6 +122,27 @@ export class SqliteNativeSessionCatalog {
     })
   }
 
+  async isNativeMetricsEligible(input: {
+    sourceId: string; installationId: string; nativeSessionId: string
+  }): Promise<boolean> {
+    return this.executor.run(() => {
+      if (isSlimDatabase(this.executor.db)) {
+        return Boolean(this.executor.db.prepare(`
+          SELECT 1 FROM native_session_catalog
+          WHERE source_id=? AND installation_id=? AND native_session_id=?
+            AND location_kind='native' AND review_session_id IS NOT NULL
+        `).get(input.sourceId,input.installationId,input.nativeSessionId))
+      }
+      // Until v38 is retired, only sessions owned by Native-only may use
+      // derived native rollups; Legacy will keep its own SQL aggregates.
+      return Boolean(this.executor.db.prepare(`
+        SELECT 1 FROM native_session_write_claims
+        WHERE source_id=? AND installation_id=? AND native_session_id=?
+          AND mode='native-only'
+      `).get(input.sourceId,input.installationId,input.nativeSessionId))
+    })
+  }
+
   async hasNativeOnlyWriteClaim(input: {
     sourceId: string; installationId: string; nativeSessionId: string
   }): Promise<boolean> {
