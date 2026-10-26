@@ -10,6 +10,7 @@ const PATH='/api/v1/native-sessions/metrics/overview'
 export async function handleNativeSessionMetricsOverviewRequest(
   request:IncomingMessage,response:ServerResponse,url:URL,
   metrics?:NativeSessionMetricsStore,sources?:SourceService,policy?:CapturePolicyService,
+  projectScopeReady=false,
 ):Promise<boolean>{
   if(url.pathname!==PATH)return false
   if(request.method!=='GET'){
@@ -21,18 +22,26 @@ export async function handleNativeSessionMetricsOverviewRequest(
     writeJson(response,503,{state:'unavailable',reason:'native-metrics-overview-unavailable'})
     return true
   }
-  if([...url.searchParams.keys()].some(key=>!['sourceId','from','to'].includes(key))
+  if([...url.searchParams.keys()].some(key=>!['sourceId','installationId','projectId','from','to'].includes(key))
     || [...new Set([...url.searchParams.keys()])].some(key=>url.searchParams.getAll(key).length!==1)){
     throw badRequest('Invalid native metric overview parameters')
   }
   const sourceId=url.searchParams.get('sourceId')??''
+  const installationId=url.searchParams.get('installationId')??''
+  const projectId=url.searchParams.get('projectId')??''
   const from=url.searchParams.get('from')??''
   const to=url.searchParams.get('to')??''
   if((url.searchParams.has('sourceId')&&(!sourceId||sourceId.length>128))
+    || (url.searchParams.has('installationId')&&(!installationId||installationId.length>512))
+    || (url.searchParams.has('projectId')&&(!projectId||projectId.length>512))
     || (url.searchParams.has('from')&&!Number.isFinite(Date.parse(from)))
     || (url.searchParams.has('to')&&!Number.isFinite(Date.parse(to)))
     || (from&&to&&Date.parse(from)>Date.parse(to))){
     throw badRequest('Invalid native metric overview scope')
+  }
+  if(projectId&&!projectScopeReady){
+    writeJson(response,200,{state:'unsupported',reason:'native-project-metrics-require-slim'})
+    return true
   }
   const sourceDefs=sources.list()
     .filter(def=>policy.isSourceEnabled(def.manifest.sourceId)
@@ -45,6 +54,8 @@ export async function handleNativeSessionMetricsOverviewRequest(
     sourceId:source.manifest.sourceId,
     parserVersion:source.manifest.parserVersion,
     coverageCertified:source.nativeSessionCoverageComplete===true,
+    ...(installationId?{installationId}:{}),
+    ...(projectId?{projectId}:{}),
     ...(from?{from}:{}),
     ...(to?{to}:{}),
   })))
