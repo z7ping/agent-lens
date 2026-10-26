@@ -32,6 +32,7 @@ import type {
   PiLiveService,
   PiLiveSnapshot,
   PiLiveStartInput,
+  PiLiveHistoryAction,
 } from './types'
 
 const CAPABILITIES = [
@@ -374,6 +375,10 @@ export function normalizePiLiveRuntimeEvent(value: LiveRuntimeEvent): LiveRuntim
  * Pi-only controls stay on PiLiveService while common cross-agent operations
  * are exposed through the Live registry.
  */
+export interface NativePiLiveHistoryResolver {
+  resolve(sessionId: string, action: PiLiveHistoryAction): Promise<PiLiveStartInput>
+}
+
 const NO_LEGACY_HISTORY_CAPABILITIES = new Set<LiveCapabilityName>([
   'resume', 'fork', 'fork-at',
 ])
@@ -391,13 +396,18 @@ export class PiLiveAdapter implements LiveAdapter {
     readonly service: PiLiveService,
     private readonly attachments: LiveAttachmentService,
     private readonly storage?: StorageService,
-    options: { nativeOnly?: boolean } = {},
+    private readonly options: {
+      nativeOnly?: boolean
+      nativeHistory?: NativePiLiveHistoryResolver
+    } = {},
   ) {
     // Slim must not advertise actions whose implementation still needs the
     // retired SourceRecord/LogicalSession SQL graph. The native Pi Worker
     // continues to support create, stream, send, queue, and recovery.
     const features=options.nativeOnly
-      ? CAPABILITIES.filter(capability=>!NO_LEGACY_HISTORY_CAPABILITIES.has(capability))
+      ? CAPABILITIES.filter(capability=>
+        !NO_LEGACY_HISTORY_CAPABILITIES.has(capability)
+        || (Boolean(options.nativeHistory) && (capability==='resume'||capability==='fork')))
       : [...CAPABILITIES]
     this.manifest=options.nativeOnly
       ? {...piLiveAdapterManifest,capabilities:[...features]}
@@ -418,11 +428,17 @@ export class PiLiveAdapter implements LiveAdapter {
   }
 
   async resume(logicalSessionId: string): Promise<PiLiveRuntimeState> {
+    if (this.options.nativeHistory) {
+      return this.service.start(await this.options.nativeHistory.resolve(logicalSessionId,'continue'))
+    }
     if (!this.storage) throw new Error('Pi Live history interactions are unavailable')
     return this.service.start(await resolvePiLiveHistoryInput(this.storage, logicalSessionId, 'continue'))
   }
 
   async fork(logicalSessionId: string): Promise<PiLiveRuntimeState> {
+    if (this.options.nativeHistory) {
+      return this.service.start(await this.options.nativeHistory.resolve(logicalSessionId,'fork'))
+    }
     if (!this.storage) throw new Error('Pi Live history interactions are unavailable')
     return this.service.start(await resolvePiLiveHistoryInput(this.storage, logicalSessionId, 'fork'))
   }
