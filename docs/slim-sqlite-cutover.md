@@ -150,3 +150,7 @@ npm run storage:slim:gate -- --legacy /path/to/legacy.sqlite --backup /path/to/b
 ```
 
 该显式只读命令串联三个互相独立的真实校验：先检查旧库与一致性备份是否变更；再核对旧会话身份与精简 Catalog/Context；再对全部原生 Catalog 进行 Source 原生内容逐页恢复，结束后重新检查旧库是否在耗时扫描期间发生变化。结果统一列出未索引身份、上下文缺失、不可恢复会话、数值统计缺口、旧 Writer 冻结/Hook 与回滚尚未认证等阻断原因。无论结果如何，`readyToSwitch:false` 是硬约束；本命令不更改旧库、备份、暂存库，不清理或替换任何用户文件。
+
+## Facets 原生筛选项
+
+精简库 `SqliteSlimNativeFacetReader` 直接使用安装身份、项目和原生会话 Catalog 构造智能体/项目筛选项，不读取旧 SessionSummary、Observations 或 Evidence。HTTP `/api/v1/facets` 在 SlimStore 可用时走这条读取器，并根据当前 Source 注册表与启用策略标记检测状态；日期范围暂标 `unavailable`，因为仅有会话最后活动日期不能证明完整的原生起止时间。Worker 已开放严格只读 `nativeFacets.query`，供默认 Daemon 完成切库后使用。
