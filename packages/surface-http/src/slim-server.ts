@@ -163,6 +163,28 @@ export async function startNativeOnlyHttpSurface(
         writeJson(response,200,await readLaunchableProjects(storage,url.searchParams))
         return
       }
+      if(url.pathname==='/api/v1/agents/summary'){
+        if(request.method!=='GET'){
+          response.setHeader('allow','GET')
+          writeJson(response,405,{error:'method_not_allowed'})
+          return
+        }
+        // Same Agent Summary contract as the existing Web navigation. Slim
+        // facts are registered Source manifests, CapturePolicy and actual
+        // indexed Installation IDs — no fake capabilities or usage totals.
+        const native=await nativeOnlyFacetResponse(
+          storage.nativeFacets,options.sources,options.capturePolicy)
+        writeJson(response,200,{
+          items:native.agents.map(agent=>({
+            ...agent,installationCount:agent.installationIds.length,
+          })),
+          meta:{
+            protocolVersion:AGENT_LENS_PROTOCOL_VERSION,
+            generatedAt:new Date().toISOString(),
+          },
+        })
+        return
+      }
       if(url.pathname==='/api/v1/facets'){
         if(request.method!=='GET'){
           writeJson(response,405,{error:'method_not_allowed'})

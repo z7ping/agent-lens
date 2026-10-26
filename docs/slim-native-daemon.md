@@ -24,6 +24,7 @@ the existing Pi Live create/send/stream/runtime controls and ephemeral attachmen
 API, **verified Pi native resume/whole-session fork and bounded fork-at**,
 Facets, the existing Local Vault `/api/v1/backups` endpoints, existing source capture-policy
 `GET/PUT /api/v1/capture-policy/sources`, `GET /api/v1/locales`, and
+`/api/v1/agents/summary` registered-Source navigation and
 `/api/v1/projects/launchable` project picker (with
 validated workspace paths), health and readiness. **Legacy logical-session IDs remain unavailable**.
 Pi native `native:...` Resume/Fork/Fork-at is resolved only through trusted Catalog,
@@ -100,3 +101,8 @@ old logical-session resume and `fork-at` remain unavailable. This is an explicit
 empty history result. Live/HTTP integration requires M5 validation before a
 production/default Daemon cutover.
 
+
+Agent navigation summaries contain only registered source manifests, effective
+enablement and indexed installation IDs/counts. They make no claim about
+unverified runtime capabilities, asset-usage evidence or full Agent details;
+those consumers remain under M5 migration.
