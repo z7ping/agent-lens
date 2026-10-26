@@ -6,6 +6,7 @@ import { SqliteExecutor } from './executor'
 import { mapHost, mapInstallation } from './repository-row-mappers'
 import { SqliteNativeSessionCatalog } from './native-session-catalog'
 import { SqliteSlimNativeSessionList } from './slim-native-session-list'
+import { SqliteSlimNativeFacetReader } from './slim-native-facets'
 import { SqliteSlimNativeSessionContexts } from './slim-native-session-contexts'
 import { SqliteSlimIdentityService } from './slim-identity-service'
 import { SqliteSlimAssetService } from './slim-asset-service'
@@ -36,6 +37,7 @@ export class SqliteSlimStorage {
   }
   readonly nativeSessionCatalog: SqliteNativeSessionCatalog
   readonly nativeSessionList: SqliteSlimNativeSessionList
+  readonly nativeFacets: SqliteSlimNativeFacetReader
   readonly nativeSessionContexts: SqliteSlimNativeSessionContexts
   readonly identity: SqliteSlimIdentityService
   readonly assets: SqliteSlimAssetService
@@ -72,6 +74,7 @@ export class SqliteSlimStorage {
     }
     this.nativeSessionCatalog = new SqliteNativeSessionCatalog(this.executor)
     this.nativeSessionList = new SqliteSlimNativeSessionList(this.executor)
+    this.nativeFacets = new SqliteSlimNativeFacetReader(this.executor)
     this.nativeSessionContexts = new SqliteSlimNativeSessionContexts(this.executor)
     this.identity = new SqliteSlimIdentityService(this.executor)
     this.assets = new SqliteSlimAssetService(this.executor)
