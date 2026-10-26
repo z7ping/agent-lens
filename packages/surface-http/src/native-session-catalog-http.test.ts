@@ -104,3 +104,43 @@ test('native Catalog HTTP rejects invalid cursors and parameters before accessin
     assert.equal(response.status,503)
   }finally{await missing.dispose()}
 })
+
+test('native Catalog HTTP routes slim session listing through coverage-aware metadata model',async()=>{
+  const calls:Array<Record<string,unknown>>=[]
+  const storage={
+    nativeSessionCatalog:{
+      async query(){throw new Error('Legacy Catalog query must not be used for slim listing')},
+    },
+    nativeSessionList:{
+      async query(query:Record<string,unknown>){
+        calls.push(query)
+        return {items:[{
+          sourceId:'pi',installationId:'install',nativeSessionId:'s',
+          reviewSessionId:nativeReviewSessionId('pi','install','s'),
+          lastActivityAt:now,title:'Native title',titleProvenance:'native',
+          metricsState:'partial',
+          metrics:{interactionCount:2,toolCallCount:1,toolResultCount:1,
+            toolErrorCount:0,errorCount:0,inputTokens:null,outputTokens:null},
+        }],hasMore:false}
+      },
+    },
+    async health(){return {ok:true}},
+  } as unknown as StorageService
+  const policy={isSourceEnabled:()=>true} as unknown as CapturePolicyService
+  const sources={list(){return [{manifest:{sourceId:'pi',parserVersion:'v1'},
+    nativeSessionCoverageComplete:false}]}}
+  const http=await startHttpSurface(storage,{port:0,capturePolicy:policy,
+    sources:sources as never})
+  try{
+    const res=await fetch(`http://${http.host}:${http.port}/api/v1/native-sessions?sourceId=pi&projectId=project-1`)
+    assert.equal(res.status,200)
+    const body=await res.json() as {items:Array<Record<string,unknown>>}
+    assert.equal(calls.length,1)
+    assert.equal(calls[0]?.projectId,'project-1')
+    assert.equal(calls[0]?.parserVersion,'v1')
+    assert.equal(calls[0]?.coverageCertified,false)
+    assert.equal(body.items[0]?.metricsState,'partial')
+    assert.equal(body.items[0]?.titleProvenance,'native')
+    assert.equal(JSON.stringify(body).includes('filePath'),false)
+  } finally {await http.dispose()}
+})
