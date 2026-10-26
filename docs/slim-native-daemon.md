@@ -20,7 +20,8 @@ APIs (501), so this is for incremental development, **not production cutover**.
 
 Available: native sessions and deep links, native windows, authorized body search,
 attachments, archived Hook pages, native statistics/rebuild, aggregate Usage/Insights,
-Facets, health and readiness. Other /api/v1/ routes explicitly return 501 instead
+Facets, the existing `/api/v1/projects/launchable` project picker (with
+validated workspace paths), health and readiness. Other /api/v1/ routes explicitly return 501 instead
 of fake empty data or a Legacy fallback.
 
 **Cutover not authorized:** default `start` still runs the old Daemon;
