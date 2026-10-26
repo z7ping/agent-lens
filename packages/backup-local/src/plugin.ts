@@ -2,9 +2,7 @@ import { homedir } from 'node:os'
 import { join } from 'node:path'
 import type { Plugin } from '@deepseek-ai/cordis'
 import type { AgentLensContext } from '@agent-lens/runtime-cordis'
-import { ExplainableBackupService } from './explainability'
-import { LocalBackupService } from './service'
-import { StaleWhileRevalidateBackupService } from './stale-while-revalidate'
+import { startLocalVault } from './standalone'
 
 export interface BackupLocalPluginConfig {
   vaultPath?: string
@@ -25,22 +23,12 @@ const applyBackupLocal: Plugin.Function<BackupLocalPluginConfig> = (
 ) => {
   const vaultPath = config.vaultPath ?? join(homedir(), '.agent-lens', '1.0', 'vault')
   const sourceOrder = configuredSourceOrder(ctx)
-  const localService = new LocalBackupService(
-    ctx.storage,
-    ctx.sources,
-    ctx.identity,
-    { vaultPath, sourceOrder },
-  )
-  const explainable = new ExplainableBackupService(localService, join(vaultPath, 'inventory-v1.json'))
-  const service = new StaleWhileRevalidateBackupService(explainable, { vaultPath, sourceOrder })
-
-  // 不再启动 LocalBackupService 自己的 5 分钟全量扫描定时器。
-  // SWR 层负责旧索引立即可用，并按用户配置的智能体顺序渐进刷新。
-  service.start()
-  const dispose = ctx.provide('backup', service)
+  const vault = startLocalVault(ctx.storage, ctx.sources, ctx.identity, {
+    vaultPath, sourceOrder,
+  })
+  const dispose = ctx.provide('backup', vault.service)
   return () => {
-    service.stop()
-    localService.stop()
+    vault.stop()
     dispose()
   }
 }
