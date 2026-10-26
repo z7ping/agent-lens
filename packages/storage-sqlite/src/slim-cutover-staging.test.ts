@@ -1,10 +1,11 @@
+import { LegacyV38TestDatabase } from './legacy-v38-test-fixture'
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import Database from 'better-sqlite3'
-import { SqliteStorageService } from './storage'
+
 import { stageSlimCutover } from './slim-cutover-staging'
 import { assertSlimSchema } from './slim-schema'
 
@@ -14,7 +15,7 @@ test('one-time staging backs up v38 and copies only approved metadata, never tra
   const backupPath = join(dir, 'legacy.backup.db')
   const stagingPath = join(dir, 'slim.stage.db')
   try {
-    const old = new SqliteStorageService({ path: legacyPath })
+    const old = new LegacyV38TestDatabase({ path: legacyPath })
     try {
       await old.migrate()
       old.db.prepare(`INSERT INTO hosts(id,name,platform,arch,created_at,last_seen_at)
