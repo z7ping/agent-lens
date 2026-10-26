@@ -12,6 +12,12 @@ Source definitions, persisted CapturePolicy and native Reader/HTTP handlers.
 It has **no Legacy Writer, v38 migrations, Canonical Observation, SQL transcript
 or old SessionSummary projection**. An absent or v38 path fails before serving.
 
+The existing Web build is now served by the same native-only HTTP process,
+using `AGENT_LENS_WEB_ROOT` or the Daemon's bundled/web workspace directory;
+SPA `/review/native:...` links resolve to the **same existing Review Task Surface**.
+No parallel UI is introduced. The rest of the Web app still calls unported
+APIs (501), so this is for incremental development, **not production cutover**.
+
 Available: native sessions and deep links, native windows, authorized body search,
 attachments, archived Hook pages, native statistics/rebuild, aggregate Usage/Insights,
 Facets, health and readiness. Other /api/v1/ routes explicitly return 501 instead
