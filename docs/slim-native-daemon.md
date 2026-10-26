@@ -93,8 +93,10 @@ metadata-only and does not persist Live bodies.
 The SAME `CodexLiveAdapter` / App Server transport is registered beside Pi
 in the Slim Live Registry, with only runtime recovery hints persisted into
 Slim checkpoints. Create, send, stream, interrupt and native turn history
-continue to use Codex's Source-owned thread. Old SQL logical-session Resume
-is not advertised until the native Catalog resolver is verified; there is no
+continue to use Codex's Source-owned thread. Native Codex Review `native:...` Resume now uses trusted Catalog, Source Reader
+and original JSONL `session_meta` (thread ID and cwd) before App Server
+`thread/read` verification. Legacy SQL logical-session ID Resume remains
+unavailable; there is no
 Legacy event fallback. Missing App Server availability remains an explicit
 runtime error, not an invented session.
 
