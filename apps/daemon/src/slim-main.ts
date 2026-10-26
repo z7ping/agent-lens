@@ -16,6 +16,7 @@ import { startNativeOnlyHttpSurface } from '@agent-lens/surface-http'
 import { SlimDataRuntime } from './data-runtime/slim-runtime.js'
 import { SlimSourceCoordinator } from './slim-source-coordinator.js'
 import { startSlimLive } from './slim-live.js'
+import { startSlimIntegrations } from './slim-integrations.js'
 
 export interface SlimDaemonOptions {
   /** Existing slim v1 only; absent/v38 paths are never upgraded at boot. */
@@ -110,9 +111,15 @@ export async function startSlimNativeDaemon(options:SlimDaemonOptions){
         httpPort.nativeSessionCatalog,nativeReader,policy,enabledLiveProducts,
       )
     }
+    const integrations=startSlimIntegrations({
+      sources,policy,lives:options.lives??live!.lives,
+    })
     const http=await startNativeOnlyHttpSurface(httpPort,{
       ...(options.port===undefined?{}:{port:options.port}),
       sources,capturePolicy:policy,
+      integrationManagement:integrations.management,
+      integrationDiscovery:integrations.discovery,
+      integrationAuthorization:integrations.authorization,
       backup:options.backup??vault!.service,
       lives:options.lives??live!.lives,
       liveAttachments:options.liveAttachments??live!.attachments,
