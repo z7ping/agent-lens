@@ -141,6 +141,13 @@ export async function handleNativeSessionCatalogRequest(
         parserVersion:declaration.manifest.parserVersion,
         coverageCertified:declaration.nativeSessionCoverageComplete===true,
       }:{}),
+      ...(!sourceId&&sources?{
+        sourceCertifications:sources.list().map(source=>({
+          sourceId:source.manifest.sourceId,
+          parserVersion:source.manifest.parserVersion,
+          coverageCertified:source.nativeSessionCoverageComplete===true,
+        })),
+      }:{}),
       limit,
     })
     const items=page.items
