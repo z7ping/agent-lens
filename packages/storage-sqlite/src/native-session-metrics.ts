@@ -181,6 +181,7 @@ export class SqliteNativeSessionMetrics implements NativeSessionMetricsStore {
     }
     return this.executor.run(()=>{
       const slim = isSlimDatabase(this.executor.db)
+      if(input.projectId && !slim) throw new Error('Project scope requires slim SQLite')
       const cte=`
         WITH selected AS (
           SELECT catalog.source_id,catalog.installation_id,catalog.native_session_id,
@@ -211,6 +212,14 @@ export class SqliteNativeSessionMetrics implements NativeSessionMetricsStore {
           WHERE catalog.location_kind='native'
             ${slim ? '' : "AND claim.mode='native-only'"} AND catalog.source_id=?
             ${input.installationId?"AND catalog.installation_id=?":""}
+            ${input.projectId?`AND EXISTS (
+              SELECT 1 FROM native_session_context AS ctx
+              LEFT JOIN workspaces AS ws ON ws.id=ctx.workspace_id
+              WHERE ctx.source_id=catalog.source_id
+                AND ctx.installation_id=catalog.installation_id
+                AND ctx.native_session_id=catalog.native_session_id
+                AND COALESCE(ctx.project_id,ws.project_id)=?
+            )`:""}
             ${input.from?"AND catalog.last_activity_at>=?":""}
             ${input.to?"AND catalog.last_activity_at<=?":""}
         )
@@ -219,6 +228,7 @@ export class SqliteNativeSessionMetrics implements NativeSessionMetricsStore {
         input.parserVersion,NATIVE_SESSION_METRIC_PROJECTION_VERSION,
         input.coverageCertified===true?1:0,input.sourceId,
         ...(input.installationId?[input.installationId]:[]),
+        ...(input.projectId?[input.projectId]:[]),
         ...(input.from?[input.from]:[]),
         ...(input.to?[input.to]:[]),
       ]
@@ -287,6 +297,7 @@ export class SqliteNativeSessionMetrics implements NativeSessionMetricsStore {
   ):Promise<NativeSessionMetricRebuildCandidate[]>{
     if(!input.sourceId || !input.parserVersion
       || input.sourceId.length>128 || input.parserVersion.length>512
+      || (input.projectId!==undefined && (!input.projectId.trim() || input.projectId.length>512))
       || !Number.isSafeInteger(limit) || limit<1 || limit>4
       || (before && (!before.lastActivityAt || before.lastActivityAt.length>128
         || !Number.isFinite(Date.parse(before.lastActivityAt))
@@ -296,6 +307,7 @@ export class SqliteNativeSessionMetrics implements NativeSessionMetricsStore {
     }
     return this.executor.run(()=>{
       const slim = isSlimDatabase(this.executor.db)
+      if(input.projectId && !slim) throw new Error('Project scope requires slim SQLite')
       const rows=this.executor.db.prepare(`
         SELECT catalog.review_session_id AS reviewSessionId,
           catalog.source_id AS sourceId,
@@ -317,6 +329,14 @@ export class SqliteNativeSessionMetrics implements NativeSessionMetricsStore {
           ${slim ? '' : "AND claim.mode='native-only'"}
           AND catalog.source_id=?
           AND catalog.review_session_id IS NOT NULL
+          ${input.projectId?`AND EXISTS (
+              SELECT 1 FROM native_session_context AS ctx
+              LEFT JOIN workspaces AS ws ON ws.id=ctx.workspace_id
+              WHERE ctx.source_id=catalog.source_id
+                AND ctx.installation_id=catalog.installation_id
+                AND ctx.native_session_id=catalog.native_session_id
+                AND COALESCE(ctx.project_id,ws.project_id)=?
+            )`:""}
           AND (metrics.source_id IS NULL
             OR metrics.file_identity<>catalog.file_identity
             OR metrics.file_size<>catalog.file_size
@@ -334,6 +354,7 @@ export class SqliteNativeSessionMetrics implements NativeSessionMetricsStore {
         LIMIT ?
       `).all(input.sourceId,input.parserVersion,
         NATIVE_SESSION_METRIC_PROJECTION_VERSION,
+        ...(input.projectId?[input.projectId]:[]),
         ...(before ? [before.lastActivityAt,before.lastActivityAt,before.installationId,
           before.lastActivityAt,before.installationId,before.nativeSessionId] : []),
         limit) as NativeSessionMetricRebuildCandidate[]
