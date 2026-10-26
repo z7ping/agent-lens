@@ -76,6 +76,8 @@ export interface ToolAssetUsageResponseDto {
     unattributedToolCalls: number
     hasMoreTools: boolean
     projection?: ToolUsageProjectionStatusDto
+    /** When native-only, Legacy aggregate fields are intentionally not authoritative. */
+    mode?: 'native-only'
     native?: NativeMetricContributionDto
     generatedAt: string
   }

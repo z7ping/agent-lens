@@ -61,6 +61,7 @@ import { handleLiveAttachmentRequest } from './live-attachments-http'
 import { handleNativeSessionWindowRequest, handleNativeSessionAttachmentRequest, handleNativeSessionHookRequest, type NativeSessionWindowReader } from './native-session-http'
 import { handleNativeSessionCatalogRequest } from './native-session-catalog-http'
 import { nativeOnlyFacetResponse } from './native-only-facets'
+import { nativeOnlyInsightsResponse, nativeOnlyToolUsageResponse } from './native-only-usage-insights'
 import { handleNativeSessionBodySearchRequest } from './native-session-search-http'
 import { handleNativeSessionMetricsRequest } from './native-session-metrics-http'
 import { handleNativeSessionMetricsOverviewRequest } from './native-session-metrics-overview-http'
@@ -921,11 +922,23 @@ export async function startHttpSurface(
         return
       }
       if (url.pathname === '/api/v1/usage/detail') {
+        if(storage.nativeSessionList){
+          writeJson(response,501,{error:'native_tool_detail_unavailable',
+            message:'Tool detail needs an original Source session; no Legacy Observation fallback'})
+          return
+        }
         writeJson(response, 200, await usage.query(parseUsageQuery(url.searchParams), USAGE_DETAIL_LIMIT))
         return
       }
       if (url.pathname === '/api/v1/usage') {
         const query=parseUsageQuery(url.searchParams)
+        if(storage.nativeSessionList){
+          const native=await nativeMetricContribution(
+            storage.nativeSessionMetrics,options.sources,options.capturePolicy,
+            {...query,includeTools:true,projectScopeReady:true})
+          writeJson(response,200,nativeOnlyToolUsageResponse(native))
+          return
+        }
         const legacy=await usage.query(query)
         const native=storage.nativeSessionMetrics?.overview && options.sources && options.capturePolicy
           ? await nativeMetricContribution(storage.nativeSessionMetrics,options.sources,options.capturePolicy,
@@ -940,6 +953,13 @@ export async function startHttpSurface(
       }
       if (url.pathname === '/api/v1/insights') {
         const query=parseInsightsQuery(url.searchParams)
+        if(storage.nativeSessionList){
+          const native=await nativeMetricContribution(
+            storage.nativeSessionMetrics,options.sources,options.capturePolicy,
+            {...query,projectScopeReady:true})
+          writeJson(response,200,nativeOnlyInsightsResponse(native,query))
+          return
+        }
         const legacy=await insights.query(query)
         const native=storage.nativeSessionMetrics?.overview && options.sources && options.capturePolicy
           ? await nativeMetricContribution(storage.nativeSessionMetrics,options.sources,options.capturePolicy,
