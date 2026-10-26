@@ -1,6 +1,7 @@
 import type {
   AgentInstallation,
   Host,
+  RuntimeProfile,
   NormalizedSourceOutput,
   SourceNativeSessionPageQuery,
   SourceNativeSessionCursor,
@@ -15,6 +16,7 @@ export interface NativeWorkerReadInput {
   query: SourceNativeSessionPageQuery
   host: Host
   installation: AgentInstallation
+  runtimeProfile?: RuntimeProfile
 }
 
 export interface NativeWorkerNormalizedRecord {
@@ -47,6 +49,7 @@ export interface NativeWorkerHookReadInput {
   cursor?: string
   host: Host
   installation: AgentInstallation
+  runtimeProfile?: RuntimeProfile
 }
 
 export type NativeWorkerHookReadResult =
