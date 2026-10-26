@@ -103,23 +103,23 @@ if (dbPath) {
     await sqliteStorageProvider.initialize?.(storage, { path: dbPath, readonly: role === 'reader', ...(config.budget ? { budget: config.budget } : {}) })
   }
   if(schemaKind==='legacy') {
-  const legacy=storage as SqliteStorageService
-  const remote = new SqliteHubRemoteReadRepository(legacy.executor)
-  const logicalSessions = new HubUnifiedLogicalSessionReader(
+    const legacy=storage as SqliteStorageService
+    const remote = new SqliteHubRemoteReadRepository(legacy.executor)
+    const logicalSessions = new HubUnifiedLogicalSessionReader(
     nodeId,
     legacy.repositories.sessions,
     remote,
     legacy.sessionSummaries,
   )
-  unifiedRead = {
-    logicalSessions,
+    unifiedRead = {
+      logicalSessions,
     observations: new HubUnifiedObservationReader(
       nodeId,
       legacy.repositories.observations,
       logicalSessions,
       remote,
     ),
-  }
+    }
   }
 }
 
@@ -176,7 +176,23 @@ function argsArray(value: unknown): unknown[] {
   return value
 }
 
-function storageRootAllowed(path: readonly string[]): boolean {
+function storageRootAllowed(
+  path:readonly string[],kind:'legacy'|'slim'='legacy',
+):boolean {
+  if(kind==='slim'){
+    // Only metadata and numerical projections: no Legacy Canonical/Observation,
+    // Evidence, replication, or internal SQLite executor exposed over IPC.
+    if(path[0]==='repositories'){
+      return path.length===3 && ['hosts','installations'].includes(path[1]!)
+        && path[2]==='get'
+    }
+    return [
+      'nativeSessionCatalog','nativeSessionMetrics','nativeSessionList',
+      'nativeSessionContexts','identity','assets',
+      'assetInventory','launchableProjects','runtimeProfiles',
+      'checkpoints','maintenanceJobs','health',
+    ].includes(path[0]!)
+  }
   return [
     'repositories',
     'checkpoints',
