@@ -57,7 +57,7 @@ test('slim runtime cannot open old 38-migration database or absent file',async()
     const legacy=new SqliteStorageService({path:legacyPath})
     try{await legacy.migrate()}finally{await legacy.close()}
     assert.throws(()=>SqliteSlimStorage.openExisting(legacyPath),/missing|required|Slim database/)
-    assert.throws(()=>SqliteSlimStorage.openExisting(join(directory,'missing.sqlite')),/SQLITE_CANTOPEN/)
+    assert.throws(()=>SqliteSlimStorage.openExisting(join(directory,'missing.sqlite')),/unable to open|does not exist|not found/i)
   }finally{await rm(directory,{recursive:true,force:true})}
 })
 
