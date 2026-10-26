@@ -87,6 +87,7 @@ export function InsightsPage({ model, toolbarHost }: { model: AgentLensClientMod
   }, [insightsModel, model])
 
   const data = insights.response
+  const verifiedNative=data?.meta.native?.state==='available' ? data.meta.native : null
   const agents = useOrderedAgents(facets?.agents ?? [])
   const insightAgents = useOrderedAgents(data?.agents ?? [])
   const projects = facets?.projects ?? []
@@ -148,11 +149,37 @@ export function InsightsPage({ model, toolbarHost }: { model: AgentLensClientMod
                 {data.meta.native.coverage === 'partial'
                   ? t('page.nativePartialCoverage') : t('page.nativeCompleteCoverage')}</b></div>
           </>}
-          <small>{t('page.nativeSeparateNote')}</small>
+          <small>{data.meta.mode==='native-only'
+            ? t('page.nativeOnlyModeNote') : t('page.nativeSeparateNote')}</small>
         </section>}
 
 
-        {insights.loading && !data ? <WorkspaceSkeleton kind="insights"/> : data && data.summary.sessionCount > 0 ? <>
+        {insights.loading && !data ? <WorkspaceSkeleton kind="insights"/> : data?.meta.mode==='native-only' ? <>
+          {verifiedNative && <section className="insight-kpi-grid"
+            aria-label={t('page.nativeCoverageTitle')}>
+            <div className="workspace-metric-card insight-kpi">
+              <span>{t('page.sessions')}</span>
+              <strong>{t('page.nativeCoverageCount', {
+                ready:verifiedNative.readySessions,eligible:verifiedNative.eligibleSessions,
+              })}</strong>
+            </div>
+            <div className="workspace-metric-card insight-kpi">
+              <span>{t('page.interactions')}</span>
+              <strong>{verifiedNative.interactionCount}</strong>
+            </div>
+            <div className="workspace-metric-card insight-kpi">
+              <span>{t('page.toolCalls')}</span>
+              <strong>{verifiedNative.toolCallCount}</strong>
+            </div>
+            <div className="workspace-metric-card insight-kpi">
+              <span>{t('page.explicitFailures')}</span>
+              <strong>{verifiedNative.errorCount}</strong>
+            </div>
+          </section>}
+          <section className="insight-method-note" role="status">
+            <span>{t('page.nativeOnlyModeNote')}</span>
+          </section>
+        </> : data && data.summary.sessionCount > 0 ? <>
           <section className="insight-coverage-strip" aria-label={t('page.coverageAria')}>
             <div><span>{t('page.statisticsRange')}</span><b>{rangeLabel(insights.filters.range, t, locale, data.meta.from, data.meta.to)}</b></div>
             <div><span>{t('page.sessionSample')}</span><b>{t('page.sessionCount', { count: data.summary.sessionCount })}</b></div>
