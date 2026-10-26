@@ -108,3 +108,11 @@ npm run storage:slim:audit-originals -- --staging /path/to/slim-staging.sqlite -
 ```
 
 **只读**打开指定精简暂存库，按原生 Catalog 逐会话调用 `auditNativeSessionOriginal`，原生记录逐页/逐条核验直到 EOF；返回 verified/partial/drifted/unavailable/unsupported 计数、额度截断标记和最多 32 个不包含路径的摘要样本。即使 `allCurrentOriginalsVerified:true`，也不表示已删除的历史版本或缺失 Hook 被恢复，`readyToSwitch:false` 保持不变。
+
+## Slim 原生资产发现
+
+```bash
+npm run storage:slim:assets -- --staging /path/to/slim-staging.sqlite --source pi --installation <id>
+```
+
+对源自 Pi/Codex/Claude/Hermes/OpenCode 的资产配置调用原生 `discoverAssets`，按 CapturePolicy 脱敏，仅写 `asset_definitions/asset_bindings/asset_current_state` 和安全的资产绑定状态快照，不落 Observation/Evidence。跨次扫描发现不再存在的资产，installed/configured 置 false，其余使用 unknown；源代码/工具正文不入库。Source/安装身份和 Runtime Profile 取自已存在的 Slim 元数据，不能从客户端任意指定文件路径。
