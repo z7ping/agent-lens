@@ -21,6 +21,7 @@ import { handleNativeSessionMetricsOverviewRequest } from './native-session-metr
 import { NativeMetricsAutoRefresh } from './native-metrics-auto-refresh'
 import { nativeOnlyFacetResponse } from './native-only-facets'
 import { nativeOnlyAgentOverview, nativeOnlyAgentCoverage, nativeOnlyAgentDetail } from './native-only-agent-overview'
+import { HttpEventHub } from './events'
 import { readLaunchableProjects } from './launchable-projects'
 import { handleBackupRequest } from './backup-http'
 import { handleAgentFilesRequest } from './agent-files-http'
@@ -66,6 +67,10 @@ export interface NativeOnlyHttpOptions {
   sources:SourceService
   capturePolicy:CapturePolicyService
   reader:NativeSessionWindowReader
+  backgroundProgress?:()=>{
+    examinedScopes:number;indexedSessions:number;runningCaptures:number;
+    failedScopes:number;deferredScopes:number;finished:boolean
+  }
   backup?: BackupService
   lives?: LiveService
   liveAttachments?: LiveAttachmentService
@@ -81,11 +86,12 @@ export interface NativeOnlyHttpOptions {
 export async function startNativeOnlyHttpSurface(
   storage:NativeOnlyHttpStorage,
   options:NativeOnlyHttpOptions,
-):Promise<RunningHttpSurface> {
+):Promise<RunningHttpSurface & {notifyBackgroundActivity:()=>void}> {
   const requestedPort=options.port??DEFAULT_AGENT_LENS_HTTP_PORT
   if(!Number.isInteger(requestedPort)||requestedPort<0||requestedPort>65535){
     throw new RangeError('Invalid native-only HTTP port')
   }
+  const eventHub=new HttpEventHub()
   const mounts=new Map<string,HttpStaticMount>()
   if(options.staticDir)mounts.set('native-web',{
     id:'native-web',directory:options.staticDir,spaFallback:true,
@@ -167,6 +173,40 @@ export async function startNativeOnlyHttpSurface(
       // No v38 StorageService or legacy write path is involved.
       if(await handleCapturePolicyRequest(request,response,url,options.capturePolicy))return
 
+      if(url.pathname==='/api/v1/events'){
+        if(request.method!=='GET'){
+          writeJson(response,405,{error:'method_not_allowed'})
+          return
+        }
+        eventHub.connect(response)
+        return
+      }
+      if(url.pathname==='/api/v1/background-activity'){
+        if(request.method!=='GET'){
+          writeJson(response,405,{error:'method_not_allowed'})
+          return
+        }
+        const progress=options.backgroundProgress?.()
+        if(!progress){
+          writeJson(response,503,{error:'native_background_progress_unavailable'})
+          return
+        }
+        const at=new Date().toISOString()
+        const state=progress.finished
+          ?(progress.failedScopes||progress.deferredScopes?'degraded':'completed')
+          :'running'
+        const item={
+          id:'native:startup-index',kind:'source-history' as const,state,
+          scope:'local-native',updatedAt:at,
+          ...(progress.failedScopes||progress.deferredScopes?{
+            errorSummary:`原生索引失败 ${progress.failedScopes}，延迟 ${progress.deferredScopes}`,
+          }:{}),
+        }
+        writeJson(response,200,{generatedAt:at,
+          active:progress.finished?[]:[item],
+          recent:progress.finished?[item]:[],sources:[item]})
+        return
+      }
       if(url.pathname==='/api/v1/locales'){
         if(request.method!=='GET'){
           response.setHeader('allow','GET')
@@ -309,6 +349,7 @@ export async function startNativeOnlyHttpSurface(
     })
   }catch(error){
     refresh.dispose()
+    eventHub.close()
     throw error
   }
   const address=server.address()
@@ -316,12 +357,14 @@ export async function startNativeOnlyHttpSurface(
     host:AGENT_LENS_HTTP_HOST,
     port:address&&typeof address!=='string'?address.port:requestedPort,
     server,
+    notifyBackgroundActivity(){eventHub.notifyBackgroundActivity()},
     mountStatic(mount){
       mounts.set(mount.id,mount)
       return {dispose:()=>{mounts.delete(mount.id)}}
     },
     async dispose(){
       refresh.dispose()
+      eventHub.close()
       await new Promise<void>((resolve,reject)=>{
         server.close(error=>error?reject(error):resolve())
       })

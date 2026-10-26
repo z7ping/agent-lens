@@ -37,6 +37,7 @@ export class SlimSourceCoordinator {
     private readonly sources:SourceService,
     private readonly policy:Pick<CapturePolicyService,'isSourceEnabled'>,
     private readonly assetPolicy?:CapturePolicyService,
+    private readonly onProgress?:()=>void,
   ) {}
 
   snapshot():SlimSourceProgress{
@@ -45,12 +46,16 @@ export class SlimSourceCoordinator {
 
   start():void{
     if(this.task)return
+    this.onProgress?.()
     this.task=Promise.resolve().then(()=>this.run()).catch(error=>{
       if(!this.abort.signal.aborted){
         this.progress.failedScopes++
         console.warn('[AgentLens] native-only source startup failed',error)
       }
-    }).finally(()=>{this.progress.finished=true})
+    }).finally(()=>{
+      this.progress.finished=true
+      this.onProgress?.()
+    })
   }
 
   /** Same official Source detect() contract as the old application, but only
@@ -139,6 +144,7 @@ export class SlimSourceCoordinator {
               continue
             }
             this.progress.examinedScopes++
+            this.onProgress?.()
             const scope={
               source,installationId,signal:this.abort.signal,
               ...(profile?{runtimeProfileId:profile.id}:{}),
@@ -148,6 +154,7 @@ export class SlimSourceCoordinator {
                 ...scope,maxSessions:MAX_STARTUP_SESSIONS_PER_SCOPE,
               })
               this.progress.indexedSessions+=report.indexed
+              this.onProgress?.()
               if(source.discoverAssets && this.assetPolicy && !this.abort.signal.aborted){
                 try{
                   await this.runtime.scanInstallationAssets({
