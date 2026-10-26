@@ -79,8 +79,16 @@ export class SqliteNativeSessionCatalog {
               THEN excluded.file_size
             ELSE MAX(native_session_catalog.file_size, excluded.file_size)
           END,
-          file_mtime_ms=MAX(native_session_catalog.file_mtime_ms, excluded.file_mtime_ms),
-          last_activity_at=MAX(native_session_catalog.last_activity_at, excluded.last_activity_at),
+          file_mtime_ms=CASE
+            WHEN excluded.file_identity != native_session_catalog.file_identity
+              THEN excluded.file_mtime_ms
+            ELSE MAX(native_session_catalog.file_mtime_ms, excluded.file_mtime_ms)
+          END,
+          last_activity_at=CASE
+            WHEN excluded.file_identity != native_session_catalog.file_identity
+              THEN excluded.last_activity_at
+            ELSE MAX(native_session_catalog.last_activity_at, excluded.last_activity_at)
+          END,
           title=COALESCE(excluded.title,native_session_catalog.title),
           updated_at=excluded.updated_at,
           review_session_id=excluded.review_session_id
