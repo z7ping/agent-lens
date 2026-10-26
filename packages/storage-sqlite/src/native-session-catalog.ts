@@ -180,8 +180,6 @@ export class SqliteNativeSessionCatalog {
         // Do not advertise pre-v35 metadata rows that cannot be opened by
         // their synthetic Review ID until their next incremental upsert.
         predicates.push('review_session_id IS NOT NULL')
-        // Slim has no legacy SQL Review ownership; only indexed original files.
-      }
       }
       if (input.before) {
         predicates.push(`(last_activity_at,source_id,installation_id,native_session_id,location_kind) < (?,?,?,?,?)`)
