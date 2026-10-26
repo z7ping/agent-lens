@@ -27,7 +27,8 @@
     "@agent-lens/surface-http": "1.0.0-alpha.7",
     "@agent-lens/web": "1.0.0-alpha.7",
     "@agent-lens/integration-packages": "1.0.0-alpha.7",
-    "@agent-lens/live-codex": "1.0.0-alpha.7"
+    "@agent-lens/live-codex": "1.0.0-alpha.7",
+    "@agent-lens/live-hermes": "1.0.0-alpha.7"
   },
   "devDependencies": {
     "@agent-lens/core-services": "1.0.0-alpha.7"

@@ -118,3 +118,17 @@ Agent navigation summaries contain only registered source manifests, effective
 enablement and indexed installation IDs/counts. They make no claim about
 unverified runtime capabilities, asset-usage evidence or full Agent details;
 those consumers remain under M5 migration.
+
+### Authorized native Live composition
+
+Slim now mounts the existing Pi, Codex and Hermes Live adapters on the **same**
+`/api/v1/live` surface, only when the product Source is enabled **and** its
+persisted Integration authorization grants `live`. A new/unknown machine does
+not gain live process or API-server rights just because the Source was found.
+Codex runtime recovery uses Slim checkpoints; historical continuation first
+verifies native Catalog/Source profile/file identity, a unique trusted workspace,
+then a read-only Codex App Server `thread/read` before obtaining a writer.
+Unsupported Codex Desktop rollouts remain read-only in Review.
+Hermes continues to use its original API Server settings and adapter; no
+separate transcript store is introduced. Changes to Source enablement take
+effect on restart (as in the existing configuration service).
