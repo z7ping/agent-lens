@@ -21,6 +21,8 @@ import { NativeMetricsAutoRefresh } from './native-metrics-auto-refresh'
 import { nativeOnlyFacetResponse } from './native-only-facets'
 import { readLaunchableProjects } from './launchable-projects'
 import { handleBackupRequest } from './backup-http'
+import { handleCapturePolicyRequest } from './capture-policy-http'
+import { discoverLocalePacks } from './locale-packs'
 import { handleLiveRequest } from './live-http'
 import { handleLiveAttachmentRequest } from './live-attachments-http'
 import { nativeMetricContribution } from './native-metrics-contribution'
@@ -45,6 +47,7 @@ export interface NativeOnlyHttpStorage {
 export interface NativeOnlyHttpOptions {
   port?:number
   staticDir?:string
+  localePackDirectory?:string
   sources:SourceService
   capturePolicy:CapturePolicyService
   reader:NativeSessionWindowReader
@@ -110,7 +113,19 @@ export async function startNativeOnlyHttpSurface(
       // Existing Vault endpoint and validation; its persistence owner is the
       // original Source/Vault filesystem plus Slim checkpoints, not Events.
       if(await handleBackupRequest(request,response,url,options.backup))return
+      // The existing capture-policy handler owns source configuration on both runtimes.
+      // No v38 StorageService or legacy write path is involved.
+      if(await handleCapturePolicyRequest(request,response,url,options.capturePolicy))return
 
+      if(url.pathname==='/api/v1/locales'){
+        if(request.method!=='GET'){
+          response.setHeader('allow','GET')
+          writeJson(response,405,{error:'method_not_allowed'})
+          return
+        }
+        writeJson(response,200,await discoverLocalePacks(options.localePackDirectory))
+        return
+      }
       if(url.pathname==='/api/v1/ready'){
         writeJson(response,200,{status:'ok',protocolVersion:AGENT_LENS_PROTOCOL_VERSION,
           storageMode:'native-only'})
