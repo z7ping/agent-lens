@@ -2,7 +2,7 @@ import { createServer, type Server } from 'node:http'
 import type {
   CapturePolicyService, NativeFacetReader, NativeSessionCatalogStore,
   NativeSessionListReader, NativeSessionMetricsStore, LaunchableProjectReader,
-  SourceService, StorageHealth, BackupService,
+  SourceService, StorageHealth, BackupService, LiveService, LiveAttachmentService,
 } from '@agent-lens/core'
 import { AGENT_LENS_PROTOCOL_VERSION } from '@agent-lens/protocol'
 import {
@@ -21,6 +21,8 @@ import { NativeMetricsAutoRefresh } from './native-metrics-auto-refresh'
 import { nativeOnlyFacetResponse } from './native-only-facets'
 import { readLaunchableProjects } from './launchable-projects'
 import { handleBackupRequest } from './backup-http'
+import { handleLiveRequest } from './live-http'
+import { handleLiveAttachmentRequest } from './live-attachments-http'
 import { nativeMetricContribution } from './native-metrics-contribution'
 import { nativeOnlyInsightsResponse, nativeOnlyToolUsageResponse } from './native-only-usage-insights'
 import { parseInsightsQuery, parseUsageQuery } from './query-params'
@@ -47,6 +49,8 @@ export interface NativeOnlyHttpOptions {
   capturePolicy:CapturePolicyService
   reader:NativeSessionWindowReader
   backup?: BackupService
+  lives?: LiveService
+  liveAttachments?: LiveAttachmentService
 }
 
 /** Reuse the existing native HTTP handlers, but NEVER construct retired
@@ -76,6 +80,12 @@ export async function startNativeOnlyHttpSurface(
         '/api/v1/usage','/api/v1/insights',
         '/api/v1/native-sessions/metrics/overview',
       ].includes(url.pathname))refresh.schedule()
+
+      // Live is the EXISTING Pi runtime controller, not a SQL projection.
+      // Deliberately omit the old history.storage argument: session rows and
+      // SourceRecord lookup no longer exist on Slim.
+      if(await handleLiveAttachmentRequest(request,response,url,options.liveAttachments))return
+      if(await handleLiveRequest(request,response,url,options.lives))return
 
       if(await handleNativeSessionMetricsOverviewRequest(
         request,response,url,storage.nativeSessionMetrics,
