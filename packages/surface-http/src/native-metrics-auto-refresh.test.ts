@@ -91,24 +91,49 @@ test('disabled Source and disposal cannot start an opportunistic native scan',as
   assert.equal(selected,0)
 })
 
-test('withdrawing Source coverage attestation prevents background Native-only scans',async()=>{
-  let candidates=0
+test('uncertified Hook coverage may refresh partial native metrics without publishing complete totals',async()=>{
+  let queried=0
   let reads=0
+  const persisted:NativeSessionMetricSnapshot[]=[]
   const uncertified={
     list:()=>[{manifest:{sourceId:'pi',parserVersion:'pi-v1'},
       nativeSessionCoverageComplete:false,
-      readNativeSessionPage:async()=>{throw Error('not used')}}],
+      readNativeSessionPage:async()=>{throw Error('Worker Reader owns native records')}}],
   } as unknown as SourceService
   const metrics={
-    findRebuildCandidates:async()=>{candidates++;return []},
+    findRebuildCandidates:async()=>{
+      queried++
+      return [{reviewSessionId:'native:0123456789abcdef0123456789abcdef',
+        sourceId:'pi',installationId:'pi-local',nativeSessionId:'session-1',
+        lastActivityAt:at}]
+    },
+    replace:async(snapshot:NativeSessionMetricSnapshot)=>{
+      persisted.push(snapshot)
+      return true
+    },
   } as unknown as NativeSessionMetricsStore
-  const reader={read:async()=>{reads++;throw Error('not used')}} as unknown as NativeSessionWindowReader
+  const reader={read:async()=>{
+    reads++
+    return {
+      state:'available' as const,
+      observations:[{kind:'message.user' as const,capturedAt:at,
+        identityHints:{nativeSessionId:'session-1'},payload:{text:'sensitive native text'}}],
+      observationRecordIds:['raw-record-1'],evidenceCandidates:[],
+      nextCursor:{offset:42,sequence:1,fileIdentity:'dev:1'},
+      hasMore:false,pendingTail:false,
+    }
+  }} as NativeSessionWindowReader
   const refresh=new NativeMetricsAutoRefresh(catalog,metrics,reader,uncertified,policy)
   try{
     refresh.schedule()
     await flush()
-    assert.equal(candidates,0)
-    assert.equal(reads,0)
+    assert.equal(queried,1)
+    assert.equal(reads,1)
+    assert.equal(persisted.length,1)
+    assert.equal(persisted[0]?.coverage,'partial')
+    assert.equal(persisted[0]?.interactionCount,1)
+    assert.equal(JSON.stringify(persisted).includes('sensitive native text'),false)
+    assert.equal(JSON.stringify(persisted).includes('raw-record-1'),false)
   }finally{refresh.dispose()}
 })
 
