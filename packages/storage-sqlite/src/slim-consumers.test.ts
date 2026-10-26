@@ -36,6 +36,10 @@ test('slim Catalog, numerical overview, profile and current assets use no Legacy
     const projected = await catalog.query({ onlyWithoutLegacyReview:true, limit:10 })
     assert.equal(projected.items.length,1)
     assert.equal(projected.items[0]?.nativeSessionId,'session')
+    assert.equal(await catalog.isNativeMetricsEligible(identity),true)
+    assert.equal(await catalog.isNativeMetricsEligible({
+      ...identity,nativeSessionId:'missing',
+    }),false)
     const reviewId = 'native:' +
       (await import('node:crypto')).createHash('sha256')
         .update(JSON.stringify(['pi','installation','session']))
