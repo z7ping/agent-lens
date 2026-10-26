@@ -126,7 +126,9 @@ export class SqliteNativeSessionCatalog {
     sourceId: string; installationId: string; nativeSessionId: string
   }): Promise<boolean> {
     return this.executor.run(() => {
-      if (isSlimDatabase(this.executor.db)) return false
+      if (isSlimDatabase(this.executor.db)) {
+        throw new Error('Legacy write claims are not supported in the slim SQLite schema')
+      }
       return Boolean(this.executor.db.prepare(`
       SELECT 1 FROM native_session_write_claims
       WHERE source_id=? AND installation_id=? AND native_session_id=? AND mode='native-only'
@@ -144,7 +146,9 @@ export class SqliteNativeSessionCatalog {
     sourceId: string; installationId: string; nativeSessionId: string
   }): Promise<'legacy' | 'native-only' | null> {
     return this.executor.run(() => {
-      if (isSlimDatabase(this.executor.db)) return 'native-only' as const
+      if (isSlimDatabase(this.executor.db)) {
+        throw new Error('Legacy write ownership is not supported in the slim SQLite schema')
+      }
       const row = this.executor.db.prepare(`
         SELECT mode FROM native_session_write_claims
         WHERE source_id=? AND installation_id=? AND native_session_id=?
@@ -189,15 +193,7 @@ export class SqliteNativeSessionCatalog {
     }
     return this.executor.run(() => {
       if (isSlimDatabase(this.executor.db)) {
-        // No ownership-claim table exists after a fully validated cutover.
-        // This compatibility API never changes state in the slim schema.
-        return Boolean(this.executor.db.prepare(`
-          SELECT 1 FROM native_session_catalog
-          WHERE source_id=? AND installation_id=? AND native_session_id=?
-            AND location_kind='native' AND file_path=? AND file_identity=?
-            AND review_session_id IS NOT NULL
-        `).get(input.sourceId,input.installationId,input.nativeSessionId,
-          input.filePath,input.fileIdentity))
+        throw new Error('Legacy write claims are not supported in the slim SQLite schema')
       }
       this.executor.db.prepare(`
         INSERT OR IGNORE INTO native_session_write_claims
