@@ -80,11 +80,9 @@ await cp(
 )
 
 await cp(resolve(root, 'packages/web/dist'), resolve(dist, 'web'), { recursive: true })
-await cp(
-  resolve(root, 'packages/storage-sqlite/migrations'),
-  resolve(dist, 'migrations'),
-  { recursive: true },
-)
+// #617 M6: v1–v38 schema upgrades are not distributed. The explicit
+// offline `slim-migrate.mjs` reads the existing v38 database without applying
+// these old migrations; normal Daemon/CLI/Desktop only create/open Slim v1.
 await cp(
   resolve(root, 'apps/hook-codex/bin/agent-lens-hook-codex.mjs'),
   resolve(dist, 'hooks/agent-lens-hook-codex.mjs'),

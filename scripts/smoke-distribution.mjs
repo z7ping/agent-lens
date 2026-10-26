@@ -1,4 +1,4 @@
-import { mkdtemp, rm } from 'node:fs/promises'
+import { mkdtemp, rm, stat } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -9,6 +9,7 @@ const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const daemon = resolve(root, 'dist', 'daemon.mjs')
 const cliEntry = resolve(root, 'dist', 'cli.mjs')
 const webRoot = resolve(root, 'dist', 'web')
+const legacyMigrations = resolve(root, 'dist', 'migrations')
 const temp = await mkdtemp(join(tmpdir(), 'agent-lens-smoke-'))
 const smokeHome = join(temp, 'home')
 
@@ -42,6 +43,16 @@ function runCli(args) {
       else reject(new Error(`CLI exited with ${code}\n${stdout}\n${stderr}`))
     })
   })
+}
+
+async function assertLegacyMigrationsNotDistributed() {
+  try {
+    await stat(legacyMigrations)
+  } catch (error) {
+    if (error?.code === 'ENOENT') return
+    throw error
+  }
+  throw new Error('Legacy v1-v38 SQL migrations must not be shipped in dist/migrations')
 }
 
 const port = await freePort()
@@ -94,6 +105,9 @@ async function health() {
 }
 
 try {
+  // #617 M6: shipping historic SQL upgrade scripts would allow the removed
+  // v38 schema to re-enter the installed runtime instead of Slim v1.
+  await assertLegacyMigrationsNotDistributed()
   const version = await runCli(['--version'])
   if (version.stdout.trim() !== '1.0.0-alpha.7') {
     throw new Error(`Unexpected CLI version output: ${version.stdout}`)
