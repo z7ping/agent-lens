@@ -25,6 +25,7 @@ import { HttpEventHub } from './events'
 import { readLaunchableProjects } from './launchable-projects'
 import { handleBackupRequest } from './backup-http'
 import { handlePiEcosystemRequest } from './pi-ecosystem-http'
+import { handleIntegrationPackageRequest, type IntegrationPackageController } from './integration-packages-http'
 import { handleIntegrationPackageRequest,type IntegrationPackageController } from './integration-packages-http'
 import { handleAgentFilesRequest } from './agent-files-http'
 import { handleHostFilesystemRequest } from './host-filesystem-http'
@@ -86,6 +87,7 @@ export interface NativeOnlyHttpOptions {
   integrationManagement?:IntegrationManagementController
   integrationAuthorization?:IntegrationAuthorizationController
   integrationPackages?:IntegrationPackageController
+  integrationPackages?:IntegrationPackageController
 }
 
 /** Reuse the existing native HTTP handlers, but NEVER construct retired
@@ -126,6 +128,8 @@ export async function startNativeOnlyHttpSurface(
         request,response,url,options.integrationDiscovery))return
       if(await handleIntegrationManagementRequest(
         request,response,url,options.integrationManagement))return
+      if(await handleIntegrationPackageRequest(
+        request,response,url,options.integrationPackages))return
       if(await handleIntegrationPackageRequest(
         request,response,url,options.integrationPackages))return
       if(await handleLiveAttachmentRequest(request,response,url,options.liveAttachments))return
