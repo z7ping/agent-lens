@@ -1,7 +1,7 @@
 import { mkdir, open } from 'node:fs/promises'
 import { dirname, resolve } from 'node:path'
 import Database from 'better-sqlite3'
-import type { RepositorySet } from '@agent-lens/core'
+import type { RepositorySet, StorageHealth } from '@agent-lens/core'
 import { SqliteExecutor } from './executor'
 import { mapHost, mapInstallation } from './repository-row-mappers'
 import { SqliteNativeSessionCatalog } from './native-session-catalog'
@@ -122,6 +122,19 @@ export class SqliteSlimStorage {
       // risking a cleanup that races with another process.
       throw error
     }
+  }
+
+  /** Fast isolated health check; never scans Source directories or event
+   * histories, and never materializes the old Migration chain.
+   */
+  health():Promise<StorageHealth> {
+    return this.executor.run(()=>{
+      this.db.prepare('SELECT 1 AS ready').get()
+      return {ok:true,schemaVersion:1,details:{
+        schemaKind:'slim-native-session-v1',
+        readonly:this.db.readonly,
+      }}
+    })
   }
 
   async close(): Promise<void> {
