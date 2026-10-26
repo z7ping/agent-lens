@@ -1,5 +1,6 @@
 import type {
   AgentInstallation, Host, RuntimeProfile, SourceDefinition,
+  HostIdentityHint, InstallationIdentityHint, RuntimeProfileIdentityHint,
   CapturePolicyService, SourceService,
   NativeSessionCatalogEntry,
   NativeSessionCatalogStore,
@@ -235,6 +236,21 @@ export class SlimDataRuntime {
         },
       },
     }
+  }
+
+  /** Local native discovery writes ONLY host/installation/Profile metadata.
+   * The RPC allowlist cannot reach Session/Observation/Legacy Writer methods.
+   */
+  resolveHost(hint:HostIdentityHint):Promise<Host>{
+    return this.write(['identity','resolveHost'],[hint])
+  }
+
+  resolveInstallation(hint:InstallationIdentityHint):Promise<AgentInstallation>{
+    return this.write(['identity','resolveInstallation'],[hint])
+  }
+
+  resolveProfile(hint:RuntimeProfileIdentityHint):Promise<RuntimeProfile>{
+    return this.write(['runtimeProfiles','resolve'],[hint])
   }
 
   /** Read-only profile enumeration for bounded Native-only startup. */
