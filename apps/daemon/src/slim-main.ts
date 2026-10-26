@@ -12,7 +12,8 @@ import { codexSourceDefinition } from '@agent-lens/source-codex'
 import { claudeSourceDefinition } from '@agent-lens/source-claude'
 import { hermesSourceDefinition } from '@agent-lens/source-hermes'
 import { openCodeSourceDefinition } from '@agent-lens/source-opencode'
-import { startNativeOnlyHttpSurface } from '@agent-lens/surface-http'
+import { startNativeOnlyHttpSurface, previewLocalHostTextFile } from '@agent-lens/surface-http'
+import { openLocalPath } from './local-path-opener.js'
 import { SlimDataRuntime } from './data-runtime/slim-runtime.js'
 import { SlimSourceCoordinator } from './slim-source-coordinator.js'
 import { startSlimLive } from './slim-live.js'
@@ -122,6 +123,8 @@ export async function startSlimNativeDaemon(options:SlimDaemonOptions){
       backgroundProgress:()=>coordinator.snapshot(),
       ...(options.port===undefined?{}:{port:options.port}),
       sources,capturePolicy:policy,
+      openHostPath:openLocalPath,
+      previewHostFile:previewLocalHostTextFile,
       integrationManagement:integrations.management,
       integrationDiscovery:integrations.discovery,
       integrationAuthorization:integrations.authorization,

@@ -6,6 +6,7 @@ import { join } from 'node:path'
 import type { CapturePolicyService, SourceService } from '@agent-lens/core'
 import { startNativeOnlyHttpSurface } from './slim-server'
 import { DefaultLiveAttachmentService } from '@agent-lens/core-services'
+import { previewLocalHostTextFile } from './host-file-preview'
 
 test('Slim-only HTTP reads native Catalog/facets and refuses all old Event APIs',async()=>{
   let listed=0
@@ -131,6 +132,11 @@ test('Slim-only HTTP reads native Catalog/facets and refuses all old Event APIs'
   }
   const surface=await startNativeOnlyHttpSurface(storage as never,{
     port:0,sources,reader:reader as never,capturePolicy:policy,
+    openHostPath:async path=>{
+      assert.equal(path,join(agentRoot,'config','AGENTS.md'))
+      return 'revealed' as const
+    },
+    previewHostFile:previewLocalHostTextFile,
     backgroundProgress:()=>({examinedScopes:2,indexedSessions:14,runningCaptures:1,
       failedScopes:0,deferredScopes:1,finished:true}),
     integrationDiscovery:{
@@ -282,6 +288,28 @@ test('Slim-only HTTP reads native Catalog/facets and refuses all old Event APIs'
     assert.equal((await fetch(base+
       '/api/v1/review/'+nativeFileId+'/file-changes')).status,404)
     enabledSources=['pi']
+    const previewHost=await fetch(base+'/api/v1/host/file-preview',{
+      method:'POST',
+      headers:{'x-agentlens-host-file-preview-path':
+        encodeURIComponent(join(agentRoot,'config','AGENTS.md'))},
+    })
+    assert.equal(previewHost.status,200)
+    assert.equal((await previewHost.json() as {previewStatus:string}).previewStatus,'readable')
+    const sensitiveHost=await fetch(base+'/api/v1/host/file-preview',{
+      method:'POST',
+      headers:{'x-agentlens-host-file-preview-path':
+        encodeURIComponent(join(agentRoot,'config','.env'))},
+    })
+    assert.equal(sensitiveHost.status,200)
+    assert.equal((await sensitiveHost.json() as {previewStatus:string}).previewStatus,'metadata-only')
+    const opened=await fetch(base+'/api/v1/host/open-path',{
+      method:'POST',
+      headers:{'x-agentlens-host-open-path-path':
+        encodeURIComponent(join(agentRoot,'config','AGENTS.md'))},
+    })
+    assert.equal(opened.status,200)
+    assert.equal((await opened.json() as {action:string}).action,'revealed')
+    assert.equal((await fetch(base+'/api/v1/host/file-preview')).status,405)
     const ready=await fetch(base+'/api/v1/ready')
     assert.equal(ready.status,200)
     assert.equal((await ready.json() as {storageMode:string}).storageMode,'native-only')
