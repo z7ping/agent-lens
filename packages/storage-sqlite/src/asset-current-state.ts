@@ -1,5 +1,6 @@
 import type Database from 'better-sqlite3'
 import type { AssetStateObservation } from '@agent-lens/core'
+import { isSlimDatabase } from './slim-schema'
 
 function encodedValue(value: AssetStateObservation['value']): string {
   return value === 'unknown' ? 'unknown' : value ? 'true' : 'false'
@@ -9,6 +10,27 @@ export function upsertAssetCurrentState(
   db: Database.Database,
   state: AssetStateObservation,
 ): void {
+  if (isSlimDatabase(db)) {
+    // A slim database stores only current asset state. Never recreate the
+    // historical asset_state_observations/Evidence tables just for this view.
+    db.prepare(`
+      DELETE FROM asset_current_state
+      WHERE state_id = ? AND (asset_binding_id <> ? OR state <> ?)
+    `).run(state.id, state.assetBindingId, state.state)
+    db.prepare(`
+      INSERT INTO asset_current_state(asset_binding_id,state,state_id,value,observed_at)
+      VALUES (?,?,?,?,?)
+      ON CONFLICT(asset_binding_id,state) DO UPDATE SET
+        state_id=excluded.state_id,
+        value=excluded.value,
+        observed_at=excluded.observed_at
+      WHERE excluded.state_id=asset_current_state.state_id
+         OR excluded.observed_at>asset_current_state.observed_at
+         OR (excluded.observed_at=asset_current_state.observed_at
+             AND excluded.state_id>asset_current_state.state_id)
+    `).run(state.assetBindingId,state.state,state.id,encodedValue(state.value),state.observedAt)
+    return
+  }
   // DefaultAssetService ids include binding/state/observedAt, but keep the derived
   // view correct even if an external repository caller rewrites an existing id.
   db.prepare(`
@@ -48,6 +70,7 @@ export function upsertAssetCurrentState(
 }
 
 export function rebuildAssetCurrentState(db: Database.Database): void {
+  if (isSlimDatabase(db)) return
   db.exec(`
     DELETE FROM asset_current_state;
 

@@ -1,10 +1,11 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { mkdtemp, rm } from 'node:fs/promises'
+import { mkdtemp, rm, readFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import Database from 'better-sqlite3'
-import { assertSlimSchema, FORBIDDEN_LEGACY_TABLES, initializeSlimSchema } from './slim-schema'
+import { assertSlimSchema, FORBIDDEN_LEGACY_TABLES, initializeSlimSchema, isSlimDatabase } from './slim-schema'
+import { SLIM_SCHEMA_SQL } from './slim-schema-sql'
 import { inspectLegacyCutover } from './slim-cutover-preflight'
 
 test('slim v1 is a separate fresh schema without old event or replication tables', async () => {
@@ -106,4 +107,20 @@ test('read-only preflight counts only metadata, does not claim native recovery',
   } finally {
     await rm(dir, { recursive: true, force: true })
   }
+})
+
+test('bundled slim schema exactly matches the reviewed standalone SQL file', async () => {
+  const diskSql = await readFile(new URL('../slim/001-schema.sql', import.meta.url), 'utf8')
+  assert.equal(SLIM_SCHEMA_SQL, diskSql)
+  const legacy = new Database(':memory:')
+  try {
+    legacy.exec(`CREATE TABLE schema_migrations(version INTEGER PRIMARY KEY,name TEXT,applied_at TEXT);
+      INSERT INTO schema_migrations VALUES(1,'initial-1.0-schema','2026-10-26')`)
+    assert.equal(isSlimDatabase(legacy), false)
+  } finally { legacy.close() }
+  const slim = new Database(':memory:')
+  try {
+    await initializeSlimSchema(slim)
+    assert.equal(isSlimDatabase(slim), true)
+  } finally { slim.close() }
 })
