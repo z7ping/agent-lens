@@ -1,7 +1,9 @@
 import { mkdir, open } from 'node:fs/promises'
 import { dirname, resolve } from 'node:path'
 import Database from 'better-sqlite3'
+import type { RepositorySet } from '@agent-lens/core'
 import { SqliteExecutor } from './executor'
+import { mapHost, mapInstallation } from './repository-row-mappers'
 import { SqliteNativeSessionCatalog } from './native-session-catalog'
 import { SqliteNativeSessionMetrics } from './native-session-metrics'
 import { SqliteRuntimeProfileRepository } from './runtime-profiles'
@@ -21,6 +23,13 @@ import { assertSlimSchema, initializeSlimSchema } from './slim-schema'
  */
 export class SqliteSlimStorage {
   readonly executor: SqliteExecutor
+  /** Minimal read-only identity port for NativeSessionReader; no Legacy
+   * RepositorySet, event writer, or implicit Canonical persistence exists.
+   */
+  readonly repositories: {
+    hosts: Pick<RepositorySet['hosts'],'get'>
+    installations: Pick<RepositorySet['installations'],'get'>
+  }
   readonly nativeSessionCatalog: SqliteNativeSessionCatalog
   readonly nativeSessionMetrics: SqliteNativeSessionMetrics
   readonly runtimeProfiles: SqliteRuntimeProfileRepository
@@ -34,6 +43,25 @@ export class SqliteSlimStorage {
     db.pragma('foreign_keys = ON')
     db.pragma('busy_timeout = 5000')
     this.executor = new SqliteExecutor(db)
+    const executor = this.executor
+    this.repositories = {
+      hosts: {
+        get(id) {
+          return executor.run(() => {
+            const value = db.prepare('SELECT * FROM hosts WHERE id=?').get(id)
+            return value ? mapHost(value) : null
+          })
+        },
+      },
+      installations: {
+        get(id) {
+          return executor.run(() => {
+            const value = db.prepare('SELECT * FROM agent_installations WHERE id=?').get(id)
+            return value ? mapInstallation(value) : null
+          })
+        },
+      },
+    }
     this.nativeSessionCatalog = new SqliteNativeSessionCatalog(this.executor)
     this.nativeSessionMetrics = new SqliteNativeSessionMetrics(this.executor)
     this.runtimeProfiles = new SqliteRuntimeProfileRepository(this.executor)
