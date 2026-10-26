@@ -5,7 +5,7 @@ import type {
   AgentInstallation, Host, NativeSessionCatalogEntry,
   SourceDefinition,
 } from '@agent-lens/core'
-import { NativeOnlySourceIndexer } from './native-only-source-indexer'
+import { NativeOnlySourceIndexer, indexNativeInstallation } from './native-only-source-indexer'
 
 const at='2026-10-26T00:00:00.000Z'
 const host:Host={id:'host',name:'localhost',platform:'linux',arch:'x64',createdAt:at,lastSeenAt:at}
@@ -120,4 +120,27 @@ test('indexer never trusts a mismatched Source installation',async()=>{
     host,installation:{...installation,productId:'codex'},
     signal:new AbortController().signal,
   }),/installation identity changed/)
+})
+
+test('slim identity port indexes source sessions without Legacy RepositorySet',async()=>{
+  const persisted:NativeSessionCatalogEntry[]=[]
+  const slimPort={
+    nativeSessionCatalog:{
+      async upsert(entry:NativeSessionCatalogEntry){persisted.push(entry)},
+    },
+    repositories:{
+      installations:{async get(id:string){return id==='install'?installation:null}},
+      hosts:{async get(id:string){return id==='host'?host:null}},
+    },
+  }
+  const report=await indexNativeInstallation(slimPort as never,{
+    source:makeSource([session('one')]),installationId:'install',
+    signal:new AbortController().signal,
+  })
+  assert.equal(report.indexed,1)
+  assert.equal(persisted[0]?.nativeSessionId,'one')
+  await assert.rejects(indexNativeInstallation(slimPort as never,{
+    source:makeSource([session('one')]),installationId:'not-found',
+    signal:new AbortController().signal,
+  }),/installation is not indexed/)
 })
