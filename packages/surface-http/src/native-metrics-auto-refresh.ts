@@ -15,9 +15,9 @@ const MAX_RESUMABLE=8
  * Starts only after a user requests Usage/Insights; never scans at startup,
  * reads legacy SQL events, or starts a persistent background polling loop.
  *
- * Any Source can participate only after explicitly certifying full native
- * session coverage; uncertified/disabled Sources never trigger body reads.
- * Source authorization and CapturePolicy remain in the Reader.
+ * Sources with incomplete Hook coverage may produce partial numerical snapshots;
+ * only fully certified native coverage can produce complete totals. A missing
+ * or disabled native Reader never scans, and CapturePolicy remains in the Reader.
  */
 export class NativeMetricsAutoRefresh {
   private readonly abort=new AbortController()
@@ -51,8 +51,9 @@ export class NativeMetricsAutoRefresh {
 
   private async run():Promise<void> {
     const eligible=this.sources!.list().filter(source=>
-      source.nativeSessionCoverageComplete===true
-      && Boolean(source.readNativeSessionPage)
+      // Coverage certification controls snapshot completeness, not whether
+      // authorized native Source data can be counted as explicitly partial.
+      Boolean(source.readNativeSessionPage)
       && this.policy!.isSourceEnabled(source.manifest.sourceId))
       .sort((a,b)=>a.manifest.sourceId.localeCompare(b.manifest.sourceId))
     if(!eligible.length)return
