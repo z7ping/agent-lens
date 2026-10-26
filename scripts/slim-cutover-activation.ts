@@ -3,7 +3,8 @@ import { link, lstat, open, rename, stat, unlink } from 'node:fs/promises'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import Database from 'better-sqlite3'
-import { assertSlimSchema,readActiveDatabasePointer,type ActiveDatabasePointer } from '@agent-lens/storage-sqlite'
+import { assertSlimSchema,auditSlimCutoverFreshness,
+  readActiveDatabasePointer,type ActiveDatabasePointer } from '@agent-lens/storage-sqlite'
 export {readActiveDatabasePointer} from '@agent-lens/storage-sqlite'
 import { auditSlimCutoverGate, type SlimCutoverGateReport } from './slim-cutover-gate'
 import { withFrozenLegacyWriter } from './slim-legacy-writer-freeze'
@@ -111,6 +112,17 @@ export async function activateSlimCutover(
   // The snapshot/recheck and pointer publication must be within one
   // SQLite writer-freeze window. A standalone preflight has a TOCTOU race.
   return withFrozenLegacyWriter(value.legacyPath,async()=>{
+    // A readiness report computed before the write lock is a TOCTOU snapshot.
+    // Recompute the entire v38/backup/schema fingerprint while the old writer
+    // is physically frozen, rather than trusting any caller's boolean.
+    const current=await auditSlimCutoverFreshness({
+      legacyPath:value.legacyPath,backupPath:value.backupPath,
+      stagingPath:value.stagingPath,
+    })
+    if(!current.unchangedSinceBackup){
+      throw new Error('Legacy database drifted from the M3 backup during cutover; '
+        +'restart migration from a fresh consistent backup')
+    }
     await Promise.all([value.legacyPath,value.backupPath,value.stagingPath].map(regular))
     await Promise.all([value.legacyPath,value.backupPath,value.stagingPath].map(noActiveWal))
     await mustNotExist(value.installedSlimPath)
