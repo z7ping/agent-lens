@@ -173,7 +173,7 @@ export async function startSlimNativeDaemon(options:SlimDaemonOptions){
       integrationManagement:integrations.management,
       integrationDiscovery:integrations.discovery,
       integrationAuthorization:integrations.authorization,
-      integrationPackages:packages,
+      ...(packages?{integrationPackages:packages}:{}),
       backup:options.backup??vault!.service,
       lives:options.lives??live!.lives,
       liveAttachments:options.liveAttachments??live!.attachments,
