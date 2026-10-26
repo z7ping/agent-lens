@@ -21,11 +21,13 @@ APIs (501), so this is for incremental development, **not production cutover**.
 Available: native sessions and deep links, native windows, authorized body search,
 attachments, archived Hook pages, native statistics/rebuild, aggregate Usage/Insights,
 the existing Pi Live create/send/stream/runtime controls and ephemeral attachment
-API, Facets, the existing Local Vault `/api/v1/backups` endpoints and
+API, **verified Pi native resume/whole-session fork**,
+Facets, the existing Local Vault `/api/v1/backups` endpoints and
 `/api/v1/projects/launchable` project picker (with
-validated workspace paths), health and readiness. **Legacy logical-session
-Resume/Fork/Fork-at is intentionally not advertised in native-only mode**
-until native Catalog-based input authorization replaces SourceRecord SQL. No
+validated workspace paths), health and readiness. **Pi legacy logical-session history and Fork-at are still unavailable**.
+Pi native `native:...` Resume/Fork is resolved only through trusted Catalog,
+CapturePolicy, the Source Reader's native root/inode checks, and Pi's original
+JSONL session ID + absolute working directory. No old SourceRecord query remains. No
 startup audit event is written to an old Observation table. Other /api/v1/
 routes explicitly return 501 instead of fake empty data or a Legacy fallback.
 
