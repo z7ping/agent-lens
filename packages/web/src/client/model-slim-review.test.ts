@@ -1,11 +1,11 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import type { HealthResponseDto, ReviewResponseDto } from '@agent-lens/protocol'
+import { AGENT_LENS_PROTOCOL_VERSION, type HealthResponseDto, type ReviewResponseDto } from '@agent-lens/protocol'
 import { AgentLensClientModel } from './model'
 import type { AgentLensApi } from './api'
 
 const slimHealth:HealthResponseDto={
-  status:'ok',protocolVersion:1,
+  status:'ok',protocolVersion:AGENT_LENS_PROTOCOL_VERSION,
   storage:{ok:true,schemaVersion:1,details:{schemaKind:'slim-native-session-v1'}},
 }
 
