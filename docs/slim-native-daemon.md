@@ -21,13 +21,16 @@ APIs (501), so this is for incremental development, **not production cutover**.
 Available: native sessions and deep links, native windows, authorized body search,
 attachments, archived Hook pages, native statistics/rebuild, aggregate Usage/Insights,
 the existing Pi Live create/send/stream/runtime controls and ephemeral attachment
-API, **verified Pi native resume/whole-session fork**,
+API, **verified Pi native resume/whole-session fork and fork-at**,
 Facets, the existing Local Vault `/api/v1/backups` endpoints and
 `/api/v1/projects/launchable` project picker (with
-validated workspace paths), health and readiness. **Pi legacy logical-session history and Fork-at are still unavailable**.
-Pi native `native:...` Resume/Fork is resolved only through trusted Catalog,
+validated workspace paths), health and readiness. **Legacy logical-session IDs are still unavailable**.
+Pi native `native:...` Resume/Fork/Fork-at is resolved only through trusted Catalog,
 CapturePolicy, the Source Reader's native root/inode checks, and Pi's original
-JSONL session ID + absolute working directory. No old SourceRecord query remains. No
+JSONL session ID + absolute working directory. Fork-at additionally requires a
+unique original assistant event ID under a 128-page / 32-record per-page budget;
+partial tails, duplicate anchor IDs and stuck cursors fail closed. No old
+SourceRecord query remains. No
 startup audit event is written to an old Observation table. Other /api/v1/
 routes explicitly return 501 instead of fake empty data or a Legacy fallback.
 
@@ -68,7 +71,9 @@ streaming, sending, cancellation, queue and attachment upload reuse the same
 implementations as the main product. The old SQL LogicalSession/SourceRecord
 history selector is never injected. Validated native Pi `resume` and
 whole-session `fork` now use Catalog + Reader + original JSONL header instead;
-old logical-session resume and `fork-at` remain unavailable. This is an explicit capability gap, not a success or an
+old logical-session IDs remain unavailable; native `fork-at` validates a unique
+assistant message within the bounded Source Reader window. This is a guarded
+capability, not a success or an
 empty history result. Live/HTTP integration requires M5 validation before a
 production/default Daemon cutover.
 
