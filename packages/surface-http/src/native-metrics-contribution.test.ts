@@ -151,3 +151,23 @@ test('cross-Source aggregate cap reports partial even when individual Source row
   assert.equal(response.tools?.some(tool=>tool.sourceId==='pi'),true)
   assert.equal(response.tools?.some(tool=>tool.sourceId==='codex'),true)
 })
+
+test('certified slim project scope reaches native numerical projection, legacy scope remains unavailable',async()=>{
+  const scopes:Array<{projectId?:string;sourceId:string}>=[]
+  const metrics={
+    async overview(query:{sourceId:string;projectId?:string}){
+      scopes.push(query)
+      return {...overview(query.sourceId,2),
+        eligibleSessions:2,readySessions:2,missingSessions:0,
+      }
+    },
+  } as unknown as NativeSessionMetricsStore
+  const denied=await nativeMetricContribution(metrics,sources,policy,{projectId:'project-a'})
+  assert.deepEqual(denied,{state:'unsupported',reason:'native-metrics-filter-not-indexed'})
+  assert.deepEqual(scopes,[])
+  const result=await nativeMetricContribution(metrics,sources,policy,{
+    projectId:'project-a',projectScopeReady:true,
+  })
+  assert.equal(result.state,'available')
+  assert.deepEqual(scopes.map(x=>x.projectId),['project-a'])
+})
