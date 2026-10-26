@@ -9,7 +9,7 @@ import { claudeSourceDefinition } from '@agent-lens/source-claude'
 import { hermesSourceDefinition } from '@agent-lens/source-hermes'
 import { openCodeSourceDefinition } from '@agent-lens/source-opencode'
 
-const SOURCES:ReadonlyMap<string,SourceDefinition>=new Map([
+export const NATIVE_REINDEX_SOURCES:ReadonlyMap<string,SourceDefinition>=new Map([
   piSourceDefinition,codexSourceDefinition,claudeSourceDefinition,
   hermesSourceDefinition,openCodeSourceDefinition,
 ].map(source=>[source.manifest.sourceId,source] as const))
@@ -43,7 +43,7 @@ export function parseNativeReindexArgs(args:readonly string[]):NativeReindexArgs
   if(!stagingPath || !sourceId || !installationId) {
     throw new Error('Native reindex requires --staging, --source and --installation')
   }
-  if(!SOURCES.has(sourceId)) throw new Error('Native reindex unsupported Source: '+sourceId)
+  if(!NATIVE_REINDEX_SOURCES.has(sourceId)) throw new Error('Native reindex unsupported Source: '+sourceId)
   const maxSessions=values.has('--limit')?Number(values.get('--limit')):32
   if(!Number.isSafeInteger(maxSessions) || maxSessions<1 || maxSessions>5000) {
     throw new RangeError('Native reindex --limit must be between 1 and 5000')
@@ -64,7 +64,7 @@ export function parseNativeReindexArgs(args:readonly string[]):NativeReindexArgs
  */
 export async function runNativeReindex(args:readonly string[]) {
   const input=parseNativeReindexArgs(args)
-  const source=SOURCES.get(input.sourceId)!
+  const source=NATIVE_REINDEX_SOURCES.get(input.sourceId)!
   const slim=SqliteSlimStorage.openExisting(input.stagingPath)
   try {
     const profile=input.runtimeProfileId
