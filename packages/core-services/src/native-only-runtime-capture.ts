@@ -23,6 +23,10 @@ export interface NativeCaptureHandle {
 
 interface NativeCapturePort {
   nativeSessionCatalog:Pick<NativeSessionCatalogStore,'upsert'>
+  /** Durable provenance for sessions observed within a scoped native profile. */
+  nativeSessionContexts?:{upsert(input:{
+    sourceId:string;installationId:string;nativeSessionId:string;runtimeProfileId:string
+  }):Promise<void>}
   nativeSessionMetrics?:Pick<NativeSessionMetricsStore,'invalidate'>
   checkpoints:Pick<CheckpointRepository,'get'|'set'|'clear'>
 }
@@ -92,6 +96,11 @@ export class NativeOnlyRuntimeCapture {
       received:0,sourceVerified:0,catalogUpdated:0,
       metricsInvalidated:0,coverageGaps:0,eventCopiesWritten:0,
     }
+    // A capture without durable native Profile provenance cannot safely
+    // re-open the right original root after Daemon restart.
+    if(runtimeProfile && !this.port.nativeSessionContexts){
+      throw new Error('Slim native capture requires durable runtime profile association')
+    }
     if(!source.startCapture){
       return {
         sourceId:source.manifest.sourceId,installationId:installation.id,
@@ -144,6 +153,16 @@ export class NativeOnlyRuntimeCapture {
         return
       }
       counts.sourceVerified++
+      // Write trusted profile identity before Catalog visibility. A collision
+      // is a hard failure, never silently reassign a source-native session to
+      // another profile or fall back to a duplicate Legacy transcript.
+      if(runtimeProfile){
+        await this.port.nativeSessionContexts!.upsert({
+          sourceId:record.sourceId,installationId:record.installationId,
+          nativeSessionId:record.sourceSessionNativeId,
+          runtimeProfileId:runtimeProfile.id,
+        })
+      }
       // Tracker never consults the v38 write-claim table on this path.
       const changed=await tracker.observe(source,record)
       if(changed) {
