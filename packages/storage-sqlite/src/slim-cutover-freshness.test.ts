@@ -52,3 +52,30 @@ test('freshness audit refuses missing databases rather than creating replacement
     }),/unable to open|does not exist|not found/i)
   }finally{await rm(dir,{recursive:true,force:true})}
 })
+
+test('freshness detects every v38 event/sidecar table and schema-only change',async()=>{
+  const dir=await mkdtemp(join(tmpdir(),'al-slim-schema-drift-'))
+  const legacyPath=join(dir,'legacy.sqlite')
+  const backupPath=join(dir,'backup.sqlite')
+  const stagingPath=join(dir,'staging.sqlite')
+  try{
+    const service=new SqliteStorageService({path:legacyPath})
+    await service.migrate()
+    await service.close()
+    await copyFile(legacyPath,backupPath)
+    const stage=await SqliteSlimStorage.createFresh(stagingPath)
+    await stage.close()
+    const db=new Database(legacyPath)
+    try{
+      db.exec('CREATE TABLE migration_coverage_probe (id TEXT PRIMARY KEY, data TEXT NOT NULL)')
+      db.prepare('INSERT INTO migration_coverage_probe VALUES (?,?)')
+        .run('id-1','this value must not be logged')
+    }finally{db.close()}
+    const report=await auditSlimCutoverFreshness({legacyPath,backupPath,stagingPath})
+    assert.equal(report.unchangedSinceBackup,false)
+    assert.equal(report.schemaChanged,true)
+    assert.ok(report.changedTables.some(row=>row.table==='migration_coverage_probe'
+      && row.currentRows===1&&row.backupRows===0))
+    assert.equal(JSON.stringify(report).includes('this value must not be logged'),false)
+  }finally{await rm(dir,{recursive:true,force:true})}
+})
