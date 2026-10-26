@@ -834,3 +834,36 @@ test('Slim Pi Live declares only actions backed by Native Worker, never SQL hist
   const old = new PiLiveAdapter(service, attachmentService())
   assert.equal(old.capabilities.has('resume'), true, 'unchanged legacy mode')
 })
+
+test('Pi Live Slim native resume and whole-session fork use authorized Catalog inputs',async()=>{
+  const actions:Array<{cwd:string;sessionPath?:string;historyAction?:string}>=[]
+  const service={
+    async start(input:{cwd:string;sessionPath?:string;historyAction?:string}){
+      actions.push(input)
+      return {runtimeSessionId:'runtime',status:'ready'}
+    },
+  } as never
+  const adapter=new PiLiveAdapter(service,attachmentService(),undefined,{
+    nativeOnly:true,
+    nativeHistory:{
+      async resolve(id,action){
+        assert.equal(id,'native:0123456789abcdef0123456789abcdef')
+        return {
+          cwd:'/verified/work',
+          sessionPath:'/verified/native.jsonl',
+          historyAction:action,
+          logicalSessionId:id,
+        }
+      },
+    },
+  })
+  assert.equal(adapter.capabilities.has('resume'),true)
+  assert.equal(adapter.capabilities.has('fork'),true)
+  assert.equal(adapter.capabilities.has('fork-at'),false)
+  const id='native:0123456789abcdef0123456789abcdef'
+  await adapter.resume(id)
+  await adapter.fork(id)
+  assert.deepEqual(actions.map(x=>x.historyAction),['continue','fork'])
+  assert.deepEqual(actions.map(x=>x.sessionPath),
+    ['/verified/native.jsonl','/verified/native.jsonl'])
+})
