@@ -171,3 +171,13 @@ and runtime retirement remain uncertified. The CLI has no bypass flag.
 The M4 default Daemon/CLI must consume the pointer before this mechanism can
 become the real application's activation path. Rollback requires the new
 Daemon to be stopped and does not replay Slim-only writes into v38.
+
+### M3 active pointer consumption
+
+An explicit Slim start can consume the exact M3 activated DB pointer via
+`AGENT_LENS_ACTIVE_DB_POINTER=/absolute/path/to/active.json npm run start:slim`.
+A corrupt/missing pointer or one rolled back to Legacy fails closed. The
+pointer takes precedence over stale `AGENT_LENS_DB_PATH`; the Slim worker
+still asserts v1 Schema at startup. This is the same storage helper used by
+the activation command; it does not replace the default Daemon/desktop launch
+until M4 and does not certify M3 on its own.

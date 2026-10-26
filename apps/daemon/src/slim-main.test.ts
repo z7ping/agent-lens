@@ -3,7 +3,7 @@ import test from 'node:test'
 import { mkdtemp, writeFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { registeredNativeSources, startSlimNativeDaemon } from './slim-main'
+import { registeredNativeSources, startSlimNativeDaemon, resolveSlimDaemonDatabasePath } from './slim-main'
 
 test('Slim standalone entry wires only native Reader and HTTP, and disposes on startup failure',async()=>{
   const actions:string[]=[]
@@ -94,4 +94,27 @@ test('Slim registers all five original Source-native readers without a Legacy wr
   }
   assert.equal(byId.get('pi')?.nativeSessionCoverageComplete,true)
   assert.equal(byId.get('opencode')?.nativeSessionCoverageComplete,true)
+})
+
+
+test('Slim standalone only accepts active Slim pointer, never silently runs a rolled-back Legacy DB',async()=>{
+  const dir=await mkdtemp(join(tmpdir(),'al-slim-active-pointer-'))
+  const pointerPath=join(dir,'active.json')
+  const legacyPath=join(dir,'legacy.sqlite')
+  const backupPath=join(dir,'backup.sqlite')
+  const slimPath=join(dir,'new.sqlite')
+  try{
+    await writeFile(pointerPath,JSON.stringify({schemaVersion:1,mode:'slim',
+      legacyPath,backupPath,slimPath,changedAt:'2026-10-26T00:00:00Z'}))
+    assert.equal(await resolveSlimDaemonDatabasePath(undefined,pointerPath),slimPath)
+    assert.equal(await resolveSlimDaemonDatabasePath(legacyPath,pointerPath),slimPath)
+    await writeFile(pointerPath,JSON.stringify({schemaVersion:1,mode:'legacy',
+      legacyPath,backupPath,slimPath,changedAt:'2026-10-26T00:00:00Z'}))
+    await assert.rejects(resolveSlimDaemonDatabasePath(undefined,pointerPath),/No activated Slim DB/)
+    await writeFile(pointerPath,'{broken')
+    await assert.rejects(resolveSlimDaemonDatabasePath(undefined,pointerPath),/Unexpected token|JSON/)
+    await assert.rejects(resolveSlimDaemonDatabasePath(undefined,join(dir,'missing.json')),
+      /No activated Slim DB/)
+    assert.equal(await resolveSlimDaemonDatabasePath(slimPath,undefined),slimPath)
+  }finally{await rm(dir,{recursive:true,force:true})}
 })
