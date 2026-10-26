@@ -105,6 +105,10 @@ export async function startNativeOnlyHttpSurface(
     throw new RangeError('Invalid native-only HTTP port')
   }
   const eventHub=new HttpEventHub()
+  // 同一批 Health 请求共用一次 Worker 探测；失败后允许下一批重新探测。
+  let storageHealthProbe:Promise<StorageHealth>|undefined
+  const probeStorageHealth=()=>storageHealthProbe??=(Promise.resolve()
+    .then(()=>storage.health()).finally(()=>{storageHealthProbe=undefined}))
   const mounts=new Map<string,HttpStaticMount>()
   if(options.staticDir)mounts.set('native-web',{
     id:'native-web',directory:options.staticDir,spaFallback:true,
@@ -248,7 +252,7 @@ export async function startNativeOnlyHttpSurface(
         return
       }
       if(url.pathname==='/api/v1/health'){
-        const health=await storage.health()
+        const health=await probeStorageHealth()
         writeJson(response,health.ok?200:503,{
           status:health.ok?'ok':'degraded',
           protocolVersion:AGENT_LENS_PROTOCOL_VERSION,

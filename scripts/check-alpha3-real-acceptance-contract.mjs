@@ -79,15 +79,23 @@ requireText(desktop, /clickTaskSequence\(win, 100\)/, '桌面验收必须覆盖 
 requireText(desktop, /Memory\.getDOMCounters/, '百次切换必须采集 DOM / Listener 趋势')
 requireText(desktop, /listenerGrowth > 20/, '百次切换必须限制 Listener 持续增长')
 
-/* Real Smoke 必须经 Source → Observation → Review Projection 注入确定性样本。 */
+/* Real Smoke 必须经 Source → Native Catalog → 原生 Review Reader 注入确定性样本。 */
 requireText(realSmokeWorkflow, /CODEX_HOME/, 'Real Smoke 必须隔离并注入确定性 Codex Home')
 requireText(realSmokeWorkflow, /AGENT_LENS_ENABLED_SOURCES = 'codex'/, 'Real Smoke 必须显式启用 Codex Capture Policy')
 requireText(realSmokeWorkflow, /codex-sample\.jsonl/, 'Real Smoke 必须复用项目 Codex fixture')
-requireText(realSmokeWorkflow, /api\/v1\/review\?limit=10/, 'Real Smoke 必须等待正式 Review Projection 数据就绪')
-requireText(realSmokeWorkflow, /Count -ge 2/, 'Real Smoke 至少需要两条正式投影任务')
+requireText(realSmokeWorkflow, /api\/v1\/native-sessions\?limit=10/, 'Real Smoke 必须等待正式 Native Catalog 数据就绪')
+requireText(realSmokeWorkflow, /Count -ge 2/, 'Real Smoke 至少需要两条原生索引任务')
 requireText(realSmokeWorkflow, /value\.toolCount -lt 1/, 'Real Smoke 必须拒绝没有 Tool Call 的 viewport/theme case')
 requireText(realSmokeWorkflow, /switchStability\.skipped/, 'Real Smoke 必须拒绝百次切换被跳过')
 requireText(realSmokeWorkflow, /completedSwitches -ne 100/, 'Real Smoke 必须确认完整执行 100 次切换')
+
+// M7 的静态门禁也覆盖 Native 验收入口，防止旧 API 或旧投影等待条件回流。
+for (const path of ['scripts/acceptance/large-db-performance.mjs', 'scripts/acceptance/large-db-backfill-foreground.mjs', 'scripts/performance/first-install-benchmark.ts', '.github/workflows/alpha3-task-center-real-smoke.yml']) {
+  const source=readFileSync(path,'utf8')
+  if (source.includes('/api/v1/review') || source.includes('sourceObservationCount') || source.includes('meta?.projection')) {
+    failures.push(`Native 验收仍依赖已退役的接口/投影：${path}`)
+  }
+}
 
 requireText(soak, /Performance\.getMetrics/, '长时验收必须采集 Chromium Performance metrics')
 requireText(soak, /Memory\.getDOMCounters/, '长时验收必须采集 DOM counters')

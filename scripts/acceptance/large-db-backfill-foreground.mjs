@@ -1,4 +1,5 @@
 import { performance } from 'node:perf_hooks'
+import { nativeCatalogPath, nativeMetricsPath, nativeMetricSnapshot, readNativeCatalog } from './native-acceptance.mjs'
 
 const baseUrl = (process.env.AGENT_LENS_ACCEPT_BASE_URL ?? 'http://127.0.0.1:56789').replace(/\/$/, '')
 const durationMs = Number.parseInt(process.argv.find(arg => arg.startsWith('--duration-ms='))?.slice('--duration-ms='.length) ?? '30000', 10)
@@ -14,7 +15,8 @@ if (!Number.isFinite(foregroundP95BudgetMs) || foregroundP95BudgetMs <= 0) throw
 if (!Number.isFinite(activationTimeoutMs) || activationTimeoutMs <= 0) throw new Error('activation-timeout-ms must be positive')
 
 const foreground = [
-  '/api/v1/review?limit=20',
+  `${nativeCatalogPath}?limit=20`,
+  nativeMetricsPath,
   '/api/v1/facets',
   '/api/v1/usage?limit=500',
   '/api/v1/agents',
@@ -56,163 +58,49 @@ async function request(path, acceptedStatuses) {
   }
 }
 
-function projection(body) {
-  const value = body?.meta?.projection
-  if (!value || typeof value !== 'object') return null
-  return {
-    state: value.state,
-    sourceObservationCount: Number(value.sourceObservationCount ?? 0),
-    projectedCount: Number(value.projectedCount ?? 0),
-    missingCount: Number(value.missingCount ?? 0),
-    coverageRatio: Number(value.coverageRatio ?? 0),
-  }
-}
-
-function maintenanceGate(body) {
-  const value = body?.storage?.details?.maintenanceGate
-  if (!value || typeof value !== 'object') return null
-  const permits = value.permits
-  const policy = value.policy
-  return {
-    activeRequests: Number(value.activeRequests ?? 0),
-    load: value.load ?? null,
-    policy: policy && typeof policy === 'object' ? {
-      quietMs: Number(policy.quietMs ?? 0),
-      pollMs: Number(policy.pollMs ?? 0),
-      maxDeferMs: Number(policy.maxDeferMs ?? 0),
-    } : null,
-    permits: permits && typeof permits === 'object' ? {
-      quiet: Number(permits.quiet ?? 0),
-      forced: Number(permits.forced ?? 0),
-      maxWaitMs: Number(permits.maxWaitMs ?? 0),
-    } : null,
-  }
-}
-
-async function freshSnapshot() {
-  // Usage aggregate has a 2s cache. Health is stale-while-revalidate, so the
-  // first expired read starts refresh and the second read observes it.
-  await delay(2100)
-  await Promise.all([
-    request('/api/v1/usage?limit=1'),
-    request('/api/v1/health', HEALTH_STATUSES),
+// 读取原生索引和按需指标重建结果；不再等待已退役的 Tool Fact 投影或维护许可。
+async function snapshot() {
+  const [metrics, health] = await Promise.all([
+    request(nativeMetricsPath), request('/api/v1/health'),
   ])
-  await delay(200)
-  const [usage, health] = await Promise.all([
-    request('/api/v1/usage?limit=1'),
-    request('/api/v1/health', HEALTH_STATUSES),
-  ])
-  return { usage, health, projection: projection(usage.body), gate: maintenanceGate(health.body) }
+  const value = nativeMetricSnapshot(metrics.body)
+  if (!metrics.ok || !health.ok || !value) throw new Error('无法读取 Slim Health / 原生数值统计')
+  return value
 }
 
-let initial = await freshSnapshot()
-const activationStartedAt = performance.now()
-const activationBaseline = initial.projection?.projectedCount ?? 0
-while (initial.projection?.state !== 'ready'
-  && initial.projection?.projectedCount === activationBaseline
-  && performance.now() - activationStartedAt < activationTimeoutMs) {
-  initial = await freshSnapshot()
-}
-const activationMs = Math.round(performance.now() - activationStartedAt)
-
-const initialUsage = initial.usage
-const initialHealth = initial.health
-const initialProjection = initial.projection
-const initialGate = initial.gate
-if (!initialUsage.ok || !initialProjection) {
-  console.error('cannot read Tool Fact projection readiness before backfill/foreground acceptance')
-  process.exit(1)
-}
-if (!initialHealth.ok || !initialGate?.permits) {
-  console.error('cannot read maintenance fairness metrics before backfill/foreground acceptance')
-  process.exit(1)
-}
-
-if (initialProjection.state === 'ready') {
-  console.log(JSON.stringify({
-    passed: false,
-    skipped: true,
-    verified: false,
-    reason: 'Tool Fact projection is already ready; this run did not exercise active backfill + foreground coexistence. Use an incomplete large-DB copy for this acceptance.',
-    projection: initialProjection,
-    maintenanceGate: initialGate,
-  }, null, 2))
-  process.exit(0)
-}
-if (initialProjection.projectedCount === activationBaseline) {
-  console.error(`Tool Fact backfill did not become active within ${activationTimeoutMs}ms`)
-  process.exit(1)
-}
-
-const startedAt = performance.now()
-const samples = []
-let failures = 0
-let rounds = 0
-let latestProjection = initialProjection
-
-while (performance.now() - startedAt < durationMs) {
-  rounds += 1
-  const results = await Promise.all(foreground.map(path => request(path).then(result => ({ path, ...result }))))
-  for (const result of results) {
-    samples.push(result.elapsedMs)
-    if (!result.ok) {
-      failures += 1
-      console.error(`foreground failure ${result.path}: status=${result.status} ${result.body?.message ?? result.error ?? ''}`)
-    }
-    if (result.path.startsWith('/api/v1/usage')) {
-      latestProjection = projection(result.body) ?? latestProjection
-    }
-  }
-  await delay(intervalMs)
-}
-
-const final = await freshSnapshot()
-const finalUsage = final.usage
-const finalHealth = final.health
-const finalProjection = final.projection ?? latestProjection
-const finalGate = final.gate
-const progressed = finalProjection.projectedCount > initialProjection.projectedCount
-const nonRegressing = finalProjection.projectedCount >= initialProjection.projectedCount
-const forcedPermitsDelta = (finalGate?.permits?.forced ?? 0) - initialGate.permits.forced
-const fairnessObserved = forcedPermitsDelta > 0
-const p95 = samples.length
-  ? [...samples].sort((a, b) => a - b)[Math.min(samples.length - 1, Math.ceil(samples.length * 0.95) - 1)]
-  : 0
-const foregroundLatencyPassed = p95 <= foregroundP95BudgetMs
-const passed = failures === 0
-  && finalUsage.ok
-  && finalHealth.ok
-  && nonRegressing
-  && progressed
-  && fairnessObserved
-  && foregroundLatencyPassed
-
-console.log(JSON.stringify({
-  passed,
-  skipped: false,
-  verified: passed,
-  durationMs,
-  activationMs,
-  rounds,
-  requests: samples.length,
-  failures,
-  foregroundP95Ms: Number(p95.toFixed(2)),
-  foregroundP95BudgetMs,
-  foregroundLatencyPassed,
-  initialProjection,
-  finalProjection,
-  progressed,
-  maintenanceFairness: {
-    observed: fairnessObserved,
-    forcedPermitsDelta,
-    initial: initialGate,
-    final: finalGate,
-  },
-}, null, 2))
-
-if (!passed) {
-  if (!progressed) console.error('Tool Fact backfill made no observable progress during the foreground coexistence window')
-  if (!fairnessObserved) console.error('maintenance gate did not record any forced permit during sustained foreground traffic')
-  if (!foregroundLatencyPassed) console.error(`foreground P95 ${p95.toFixed(2)}ms exceeds ${foregroundP95BudgetMs}ms budget during maintenance coexistence`)
+await readNativeCatalog(baseUrl, { minSessions: 1 })
+const initial = await snapshot()
+if (!initial.eligibleSessions || (!initial.missingSessions && !initial.staleSessions)) {
+  console.log(JSON.stringify({ passed: false, verified: false, skipped: true,
+    reason: '样本没有待重建统计；本次未覆盖重建与前台并发，请使用隔离的新索引样本', initial }, null, 2))
   process.exitCode = 1
+} else {
+  const startedAt = performance.now()
+  const samples = []
+  let failures = 0, rounds = 0, progressed = false, latest = initial
+  const completed = value => value.readySessions + value.partialSessions
+  // 对较长会话，单次有界重建可能尚未到 EOF；同时观察覆盖计数和实际前台延迟。
+  while (performance.now() - startedAt < Math.min(durationMs, activationTimeoutMs)) {
+    rounds++
+    for (const result of await Promise.all(foreground.map(path => request(path)))) {
+      samples.push(result.elapsedMs)
+      if (!result.ok) failures++
+    }
+    latest = await snapshot()
+    progressed ||= completed(latest) > completed(initial)
+    if (latest.eligibleSessions !== initial.eligibleSessions || completed(latest) < completed(initial)) {
+      throw new Error('验收期间样本集合改变或统计进度回退')
+    }
+    await delay(intervalMs)
+  }
+  const sorted = samples.sort((a,b) => a-b)
+  const p95 = sorted[Math.max(0, Math.ceil(sorted.length * .95) - 1)] ?? Infinity
+  const passed = failures === 0 && progressed && p95 <= foregroundP95BudgetMs
+  console.log(JSON.stringify({ passed, verified: passed, skipped: false,
+    rounds, requests: samples.length, failures, foregroundP95Ms: p95,
+    foregroundP95BudgetMs, initial, final: latest, progressed,
+    complete: latest.coverage === 'complete',
+    note: 'partial 快照仅证明重建取得进展，不表示 Hook/事件覆盖已完整认证',
+  }, null, 2))
+  if (!passed) process.exitCode = 1
 }

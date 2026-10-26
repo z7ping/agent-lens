@@ -81,6 +81,9 @@ try {
     name: 'agent-lens-npm-smoke-consumer',
     version: '0.0.0',
     private: true,
+    // npm 12 的隔离消费工程必须显式允许已审计的原生依赖安装脚本。
+    // 使用项目自身声明，保持版本锁定；不放开其他包的脚本。
+    allowScripts: rootPackage.allowScripts,
   }, null, 2)}\n`)
 
   // npm CLI decodes file:// URL paths inconsistently on Windows when the
@@ -177,5 +180,6 @@ try {
     ])
     if (daemon.exitCode === null) daemon.kill('SIGKILL')
   }
-  await rm(temp, { recursive: true, force: true })
+  // Windows 杀进程与释放 cwd/原生 DLL 句柄存在短暂延迟。
+  await rm(temp, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 })
 }

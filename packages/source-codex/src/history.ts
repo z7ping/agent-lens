@@ -170,7 +170,7 @@ function readSqliteThreadNames(codexHome: string): Map<string, CodexThreadName> 
   return result
 }
 
-async function readThreadNames(codexHome: string | undefined): Promise<Map<string, CodexThreadName>> {
+export async function readThreadNames(codexHome: string | undefined): Promise<Map<string, CodexThreadName>> {
   const result = new Map<string, CodexThreadName>()
   if (!codexHome) return result
   try {
@@ -233,6 +233,27 @@ export async function readSessionMetadata(
   } finally {
     await handle.close()
   }
+}
+
+/** 只读最后 64 KiB 的原生时间，不把文件复制/解压的时间当成新活动。 */
+export async function readSessionActivity(filePath: string, fallback?: string): Promise<string | undefined> {
+  const handle = await open(filePath, 'r')
+  try {
+    const size = (await handle.stat()).size
+    const start = Math.max(0, size - 64 * 1024)
+    const buffer = Buffer.alloc(size - start)
+    const { bytesRead } = await handle.read(buffer, 0, buffer.length, start)
+    const lines = buffer.subarray(0, bytesRead).toString('utf8').split(/\r?\n/)
+    if (start > 0) lines.shift() // 窗口首行可能被截断。
+    for (const line of lines.reverse()) {
+      try {
+        const value = asRecord(JSON.parse(line))
+        const at = normalizeTimestamp(value.timestamp)
+        if (at) return fallback && fallback > at ? fallback : at
+      } catch { /* 未完成尾行不应覆盖前一条可信时间。 */ }
+    }
+    return fallback
+  } finally { await handle.close() }
 }
 
 function cwdPathKey(value: string): string {

@@ -75,7 +75,7 @@ requireText(cliPathHelper.includes("$mode = 'npm-primary'"), 'CLI PATH helper �
 requireText(cliPathHelper.includes("$mode = 'desktop-primary'"), 'CLI PATH helper 没有固定 Desktop 兜底规则')
 requireText(cliPathHelper.includes("[int]$Matches[1] -lt 1"), 'CLI PATH helper 没有排除 0.x npm CLI')
 
-const surface = read('packages/surface-http/src/server.ts')
+const surface = read('packages/surface-http/src/slim-server.ts')
 requireText(surface.includes('storageHealthProbe'), 'Health 请求没有合并并发 Storage 探测')
 
 const windowsSmoke = read('scripts/smoke-windows-desktop.ps1')
