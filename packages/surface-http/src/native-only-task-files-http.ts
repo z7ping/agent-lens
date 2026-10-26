@@ -84,5 +84,5 @@ export async function readNativeOnlyFileChanges(
   })
   return taskFileChangesResponse(id,items,null,{
     truncated:result.hasMore||result.pendingTail||window.fileChangesTruncated===true,
-  }))
+  })
 }
