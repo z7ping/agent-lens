@@ -17,7 +17,7 @@ test('M3 freeze blocks concurrent v38 writes until the entire finalizer complete
     await withFrozenLegacyWriter(legacyPath,async()=>{
       const second=new Database(legacyPath,{timeout:0})
       try{
-        assert.equal(second.prepare('SELECT count(*) AS n FROM hosts').get()?.n,0)
+        assert.equal((second.prepare('SELECT count(*) AS n FROM hosts').get() as {n:number}).n,0)
         assert.throws(()=>second.prepare(`INSERT INTO hosts(id,name,platform,arch,created_at,last_seen_at)
           VALUES ('test','test','linux','x64','2026-10-26','2026-10-26')`).run(),/database is locked|SQLITE_BUSY/)
       }finally{second.close()}
