@@ -1,5 +1,5 @@
 import { existsSync } from 'node:fs'
-import { readActiveDatabasePointer } from '@agent-lens/storage-sqlite'
+import { readActiveDatabasePointer } from '@agent-lens/storage-sqlite/slim'
 import { homedir } from 'node:os'
 import { startLocalVault } from '@agent-lens/backup-local'
 import { NpmPiEcosystemProvider } from '@agent-lens/integration-pi'
