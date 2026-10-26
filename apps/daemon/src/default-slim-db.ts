@@ -1,7 +1,7 @@
 import { existsSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { resolveAgentLensNodeRuntime } from '@agent-lens/runtime-cordis'
-import { readActiveDatabasePointer, SqliteSlimStorage } from '@agent-lens/storage-sqlite'
+import { readActiveDatabasePointer, SqliteSlimStorage } from '@agent-lens/storage-sqlite/slim'
 
 export interface DefaultSlimDbPaths {
   dataRoot:string
