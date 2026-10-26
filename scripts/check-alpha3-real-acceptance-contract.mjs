@@ -35,7 +35,7 @@ function requireText(source, pattern, message) {
 
 /* 真实 Pi：必须覆盖 Runtime 生命周期、两类队列、Abort 恢复、重连和历史回流。 */
 for (const token of [
-  '/api/v1/live/pi/availability', '/events', '/messages', "behavior: 'steer'", "behavior: 'follow-up'", '/interrupt', '/snapshot', '/model-control', '/thinking-control', '/api/v1/review?limit=500',
+  '/api/v1/live/pi/availability', '/events', '/messages', "behavior: 'steer'", "behavior: 'follow-up'", '/interrupt', '/snapshot', '/model-control', '/thinking-control', '/api/v1/native-sessions?',
 ]) {
   if (!pi.includes(token)) failures.push(`真实 Pi 验收缺少 ${token}`)
 }
