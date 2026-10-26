@@ -2,6 +2,11 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import { DataRuntimeClient } from './client'
 
+test('Legacy writer options fail before allocating a Worker', () => {
+  assert.throws(() => new DataRuntimeClient({ schemaKind: 'legacy' }), /Legacy Data Runtime has been removed/)
+  assert.throws(() => new DataRuntimeClient({ nodeId: 'old-node' }), /Legacy Data Runtime has been removed/)
+})
+
 test('Data Runtime worker starts with versioned IPC and shuts down cleanly', async () => {
   const client = new DataRuntimeClient({ allowDiagnostics: true, requestTimeoutMs: 2_000 })
   await client.start()
@@ -10,6 +15,7 @@ test('Data Runtime worker starts with versioned IPC and shuts down cleanly', asy
     const status = await client.request<{ ok: boolean; protocolVersion: number; threadId: number }>('status')
     assert.equal(status.ok, true)
     assert.equal(status.protocolVersion, 1)
+    assert.equal((status as { schemaKind?: string }).schemaKind, 'slim')
     assert.ok(status.threadId > 0)
     const snapshot = client.snapshot()
     assert.equal(snapshot.state, 'ready')
