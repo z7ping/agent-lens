@@ -57,10 +57,12 @@ export class SlimSourceCoordinator {
    * existing indexed installations or start a Legacy import.
    */
   private async discoverInstallations():Promise<void>{
+    const registered=this.sources.list()
+    if(!registered.length)return
     const host=await this.runtime.resolveHost({
       name:hostname(),platform:platform(),arch:arch(),
     })
-    for(const source of this.sources.list()){
+    for(const source of registered){
       if(this.abort.signal.aborted)break
       try{
         const detected=await source.detect({host,env:process.env})
