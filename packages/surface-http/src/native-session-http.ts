@@ -39,7 +39,7 @@ const MAX_REVIEW_INPUT_BYTES = 2 * 1024 * 1024
  * The cap is deliberate: a turn beyond the budget remains "partial"; callers
  * must not treat this as full-session or safe turn-by-turn pagination yet.
  */
-async function readContiguousReviewPages(
+export async function readContiguousReviewPages(
   reader: NativeSessionWindowReader,
   query: NativeSessionReadQuery,
   first: Extract<NativeSessionReadResult, {state: 'available'}>,
