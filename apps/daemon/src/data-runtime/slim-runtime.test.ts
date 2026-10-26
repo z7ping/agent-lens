@@ -238,3 +238,43 @@ test('Slim Reader is composed directly from Native ports and owned by Slim shutd
     assert.deepEqual(denied,{state:'unsupported',reason:'source-disabled'})
   }finally{await runtime.shutdown();await rm(directory,{recursive:true,force:true})}
 })
+
+
+test('Slim Source asset discovery persists metadata only via allowlisted Worker methods',async()=>{
+  const directory=await mkdtemp(join(tmpdir(),'al-slim-current-assets-'))
+  const dbPath=join(directory,'native.sqlite')
+  const db=await SqliteSlimStorage.createFresh(dbPath)
+  await db.close()
+  const writer=args('writer'),reader=args('reader')
+  const runtime=new SlimDataRuntime({
+    dbPath,writer:writer.port as never,reader:reader.port as never,
+  })
+  try{
+    await runtime.start()
+    const source={
+      manifest:{sourceId:'pi',productId:'pi'},
+      async *discoverAssets(){
+        yield {definition:{type:'skill',canonicalName:'fixture-skill'},
+          binding:{path:'/native/skills/fixture-skill'},
+          states:[{state:'installed',value:true,observedAt:'2026-10-26T00:00:00Z'}]}
+      },
+    }
+    // The fake Worker has no real backing rows; assert the full error does
+    // not turn into a Legacy call and the Reader only touches identity.
+    const policy={
+      isEnabled:()=>true,
+      isSourceEnabled:()=>true,
+      sanitizeDiscoveredAsset:(value:unknown)=>value,
+    }
+    await assert.rejects(
+      runtime.scanInstallationAssets({
+        source:source as never,installationId:'missing',
+        policy:policy as never,signal:new AbortController().signal,
+      }),
+      /unavailable/,
+    )
+    assert.deepEqual(reader.log.filter(x=>x.method==='reader').map(x=>x.path),
+      [['repositories','installations','get']])
+    assert.deepEqual(writer.log.filter(x=>x.method==='writer'),[])
+  }finally{await runtime.shutdown();await rm(directory,{recursive:true,force:true})}
+})
