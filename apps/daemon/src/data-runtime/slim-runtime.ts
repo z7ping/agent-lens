@@ -213,6 +213,7 @@ export class SlimDataRuntime {
     if(!port.nativeSessionCatalog)throw new Error('Native Catalog is unavailable')
     return new NativeOnlyRuntimeCapture({
       nativeSessionCatalog:port.nativeSessionCatalog,
+      nativeSessionContexts:port.nativeSessionContexts,
       nativeSessionMetrics:port.nativeSessionMetrics,
       checkpoints:port.checkpoints,
     }).start({
