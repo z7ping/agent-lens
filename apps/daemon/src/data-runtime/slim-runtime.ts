@@ -12,11 +12,11 @@ import type {
   NativeSessionMetricRebuildCandidate,
   NativeSessionMetricsStore,
   NativeSessionListReader, NativeFacetReader,
-  StorageHealth, LaunchableProjectReader,
+  StorageHealth, LaunchableProjectReader, AssetService,
 } from '@agent-lens/core'
 import { SqliteSlimStorage } from '@agent-lens/storage-sqlite'
 import {
-  indexNativeInstallation, NativeOnlyRuntimeCapture,
+  indexNativeInstallation, NativeOnlyRuntimeCapture, NativeOnlyAssetScanner,
   NativeSessionReader, NativeReaderWorkerClient,
   type NativeCatalogScanReport, type NativeCaptureHandle,
   type NativeSessionReaderStorage,
@@ -253,6 +253,35 @@ export class SlimDataRuntime {
         },
       },
     }
+  }
+
+  /** Source-owned asset scan writes Slim current-state only; no event copy. */
+  async scanInstallationAssets(input:{
+    source:SourceDefinition;installationId:string;runtimeProfileId?:string;
+    signal:AbortSignal;policy:CapturePolicyService
+  }):Promise<import('@agent-lens/core-services').SlimAssetScanReport>{
+    this.assertStarted()
+    const native=this.nativePort()
+    const installation=await native.repositories.installations.get(input.installationId)
+    if(!installation)throw new Error('Slim asset installation is unavailable')
+    const host=await native.repositories.hosts.get(installation.hostId)
+    if(!host)throw new Error('Slim asset Host is unavailable')
+    const profile=input.runtimeProfileId
+      ?await this.read<RuntimeProfile|null>(['runtimeProfiles','get'],[input.runtimeProfileId])
+      :undefined
+    if(input.runtimeProfileId&&!profile)throw new Error('Slim asset Profile is unavailable')
+    const assets:AssetService={
+      resolveDefinition:hint=>this.write<Awaited<ReturnType<AssetService['resolveDefinition']>>>(
+        ['assets','resolveDefinition'],[hint]),
+      resolveBinding:hint=>this.write<Awaited<ReturnType<AssetService['resolveBinding']>>>(
+        ['assets','resolveBinding'],[hint]),
+      recordState:state=>this.write<Awaited<ReturnType<AssetService['recordState']>>>(
+        ['assets','recordState'],[state]),
+    }
+    return new NativeOnlyAssetScanner(assets,native.checkpoints,input.policy).scan({
+      source:input.source,host,installation,signal:input.signal,
+      ...(profile?{runtimeProfile:profile}:{}),
+    })
   }
 
   /** Local native discovery writes ONLY host/installation/Profile metadata.
