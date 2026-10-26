@@ -142,3 +142,11 @@ npm run storage:slim:reconcile -- --legacy /path/to/legacy.sqlite --backup /path
 ```
 
 逐表只读对比旧库与一致性备份的实际行摘要及行数，不输出记录正文、原始文件路径或 SQL 内容；非空旧 WAL/rollback journal 也会报告。旧库自备份后发生任意变化，`unchangedSinceBackup=false`。即使报告未发现变化，**也不表示 Writer 已停止或文件可安全替换**，始终 `readyToSwitch=false`；只有单独完成冻结旧写入、末次快照、原生恢复核验、文件安装与失败回滚流程后才允许最终切库。
+
+## 一体化切库预验收报告（仍不执行切换）
+
+```bash
+npm run storage:slim:gate -- --legacy /path/to/legacy.sqlite --backup /path/to/backup-v38.sqlite --staging /path/to/slim-v1.sqlite --max-sessions 5000
+```
+
+该显式只读命令串联三个互相独立的真实校验：先检查旧库与一致性备份是否变更；再核对旧会话身份与精简 Catalog/Context；再对全部原生 Catalog 进行 Source 原生内容逐页恢复，结束后重新检查旧库是否在耗时扫描期间发生变化。结果统一列出未索引身份、上下文缺失、不可恢复会话、数值统计缺口、旧 Writer 冻结/Hook 与回滚尚未认证等阻断原因。无论结果如何，`readyToSwitch:false` 是硬约束；本命令不更改旧库、备份、暂存库，不清理或替换任何用户文件。
