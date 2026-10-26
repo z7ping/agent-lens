@@ -111,7 +111,7 @@ export async function startNativeOnlyHttpSurface(
     try{
       const url=new URL(request.url??'/',`http://${AGENT_LENS_HTTP_HOST}`)
       if(request.method==='GET'&&[
-        '/api/v1/usage','/api/v1/insights',
+        '/api/v1/usage','/api/v1/usage/detail','/api/v1/insights',
         '/api/v1/native-sessions/metrics/overview',
       ].includes(url.pathname))refresh.schedule()
 
@@ -318,13 +318,17 @@ export async function startNativeOnlyHttpSurface(
           storage.nativeFacets,options.sources,options.capturePolicy))
         return
       }
-      if(url.pathname==='/api/v1/usage'||url.pathname==='/api/v1/insights'){
+      if(url.pathname==='/api/v1/usage'||url.pathname==='/api/v1/usage/detail'
+        ||url.pathname==='/api/v1/insights'){
         if(request.method!=='GET'){
           writeJson(response,405,{error:'method_not_allowed'})
           return
         }
-        const usage=url.pathname==='/api/v1/usage'
+        const usage=url.pathname!='/api/v1/insights'
         const scope=usage?parseUsageQuery(url.searchParams):parseInsightsQuery(url.searchParams)
+        if(url.pathname==='/api/v1/usage/detail' && !(scope as {toolName?:string}).toolName){
+          throw badRequest('Tool name is required for native usage detail')
+        }
         const native=await nativeMetricContribution(
           storage.nativeSessionMetrics,options.sources,options.capturePolicy,
           {...scope,projectScopeReady:true,...(usage?{includeTools:true}:{})})

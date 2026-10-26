@@ -65,7 +65,7 @@ test('unsupported project and tool filters must not appear as complete aggregate
     async overview(){throw Error('not accessed')},
   } as unknown as NativeSessionMetricsStore
   for(const filter of [
-    {projectId:'proj-1'},{logicalSessionId:'session-1'},{toolName:'shell'},
+    {projectId:'proj-1'},{logicalSessionId:'session-1'},
   ]){
     assert.deepEqual(await nativeMetricContribution(metrics,sources,policy,filter),{
       state:'unsupported',reason:'native-metrics-filter-not-indexed',
@@ -170,4 +170,28 @@ test('certified slim project scope reaches native numerical projection, legacy s
   })
   assert.equal(result.state,'available')
   assert.deepEqual(scopes.map(x=>x.projectId),['project-a'])
+})
+
+
+test('Native exact tool detail queries indexed totals without Legacy event rows',async()=>{
+  const seen:Array<{sourceId:string;nativeToolName?:string}>=[]
+  const metrics={overview:async(q:{sourceId:string;nativeToolName?:string})=>{
+    seen.push(q)
+    return {...overview('pi',2),eligibleSessions:2,readySessions:2,missingSessions:0,
+      tools:q.nativeToolName==='shell'?[{nativeToolName:'shell',callCount:3,
+        resultCount:2,errorCount:1,totalDurationMs:30,sessionCount:2}]:[],
+    }
+  }} as unknown as NativeSessionMetricsStore
+  const result=await nativeMetricContribution(metrics,sources,policy,{
+    sourceIds:['pi'],toolName:'shell',includeTools:true,
+  })
+  assert.deepEqual(seen.map(x=>x.nativeToolName),['shell'])
+  if(result.state!=='available')assert.fail('Expected available result')
+  assert.deepEqual(result.tools,[{sourceId:'pi',nativeToolName:'shell',
+    callCount:3,resultCount:2,errorCount:1,sessionCount:2}])
+  assert.equal(result.toolCallCount,3)
+  assert.equal(result.errorCount,1)
+  assert.deepEqual(await nativeMetricContribution(metrics,sources,policy,{
+    toolName:' '.repeat(3),includeTools:true,
+  }),{state:'unsupported',reason:'native-metrics-invalid-tool-name'})
 })

@@ -28,8 +28,11 @@ export async function nativeMetricContribution(
   policy:CapturePolicyService|undefined,
   scope:NativeContributionScope,
 ):Promise<NativeMetricContributionDto>{
-  if((scope.projectId && !scope.projectScopeReady) || scope.logicalSessionId || scope.toolName){
+  if((scope.projectId && !scope.projectScopeReady) || scope.logicalSessionId){
     return {state:'unsupported',reason:'native-metrics-filter-not-indexed'}
+  }
+  if(scope.toolName!==undefined && (!scope.toolName.trim() || scope.toolName.length>128)){
+    return {state:'unsupported',reason:'native-metrics-invalid-tool-name'}
   }
   if(!metrics?.overview||!sources||!policy){
     return {state:'unavailable',reason:'native-metrics-contribution-unavailable'}
@@ -59,6 +62,7 @@ export async function nativeMetricContribution(
       coverageCertified:source.nativeSessionCoverageComplete===true,
       ...(scope.installationId?{installationId:scope.installationId}:{}),
       ...(scope.projectId?{projectId:scope.projectId}:{}),
+      ...(scope.toolName?{nativeToolName:scope.toolName}:{}),
       ...(scope.from?{from:scope.from}:{}),...(scope.to?{to:scope.to}:{}),
     })))
     const sum=(key:'eligibleSessions'|'readySessions'|'missingSessions'|'staleSessions'|'partialSessions')=>
@@ -90,8 +94,10 @@ export async function nativeMetricContribution(
       eligibleSessions:eligible,readySessions:ready,
       missingSessions:sum('missingSessions'),staleSessions:sum('staleSessions'),
       partialSessions:sum('partialSessions'),
-      interactionCount:total('interactionCount'),toolCallCount:total('toolCallCount'),
-      errorCount:total('errorCount'),inputTokens:tokens('inputTokens'),
+      interactionCount:total('interactionCount'),
+      toolCallCount:scope.toolName?rawTools.reduce((n,t)=>n+t.callCount,0):total('toolCallCount'),
+      errorCount:scope.toolName?rawTools.reduce((n,t)=>n+t.errorCount,0):total('errorCount'),
+      inputTokens:tokens('inputTokens'),
       outputTokens:tokens('outputTokens'),
       ...(scope.includeTools?{
         tools:rawTools.slice(0,256),toolsTruncated,
