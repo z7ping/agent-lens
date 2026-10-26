@@ -6,7 +6,10 @@ import type {
   NativeSessionListItem,
   NativeSessionMetricOverview,
   NativeSessionMetricOverviewQuery,
-  NativeSessionMetricSnapshot,
+  NativeSessionMetricSnapshot, NativeSessionMetricReadResult,
+  NativeSessionMetricRebuildCandidate,
+  NativeSessionMetricsStore,
+  NativeSessionListReader, NativeFacetReader,
   StorageHealth,
 } from '@agent-lens/core'
 import { SqliteSlimStorage } from '@agent-lens/storage-sqlite'
@@ -112,6 +115,50 @@ export class SlimDataRuntime {
 
   replaceMetrics(snapshot:NativeSessionMetricSnapshot):Promise<boolean>{
     return this.write(['nativeSessionMetrics','replace'],[snapshot])
+  }
+
+  /** Slim HTTP and review handlers consume this contract directly.
+   * Unlike the Legacy StorageService it offers no Observation/SessionSummary
+   * RepositorySet, no write claims and no access to executor/private SQL.
+   * Explicit numeric rebuild writes only validated aggregate snapshots.
+   */
+  nativeHttpPort():{
+    nativeSessionCatalog:Pick<NativeSessionCatalogStore,
+      'get'|'getByReviewSessionId'|'query'|'isNativeMetricsEligible'>
+    nativeSessionList:NativeSessionListReader
+    nativeFacets:NativeFacetReader
+    nativeSessionMetrics:NativeSessionMetricsStore
+    health:()=>Promise<StorageHealth>
+  }{
+    const self=this
+    return {
+      nativeSessionCatalog:{
+        get(input){return self.read<NativeSessionCatalogEntry|null>(['nativeSessionCatalog','get'],[input])},
+        getByReviewSessionId(id){return self.read<NativeSessionCatalogEntry|null>(['nativeSessionCatalog','getByReviewSessionId'],[id])},
+        query(input={}){return self.read<Awaited<ReturnType<NativeSessionCatalogStore['query']>>>(['nativeSessionCatalog','query'],[input])},
+        isNativeMetricsEligible(input){
+          return self.read<boolean>(['nativeSessionCatalog','isNativeMetricsEligible'],[input])
+        },
+      },
+      nativeSessionList:{query(input){
+        return self.read<Awaited<ReturnType<NativeSessionListReader['query']>>>(['nativeSessionList','query'],[input])
+      }},
+      nativeFacets:{query(input={}){
+        return self.read<Awaited<ReturnType<NativeFacetReader['query']>>>(['nativeFacets','query'],[input])
+      }},
+      nativeSessionMetrics:{
+        get(input){return self.read<NativeSessionMetricReadResult>(['nativeSessionMetrics','get'],[input])},
+        overview(input){return self.read<NativeSessionMetricOverview>(['nativeSessionMetrics','overview'],[input])},
+        findRebuildCandidates(input,limit,before){
+          return self.read<NativeSessionMetricRebuildCandidate[]>(['nativeSessionMetrics','findRebuildCandidates'],[
+            input,limit,...(before?[before]:[]),
+          ])
+        },
+        replace(input){return self.write<boolean>(['nativeSessionMetrics','replace'],[input])},
+        invalidate(input){return self.write<void>(['nativeSessionMetrics','invalidate'],[input])},
+      },
+      health(){return self.health()},
+    }
   }
 
   /** The ONLY storage dependencies supplied to new Source Reader/Indexer:

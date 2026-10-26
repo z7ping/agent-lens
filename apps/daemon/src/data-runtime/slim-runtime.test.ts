@@ -115,3 +115,46 @@ test('slim Daemon bridge routes reader/catalog/context/metrics/checkpoints to is
     await rm(directory,{recursive:true,force:true})
   }
 })
+
+test('Slim HTTP bridge serves existing native list, facets, Catalog and aggregate RPC without Legacy repositories',async()=>{
+  const directory=await mkdtemp(join(tmpdir(),'al-slim-native-http-'))
+  const dbPath=join(directory,'native.sqlite')
+  const db=await SqliteSlimStorage.createFresh(dbPath)
+  await db.close()
+  const writer=args('writer'),reader=args('reader')
+  const runtime=new SlimDataRuntime({
+    dbPath,writer:writer.port as never,reader:reader.port as never,
+  })
+  try{
+    await runtime.start()
+    const http=runtime.nativeHttpPort()
+    assert.equal('repositories' in http,false)
+    assert.equal('sessionSummaries' in http,false)
+    await http.nativeSessionCatalog.get({
+      sourceId:'pi',installationId:'i',nativeSessionId:'s',
+    })
+    await http.nativeSessionCatalog.getByReviewSessionId('native:00000000000000000000000000000000')
+    await http.nativeSessionCatalog.query({limit:10})
+    await http.nativeSessionCatalog.isNativeMetricsEligible({
+      sourceId:'pi',installationId:'i',nativeSessionId:'s',
+    })
+    await http.nativeSessionList.query({limit:10})
+    await http.nativeFacets.query()
+    await http.nativeSessionMetrics.get({
+      sourceId:'pi',installationId:'i',nativeSessionId:'s',
+    })
+    await http.nativeSessionMetrics.overview!({sourceId:'pi',parserVersion:'v1'})
+    await http.nativeSessionMetrics.findRebuildCandidates!(
+      {sourceId:'pi',parserVersion:'v1'},4)
+    await http.health()
+    const reads=reader.log.filter(item=>item.method==='reader').map(item=>item.path)
+    assert.deepEqual(reads,[
+      ['nativeSessionCatalog','get'],['nativeSessionCatalog','getByReviewSessionId'],
+      ['nativeSessionCatalog','query'],['nativeSessionCatalog','isNativeMetricsEligible'],
+      ['nativeSessionList','query'],['nativeFacets','query'],
+      ['nativeSessionMetrics','get'],['nativeSessionMetrics','overview'],
+      ['nativeSessionMetrics','findRebuildCandidates'],['health'],
+    ])
+    assert.deepEqual(writer.log.filter(item=>item.method==='writer'),[])
+  }finally{await runtime.shutdown();await rm(directory,{recursive:true,force:true})}
+})
