@@ -24,6 +24,12 @@ import {
 } from '@agent-lens/source-support'
 import { badRequest, httpError, writeJson } from './http-utils'
 
+/** The existing safe asset-files handler only needs these two read ports. */
+type ManagedAssetStorage = {
+  repositories: { installations: Pick<StorageService['repositories']['installations'],'get'> }
+  assetInventory?: Pick<NonNullable<StorageService['assetInventory']>,'listByInstallation'>
+}
+
 type IntegrationStatusReader = (
   productId: string,
 ) => AgentIntegrationRuntimeStatus | null | Promise<AgentIntegrationRuntimeStatus | null>
@@ -51,7 +57,7 @@ async function assertAssetsCapability(
 }
 
 async function managedRoot(
-  storage: StorageService,
+  storage: ManagedAssetStorage,
   input: {
     productId: string
     installationId: string
@@ -133,7 +139,7 @@ function directoryEntry(entry: Awaited<ReturnType<typeof listManagedDirectory>>[
 }
 
 export async function readManagedAssetDirectory(
-  storage: StorageService,
+  storage: ManagedAssetStorage,
   input: {
     productId: string
     installationId: string
@@ -161,7 +167,7 @@ export async function readManagedAssetDirectory(
 }
 
 export async function readManagedAssetFile(
-  storage: StorageService,
+  storage: ManagedAssetStorage,
   input: {
     productId: string
     installationId: string
@@ -253,7 +259,7 @@ export async function handleManagedAssetFilesRequest(
   request: IncomingMessage,
   response: ServerResponse,
   url: URL,
-  storage: StorageService,
+  storage: ManagedAssetStorage,
   readIntegrationStatus?: IntegrationStatusReader,
 ): Promise<boolean> {
   const route = routeMatch(url.pathname)
