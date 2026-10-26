@@ -190,18 +190,32 @@ export async function assertNoDaemonListening(port:number):Promise<void>{
   })
 }
 
-export async function finalizeSlimCutover(input:SlimActivationPaths,port:number):
+export interface CutoverAuditLimits {maxSessions:number;maxPages:number}
+
+export function finalGateArgs(input:SlimActivationPaths,limits:CutoverAuditLimits):string[]{
+  if(!Number.isSafeInteger(limits.maxSessions)||limits.maxSessions<1||limits.maxSessions>5000){
+    throw new RangeError('Cutover final session limit must be 1-5000')
+  }
+  if(!Number.isSafeInteger(limits.maxPages)||limits.maxPages<1||limits.maxPages>16384){
+    throw new RangeError('Cutover final page limit must be 1-16384')
+  }
+  return ['--legacy',input.legacyPath,'--backup',input.backupPath,
+    '--staging',input.stagingPath,'--max-sessions',String(limits.maxSessions),
+    '--max-pages',String(limits.maxPages)]
+}
+
+export async function finalizeSlimCutover(input:SlimActivationPaths,port:number,
+  limits:CutoverAuditLimits={maxSessions:5000,maxPages:256}):
   Promise<ActiveDatabasePointer>{
   if(!Number.isSafeInteger(port)||port<1||port>65535){
     throw new Error('Valid AgentLens port required for M3 cutover')
   }
+  const args=finalGateArgs(input,limits)
   await assertNoDaemonListening(port)
   return activateSlimCutover(input,async()=>{
     await assertNoDaemonListening(port)
-    const result=await auditSlimCutoverGate([
-      '--legacy',input.legacyPath,'--backup',input.backupPath,
-      '--staging',input.stagingPath,
-    ],{writerFrozen:true,defaultDaemonSlim:true,oldDaemonStopped:true})
+    const result=await auditSlimCutoverGate(args,
+      {writerFrozen:true,defaultDaemonSlim:true,oldDaemonStopped:true})
     await assertNoDaemonListening(port)
     if(!result.readyToSwitch){
       throw new Error('M3 final cutover blocked: '+result.blockedBy.join(', '))

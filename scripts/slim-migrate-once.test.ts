@@ -1,6 +1,9 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { parseMigrateOnceArgs } from './slim-migrate-once'
+import { unresolvedSlimPrepareBlockers } from './slim-prepare-cutover'
+import { finalGateArgs } from './slim-cutover-activation'
+import { parseSlimGateArgs } from './slim-cutover-gate'
 import { resolve } from 'node:path'
 import { readFile } from 'node:fs/promises'
 import { fileURLToPath } from 'node:url'
@@ -35,4 +38,38 @@ test('bundled migrator imports never trigger other original script entrypoints',
     assert.equal(body.includes('"slim-migrate.mjs"'),false,
       name+' must not start when bundled as slim-migrate.mjs')
   }
+})
+
+
+test('M3 prepare cannot discard Source enumeration, Hook or numerical failures before final activation',()=>{
+  const blocked=unresolvedSlimPrepareBlockers({blockedBy:[
+    'full-consumer-and-legacy-writer-retirement-pending',
+    'native-source-enumeration-incomplete',
+    'native-numerical-metrics-budget-exhausted',
+    'hook-and-archival-coverage-not-certified',
+    'old-writer-freeze-and-atomic-swap-not-certified',
+  ]})
+  assert.deepEqual(blocked,[
+    'native-source-enumeration-incomplete',
+    'native-numerical-metrics-budget-exhausted',
+    'hook-and-archival-coverage-not-certified',
+  ])
+  assert.deepEqual(unresolvedSlimPrepareBlockers({blockedBy:[
+    'full-consumer-and-legacy-writer-retirement-pending',
+    'old-writer-freeze-and-atomic-swap-not-certified',
+  ]}),[])
+})
+
+test('M3 final gate uses the SAME bounded native Reader budgets requested for preparation',()=>{
+  const args=finalGateArgs({
+    legacyPath:'/tmp/old.db',backupPath:'/tmp/backup.db',
+    stagingPath:'/tmp/stage.db',installedSlimPath:'/tmp/installed.db',
+    pointerPath:'/tmp/active.json',
+  },{maxSessions:3000,maxPages:16384})
+  const params=parseSlimGateArgs(args)
+  assert.equal(params.maxPages,16384)
+  assert.equal(params.maxSessions,3000)
+  assert.throws(()=>finalGateArgs({legacyPath:'a',backupPath:'b',stagingPath:'c',
+    installedSlimPath:'d',pointerPath:'e'},
+    {maxSessions:5001,maxPages:16384}),/session limit/)
 })
