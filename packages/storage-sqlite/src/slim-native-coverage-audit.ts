@@ -1,0 +1,116 @@
+import { createHash } from 'node:crypto'
+import type Database from 'better-sqlite3'
+import { assertSlimSchema } from './slim-schema'
+
+export interface SlimNativeCoverageAudit {
+  /** Catalog identity alone is NOT evidence the entire native session is intact. */
+  readonly nativeContentFullyVerified: false
+  readonly readyToSwitch: false
+  readonly oldSessionIdentities: number
+  readonly migratedContextIdentities: number
+  readonly nativeIndexed: number
+  readonly archivedOnly: number
+  readonly missingFromNativeCatalog: number
+  readonly missingContext: number
+  readonly invalidOldIdentities: number
+  readonly nativeMetricsMissingOrStale: number
+  /** Opaque digest; no user prompts, raw file paths or session IDs. */
+  readonly missingExamples: readonly {sourceId:string;opaqueSession:string}[]
+  readonly nextRequiredActions: readonly string[]
+}
+
+function count(db:Database.Database, sql:string):number {
+  const value=db.prepare(sql).get() as {n:number}
+  return value.n
+}
+
+/** Compares the old v38 identity graph to a rebuilt, slim-only catalog.
+ * Both handles MUST be read-only, and neither original transcripts nor
+ * persisted SQL events are materialized by this audit.
+ *
+ * IMPORTANT: Passing here does NOT prove readable contents or permit cutover.
+ * Source Reader still must attest full original replay per session, with
+ * Hook gaps reported separately.
+ */
+export function auditSlimNativeCoverage(
+  oldDb:Database.Database,
+  slimDb:Database.Database,
+):SlimNativeCoverageAudit {
+  if(!oldDb.readonly || !slimDb.readonly) {
+    throw new Error('Native coverage audit requires read-only old and slim databases')
+  }
+  assertSlimSchema(slimDb)
+  const oldVersion=oldDb.prepare('SELECT MAX(version) AS v FROM schema_migrations').get() as {v:number|null}
+  if(oldVersion.v!==38) throw new Error('Native coverage audit requires v38 legacy schema')
+  const missingExamples:Array<{sourceId:string;opaqueSession:string}>=[]
+  const native=slimDb.prepare(`SELECT 1 FROM native_session_catalog WHERE
+    source_id=? AND installation_id=? AND native_session_id=? AND location_kind='native'
+    LIMIT 1`)
+  const archive=slimDb.prepare(`SELECT 1 FROM native_session_catalog WHERE
+    source_id=? AND installation_id=? AND native_session_id=? AND location_kind='archive'
+    LIMIT 1`)
+  const context=slimDb.prepare(`SELECT 1 FROM native_session_context WHERE
+    source_id=? AND installation_id=? AND native_session_id=? LIMIT 1`)
+  const identities=oldDb.prepare(`SELECT DISTINCT source_id,installation_id,native_session_id
+    FROM source_sessions`)
+  let oldSessionIdentities=0,invalidOldIdentities=0,nativeIndexed=0
+  let archivedOnly=0,missingFromNativeCatalog=0,missingContext=0
+  for(const row of identities.iterate() as Iterable<{
+    source_id:string|null;installation_id:string|null;native_session_id:string|null
+  }>) {
+    oldSessionIdentities++
+    const {source_id,installation_id,native_session_id}=row
+    if(!source_id || !installation_id || !native_session_id) {
+      invalidOldIdentities++
+      continue
+    }
+    const args=[source_id,installation_id,native_session_id] as const
+    if(!context.get(...args)) missingContext++
+    if(native.get(...args)) {
+      nativeIndexed++
+    } else if(archive.get(...args)) {
+      archivedOnly++
+    } else {
+      missingFromNativeCatalog++
+      if(missingExamples.length<32) {
+        missingExamples.push({
+          sourceId:source_id,
+          opaqueSession:createHash('sha256')
+            .update(JSON.stringify(args)).digest('hex').slice(0,20),
+        })
+      }
+    }
+  }
+  const migratedContextIdentities=count(slimDb,'SELECT COUNT(*) AS n FROM native_session_context')
+  const nativeMetricsMissingOrStale=count(slimDb,`
+    SELECT COUNT(*) AS n FROM native_session_catalog AS c
+    LEFT JOIN native_session_metrics AS m
+      ON m.source_id=c.source_id AND m.installation_id=c.installation_id
+      AND m.native_session_id=c.native_session_id
+    WHERE c.location_kind='native' AND (
+      m.source_id IS NULL
+      OR m.file_identity<>c.file_identity
+      OR m.file_size<>c.file_size
+      OR m.file_mtime_ms<>c.file_mtime_ms
+    )`)
+  return {
+    nativeContentFullyVerified:false,
+    readyToSwitch:false,
+    oldSessionIdentities,
+    migratedContextIdentities,
+    nativeIndexed,
+    archivedOnly,
+    missingFromNativeCatalog,
+    missingContext,
+    invalidOldIdentities,
+    nativeMetricsMissingOrStale,
+    missingExamples,
+    nextRequiredActions:[
+      'Use Source-owned readers to verify the entire original session, not only the first record',
+      'Rebuild missing Catalog and numerical metrics with the Native-only indexer and bounded readers',
+      'Report old-only transcripts and Hook partial coverage without copying event bodies',
+      'Validate settings, backup identity and all business consumers before freezing old writers',
+      'Freeze, reconcile and atomically cut over only after cross-source acceptance',
+    ],
+  }
+}
