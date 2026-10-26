@@ -352,9 +352,10 @@ export class SqliteNativeSessionMetrics implements NativeSessionMetricsStore {
         ORDER BY catalog.last_activity_at DESC,
           catalog.installation_id ASC,catalog.native_session_id ASC
         LIMIT ?
-      `).all(input.sourceId,input.parserVersion,
-        NATIVE_SESSION_METRIC_PROJECTION_VERSION,
+      `).all(input.sourceId,
+        // Match SQL placeholder order: source -> optional project -> version checks.
         ...(input.projectId?[input.projectId]:[]),
+        input.parserVersion,NATIVE_SESSION_METRIC_PROJECTION_VERSION,
         ...(before ? [before.lastActivityAt,before.lastActivityAt,before.installationId,
           before.lastActivityAt,before.installationId,before.nativeSessionId] : []),
         limit) as NativeSessionMetricRebuildCandidate[]
