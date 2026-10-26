@@ -86,7 +86,8 @@ export async function runNativeReindex(args:readonly string[]) {
   }
 }
 
-if(process.argv[1] && resolve(process.argv[1])===fileURLToPath(import.meta.url)){
+if(process.argv[1]&&resolve(process.argv[1])===fileURLToPath(import.meta.url)
+  &&/(?:^|[\\/])slim-reindex-native\\.(?:[cm]?js|[cm]?ts)$/.test(process.argv[1])){
   runNativeReindex(process.argv.slice(2)).then(report=>{
     process.stdout.write(JSON.stringify(report,null,2)+'\n')
   }).catch(error=>{

@@ -245,7 +245,8 @@ async function main(args:readonly string[]){
   return finalizeSlimCutover({legacyPath,backupPath,stagingPath,
     installedSlimPath,pointerPath},observedPort)
 }
-if(process.argv[1]&&resolve(process.argv[1])===fileURLToPath(import.meta.url)){
+if(process.argv[1]&&resolve(process.argv[1])===fileURLToPath(import.meta.url)
+  &&/(?:^|[\\/])slim-cutover-activation\\.(?:[cm]?js|[cm]?ts)$/.test(process.argv[1])){
   main(process.argv.slice(2)).then(result=>{
     process.stdout.write(JSON.stringify({mode:result.mode,activated:result.mode==='slim'})+'\n')
   }).catch(error=>{

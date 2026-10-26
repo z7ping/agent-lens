@@ -128,7 +128,8 @@ export async function auditLegacyHookOriginals(args:readonly string[]):Promise<L
     }finally{await slim.close()}
   }finally{old.close()}
 }
-if(process.argv[1]&&resolve(process.argv[1])===fileURLToPath(import.meta.url)){
+if(process.argv[1]&&resolve(process.argv[1])===fileURLToPath(import.meta.url)
+  &&/(?:^|[\\/])slim-audit-legacy-hooks\\.(?:[cm]?js|[cm]?ts)$/.test(process.argv[1])){
   auditLegacyHookOriginals(process.argv.slice(2)).then(report=>{
     process.stdout.write(JSON.stringify(report,null,2)+'\n')
   }).catch(error=>{

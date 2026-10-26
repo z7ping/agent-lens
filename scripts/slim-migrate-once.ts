@@ -83,7 +83,8 @@ export async function runSlimMigrateOnce(args:readonly string[]){
     scannedSources:prepared.discovery.sourceResults.length,
   }
 }
-if(process.argv[1]&&resolve(process.argv[1])===fileURLToPath(import.meta.url)){
+if(process.argv[1]&&resolve(process.argv[1])===fileURLToPath(import.meta.url)
+  &&/(?:^|[\\/])slim-migrate(?:-once)?\\.(?:[cm]?js|[cm]?ts)$/.test(process.argv[1])){
   runSlimMigrateOnce(process.argv.slice(2)).then(x=>{
     process.stdout.write(JSON.stringify(x,null,2)+'\n')
   }).catch(error=>{

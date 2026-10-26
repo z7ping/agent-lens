@@ -114,7 +114,8 @@ export async function runNativeReindexAll(args:readonly string[]):Promise<Reinde
   }finally{await slim.close()}
 }
 
-if(process.argv[1]&&resolve(process.argv[1])===fileURLToPath(import.meta.url)){
+if(process.argv[1]&&resolve(process.argv[1])===fileURLToPath(import.meta.url)
+  &&/(?:^|[\\/])slim-reindex-all\\.(?:[cm]?js|[cm]?ts)$/.test(process.argv[1])){
   runNativeReindexAll(process.argv.slice(2)).then(report=>{
     process.stdout.write(JSON.stringify(report,null,2)+'\n')
   }).catch(error=>{
