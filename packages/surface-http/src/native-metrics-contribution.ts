@@ -8,6 +8,8 @@ export interface NativeContributionScope {
   sourceId?:string
   installationId?:string
   projectId?:string
+  /** Only the Slim native_session_context read model can certify project scope. */
+  projectScopeReady?:boolean
   logicalSessionId?:string
   toolName?:string
   from?:string
@@ -26,7 +28,7 @@ export async function nativeMetricContribution(
   policy:CapturePolicyService|undefined,
   scope:NativeContributionScope,
 ):Promise<NativeMetricContributionDto>{
-  if(scope.projectId || scope.logicalSessionId || scope.toolName){
+  if((scope.projectId && !scope.projectScopeReady) || scope.logicalSessionId || scope.toolName){
     return {state:'unsupported',reason:'native-metrics-filter-not-indexed'}
   }
   if(!metrics?.overview||!sources||!policy){
@@ -56,6 +58,7 @@ export async function nativeMetricContribution(
       sourceId:source.manifest.sourceId,parserVersion:source.manifest.parserVersion,
       coverageCertified:source.nativeSessionCoverageComplete===true,
       ...(scope.installationId?{installationId:scope.installationId}:{}),
+      ...(scope.projectId?{projectId:scope.projectId}:{}),
       ...(scope.from?{from:scope.from}:{}),...(scope.to?{to:scope.to}:{}),
     })))
     const sum=(key:'eligibleSessions'|'readySessions'|'missingSessions'|'staleSessions'|'partialSessions')=>
