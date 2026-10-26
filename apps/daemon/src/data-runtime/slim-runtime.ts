@@ -237,6 +237,11 @@ export class SlimDataRuntime {
     }
   }
 
+  /** Read-only profile enumeration for bounded Native-only startup. */
+  profiles(installationId:string):Promise<RuntimeProfile[]>{
+    return this.read(['runtimeProfiles','listByInstallation'],[installationId])
+  }
+
   /** Native Source history indexing now uses the real isolated Worker port. */
   async reindexInstallation(input:{
     source:SourceDefinition;installationId:string
