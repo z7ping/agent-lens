@@ -128,7 +128,7 @@ export class SqliteSlimNativeSessionList implements NativeSessionListReader {
           :certified?.coverageCertified===true
         const stale=item.metric_identity!==null && (
           (certifications!==undefined && !certified)
-          item.metric_identity!==item.file_identity
+          || item.metric_identity!==item.file_identity
           || item.metric_size!==item.file_size || item.metric_mtime!==item.file_mtime_ms
           || item.projection_version!==NATIVE_SESSION_METRIC_PROJECTION_VERSION
           || (expectedVersion!==undefined && item.parser_version!==expectedVersion)
