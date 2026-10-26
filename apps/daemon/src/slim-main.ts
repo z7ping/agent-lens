@@ -1,6 +1,7 @@
 import { existsSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { startLocalVault } from '@agent-lens/backup-local'
+import { NpmPiEcosystemProvider } from '@agent-lens/integration-pi'
 import { isAbsolute, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { DefaultCapturePolicyService, resolveCapturePolicyPluginState, writeCapturePolicyConfiguration } from '@agent-lens/capture-policy'
@@ -13,6 +14,7 @@ import { claudeSourceDefinition } from '@agent-lens/source-claude'
 import { hermesSourceDefinition } from '@agent-lens/source-hermes'
 import { openCodeSourceDefinition } from '@agent-lens/source-opencode'
 import { startNativeOnlyHttpSurface, previewLocalHostTextFile } from '@agent-lens/surface-http'
+import type { PiEcosystemQueryService } from '@agent-lens/protocol'
 import { openLocalPath } from './local-path-opener.js'
 import { SlimDataRuntime } from './data-runtime/slim-runtime.js'
 import { SlimSourceCoordinator } from './slim-source-coordinator.js'
@@ -29,6 +31,8 @@ export interface SlimDaemonOptions {
   vaultPath?:string
   /** Test-only external existing Vault; otherwise compose the same Local Vault as Cordis. */
   backup?:BackupService
+  /** Test injection for the existing remote Pi catalog; never persisted to SQLite. */
+  piEcosystem?:PiEcosystemQueryService
   /** Test-only injected Live Registry/attachments; real runtime is Pi Worker. */
   lives?:LiveService
   liveAttachments?:LiveAttachmentService
@@ -123,6 +127,9 @@ export async function startSlimNativeDaemon(options:SlimDaemonOptions){
       backgroundProgress:()=>coordinator.snapshot(),
       ...(options.port===undefined?{}:{port:options.port}),
       sources,capturePolicy:policy,
+      ...(policy.isSourceEnabled('pi')?{
+        piEcosystem:options.piEcosystem??new NpmPiEcosystemProvider(),
+      }:{}),
       openHostPath:openLocalPath,
       previewHostFile:previewLocalHostTextFile,
       integrationManagement:integrations.management,
