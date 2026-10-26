@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { copyFile, mkdtemp, stat, rm, writeFile } from 'node:fs/promises'
+import Database from 'better-sqlite3'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { SqliteStorageService, SqliteSlimStorage } from '@agent-lens/storage-sqlite'
@@ -64,4 +65,27 @@ test('malformed active pointer is a hard error, never a silent Legacy fallback',
     await writeFile(path,'{"mode":"slim"}')
     await assert.rejects(readActiveDatabasePointer(path),/Invalid cutover pointer/)
   }finally{await rm(dir,{recursive:true,force:true})}
+})
+
+
+test('M3 cutover rehashes v38 under writer lock, rejecting changes after a previously allowed gate',async()=>{
+  const root=await mkdtemp(join(tmpdir(),'al-m3-stale-gate-'))
+  const paths={legacyPath:join(root,'old.sqlite'),backupPath:join(root,'backup.sqlite'),
+    stagingPath:join(root,'stage.sqlite'),installedSlimPath:join(root,'installed.sqlite'),
+    pointerPath:join(root,'active.json')}
+  try{
+    const legacy=new SqliteStorageService({path:paths.legacyPath})
+    await legacy.migrate()
+    await legacy.close()
+    await copyFile(paths.legacyPath,paths.backupPath)
+    const slim=await SqliteSlimStorage.createFresh(paths.stagingPath)
+    await slim.close()
+    const changed=new Database(paths.legacyPath)
+    try{changed.exec(`CREATE TABLE m3_race_detected (id INTEGER PRIMARY KEY)`)}
+    finally{changed.close()}
+    await assert.rejects(activateSlimCutover(paths,allowed),
+      /Legacy database drifted from the M3 backup/)
+    assert.equal(await readActiveDatabasePointer(paths.pointerPath),null)
+    await assert.rejects(stat(paths.installedSlimPath),/ENOENT/)
+  }finally{await rm(root,{force:true,recursive:true})}
 })
