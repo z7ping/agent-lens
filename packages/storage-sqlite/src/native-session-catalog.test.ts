@@ -1,224 +1,65 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { resolve } from 'node:path'
-import { createHash } from 'node:crypto'
+import { SqliteSlimStorage } from './slim-storage'
 
-function nativeReviewSessionId(sourceId: string, installationId: string, nativeSessionId: string): string {
-  return `native:${createHash('sha256').update(JSON.stringify([sourceId, installationId, nativeSessionId])).digest('hex').slice(0,32)}`
+const at='2026-10-26T00:00:00.000Z'
+
+async function fixture() {
+  const storage=await SqliteSlimStorage.createFresh(':memory:')
+  storage.db.exec(`
+    INSERT INTO hosts(id,name,platform,arch,created_at,last_seen_at)
+      VALUES ('host','local','linux','x64','2026-10-26','2026-10-26');
+    INSERT INTO agent_products(id,name) VALUES ('pi','Pi');
+    INSERT INTO agent_installations(id,host_id,product_id,first_seen_at,last_seen_at)
+      VALUES ('local-pi','host','pi','2026-10-26','2026-10-26');
+  `)
+  return storage
 }
-import { SqliteStorageService } from './storage'
-
-const now = '2026-10-25T00:00:00.000Z'
-const location = (nativeSessionId: string, date = now) => ({
-  sourceId: 'pi',
-  installationId: 'local-pi',
-  nativeSessionId,
-  locationKind: 'native' as const,
-  filePath: resolve('/tmp', `${nativeSessionId}.jsonl`),
-  fileIdentity: '1:1',
-  fileSize: 256,
-  fileMtimeMs: 1_790_000_000_000,
-  lastActivityAt: date,
-  updatedAt: now,
+const location=(id:string,lastActivityAt=at)=>({
+  sourceId:'pi',installationId:'local-pi',nativeSessionId:id,
+  locationKind:'native' as const,filePath:resolve('fixtures',id+'.jsonl'),
+  fileIdentity:'inode:'+id,fileSize:200,fileMtimeMs:10,
+  lastActivityAt,updatedAt:at,
 })
 
-test('native session catalog remains metadata-only, stable and independently pageable', async () => {
-  const storage = new SqliteStorageService({ path: ':memory:' })
-  await storage.migrate()
+test('Slim Native Catalog stores stable metadata and independently paginates sessions',async()=>{
+  const storage=await fixture()
   try {
-    const catalog = storage.nativeSessionCatalog
-    const old = location('a','2026-10-20T00:00:00Z')
-    const middle = location('b','2026-10-22T00:00:00Z')
-    const newest = location('c','2026-10-24T00:00:00Z')
-    await catalog.upsert(old)
-    await catalog.upsert(middle)
-    await catalog.upsert(newest)
-    await catalog.upsert({ ...middle, fileSize: 300, title: 'Generated session title' })
-
-    // File walkers can observe older events after newer ones during replay.
-    // Keep the newest real session activity even when upserts arrive late.
-    await catalog.upsert({ ...middle, lastActivityAt: '2026-10-21T00:00:00Z' })
-    assert.equal((await catalog.get({sourceId:'pi',installationId:'local-pi',nativeSessionId:'b'}))?.lastActivityAt,
-      '2026-10-22T00:00:00Z')
-
-    assert.deepEqual((await catalog.query({search:'generated SESSION',locationKind:'native'}))
-      .items.map(item=>item.nativeSessionId),['b'])
-    assert.deepEqual((await catalog.query({search:'no-such-private-body'})).items,[])
-    assert.deepEqual((await catalog.query({search:'%' })).items,[])
-    assert.deepEqual((await catalog.query({search:'a', locationKind:'native'}))
-      .items.map(item=>item.nativeSessionId),['b','a'])
-
-    const byNativeId = await catalog.getByReviewSessionId(
-      nativeReviewSessionId('pi','local-pi','b'),
-    )
-    assert.equal(byNativeId?.nativeSessionId,'b')
-    assert.equal(byNativeId?.title,'Generated session title')
-    assert.equal(await catalog.getByReviewSessionId('invalid'),null)
-    const first = await catalog.query({ limit: 2 })
-    assert.deepEqual(first.items.map(x => x.nativeSessionId), ['c','b'])
+    const catalog=storage.nativeSessionCatalog
+    for(const [id,activity] of [
+      ['old','2026-10-20T00:00:00.000Z'],
+      ['middle','2026-10-22T00:00:00.000Z'],
+      ['new','2026-10-24T00:00:00.000Z'],
+    ]) await catalog.upsert(location(id!,activity!))
+    await catalog.upsert({...location('middle','2026-10-21T00:00:00.000Z'),title:'Readable title'})
+    assert.equal((await catalog.get({sourceId:'pi',installationId:'local-pi',nativeSessionId:'middle'}))?.lastActivityAt,
+      '2026-10-22T00:00:00.000Z')
+    assert.deepEqual((await catalog.query({search:'READABLE',limit:10})).items.map(x=>x.nativeSessionId),['middle'])
+    const first=await catalog.query({limit:2})
+    assert.deepEqual(first.items.map(x=>x.nativeSessionId),['new','middle'])
     assert.equal(first.hasMore,true)
-    assert.equal(first.items[1]?.fileSize,300)
-    const last = first.items[1]!
-    const next = await catalog.query({ limit: 2,
-      before: { lastActivityAt: last.lastActivityAt,sourceId: last.sourceId,
-        installationId: last.installationId,nativeSessionId: last.nativeSessionId,
-        locationKind: last.locationKind } })
-    assert.deepEqual(next.items.map(x => x.nativeSessionId), ['a'])
-    assert.equal(next.hasMore,false)
-    assert.equal((await catalog.get({sourceId:'pi',installationId:'local-pi',nativeSessionId:'b'}))?.title,
-      'Generated session title')
-
-    await catalog.upsert({ ...middle, locationKind: 'archive', filePath: resolve('/tmp','vault','b.jsonl') })
-    assert.equal((await catalog.query({ locationKind: 'archive' })).items.length,1)
-    assert.equal((await catalog.get({sourceId:'pi',installationId:'local-pi',nativeSessionId:'b'}))?.locationKind,'native')
-    assert.equal((await catalog.get({sourceId:'pi',installationId:'local-pi',nativeSessionId:'b',locationKind:'archive'}))?.locationKind,'archive')
-
-    // Match old sessions by Source/Installation/native ID only, not by
-    // identical names or approximate activity timestamps. Only an actual
-    // persisted logical session with observations suppresses the native row.
-    storage.db.prepare(`INSERT INTO hosts
-      (id,name,platform,arch,created_at,last_seen_at) VALUES (?,?,?,?,?,?)`)
-      .run('host','local','linux','x64',now,now)
-    storage.db.prepare(`INSERT INTO agent_products(id,name) VALUES (?,?)`).run('pi','Pi')
-    storage.db.prepare(`INSERT INTO agent_installations
-      (id,host_id,product_id,first_seen_at,last_seen_at) VALUES (?,?,?,?,?)`)
-      .run('local-pi','host','pi',now,now)
-    for (const id of ['b','c']) {
-      storage.db.prepare('INSERT INTO logical_sessions(id,installation_id) VALUES (?,?)')
-        .run('logical-'+id,'local-pi')
-      storage.db.prepare(`INSERT INTO source_sessions
-        (id,source_id,installation_id,native_session_id,logical_session_id)
-        VALUES (?,?,?,?,?)`).run('source-'+id,'pi','local-pi',id,'logical-'+id)
-    }
-    // A SourceSession relationship alone does NOT mean Review has content.
-    const partial = await catalog.query({onlyWithoutLegacyReview:true,limit:2,locationKind:'native'})
-    assert.deepEqual(partial.items.map(x=>x.nativeSessionId),['c','b'])
-    for (const id of ['b','c']) {
-      storage.db.prepare(`INSERT INTO observations
-        (id,host_id,installation_id,logical_session_id,source_session_id,kind,captured_at,payload_json)
-        VALUES (?,?,?,?,?,?,?,?)`)
-        .run('observation-'+id,'host','local-pi','logical-'+id,'source-'+id,
-          'message.user',now,'{"text":"never included in catalog output"}')
-    }
-    // SQL excludes c and b *before* its LIMIT, so a is still reachable.
-    const unmatched = await catalog.query({onlyWithoutLegacyReview:true,limit:1,locationKind:'native'})
-    assert.deepEqual(unmatched.items.map(x=>x.nativeSessionId),['a'])
-    assert.equal(unmatched.hasMore,false)
-    // An older v34 metadata row has not yet received its stable ID index.
-    // Do not display an unopenable native link as a usable Task session.
-    storage.db.prepare(`UPDATE native_session_catalog SET review_session_id=NULL
-      WHERE source_id=? AND installation_id=? AND native_session_id=? AND location_kind=?`)
-      .run('pi','local-pi','a','native')
-    assert.deepEqual((await catalog.query({
-      onlyWithoutLegacyReview:true,locationKind:'native',
-    })).items,[])
-    // The next ordinary metadata refresh restores ID lookup automatically.
-    await catalog.upsert(old)
-    assert.deepEqual((await catalog.query({
-      onlyWithoutLegacyReview:true,locationKind:'native',
-    })).items.map(x=>x.nativeSessionId),['a'])
-    // A native-only writer claim is per exact source identity, durable and
-    // cannot silently convert any historical SQL-backed session.
-    const ownership = {
-      sourceId: old.sourceId,
-      installationId: old.installationId,
-      nativeSessionId: old.nativeSessionId,
-      filePath: old.filePath,
-      fileIdentity: old.fileIdentity,
-    }
-    assert.equal(await catalog.hasNativeOnlyWriteClaim(ownership),false)
-    assert.equal(await catalog.isNativeMetricsEligible(ownership),false)
-    assert.equal(await catalog.claimNativeOnlyWrite({
-      ...ownership, fileIdentity: 'forged',
-    }),false)
-    assert.equal(await catalog.claimNativeOnlyWrite(ownership),true)
-    assert.equal(await catalog.hasNativeOnlyWriteClaim(ownership),true)
-    assert.equal(await catalog.isNativeMetricsEligible(ownership),true)
-    assert.equal(await catalog.getSessionWriteMode(ownership),'native-only')
-    assert.equal(await catalog.claimLegacyWrite(ownership),'native-only') // no mixed writer
-    assert.equal(await catalog.claimNativeOnlyWrite(ownership),true) // idempotent
-    assert.equal(await catalog.claimNativeOnlyWrite({
-      ...ownership, nativeSessionId:'b',filePath:middle.filePath,
-    }),false) // prior Observation
-    assert.equal(await catalog.claimNativeOnlyWrite({
-      ...ownership, nativeSessionId:'c',filePath:newest.filePath,
-    }),false) // prior Observation
-    await catalog.upsert(location('legacy-first'))
-    const legacyFirst = { ...ownership, nativeSessionId:'legacy-first',
-      filePath:location('legacy-first').filePath }
-    assert.equal(await catalog.getSessionWriteMode(legacyFirst),null)
-    assert.equal(await catalog.claimLegacyWrite(legacyFirst),'legacy')
-    assert.equal(await catalog.claimNativeOnlyWrite(legacyFirst),false)
-    assert.equal(await catalog.getSessionWriteMode(legacyFirst),'legacy')
-    assert.equal(await catalog.hasNativeOnlyWriteClaim(legacyFirst),false)
-    await catalog.upsert(location('source-record-only'))
-    storage.db.prepare(`INSERT INTO source_records(
-      id,source_id,installation_id,source_session_native_id,native_type,
-      captured_at,locator_json,payload_json,parser_version
-    ) VALUES (?,?,?,?,?,?,?,?,?)`).run(
-      'old-record','pi','local-pi','source-record-only','message.user',
-      now,'{"kind":"file"}','{"text":"old body"}','1',
-    )
-    assert.equal(await catalog.claimNativeOnlyWrite({
-      ...ownership,nativeSessionId:'source-record-only',
-      filePath:location('source-record-only').filePath,
-    }),false)
-    assert.equal(await catalog.hasNativeOnlyWriteClaim({
-      sourceId:'pi',installationId:'local-pi',nativeSessionId:'source-record-only',
-    }),false)
-
-    // Unfiltered view still exposes all original catalog entries.
-    const allNative = await catalog.query({locationKind:'native',limit:6})
-    assert.deepEqual(allNative.items.map(x=>x.nativeSessionId),['source-record-only','legacy-first','c','b','a'])
-    assert.equal(JSON.stringify(unmatched).includes('never included'),false)
-
-    const columns = storage.db.prepare('PRAGMA table_info(native_session_catalog)').all() as Array<{name:string}>
-    assert.equal(columns.some(x=>x.name==='payload' || x.name==='payload_json' || x.name==='observation_id'),false)
-    const rows = storage.db.prepare('SELECT COUNT(*) AS count FROM native_session_catalog').get() as {count:number}
-    assert.equal(rows.count,6)
-    await assert.rejects(catalog.upsert({ ...middle, filePath: '../relative.jsonl' }))
-    await assert.rejects(catalog.query({limit:5000}))
-  } finally {
-    storage.close()
-  }
+    const second=await catalog.query({limit:2,before:{
+      lastActivityAt:first.items[1]!.lastActivityAt,sourceId:'pi',installationId:'local-pi',
+      nativeSessionId:'middle',locationKind:'native',
+    }})
+    assert.deepEqual(second.items.map(x=>x.nativeSessionId),['old'])
+  }finally{await storage.close()}
 })
 
-test('Native-only rail excludes a durable Legacy owner even before any Review Observation exists',async()=>{
-  const storage=new SqliteStorageService({path:':memory:'})
-  await storage.migrate()
-  try{
+test('Slim numerical eligibility is original native location, never SQL writer ownership',async()=>{
+  const storage=await fixture()
+  try {
     const catalog=storage.nativeSessionCatalog
-    const legacy=location('legacy-without-observation','2026-10-25T15:00:00Z')
-    const native=location('native-verified','2026-10-25T14:00:00Z')
-    const unclaimed=location('unclaimed-catalog-only','2026-10-25T13:00:00Z')
-    for(const row of [legacy,native,unclaimed])await catalog.upsert(row)
-    assert.equal(await catalog.claimLegacyWrite(legacy),'legacy')
-    assert.equal(await catalog.claimNativeOnlyWrite(native),true)
-    // A metadata-only empty Review is not proof that a Legacy claim can be
-    // replaced by a synthetic Native-only Task Center/search result.
-    const visible=await catalog.query({
-      locationKind:'native',onlyWithoutLegacyReview:true,limit:1,
-    })
-    assert.deepEqual(visible.items.map(row=>row.nativeSessionId),['native-verified'])
-    assert.equal(visible.hasMore,true)
-    const rest=await catalog.query({
-      locationKind:'native',onlyWithoutLegacyReview:true,limit:2,
-      before: {
-        sourceId:visible.items[0]!.sourceId,
-        installationId:visible.items[0]!.installationId,
-        nativeSessionId:visible.items[0]!.nativeSessionId,
-        locationKind:'native',
-        lastActivityAt:visible.items[0]!.lastActivityAt,
-      },
-    })
-    assert.deepEqual(rest.items.map(row=>row.nativeSessionId),['unclaimed-catalog-only'])
-    const raw=await catalog.query({locationKind:'native'})
-    assert.deepEqual(raw.items.map(row=>row.nativeSessionId),[
-      'legacy-without-observation','native-verified','unclaimed-catalog-only',
-    ])
-    const direct=await catalog.getByReviewSessionId(nativeReviewSessionId(
-      legacy.sourceId,legacy.installationId,legacy.nativeSessionId,
-    ))
-    assert.equal(direct?.nativeSessionId,'legacy-without-observation')
+    const identity={sourceId:'pi',installationId:'local-pi',nativeSessionId:'a'}
+    assert.equal(await catalog.isNativeMetricsEligible(identity),false)
+    await catalog.upsert(location('a'))
+    assert.equal(await catalog.isNativeMetricsEligible(identity),true)
+    assert.equal('claimLegacyWrite' in catalog,false)
+    assert.equal('claimNativeOnlyWrite' in catalog,false)
+    assert.equal('getSessionWriteMode' in catalog,false)
+    assert.equal('hasNativeOnlyWriteClaim' in catalog,false)
+    const tables=storage.db.prepare("SELECT name FROM sqlite_master WHERE type='table'").all() as Array<{name:string}>
+    assert.equal(tables.some(row=>row.name==='native_session_write_claims'),false)
   }finally{await storage.close()}
 })
