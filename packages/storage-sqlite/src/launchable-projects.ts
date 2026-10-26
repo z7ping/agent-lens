@@ -6,6 +6,7 @@ import type {
 } from '@agent-lens/core'
 import type { SqliteExecutor } from './executor'
 import { rebuildLaunchableProjectIndex } from './launchable-project-index'
+import { rebuildSlimLaunchableProjectIndex } from './slim-launchable-project-rebuild'
 
 const MAX_LIMIT = 100
 const MAX_WORKSPACES_PER_PROJECT = 64
@@ -212,7 +213,10 @@ export class SqliteLaunchableProjectReader implements LaunchableProjectReader {
   }
 
   rebuild(): Promise<void> {
-    return this.executor.run(() => rebuildLaunchableProjectIndex(this.executor.db))
+    return this.executor.run(() => {
+      if (this.executor.slimSchema) rebuildSlimLaunchableProjectIndex(this.executor.db)
+      else rebuildLaunchableProjectIndex(this.executor.db)
+    })
   }
 }
 
