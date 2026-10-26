@@ -91,7 +91,7 @@ export class SqliteSlimNativeSessionContexts {
     const updatedAt = input.updatedAt ?? new Date().toISOString()
     if (!Number.isFinite(Date.parse(updatedAt))) throw new TypeError('Invalid context updatedAt')
     return this.executor.run(() => {
-      this.executor.db.prepare(`
+      const result=this.executor.db.prepare(`
         INSERT INTO native_session_context(
           source_id,installation_id,native_session_id,runtime_profile_id,
           project_id,workspace_id,title_override,title_kind,updated_at
@@ -103,12 +103,18 @@ export class SqliteSlimNativeSessionContexts {
           title_override=COALESCE(excluded.title_override,native_session_context.title_override),
           title_kind=COALESCE(excluded.title_kind,native_session_context.title_kind),
           updated_at=excluded.updated_at
+        WHERE excluded.runtime_profile_id IS NULL
+          OR native_session_context.runtime_profile_id IS NULL
+          OR native_session_context.runtime_profile_id=excluded.runtime_profile_id
       `).run(
         input.sourceId,input.installationId,input.nativeSessionId,
         input.runtimeProfileId ?? null,input.projectId ?? null,
         input.workspaceId ?? null,input.titleOverride ?? null,
         input.titleKind ?? null,updatedAt,
       )
+      if(result.changes===0) {
+        throw new Error('Native session identity collision across runtime profiles')
+      }
     })
   }
 }
