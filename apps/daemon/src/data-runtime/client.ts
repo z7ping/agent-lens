@@ -101,6 +101,8 @@ export interface DataRuntimeClientOptions {
   dbPath?: string
   nodeId?: string
   budget?: StorageBudgetPolicy
+  /** Explicit staging runtime. Default still remains legacy until cutover. */
+  schemaKind?: 'legacy'|'slim'
   heartbeatIntervalMs?: number
   heartbeatTimeoutMs?: number
 }
@@ -149,6 +151,7 @@ export class DataRuntimeClient {
         ...(this.options.dbPath ? { dbPath: this.options.dbPath } : {}),
         ...(this.options.nodeId ? { nodeId: this.options.nodeId } : {}),
         ...(this.options.budget ? { budget: this.options.budget } : {}),
+        ...(this.options.schemaKind === 'slim' ? { schemaKind: 'slim' } : {}),
       },
       execArgv: [],
     })
