@@ -44,8 +44,46 @@ test('native overview consults only bounded numerical cache, filters authorizati
     assert.deepEqual(captured,[{sourceId:'pi',parserVersion:'pi-v9',coverageCertified:true}])
     assert.equal(JSON.stringify(result).includes('filePath'),false)
     assert.equal((await fetch(base+'?sourceId=codex')).status,200)
-    assert.equal((await fetch(base+'?projectId=secret')).status,400)
+    assert.deepEqual(await (await fetch(base+'?projectId=secret')).json(),{
+      state:'unsupported',reason:'native-project-metrics-require-slim',
+    })
     assert.equal((await fetch(base+'?sourceId=pi&sourceId=codex')).status,400)
     assert.equal((await fetch(base,{method:'POST'})).status,405)
+  }finally{await app.dispose()}
+})
+
+test('Slim-only numerical overview passes project and installation scope without Canonical rows',async()=>{
+  const captured:Array<Record<string,unknown>>=[]
+  const storage={
+    health:async()=>({ok:true}),
+    nativeSessionList:{async query(){return {items:[],hasMore:false}}},
+    nativeSessionMetrics:{
+      async overview(query:Record<string,unknown>){
+        captured.push(query)
+        return {
+          sourceId:query.sourceId,eligibleSessions:1,readySessions:0,
+          missingSessions:1,staleSessions:0,partialSessions:0,
+          totals:{interactionCount:0,toolCallCount:0,toolResultCount:0,
+            toolErrorCount:0,errorCount:0,inputTokens:null,outputTokens:null},
+          tools:[],toolsTruncated:false,
+        }
+      },
+    },
+  } as unknown as StorageService
+  const sources={list:()=>[
+    {manifest:{sourceId:'pi',parserVersion:'pi-v9'},nativeSessionCoverageComplete:false},
+  ]} as unknown as SourceService
+  const policy={isSourceEnabled:()=>true} as unknown as CapturePolicyService
+  const app=await startHttpSurface(storage,{port:0,sources,capturePolicy:policy})
+  try{
+    const url=`http://${app.host}:${app.port}/api/v1/native-sessions/metrics/overview?projectId=p1&installationId=i1`
+    const response=await fetch(url)
+    assert.equal(response.status,200)
+    const body=await response.json() as {state:string;coverage:string}
+    assert.equal(body.state,'available')
+    assert.equal(body.coverage,'partial')
+    assert.equal(captured[0]?.projectId,'p1')
+    assert.equal(captured[0]?.installationId,'i1')
+    assert.equal(captured[0]?.coverageCertified,false)
   }finally{await app.dispose()}
 })
