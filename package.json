@@ -62,6 +62,7 @@
     "storage:slim:preflight": "tsx scripts/slim-cutover-preflight.ts preflight",
     "storage:slim:stage": "tsx scripts/slim-cutover-preflight.ts stage",
     "storage:slim:prepare": "tsx scripts/slim-prepare-cutover.ts",
+    "storage:slim:migrate": "tsx scripts/slim-migrate-once.ts",
     "storage:slim:verify": "tsx scripts/slim-cutover-preflight.ts verify",
     "storage:slim:reconcile": "tsx scripts/slim-cutover-preflight.ts reconcile",
     "storage:slim:gate": "tsx scripts/slim-cutover-gate.ts",
