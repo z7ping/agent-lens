@@ -1,3 +1,4 @@
+import { basename as invocationBaseName } from 'node:path'
 import { createHash } from 'node:crypto'
 import { resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -137,7 +138,7 @@ export async function runOriginalsAudit(args:readonly string[]):Promise<Original
 }
 
 if(process.argv[1]&&resolve(process.argv[1])===fileURLToPath(import.meta.url)
-  &&/(?:^|[\\/])slim-audit-originals\\.(?:[cm]?js|[cm]?ts)$/.test(process.argv[1])){
+  &&["slim-audit-originals.ts","slim-audit-originals.js","slim-audit-originals.mjs"].includes(invocationBaseName(process.argv[1]))){
   runOriginalsAudit(process.argv.slice(2)).then(report=>{
     process.stdout.write(JSON.stringify(report,null,2)+'\n')
   }).catch(error=>{

@@ -1,3 +1,4 @@
+import { basename as invocationBaseName } from 'node:path'
 import { randomUUID } from 'node:crypto'
 import { existsSync } from 'node:fs'
 import { join,resolve } from 'node:path'
@@ -84,7 +85,7 @@ export async function runSlimMigrateOnce(args:readonly string[]){
   }
 }
 if(process.argv[1]&&resolve(process.argv[1])===fileURLToPath(import.meta.url)
-  &&/(?:^|[\\/])slim-migrate(?:-once)?\\.(?:[cm]?js|[cm]?ts)$/.test(process.argv[1])){
+  &&["slim-migrate-once.ts","slim-migrate-once.js","slim-migrate-once.mjs","slim-migrate.mjs"].includes(invocationBaseName(process.argv[1]))){
   runSlimMigrateOnce(process.argv.slice(2)).then(x=>{
     process.stdout.write(JSON.stringify(x,null,2)+'\n')
   }).catch(error=>{

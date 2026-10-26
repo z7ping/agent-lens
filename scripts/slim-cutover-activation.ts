@@ -1,3 +1,4 @@
+import { basename as invocationBaseName } from 'node:path'
 import { randomUUID } from 'node:crypto'
 import { link, lstat, open, rename, stat, unlink } from 'node:fs/promises'
 import { dirname, resolve } from 'node:path'
@@ -246,7 +247,7 @@ async function main(args:readonly string[]){
     installedSlimPath,pointerPath},observedPort)
 }
 if(process.argv[1]&&resolve(process.argv[1])===fileURLToPath(import.meta.url)
-  &&/(?:^|[\\/])slim-cutover-activation\\.(?:[cm]?js|[cm]?ts)$/.test(process.argv[1])){
+  &&["slim-cutover-activation.ts","slim-cutover-activation.js","slim-cutover-activation.mjs"].includes(invocationBaseName(process.argv[1]))){
   main(process.argv.slice(2)).then(result=>{
     process.stdout.write(JSON.stringify({mode:result.mode,activated:result.mode==='slim'})+'\n')
   }).catch(error=>{
