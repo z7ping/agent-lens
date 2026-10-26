@@ -26,6 +26,7 @@ import { readLaunchableProjects } from './launchable-projects'
 import { handleBackupRequest } from './backup-http'
 import { handleAgentFilesRequest } from './agent-files-http'
 import { handleManagedAssetFilesRequest } from './managed-asset-files'
+import { handleNativeOnlyTaskFilesRequest } from './native-only-task-files-http'
 import { handleCapturePolicyRequest } from './capture-policy-http'
 import {
   handleIntegrationDiscoveryRequest,type IntegrationDiscoveryController,
@@ -144,6 +145,9 @@ export async function startNativeOnlyHttpSurface(
       if(await handleNativeSessionWindowRequest(
         request,response,url,options.reader,storage.nativeSessionCatalog))return
 
+      if(await handleNativeOnlyTaskFilesRequest(
+        request,response,url,storage.nativeSessionCatalog,
+        options.reader,options.capturePolicy))return
       if(await handleAgentFilesRequest(request,response,url,{
         repositories:{installations:storage.installations},
       },options.sources,options.capturePolicy))return
