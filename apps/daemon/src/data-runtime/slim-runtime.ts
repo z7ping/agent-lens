@@ -6,7 +6,8 @@ import type {
   NativeSessionListItem,
   NativeSessionMetricOverview,
   NativeSessionMetricOverviewQuery,
-  NativeSessionMetricSnapshot,
+  NativeSessionMetricSnapshot, NativeSessionMetricReadResult,
+  NativeSessionMetricRebuildCandidate,
   NativeSessionMetricsStore,
   NativeSessionListReader, NativeFacetReader,
   StorageHealth,
@@ -132,29 +133,29 @@ export class SlimDataRuntime {
     const self=this
     return {
       nativeSessionCatalog:{
-        get(input){return self.read(['nativeSessionCatalog','get'],[input])},
-        getByReviewSessionId(id){return self.read(['nativeSessionCatalog','getByReviewSessionId'],[id])},
-        query(input={}){return self.read(['nativeSessionCatalog','query'],[input])},
+        get(input){return self.read<NativeSessionCatalogEntry|null>(['nativeSessionCatalog','get'],[input])},
+        getByReviewSessionId(id){return self.read<NativeSessionCatalogEntry|null>(['nativeSessionCatalog','getByReviewSessionId'],[id])},
+        query(input={}){return self.read<Awaited<ReturnType<NativeSessionCatalogStore['query']>>>(['nativeSessionCatalog','query'],[input])},
         isNativeMetricsEligible(input){
-          return self.read(['nativeSessionCatalog','isNativeMetricsEligible'],[input])
+          return self.read<boolean>(['nativeSessionCatalog','isNativeMetricsEligible'],[input])
         },
       },
       nativeSessionList:{query(input){
-        return self.read(['nativeSessionList','query'],[input])
+        return self.read<Awaited<ReturnType<NativeSessionListReader['query']>>>(['nativeSessionList','query'],[input])
       }},
       nativeFacets:{query(input={}){
-        return self.read(['nativeFacets','query'],[input])
+        return self.read<Awaited<ReturnType<NativeFacetReader['query']>>>(['nativeFacets','query'],[input])
       }},
       nativeSessionMetrics:{
-        get(input){return self.read(['nativeSessionMetrics','get'],[input])},
-        overview(input){return self.read(['nativeSessionMetrics','overview'],[input])},
+        get(input){return self.read<NativeSessionMetricReadResult>(['nativeSessionMetrics','get'],[input])},
+        overview(input){return self.read<NativeSessionMetricOverview>(['nativeSessionMetrics','overview'],[input])},
         findRebuildCandidates(input,limit,before){
-          return self.read(['nativeSessionMetrics','findRebuildCandidates'],[
+          return self.read<NativeSessionMetricRebuildCandidate[]>(['nativeSessionMetrics','findRebuildCandidates'],[
             input,limit,...(before?[before]:[]),
           ])
         },
-        replace(input){return self.write(['nativeSessionMetrics','replace'],[input])},
-        invalidate(input){return self.write(['nativeSessionMetrics','invalidate'],[input])},
+        replace(input){return self.write<boolean>(['nativeSessionMetrics','replace'],[input])},
+        invalidate(input){return self.write<void>(['nativeSessionMetrics','invalidate'],[input])},
       },
       health(){return self.health()},
     }
