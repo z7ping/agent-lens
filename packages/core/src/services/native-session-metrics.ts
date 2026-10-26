@@ -13,6 +13,8 @@ export interface NativeSessionMetricOverviewQuery {
   /** Must be explicitly attested by the current Source. Missing means unverified. */
   coverageCertified?:boolean
   installationId?:string
+  /** Slim-only project attribution; never infer it from legacy event bodies. */
+  projectId?:string
   from?:string
   to?:string
 }
