@@ -297,6 +297,7 @@ export class SqliteNativeSessionMetrics implements NativeSessionMetricsStore {
   ):Promise<NativeSessionMetricRebuildCandidate[]>{
     if(!input.sourceId || !input.parserVersion
       || input.sourceId.length>128 || input.parserVersion.length>512
+      || (input.coverageCertified!==undefined && typeof input.coverageCertified!=='boolean')
       || (input.projectId!==undefined && (!input.projectId.trim() || input.projectId.length>512))
       || !Number.isSafeInteger(limit) || limit<1 || limit>4
       || (before && (!before.lastActivityAt || before.lastActivityAt.length>128
@@ -342,7 +343,8 @@ export class SqliteNativeSessionMetrics implements NativeSessionMetricsStore {
             OR metrics.file_size<>catalog.file_size
             OR metrics.file_mtime_ms<>catalog.file_mtime_ms
             OR metrics.parser_version<>?
-            OR metrics.projection_version<>?)
+            OR metrics.projection_version<>?
+            OR (metrics.coverage='partial' AND ?=1))
           ${before ? `AND (
             catalog.last_activity_at < ?
             OR (catalog.last_activity_at = ? AND catalog.installation_id > ?)
@@ -356,6 +358,7 @@ export class SqliteNativeSessionMetrics implements NativeSessionMetricsStore {
         // Match SQL placeholder order: source -> optional project -> version checks.
         ...(input.projectId?[input.projectId]:[]),
         input.parserVersion,NATIVE_SESSION_METRIC_PROJECTION_VERSION,
+        input.coverageCertified===true?1:0,
         ...(before ? [before.lastActivityAt,before.lastActivityAt,before.installationId,
           before.lastActivityAt,before.installationId,before.nativeSessionId] : []),
         limit) as NativeSessionMetricRebuildCandidate[]

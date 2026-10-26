@@ -55,5 +55,32 @@ test('slim numeric Overview and repair queue filter project without legacy sessi
     assert.deepEqual((await slim.nativeSessionMetrics.findRebuildCandidates({
       ...query,projectId:p1.id,
     },4)).map(row=>row.nativeSessionId),[])
+    // A prior partial result remains partial until the registered Source
+    // explicitly attests full native history/Hook coverage.
+    const pendingSnapshot={
+      sourceId:'pi',installationId:installation.id,nativeSessionId:'two',
+      fileIdentity:'two',fileSize:100,fileMtimeMs:2,
+      parserVersion:'pi-v1',projectionVersion:NATIVE_SESSION_METRIC_PROJECTION_VERSION,
+      coverage:'partial' as const,interactionCount:3,toolCallCount:1,
+      toolResultCount:1,toolErrorCount:0,errorCount:0,
+      inputTokens:null,outputTokens:null,tools:[],computedAt:at,
+    }
+    assert.equal(await slim.nativeSessionMetrics.replace(pendingSnapshot),true)
+    assert.deepEqual((await slim.nativeSessionMetrics.findRebuildCandidates({
+      ...query,projectId:p2.id,coverageCertified:false,
+    },4)).map(row=>row.nativeSessionId),[])
+    assert.deepEqual((await slim.nativeSessionMetrics.findRebuildCandidates({
+      ...query,projectId:p2.id,coverageCertified:true,
+    },4)).map(row=>row.nativeSessionId),['two'])
+    const partial=await slim.nativeSessionMetrics.overview({...query,projectId:p2.id})
+    assert.equal(partial.readySessions,0)
+    assert.equal(partial.partialSessions,1)
+    assert.equal(partial.totals.interactionCount,0)
+    assert.equal(await slim.nativeSessionMetrics.replace({
+      ...pendingSnapshot,coverage:'complete',
+    }),true)
+    assert.deepEqual((await slim.nativeSessionMetrics.findRebuildCandidates({
+      ...query,projectId:p2.id,
+    },4)).map(row=>row.nativeSessionId),[])
   }finally{await slim.close()}
 })
