@@ -144,3 +144,41 @@ test('slim identity port indexes source sessions without Legacy RepositorySet',a
     signal:new AbortController().signal,
   }),/installation is not indexed/)
 })
+
+test('profile-owned native roots and metadata stay attached to the verified session',async()=>{
+  const saved:Array<{sourceId:string;nativeSessionId:string;runtimeProfileId?:string}>=[]
+  const profile={
+    id:'profile',installationId:'install',nativeProfileId:'profile',
+    dataRoot:resolve('separate-profile'),configRoot:resolve('profile-config'),
+    firstSeenAt:at,lastSeenAt:at,
+  }
+  const expectedSession={...session('s'),
+    filePath:resolve('separate-profile','s.jsonl')}
+  const source=makeSource([expectedSession])
+  const discovery=source.discoverNativeSessions!
+  source.discoverNativeSessions=async function*(ctx){
+    assert.equal(ctx.installation.dataRoot,profile.dataRoot)
+    yield* discovery(ctx)
+  }
+  const storage={
+    nativeSessionCatalog:{async upsert(entry:NativeSessionCatalogEntry){
+      saved.push({sourceId:entry.sourceId,nativeSessionId:entry.nativeSessionId})
+    }},
+    nativeSessionContexts:{async upsert(input:{
+      sourceId:string;installationId:string;nativeSessionId:string;runtimeProfileId?:string
+    }){saved.push({sourceId:input.sourceId,nativeSessionId:input.nativeSessionId,
+      runtimeProfileId:input.runtimeProfileId})}},
+    repositories:{
+      installations:{async get(){return installation}},
+      hosts:{async get(){return host}},
+    },
+  }
+  const report=await indexNativeInstallation(storage as never,{
+    source,installationId:'install',runtimeProfile:profile,
+    signal:new AbortController().signal,
+  })
+  assert.equal(report.indexed,1)
+  assert.equal(saved.length,2)
+  assert.equal(saved[0]?.runtimeProfileId,'profile')
+  assert.equal(saved[1]?.nativeSessionId,'s')
+})
