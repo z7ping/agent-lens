@@ -51,6 +51,13 @@ export interface NativeSessionCatalogStore {
   hasNativeOnlyWriteClaim(input: {
     sourceId: string; installationId: string; nativeSessionId: string
   }): Promise<boolean>
+  /** Read-only numerical projection eligibility. Slim v1 uses verified
+   * Native Catalog presence; older databases additionally check write claims.
+   * This is NOT a Writer ownership claim and must never persist session body.
+   */
+  isNativeMetricsEligible?(input: {
+    sourceId: string; installationId: string; nativeSessionId: string
+  }): Promise<boolean>
   /** Durable single-owner write mode; null means unclaimed. */
   getSessionWriteMode(input: {
     sourceId: string; installationId: string; nativeSessionId: string
