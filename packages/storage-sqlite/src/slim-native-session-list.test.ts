@@ -52,6 +52,50 @@ test('slim session list reads native titles/projects and never guesses missing s
   }finally{await slim.close()}
 })
 
+test('unfiltered multi-Agent lists validate metrics against each Source independently',async()=>{
+  const slim=await SqliteSlimStorage.createFresh(':memory:')
+  try{
+    for(const [sourceId,parserVersion] of [['pi','pi-v1'],['codex','codex-v2']] as const){
+      await slim.nativeSessionCatalog.upsert({
+        sourceId,installationId:'install',nativeSessionId:sourceId,
+        locationKind:'native',filePath:resolve('native',sourceId+'.jsonl'),
+        fileIdentity:sourceId,fileSize:100,fileMtimeMs:2,
+        lastActivityAt:timestamp,updatedAt:timestamp,
+      })
+      assert.equal(await slim.nativeSessionMetrics.replace({
+        sourceId,installationId:'install',nativeSessionId:sourceId,
+        fileIdentity:sourceId,fileSize:100,fileMtimeMs:2,
+        parserVersion,projectionVersion:NATIVE_SESSION_METRIC_PROJECTION_VERSION,
+        coverage:'complete',interactionCount:2,toolCallCount:1,toolResultCount:1,
+        toolErrorCount:0,errorCount:0,inputTokens:null,outputTokens:null,
+        tools:[],computedAt:timestamp,
+      }),true)
+    }
+    const query={limit:5,sourceCertifications:[
+      {sourceId:'pi',parserVersion:'pi-v1',coverageCertified:true},
+      {sourceId:'codex',parserVersion:'codex-v2',coverageCertified:false},
+    ]}
+    const mixed=await slim.nativeSessionList.query(query)
+    const bySource=new Map(mixed.items.map(item=>[item.sourceId,item]))
+    assert.equal(bySource.get('pi')?.metricsState,'complete')
+    assert.equal(bySource.get('codex')?.metricsState,'partial')
+    const changed=await slim.nativeSessionList.query({limit:5,sourceCertifications:[
+      {sourceId:'pi',parserVersion:'pi-v2',coverageCertified:true},
+      {sourceId:'codex',parserVersion:'codex-v2',coverageCertified:true},
+    ]})
+    const revised=new Map(changed.items.map(item=>[item.sourceId,item]))
+    assert.equal(revised.get('pi')?.metricsState,'stale')
+    assert.equal(revised.get('pi')?.metrics,undefined)
+    assert.equal(revised.get('codex')?.metricsState,'complete')
+    const unavailable=await slim.nativeSessionList.query({limit:5,sourceCertifications:[]})
+    assert.equal(unavailable.items.every(item=>item.metricsState==='stale'),true)
+    await assert.rejects(slim.nativeSessionList.query({limit:5,sourceCertifications:[
+      {sourceId:'pi',parserVersion:'pi-v1',coverageCertified:true},
+      {sourceId:'pi',parserVersion:'pi-v1',coverageCertified:false},
+    ]}),/certifications/)
+  }finally{await slim.close()}
+})
+
 test('slim list distinguishes certified/current, partial and stale metrics',async()=>{
   const slim=await SqliteSlimStorage.createFresh(':memory:')
   try{
