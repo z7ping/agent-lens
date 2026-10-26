@@ -141,8 +141,27 @@ export async function activateSlimCutover(
       backupPath:value.backupPath,slimPath:value.installedSlimPath,
       changedAt:new Date().toISOString(),
     }
-    await writePointer(value.pointerPath,pointer)
-    return pointer
+    try{
+      await writePointer(value.pointerPath,pointer)
+      return pointer
+    }catch(error){
+      // The pointer is not published. The exclusive hard link we created must
+      // not strand the next safe migration attempt in EEXIST. Only unlink a
+      // path that STILL refers to our own staging inode, never an arbitrary
+      // file another process may have replaced in the meantime.
+      try{
+        const [stage,installed]=await Promise.all([
+          stat(value.stagingPath),stat(value.installedSlimPath),
+        ])
+        if(stage.dev===installed.dev&&stage.ino===installed.ino){
+          await unlink(value.installedSlimPath)
+        }
+      }catch(cleanupError){
+        throw new AggregateError([error,cleanupError],
+          'Slim pointer publication and exclusive hard-link cleanup both failed')
+      }
+      throw error
+    }
   })
 }
 /** Switches the active pointer back. Never deletes either database or backup.

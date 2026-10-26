@@ -148,3 +148,26 @@ test('M3 rollback refuses an active Daemon port and preserves the Slim pointer',
     await rm(root,{force:true,recursive:true})
   }
 })
+
+
+test('failed pointer publication cleans ONLY the newly created hard link, preserving stage and v38',async()=>{
+  const root=await mkdtemp(join(tmpdir(),'al-m3-pointer-failure-'))
+  const paths={legacyPath:join(root,'old.sqlite'),backupPath:join(root,'backup.sqlite'),
+    stagingPath:join(root,'stage.sqlite'),installedSlimPath:join(root,'installed.sqlite'),
+    // Parent directory deliberately missing: pointer write fails *after* the
+    // exclusive hard link, recreating an interrupted activation publication.
+    pointerPath:join(root,'absent-directory','active.json')}
+  try{
+    const old=new SqliteStorageService({path:paths.legacyPath})
+    await old.migrate();await old.close()
+    await copyFile(paths.legacyPath,paths.backupPath)
+    const stage=await SqliteSlimStorage.createFresh(paths.stagingPath)
+    await stage.close()
+    await assert.rejects(activateSlimCutover(paths,allowed),/ENOENT|no such file/i)
+    await assert.rejects(stat(paths.installedSlimPath),/ENOENT/)
+    assert.equal((await stat(paths.stagingPath)).isFile(),true)
+    assert.equal((await stat(paths.legacyPath)).isFile(),true)
+    assert.equal((await stat(paths.backupPath)).isFile(),true)
+    assert.equal(await readActiveDatabasePointer(paths.pointerPath),null)
+  }finally{await rm(root,{force:true,recursive:true})}
+})
