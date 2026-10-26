@@ -20,6 +20,7 @@ import {
   type DataRuntimeRole,
 } from './protocol.js'
 import { logDataRuntimeDebug, logDataRuntimeFailure } from './diagnostics.js'
+import { slimStorageRootAllowed } from './slim-rpc-policy.js'
 
 if (!parentPort) throw new Error('Data Runtime worker requires parentPort')
 
@@ -179,33 +180,7 @@ function argsArray(value: unknown): unknown[] {
 function storageRootAllowed(
   path:readonly string[],kind:'legacy'|'slim'='legacy',
 ):boolean {
-  if(kind==='slim'){
-    // Only metadata and numerical projections: no Legacy Canonical/Observation,
-    // Evidence, replication, or internal SQLite executor exposed over IPC.
-    if(path[0]==='repositories'){
-      return path.length===3 && ['hosts','installations'].includes(path[1]!)
-        && path[2]==='get'
-    }
-    if(path.length===1 && path[0]==='health')return true
-    // The generic IPC reflection mechanism must never be able to descend
-    // through TypeScript-private `executor` or `db` properties. Only these
-    // explicitly supported public methods are callable in Slim mode.
-    if(path.length!==2)return false
-    const allowed:Readonly<Record<string,readonly string[]>>={
-      nativeSessionCatalog:['upsert','get','getByReviewSessionId','query',
-        'isNativeMetricsEligible'],
-      nativeSessionMetrics:['replace','get','overview','findRebuildCandidates','invalidate'],
-      nativeSessionList:['query'],
-      nativeSessionContexts:['get','upsert'],
-      identity:['resolveHost','resolveInstallation','resolveProject','resolveWorkspace'],
-      assets:['resolveDefinition','resolveBinding','recordState'],
-      assetInventory:['listByInstallation'],
-      launchableProjects:['query','recordWorkspaceValidation','rebuild'],
-      runtimeProfiles:['get','resolve'],
-      checkpoints:['get','getWithRevision','compareAndSet','set','clear'],
-    }
-    return Boolean(allowed[path[0]!]?.includes(path[1]!))
-  }
+  if(kind==='slim')return slimStorageRootAllowed(path)
   return [
     'repositories',
     'checkpoints',
