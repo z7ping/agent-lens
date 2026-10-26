@@ -18,6 +18,11 @@ test('Hook audit reads locator metadata but never exposes prior payloads',async(
   try{
     const old=new SqliteStorageService({path:legacyPath})
     await old.migrate()
+    old.db.prepare(`INSERT INTO hosts(id,name,platform,arch,created_at,last_seen_at)
+      VALUES('host','host','linux','x64','2026-10-26','2026-10-26')`).run()
+    old.db.prepare(`INSERT INTO agent_products(id,name) VALUES('codex','Codex')`).run()
+    old.db.prepare(`INSERT INTO agent_installations(id,host_id,product_id,first_seen_at,last_seen_at)
+      VALUES('unmapped','host','codex','2026-10-26','2026-10-26')`).run()
     old.db.prepare(`INSERT INTO source_records(
       id,source_id,installation_id,native_type,captured_at,locator_json,
       payload_json,parser_version,source_session_native_id,fingerprint
