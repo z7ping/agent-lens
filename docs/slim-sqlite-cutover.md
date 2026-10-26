@@ -128,3 +128,9 @@ npm run storage:slim:assets -- --staging /path/to/slim-staging.sqlite --source p
 `NativeOnlyRuntimeCapture` 新运行链直接消费 Source 自身的 `startCapture`，逐个核验 `rawRecovery.verify`，可恢复事件只刷新 `NativeSessionCatalogTracker` 的 Source 文件元数据并使数值汇总失效；不执行 `processSourceRecordWithOwnership` 或 Legacy Writer/Observation/Evidence。未证明可恢复的 Hook/文件事件计为 `coverageGaps`，不会静默回退旧存储，亦不宣称“覆盖完整”。
 
 跨次监听 Checkpoint 只允许小于 4KiB、没有正文/提示词/密钥字段的有界进度元数据。捕获队列串行处理，dispose 时先关闭 Source 再排空队列；计数器仅内存，不在 SQLite 复制执行事件。**仍需要新 Daemon 集成启动/停止与 Hook 自有归档覆盖策略**，此独立实现不等于默认运行时已切换。
+
+## Native Source 经过 Daemon Worker 的真实桥接
+
+`SlimDataRuntime.nativePort()` 已建立通过现有 Writer/Reader IPC 的最小存储端口：主机和安装身份由只读 Worker 查询；会话 Catalog、Runtime Profile 上下文、数值缓存失效和有界 Source Checkpoint 交由 Writer Worker。它可直接传给 `NativeSessionReader`、`indexNativeInstallation`，不需要旧 `RepositorySet` 或任何 Write Claim。
+
+`SlimDataRuntime.reindexInstallation(...)` 和 `captureInstallation(...)` 接入了新的原生 Source 扫描/实时捕获实现，保留 Source-owned 原始文件作为唯一会话正文。**仍未把整个旧 HTTP/Live 运行入口切换为此服务**，在完成所有页面消费者之前不得直接启用默认安装切库。

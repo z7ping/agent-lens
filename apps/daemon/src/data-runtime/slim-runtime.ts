@@ -1,5 +1,7 @@
 import type {
+  AgentInstallation, Host, RuntimeProfile, SourceDefinition,
   NativeSessionCatalogEntry,
+  NativeSessionCatalogStore,
   NativeSessionListQuery,
   NativeSessionListItem,
   NativeSessionMetricOverview,
@@ -8,6 +10,11 @@ import type {
   StorageHealth,
 } from '@agent-lens/core'
 import { SqliteSlimStorage } from '@agent-lens/storage-sqlite'
+import {
+  indexNativeInstallation, NativeOnlyRuntimeCapture,
+  type NativeCatalogScanReport, type NativeCaptureHandle,
+  type NativeSessionReaderStorage,
+} from '@agent-lens/core-services'
 import { DataRuntimeClient } from './client.js'
 
 type SlimWorkerPort=Pick<DataRuntimeClient,'start'|'request'|'shutdown'>
@@ -97,6 +104,113 @@ export class SlimDataRuntime {
 
   replaceMetrics(snapshot:NativeSessionMetricSnapshot):Promise<boolean>{
     return this.write(['nativeSessionMetrics','replace'],[snapshot])
+  }
+
+  /** The ONLY storage dependencies supplied to new Source Reader/Indexer:
+   * no legacy RepositorySet, SourceRecords, Evidence, or Event Writer.
+   */
+  nativePort():NativeSessionReaderStorage & {
+    nativeSessionContexts:{upsert(input:{
+      sourceId:string;installationId:string;nativeSessionId:string;
+      runtimeProfileId?:string
+    }):Promise<void>}
+    nativeSessionMetrics:{invalidate(input:{
+      sourceId:string;installationId:string;nativeSessionId:string
+    }):Promise<void>}
+    checkpoints:{
+      get<T>(scope:string,key:string):Promise<T|null>
+      set<T>(scope:string,key:string,value:T):Promise<void>
+      clear(scope:string,key:string):Promise<void>
+    }
+  } {
+    const self=this
+    return {
+      nativeSessionCatalog:{
+        upsert(entry:NativeSessionCatalogEntry){
+          return self.write<void>(['nativeSessionCatalog','upsert'],[entry])
+        },
+        get(input:Parameters<NativeSessionCatalogStore['get']>[0]){
+          return self.read<NativeSessionCatalogEntry|null>(['nativeSessionCatalog','get'],[input])
+        },
+      },
+      repositories:{
+        hosts:{
+          get(id:string){return self.read<Host|null>(['repositories','hosts','get'],[id])},
+        },
+        installations:{
+          get(id:string){
+            return self.read<AgentInstallation|null>(['repositories','installations','get'],[id])
+          },
+        },
+      },
+      nativeSessionContexts:{
+        upsert(input){return self.write<void>(['nativeSessionContexts','upsert'],[input])},
+      },
+      nativeSessionMetrics:{
+        invalidate(input){return self.write<void>(['nativeSessionMetrics','invalidate'],[input])},
+      },
+      checkpoints:{
+        get<T>(scope:string,key:string){
+          return self.read<T|null>(['checkpoints','get'],[scope,key])
+        },
+        set<T>(scope:string,key:string,value:T){
+          return self.write<void>(['checkpoints','set'],[scope,key,value])
+        },
+        clear(scope:string,key:string){
+          return self.write<void>(['checkpoints','clear'],[scope,key])
+        },
+      },
+    }
+  }
+
+  /** Native Source history indexing now uses the real isolated Worker port. */
+  async reindexInstallation(input:{
+    source:SourceDefinition;installationId:string
+    runtimeProfileId?:string;signal:AbortSignal;maxSessions?:number
+  }):Promise<NativeCatalogScanReport>{
+    this.assertStarted()
+    const profile=input.runtimeProfileId
+      ? await this.read<RuntimeProfile|null>(['runtimeProfiles','get'],[input.runtimeProfileId])
+      : undefined
+    if(input.runtimeProfileId&&!profile){
+      throw new Error('Requested native runtime profile is not indexed')
+    }
+    return indexNativeInstallation(this.nativePort(),{
+      source:input.source,installationId:input.installationId,
+      signal:input.signal,
+      ...(profile?{runtimeProfile:profile}:{}),
+      ...(input.maxSessions?{maxSessions:input.maxSessions}:{}),
+    })
+  }
+
+  /** Captures into Source-owned original files plus slim metadata only.
+   * Incomplete Hook-only facts are counted as gaps, never mirrored to Events.
+   */
+  async captureInstallation(input:{
+    source:SourceDefinition;installationId:string
+    runtimeProfileId?:string;signal:AbortSignal
+  }):Promise<NativeCaptureHandle>{
+    this.assertStarted()
+    const port=this.nativePort()
+    const installation=await port.repositories.installations.get(input.installationId)
+    if(!installation)throw new Error('Native capture installation is not indexed')
+    const host=await port.repositories.hosts.get(installation.hostId)
+    if(!host)throw new Error('Native capture host is not indexed')
+    const profile=input.runtimeProfileId
+      ? await this.read<RuntimeProfile|null>(['runtimeProfiles','get'],[input.runtimeProfileId])
+      : undefined
+    if(input.runtimeProfileId&&!profile){
+      throw new Error('Requested native capture runtime profile is not indexed')
+    }
+    if(!port.nativeSessionCatalog)throw new Error('Native Catalog is unavailable')
+    return new NativeOnlyRuntimeCapture({
+      nativeSessionCatalog:port.nativeSessionCatalog,
+      nativeSessionMetrics:port.nativeSessionMetrics,
+      checkpoints:port.checkpoints,
+    }).start({
+      source:input.source,installation,host,signal:input.signal,
+      ...(profile?{runtimeProfile:profile}:{}),
+    })
   }
 
   async shutdown():Promise<void>{

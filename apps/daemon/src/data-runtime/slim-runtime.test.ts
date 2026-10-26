@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { SqliteSlimStorage, SqliteStorageService } from '@agent-lens/storage-sqlite'
 import { SlimDataRuntime } from './slim-runtime'
+import type { NativeSessionReaderStorage } from '@agent-lens/core-services'
 
 const args=(name:string)=>{
   const log:Array<{method:string;path?:unknown}>= []
@@ -63,4 +64,54 @@ test('slim runtime refuses legacy v38 and absent databases before worker start',
     }).start(),/unable to open|does not exist|not found/i)
     assert.deepEqual(writer.log,[])
   }finally{await rm(directory,{recursive:true,force:true})}
+})
+
+test('slim Daemon bridge routes reader/catalog/context/metrics/checkpoints to isolated Worker roles',async()=>{
+  const directory=await mkdtemp(join(tmpdir(),'al-slim-bridge-'))
+  const dbPath=join(directory,'native.sqlite')
+  const original=await SqliteSlimStorage.createFresh(dbPath)
+  await original.close()
+  const writer=args('writer'),reader=args('reader')
+  const runtime=new SlimDataRuntime({
+    dbPath,writer:writer.port as never,reader:reader.port as never,
+  })
+  try{
+    await runtime.start()
+    const port:NativeSessionReaderStorage=runtime.nativePort()
+    await port.repositories.hosts.get('h')
+    await port.repositories.installations.get('i')
+    await port.nativeSessionCatalog!.get({
+      sourceId:'pi',installationId:'i',nativeSessionId:'s',
+    })
+    await port.nativeSessionCatalog!.upsert({
+      sourceId:'pi',installationId:'i',nativeSessionId:'s',
+      locationKind:'native',filePath:'/source/s.jsonl',fileIdentity:'id',
+      fileSize:100,fileMtimeMs:2,lastActivityAt:'2026-10-26',updatedAt:'2026-10-26',
+    })
+    await runtime.nativePort().nativeSessionContexts.upsert({
+      sourceId:'pi',installationId:'i',nativeSessionId:'s',
+    })
+    await runtime.nativePort().nativeSessionMetrics.invalidate({
+      sourceId:'pi',installationId:'i',nativeSessionId:'s',
+    })
+    await runtime.nativePort().checkpoints.set('capture','cursor',{offset:1})
+    const reads=reader.log.filter(item=>item.method==='reader')
+      .map(item=>item.path)
+    const writes=writer.log.filter(item=>item.method==='writer')
+      .map(item=>item.path)
+    assert.deepEqual(reads,[
+      ['repositories','hosts','get'],
+      ['repositories','installations','get'],
+      ['nativeSessionCatalog','get'],
+    ])
+    assert.deepEqual(writes,[
+      ['nativeSessionCatalog','upsert'],
+      ['nativeSessionContexts','upsert'],
+      ['nativeSessionMetrics','invalidate'],
+      ['checkpoints','set'],
+    ])
+  }finally{
+    await runtime.shutdown()
+    await rm(directory,{recursive:true,force:true})
+  }
 })

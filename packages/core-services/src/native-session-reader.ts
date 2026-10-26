@@ -3,6 +3,7 @@ import type {
   EvidenceCandidate,
   ObservationCandidate,
   SourceCheckpointService,
+  NativeSessionCatalogStore,
   SourceNativeSessionCursor,
   SourceService,
   StorageService,
@@ -13,8 +14,10 @@ import type { NativeWorkerNormalizedRecord } from './native-reader-worker-protoc
 /** Native history needs only Source identity and a verified file Catalog.
  * It must not require the Legacy Canonical/Observation RepositorySet.
  */
-export type NativeSessionReaderStorage =
-  Pick<StorageService,'nativeSessionCatalog'> & {
+export type NativeSessionReaderStorage = {
+  /** Legacy Claim methods are intentionally NOT part of this read/index port. */
+  nativeSessionCatalog?: Pick<NativeSessionCatalogStore,'get'|'upsert'>
+} & {
     repositories: {
       installations: Pick<StorageService['repositories']['installations'],'get'>
       hosts: Pick<StorageService['repositories']['hosts'],'get'>
