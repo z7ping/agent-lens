@@ -60,9 +60,15 @@ test('Slim-only HTTP reads native Catalog/facets and refuses all old Event APIs'
   const reader={async read(){return {state:'unsupported',reason:'not-indexed'}}}
   const surface=await startNativeOnlyHttpSurface(storage as never,{
     port:0,sources,reader:reader as never,capturePolicy:policy,
+    backup:{async overview(){return {
+      vaultPath:'/existing-backup',sources:[],snapshots:[],
+    }}} as never,
   })
   const base=`http://${surface.host}:${surface.port}`
   try{
+    const backup=await fetch(base+'/api/v1/backups')
+    assert.equal(backup.status,200)
+    assert.equal((await backup.json() as {vaultPath:string}).vaultPath,'/existing-backup')
     const ready=await fetch(base+'/api/v1/ready')
     assert.equal(ready.status,200)
     assert.equal((await ready.json() as {storageMode:string}).storageMode,'native-only')

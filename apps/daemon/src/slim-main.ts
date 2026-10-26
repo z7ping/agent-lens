@@ -1,8 +1,10 @@
 import { existsSync } from 'node:fs'
+import { homedir } from 'node:os'
+import { startLocalVault } from '@agent-lens/backup-local'
 import { isAbsolute, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { DefaultCapturePolicyService, resolveCapturePolicyPluginState } from '@agent-lens/capture-policy'
-import type { CapturePolicyService, SourceService } from '@agent-lens/core'
+import type { BackupService, CapturePolicyService, SourceService } from '@agent-lens/core'
 import { DefaultSourceService } from '@agent-lens/core-services'
 import { piSourceDefinition } from '@agent-lens/source-pi'
 import { codexSourceDefinition } from '@agent-lens/source-codex'
@@ -19,6 +21,9 @@ export interface SlimDaemonOptions {
   port?:number
   /** Existing web build; uses the same static bundle as the default Daemon. */
   webRoot?:string
+  vaultPath?:string
+  /** Test-only external existing Vault; otherwise compose the same Local Vault as Cordis. */
+  backup?:BackupService
   /** Testable injection, not a Legacy StorageService adapter. */
   runtime?:SlimDataRuntime
   sources?:SourceService
@@ -58,10 +63,32 @@ export async function startSlimNativeDaemon(options:SlimDaemonOptions){
     },
   )
   await runtime.start()
+  let vault:ReturnType<typeof startLocalVault>|undefined
   try {
+    if(!options.backup){
+      const vaultPath=options.vaultPath??process.env.AGENT_LENS_VAULT_PATH
+        ??join(homedir(),'.agent-lens','1.0','vault')
+      const sourceOrder=[
+        ...new Set([
+          ...resolved.settings.enabledSources,
+          ...sources.list().map(source=>source.manifest.sourceId),
+        ]),
+      ]
+      // The existing Vault owns original backup files; only its lightweight
+      // Source checkpoint state and identities come from Slim storage.
+      vault=startLocalVault(
+        {checkpoints:runtime.nativePort().checkpoints},sources,
+        {
+          resolveHost:hint=>runtime.resolveHost(hint),
+          resolveInstallation:hint=>runtime.resolveInstallation(hint),
+        },
+        {vaultPath,sourceOrder},
+      )
+    }
     const http=await startNativeOnlyHttpSurface(runtime.nativeHttpPort(),{
       ...(options.port===undefined?{}:{port:options.port}),
       sources,capturePolicy:policy,
+      backup:options.backup??vault!.service,
       staticDir:resolveSlimWebRoot(options.webRoot),
       reader:runtime.nativeReader(sources,policy),
     })
@@ -76,11 +103,15 @@ export async function startSlimNativeDaemon(options:SlimDaemonOptions){
         if(closed)return
         closed=true
         try{await http.dispose()}finally{
-          try{await coordinator.dispose()}finally{await runtime.shutdown()}
+          try{await coordinator.dispose()}finally{
+            vault?.stop()
+            await runtime.shutdown()
+          }
         }
       },
     }
   }catch(error){
+    vault?.stop()
     await runtime.shutdown()
     throw error
   }

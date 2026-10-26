@@ -135,7 +135,7 @@ interface HashUpdate {
 
 class ScopedCheckpointService implements SourceCheckpointService {
   constructor(
-    private readonly storage: StorageService,
+    private readonly storage: Pick<StorageService, 'checkpoints'>,
     private readonly scope: string,
   ) {}
 
@@ -404,9 +404,9 @@ export class LocalBackupService implements BackupService {
   private refreshTimer: NodeJS.Timeout | null = null
 
   constructor(
-    private readonly storage: StorageService,
+    private readonly storage: Pick<StorageService, 'checkpoints'>,
     private readonly sources: SourceService,
-    private readonly identity: IdentityService,
+    private readonly identity: Pick<IdentityService, 'resolveHost' | 'resolveInstallation'>,
     private readonly options: LocalBackupServiceOptions,
   ) {
     this.snapshotsPath = join(options.vaultPath, 'snapshots')
