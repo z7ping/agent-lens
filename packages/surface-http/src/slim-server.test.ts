@@ -238,6 +238,8 @@ test('Slim-only HTTP reads native Catalog/facets and refuses all old Event APIs'
       '/api/v1/integrations/pi/assets/files?installationId=install&root=config')
     assert.equal(disabledAsset.status,503)
     enabledSources=['pi']
+    assert.equal((await fetch(base+'/api/v1/events',{method:'POST'})).status,405)
+    assert.equal((await fetch(base+'/api/v1/background-activity')).status,503)
     const ready=await fetch(base+'/api/v1/ready')
     assert.equal(ready.status,200)
     assert.equal((await ready.json() as {storageMode:string}).storageMode,'native-only')

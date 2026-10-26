@@ -115,7 +115,11 @@ export async function startSlimNativeDaemon(options:SlimDaemonOptions){
       sources,policy,lives:options.lives??live!.lives,
       scanOnStart:!options.runtime,
     })
+    let notifyActivity=()=>{}
+    const coordinator=new SlimSourceCoordinator(runtime,sources,policy,policy,
+      ()=>notifyActivity())
     const http=await startNativeOnlyHttpSurface(httpPort,{
+      backgroundProgress:()=>coordinator.snapshot(),
       ...(options.port===undefined?{}:{port:options.port}),
       sources,capturePolicy:policy,
       integrationManagement:integrations.management,
@@ -128,7 +132,7 @@ export async function startSlimNativeDaemon(options:SlimDaemonOptions){
       ...(options.localePackDirectory?{localePackDirectory:options.localePackDirectory}:{}),
       reader:nativeReader,
     })
-    const coordinator=new SlimSourceCoordinator(runtime,sources,policy,policy)
+    notifyActivity=()=>http.notifyBackgroundActivity()
     // HTTP is already ready; directory scans are now isolated, bounded and
     // asynchronous, so startup never waits for large original Source roots.
     coordinator.start()
