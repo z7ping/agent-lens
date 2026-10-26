@@ -28,6 +28,15 @@ import { handleBackupRequest } from './backup-http'
 import { handleAgentFilesRequest } from './agent-files-http'
 import { handleManagedAssetFilesRequest } from './managed-asset-files'
 import { handleCapturePolicyRequest } from './capture-policy-http'
+import {
+  handleIntegrationDiscoveryRequest,type IntegrationDiscoveryController,
+} from './integration-discovery-http'
+import {
+  handleIntegrationManagementRequest,type IntegrationManagementController,
+} from './integration-management-http'
+import {
+  handleIntegrationAuthorizationRequest,type IntegrationAuthorizationController,
+} from './integration-http'
 import { discoverLocalePacks } from './locale-packs'
 import { handleLiveRequest } from './live-http'
 import { handleLiveAttachmentRequest } from './live-attachments-http'
@@ -62,6 +71,9 @@ export interface NativeOnlyHttpOptions {
   backup?: BackupService
   lives?: LiveService
   liveAttachments?: LiveAttachmentService
+  integrationDiscovery?:IntegrationDiscoveryController
+  integrationManagement?:IntegrationManagementController
+  integrationAuthorization?:IntegrationAuthorizationController
 }
 
 /** Reuse the existing native HTTP handlers, but NEVER construct retired
@@ -95,6 +107,12 @@ export async function startNativeOnlyHttpSurface(
       // Live is the EXISTING Pi runtime controller, not a SQL projection.
       // Deliberately omit the old history.storage argument: session rows and
       // SourceRecord lookup no longer exist on Slim.
+      if(await handleIntegrationAuthorizationRequest(
+        request,response,url,options.integrationAuthorization))return
+      if(await handleIntegrationDiscoveryRequest(
+        request,response,url,options.integrationDiscovery))return
+      if(await handleIntegrationManagementRequest(
+        request,response,url,options.integrationManagement))return
       if(await handleLiveAttachmentRequest(request,response,url,options.liveAttachments))return
       if(await handleLiveRequest(request,response,url,options.lives,undefined,{
         nativeSessions:storage.nativeSessionList,
