@@ -1,7 +1,7 @@
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import type { CapturePolicyService, NativeSessionCatalogStore, NativeSessionCatalogEntry, TaskFileChangeRecord } from '@agent-lens/core'
 import { projectNativeReviewWindow } from '@agent-lens/projection-review'
-import { taskFileChangesResponse } from './task-file-changes-http'
+import { taskFileChangesResponse } from './task-file-changes-response'
 import { readContiguousReviewPages, type NativeSessionWindowReader } from './native-session-http'
 import { badRequest, httpError, writeJson } from './http-utils'
 
