@@ -27,6 +27,16 @@ test('one-time staging backs up v38 and copies only approved metadata, never tra
         VALUES ('project','Important Project','2026-10-26','2026-10-26')`).run()
       old.db.prepare(`INSERT INTO workspaces(id,host_id,project_id,path)
         VALUES ('workspace','host','project','C:/workspace')`).run()
+      old.db.prepare(`INSERT INTO asset_definitions(id,type,canonical_name)
+        VALUES ('asset','skill','my-skill')`).run()
+      old.db.prepare(`INSERT INTO asset_bindings(id,asset_id,installation_id,scope)
+        VALUES ('binding','asset','install','installation')`).run()
+      old.db.prepare(`INSERT INTO asset_state_observations(
+        id,asset_binding_id,state,value,observed_at
+      ) VALUES ('old-state','binding','enabled','true','2026-10-26')`).run()
+      old.db.prepare(`INSERT INTO asset_current_state(
+        asset_binding_id,state,observation_id,value,observed_at
+      ) VALUES ('binding','enabled','old-state','true','2026-10-26')`).run()
       old.db.prepare(`INSERT INTO logical_sessions(
         id,installation_id,project_id,workspace_id,title,title_kind
       ) VALUES ('logical','install','project','workspace','My title','explicit')`).run()
@@ -57,6 +67,7 @@ test('one-time staging backs up v38 and copies only approved metadata, never tra
     assert.equal(report.source.verifiedOriginalSourceRecovery, false)
     assert.equal(report.copiedRows.native_session_catalog, 1)
     assert.equal(report.copiedRows.native_session_context, 1)
+    assert.equal(report.copiedRows.asset_current_state, 1)
     const backup = new Database(backupPath, { readonly:true, fileMustExist:true })
     try {
       assert.equal((backup.prepare('SELECT payload_json FROM source_records')
@@ -72,6 +83,9 @@ test('one-time staging backs up v38 and copies only approved metadata, never tra
       assert.deepEqual(rows, [{
         project_id: 'project', workspace_id: 'workspace', title_override: 'My title',
       }])
+      assert.deepEqual(stage.prepare('SELECT state_id,value FROM asset_current_state').all(), [
+        { state_id:'old-state', value:'true' },
+      ])
       assert.equal((stage.prepare('SELECT COUNT(*) AS c FROM native_session_metrics')
         .get() as {c:number}).c, 0) // Must be recalculated from native source.
       assert.deepEqual(stage.pragma('foreign_key_check'), [])
