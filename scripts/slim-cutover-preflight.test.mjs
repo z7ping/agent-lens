@@ -33,3 +33,14 @@ test('preflight refuses missing old database rather than create it',()=>{
   assert.match(result.stderr,/Slim cutover refused:/)
   assert.equal(result.stdout,'')
 })
+
+test('verify requires explicit staging path and rejects backup/write destinations',()=>{
+  const noStaging=run(['verify','--legacy','missing.db'])
+  assert.equal(noStaging.status,1)
+  assert.match(noStaging.stderr,/Verify requires --staging/)
+  const withBackup=run([
+    'verify','--legacy','missing.db','--staging','slim.db','--backup','backup.db',
+  ])
+  assert.equal(withBackup.status,1)
+  assert.match(withBackup.stderr,/rejects --backup/)
+})
