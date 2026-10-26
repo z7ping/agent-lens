@@ -151,7 +151,17 @@ export async function activateSlimCutover(
  */
 export async function rollbackSlimCutover(input:{
   pointerPath:string;legacyPath:string;backupPath:string;installedSlimPath:string
+  /** Optional exact daemon port, primarily for owner-aware tests. */
+  port?:number
 }):Promise<ActiveDatabasePointer>{
+  const port=input.port??(process.env.AGENT_LENS_PORT
+    ?Number(process.env.AGENT_LENS_PORT):56789)
+  if(!Number.isSafeInteger(port)||port<1||port>65535){
+    throw new Error('Rollback requires a valid AgentLens daemon port')
+  }
+  // Reversing the pointer while Slim is still serving requests creates
+  // competing historical timelines. Never rely solely on caller comments.
+  await assertNoDaemonListening(port)
   const path=resolve(input.pointerPath)
   const current=await readActiveDatabasePointer(path)
   if(!current||current.mode!=='slim')throw new Error('No active Slim cutover to roll back')
@@ -165,6 +175,7 @@ export async function rollbackSlimCutover(input:{
   database(current.legacyPath,'legacy')
   database(current.slimPath,'slim')
   const legacy:ActiveDatabasePointer={...current,mode:'legacy',changedAt:new Date().toISOString()}
+  await assertNoDaemonListening(port)
   await writePointer(path,legacy)
   return legacy
 }
