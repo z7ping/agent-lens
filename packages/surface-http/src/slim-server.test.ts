@@ -32,7 +32,11 @@ test('Slim-only HTTP reads native Catalog/facets and refuses all old Event APIs'
   } as unknown as CapturePolicyService
   const storage={
     nativeSessionCatalog:{
-      async getByReviewSessionId(){return null},
+      async getByReviewSessionId(id:string){
+        return id==='native:ffffffffffffffffffffffffffffffff'
+          ?{sourceId:'pi',installationId:'install',nativeSessionId:'native-file-1',
+            locationKind:'native'}:null
+      },
       async get(){return null},
       async query(){throw new Error('Slim handler should prefer session list')},
       async isNativeMetricsEligible(){return true},
@@ -102,7 +106,14 @@ test('Slim-only HTTP reads native Catalog/facets and refuses all old Event APIs'
     async health(){return {ok:true,schemaVersion:1,
       details:{schemaKind:'slim-native-session-v1'}}},
   }
-  const reader={async read(){return {state:'unsupported',reason:'not-indexed'}}}
+  const reader={async read(query:{nativeSessionId:string}){
+    if(query.nativeSessionId==='native-file-1')return {
+      state:'available',observations:[],observationRecordIds:[],evidenceCandidates:[],
+      hasMore:false,pendingTail:false,
+      nextCursor:{fileIdentity:'file-1',offset:0},
+    }
+    return {state:'unsupported',reason:'not-indexed'}
+  }}
   const liveAttachments=new DefaultLiveAttachmentService()
   const liveAdapter={
     manifest:{liveId:'pi-live',productId:'pi',displayName:'Pi'},
@@ -251,6 +262,26 @@ test('Slim-only HTTP reads native Catalog/facets and refuses all old Event APIs'
     assert.equal(stream.status,200)
     assert.match(stream.headers.get('content-type')??'',/text\/event-stream/)
     streamController.abort()
+    const nativeFileId='native:ffffffffffffffffffffffffffffffff'
+    const nativeFileChanges=await fetch(base+'/api/v1/review/'+nativeFileId+'/file-changes')
+    assert.equal(nativeFileChanges.status,200)
+    const changeBody=await nativeFileChanges.json() as {
+      items:unknown[];summary:{count:number};meta:{truncated?:boolean}
+    }
+    assert.equal(changeBody.summary.count,0)
+    assert.equal(changeBody.items.length,0)
+    assert.notEqual(changeBody.meta.truncated,true)
+    const noExactDiff=await fetch(base+
+      '/api/v1/review/'+nativeFileId+'/file-diff?path=src/main.ts')
+    assert.equal(noExactDiff.status,200)
+    assert.deepEqual(await noExactDiff.json(),{
+      path:'src/main.ts',available:false,reason:'not-exact',
+    })
+    assert.equal((await fetch(base+'/api/v1/review/'+nativeFileId+'/file-diff')).status,400)
+    enabledSources=[]
+    assert.equal((await fetch(base+
+      '/api/v1/review/'+nativeFileId+'/file-changes')).status,404)
+    enabledSources=['pi']
     const ready=await fetch(base+'/api/v1/ready')
     assert.equal(ready.status,200)
     assert.equal((await ready.json() as {storageMode:string}).storageMode,'native-only')
