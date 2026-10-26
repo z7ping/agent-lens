@@ -136,6 +136,8 @@ export interface AgentEnrichmentResponseDto {
 }
 
 export interface AgentCoverageItemDto {
+  /** Native coverage cannot infer zero calls from missing event-derived attribution. */
+  usedAssetsStatus?: 'available' | 'unavailable'
   sourceId: string
   productId: string
   displayName: string

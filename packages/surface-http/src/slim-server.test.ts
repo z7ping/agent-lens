@@ -424,7 +424,14 @@ test('Slim-only HTTP reads native Catalog/facets and refuses all old Event APIs'
     assert.equal((await agentDetail.json() as {item:{assetInventory:unknown[]}})
       .item.assetInventory.length,1)
     assert.equal((await fetch(base+'/api/v1/agents/unknown')).status,404)
-    assert.equal((await fetch(base+'/api/v1/agents/coverage')).status,200)
+    const nativeCoverage=await fetch(base+'/api/v1/agents/coverage')
+    assert.equal(nativeCoverage.status,200)
+    const nativeCoverageDto=await nativeCoverage.json() as {items:Array<{
+      sourceId:string;usedAssets:unknown[];usedAssetsStatus?:string
+    }>}
+    assert.equal(nativeCoverageDto.items[0]?.sourceId,'pi')
+    assert.deepEqual(nativeCoverageDto.items[0]?.usedAssets,[])
+    assert.equal(nativeCoverageDto.items[0]?.usedAssetsStatus,'unavailable')
     assert.equal((await fetch(base+'/api/v1/agents/pi/enrichment')).status,200)
     assert.equal((await fetch(base+'/api/v1/agents',{method:'POST'})).status,405)
     const exactTool=await fetch(base+'/api/v1/usage/detail?toolName=shell&sourceId=pi')

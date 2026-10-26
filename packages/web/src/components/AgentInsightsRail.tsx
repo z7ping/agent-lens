@@ -76,6 +76,7 @@ const stageKey: Record<string, string> = {
 
 function CoverageCard({ agents }: { agents: AgentCoverageItemDto[] }) {
   const { t } = useTranslation('agents')
+  const usageUnknown = agents.some(agent => agent.usedAssetsStatus === 'unavailable')
   const rows = useMemo(() => {
     const map = new Map<string, { type: 'skill' | 'mcp'; canonicalName: string; displayName: string; calls: number }>()
     for (const agent of agents) {
@@ -99,7 +100,8 @@ function CoverageCard({ agents }: { agents: AgentCoverageItemDto[] }) {
   return <section className="agent-insight-card agent-coverage-card">
     <header className="agent-insight-head">
       <div><h2>{t('insightsRail.coverageTitle')}</h2></div>
-      <span>{rows.length ? `Top ${rows.length}` : t('insightsRail.noRecords')}</span>
+      <span>{rows.length ? `Top ${rows.length}` : usageUnknown
+        ? t('insightsRail.unavailable') : t('insightsRail.noRecords')}</span>
     </header>
     <div className="agent-insight-body">
       {rows.length ? <div className="agent-coverage-list">
@@ -114,7 +116,11 @@ function CoverageCard({ agents }: { agents: AgentCoverageItemDto[] }) {
             })}
           </div>
         </div>)}
-      </div> : <div className="agent-insight-empty">{t('insightsRail.noCoverage')}</div>}
+      </div> : <div className="agent-insight-empty">{usageUnknown
+        ? t('usageUnavailable') : t('insightsRail.noCoverage')}</div>}
+      {rows.length > 0 && usageUnknown && <small className="agent-insight-empty" role="status">
+        {t('usageUnavailable')}
+      </small>}
     </div>
   </section>
 }
