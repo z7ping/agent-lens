@@ -202,7 +202,12 @@ export class SlimDataRuntime {
     if(input.runtimeProfileId&&!profile){
       throw new Error('Requested native capture runtime profile is not indexed')
     }
-    return new NativeOnlyRuntimeCapture(port).start({
+    if(!port.nativeSessionCatalog)throw new Error('Native Catalog is unavailable')
+    return new NativeOnlyRuntimeCapture({
+      nativeSessionCatalog:port.nativeSessionCatalog,
+      nativeSessionMetrics:port.nativeSessionMetrics,
+      checkpoints:port.checkpoints,
+    }).start({
       source:input.source,installation,host,signal:input.signal,
       ...(profile?{runtimeProfile:profile}:{}),
     })
