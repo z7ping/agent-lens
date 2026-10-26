@@ -1,0 +1,146 @@
+import assert from 'node:assert/strict'
+import test from 'node:test'
+import { resolve } from 'node:path'
+import type {
+  AgentInstallation, Host, NativeSessionCatalogEntry,
+  SourceDefinition,
+} from '@agent-lens/core'
+import { NativeOnlySourceIndexer, indexNativeInstallation } from './native-only-source-indexer'
+
+const at='2026-10-26T00:00:00.000Z'
+const host:Host={id:'host',name:'localhost',platform:'linux',arch:'x64',createdAt:at,lastSeenAt:at}
+const installation:AgentInstallation={
+  id:'install',hostId:'host',productId:'pi',dataRoot:resolve('source-root'),
+  firstSeenAt:at,lastSeenAt:at,
+}
+const session=(id:string):NativeSessionCatalogEntry=>({
+  sourceId:'pi',installationId:'install',nativeSessionId:id,locationKind:'native',
+  filePath:resolve('source-root',id+'.jsonl'),fileIdentity:'1:2',fileSize:300,
+  fileMtimeMs:100,lastActivityAt:at,updatedAt:at,
+})
+function makeSource(entries:NativeSessionCatalogEntry[],options:{
+  driftId?:string
+  verify?:'verified'|'drifted'
+  throwRead?:boolean
+}={}):SourceDefinition {
+  return {
+    manifest:{pluginType:'source',sourceId:'pi',productId:'pi',parserVersion:'v1',name:'Pi'},
+    // Intentionally NO nativeSessionCoverageComplete flag: Hook gaps must not
+    // turn an original native file into a Legacy Writer record.
+    async *discoverNativeSessions(ctx){
+      for(const entry of entries.slice(0,ctx.historyWindow?.sessionLimit??entries.length))yield entry
+    },
+    async readNativeSessionPage(query){
+      if(options.throwRead)throw new Error('source file missing')
+      return {
+        state:'available',hasMore:false,pendingTail:false,
+        nextCursor:{fileIdentity:'1:2',offset:300,sequence:1},
+        records:[{
+          id:'record',sourceId:'pi',installationId:'install',
+          sourceSessionNativeId:options.driftId??query.nativeSessionId,
+          nativeType:'history/message',capturedAt:at,
+          locator:{kind:'file',path:query.filePath,offset:0},
+          fingerprint:'hash',
+          parserVersion:'v1',
+          payload:{entry:{type:'message'}},
+        }],
+      }
+    },
+    rawRecovery:{
+      describe(){return {
+        authority:'native-store',locatorStability:'stable',
+        mutability:'append-oriented',verification:'fingerprint',
+        canReread:true,canReparse:true,replayable:true,persistencePreference:'reference',
+      }},
+      async verify(){return {state:options.verify??'verified',checkedAt:at}},
+    },
+  } as unknown as SourceDefinition
+}
+
+test('independent native indexer indexes verifiable original files even with incomplete Hook coverage',async()=>{
+  const persisted:NativeSessionCatalogEntry[]=[]
+  const indexer=new NativeOnlySourceIndexer({async upsert(entry){persisted.push(entry)}})
+  const source=makeSource([session('a'),session('b')])
+  const report=await indexer.scan({
+    source,host,installation,signal:new AbortController().signal,maxSessions:4,
+  })
+  assert.equal(report.nativeCoverage,'partial')
+  assert.equal(report.indexed,2)
+  assert.equal(report.scanned,2)
+  assert.equal(report.exhausted,true)
+  assert.deepEqual(report.failures,{})
+  assert.deepEqual(persisted.map(entry=>entry.nativeSessionId),['a','b'])
+})
+
+test('native indexer rejects cross-session evidence and never writes a duplicate record',async()=>{
+  let writes=0
+  const indexer=new NativeOnlySourceIndexer({async upsert(){writes++}})
+  const drift=await indexer.scan({
+    source:makeSource([session('a')],{driftId:'different'}),
+    host,installation,signal:new AbortController().signal,
+  })
+  assert.equal(drift.indexed,0)
+  assert.equal(drift.failures['record-identity-drifted'],1)
+  const unverified=await indexer.scan({
+    source:makeSource([session('a')],{verify:'drifted'}),
+    host,installation,signal:new AbortController().signal,
+  })
+  assert.equal(unverified.indexed,0)
+  assert.equal(unverified.failures['recovery-unverified'],1)
+  const unavailable=await indexer.scan({
+    source:makeSource([session('a')],{throwRead:true}),
+    host,installation,signal:new AbortController().signal,
+  })
+  assert.equal(unavailable.failures['source-read-error'],1)
+  assert.equal(writes,0)
+})
+
+test('native indexer enforces bounded sessions and preserves write errors',async()=>{
+  const source=makeSource([session('a'),session('b'),session('c')])
+  let stored=0
+  const indexer=new NativeOnlySourceIndexer({async upsert(){stored++}})
+  const report=await indexer.scan({
+    source,host,installation,signal:new AbortController().signal,maxSessions:2,
+  })
+  assert.equal(stored,2)
+  assert.equal(report.exhausted,false)
+  await assert.rejects(indexer.scan({
+    source,host,installation,signal:new AbortController().signal,maxSessions:1000,
+  }),/budget/)
+  const failing=new NativeOnlySourceIndexer({async upsert(){throw new Error('sqlite write failed')}})
+  await assert.rejects(failing.scan({
+    source,host,installation,signal:new AbortController().signal,
+  }),/sqlite write failed/)
+})
+
+test('indexer never trusts a mismatched Source installation',async()=>{
+  const indexer=new NativeOnlySourceIndexer({async upsert(){throw new Error('should not write')}})
+  await assert.rejects(indexer.scan({
+    source:makeSource([session('a')]),
+    host,installation:{...installation,productId:'codex'},
+    signal:new AbortController().signal,
+  }),/installation identity changed/)
+})
+
+test('slim identity port indexes source sessions without Legacy RepositorySet',async()=>{
+  const persisted:NativeSessionCatalogEntry[]=[]
+  const slimPort={
+    nativeSessionCatalog:{
+      async upsert(entry:NativeSessionCatalogEntry){persisted.push(entry)},
+    },
+    repositories:{
+      installations:{async get(id:string){return id==='install'?installation:null}},
+      hosts:{async get(id:string){return id==='host'?host:null}},
+    },
+  }
+  const report=await indexNativeInstallation(slimPort as never,{
+    source:makeSource([session('one')]),installationId:'install',
+    signal:new AbortController().signal,
+  })
+  assert.equal(report.indexed,1)
+  assert.equal(persisted[0]?.nativeSessionId,'one')
+  await assert.rejects(indexNativeInstallation(slimPort as never,{
+    source:makeSource([session('one')]),installationId:'not-found',
+    signal:new AbortController().signal,
+  }),/installation is not indexed/)
+})

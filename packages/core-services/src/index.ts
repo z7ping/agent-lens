@@ -869,3 +869,5 @@ export type {
   NativeWorkerHookReadInput, NativeWorkerHookReadResult,
   NativeWorkerRequest, NativeWorkerReply,
 } from './native-reader-worker-protocol'
+
+export * from './native-only-source-indexer'
