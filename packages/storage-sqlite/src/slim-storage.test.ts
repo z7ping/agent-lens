@@ -1,3 +1,4 @@
+import { LegacyV38TestDatabase } from './legacy-v38-test-fixture'
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { mkdtemp, rm } from 'node:fs/promises'
@@ -5,7 +6,7 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { SqliteSlimStorage } from './slim-storage'
 import type { NativeSessionReaderStorage } from '@agent-lens/core-services'
-import { SqliteStorageService } from './storage'
+
 import { assertSlimSchema } from './slim-schema'
 
 test('new slim runtime composes only native/metadata repositories and reopens without v38 migrations',async()=>{
@@ -52,7 +53,7 @@ test('new slim runtime composes only native/metadata repositories and reopens wi
     }finally{await readOnly.close()}
     // Accidentally routing a slim database through the old provider must
     // fail before it can recreate removed Legacy event tables.
-    const oldProvider=new SqliteStorageService({path})
+    const oldProvider=new LegacyV38TestDatabase({path})
     try {
       await assert.rejects(oldProvider.migrate(),/cannot upgrade a slim/)
       assertSlimSchema(oldProvider.db)
@@ -67,7 +68,7 @@ test('slim runtime cannot open old 38-migration database or absent file',async()
   const directory=await mkdtemp(join(tmpdir(),'agent-lens-slim-reject-'))
   const legacyPath=join(directory,'legacy.sqlite')
   try {
-    const legacy=new SqliteStorageService({path:legacyPath})
+    const legacy=new LegacyV38TestDatabase({path:legacyPath})
     try{await legacy.migrate()}finally{await legacy.close()}
     assert.throws(()=>SqliteSlimStorage.openExisting(legacyPath),/missing|required|Slim database/)
     assert.throws(()=>SqliteSlimStorage.openExisting(join(directory,'missing.sqlite')),/unable to open|does not exist|not found/i)
