@@ -216,7 +216,7 @@ export function ReviewPage({ model, embedded = false, latestRequest = 0 }: { mod
                 <div className="session-item-meta">
                   <span className={`source-dot ${sourceDot(item.sourceId)}`}/>
                   <span>{agentLabel(item.sourceId, item.sourceId)}</span>
-                  <span className="session-item-project">{t('local.session.nativeIndexed')}</span>
+                  <span className="session-item-project">{item.projectName ?? t('local.session.nativeIndexed')}</span>
                   <time title={t('local.list.recentActivity', { time: formatTime(item.lastActivityAt) })}>
                     {sessionRelativeTime(item.lastActivityAt)}
                   </time>
