@@ -288,10 +288,11 @@ export class SqliteNativeSessionCatalog {
         }
         predicates.push(`EXISTS (
           SELECT 1 FROM native_session_context AS ctx
+          LEFT JOIN workspaces AS ws ON ws.id=ctx.workspace_id
           WHERE ctx.source_id=native_session_catalog.source_id
             AND ctx.installation_id=native_session_catalog.installation_id
             AND ctx.native_session_id=native_session_catalog.native_session_id
-            AND ctx.project_id=?
+            AND COALESCE(ctx.project_id,ws.project_id)=?
         )`)
         values.push(input.projectId)
       }
