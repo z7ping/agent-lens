@@ -113,6 +113,7 @@ export async function startSlimNativeDaemon(options:SlimDaemonOptions){
     }
     const integrations=startSlimIntegrations({
       sources,policy,lives:options.lives??live!.lives,
+      scanOnStart:!options.runtime,
     })
     const http=await startNativeOnlyHttpSurface(httpPort,{
       ...(options.port===undefined?{}:{port:options.port}),
