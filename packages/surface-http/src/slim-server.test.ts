@@ -99,12 +99,15 @@ test('Slim-only HTTP reads native Catalog/facets and refuses all old Event APIs'
       async get(){return {state:'missing' as const}},
       async replace(){return true},
       async invalidate(){},
-      async overview(){return {
-        sourceId:'pi',eligibleSessions:0,readySessions:0,missingSessions:0,
+      async overview(query?:{nativeToolName?:string}){return {
+        sourceId:'pi',eligibleSessions:1,readySessions:1,missingSessions:0,
         staleSessions:0,partialSessions:0,
-        totals:{interactionCount:0,toolCallCount:0,toolResultCount:0,
-          toolErrorCount:0,errorCount:0,inputTokens:null,outputTokens:null},
-        tools:[],toolsTruncated:false,
+        totals:{interactionCount:2,toolCallCount:3,toolResultCount:2,
+          toolErrorCount:1,errorCount:1,inputTokens:null,outputTokens:null},
+        tools:!query?.nativeToolName||query.nativeToolName==='shell'?[{
+          nativeToolName:'shell',callCount:3,resultCount:2,errorCount:1,
+          totalDurationMs:0,sessionCount:1,
+        }]:[],toolsTruncated:false,
       }},
       async findRebuildCandidates(){return []},
     },
@@ -368,6 +371,21 @@ test('Slim-only HTTP reads native Catalog/facets and refuses all old Event APIs'
     assert.equal((await fetch(base+'/api/v1/agents/coverage')).status,200)
     assert.equal((await fetch(base+'/api/v1/agents/pi/enrichment')).status,200)
     assert.equal((await fetch(base+'/api/v1/agents',{method:'POST'})).status,405)
+    const exactTool=await fetch(base+'/api/v1/usage/detail?toolName=shell&sourceId=pi')
+    assert.equal(exactTool.status,200)
+    const exactToolBody=await exactTool.json() as {meta:{mode:string;native:{state:string;
+      toolCallCount:number;tools:Array<{nativeToolName:string;callCount:number}>}}}
+    assert.equal(exactToolBody.meta.mode,'native-only')
+    assert.equal(exactToolBody.meta.native.state,'available')
+    assert.equal(exactToolBody.meta.native.toolCallCount,3)
+    assert.deepEqual(exactToolBody.meta.native.tools.map(item=>item.nativeToolName),['shell'])
+    assert.equal((await fetch(base+'/api/v1/usage/detail')).status,400)
+    assert.equal((await fetch(base+'/api/v1/usage/detail?toolName=shell',
+      {method:'POST'})).status,405)
+    const unknownTool=await fetch(base+'/api/v1/usage/detail?toolName=unknown')
+    assert.equal(unknownTool.status,200)
+    assert.deepEqual((await unknownTool.json() as {meta:{native:{tools:unknown[]}}})
+      .meta.native.tools,[])
     const facets=await fetch(base+'/api/v1/facets')
     assert.equal(facets.status,200)
     assert.equal((await facets.json() as {agents:Array<{sourceId:string}>}).agents[0]?.sourceId,'pi')
