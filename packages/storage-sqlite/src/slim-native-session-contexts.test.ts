@@ -41,7 +41,7 @@ test('slim metadata retains project/title association without SQL session or evi
     const p2=await storage.nativeSessionCatalog.query({projectId:'p2',limit:10})
     assert.deepEqual(p2.items.map(item=>item.nativeSessionId),['two'])
     assert.equal(db.prepare(`SELECT COUNT(*) AS n FROM sqlite_master
-      WHERE name IN ('logical_sessions','observations','source_records')`).get()?.n,0)
+      WHERE name IN ('logical_sessions','observations','source_records')`).get() as {n:number}).n,0)
     await assert.rejects(storage.nativeSessionContexts.upsert({...base,nativeSessionId:'one',
       titleOverride:'unverified first prompt'}),/provenance/)
     await assert.rejects(storage.nativeSessionContexts.upsert({...base,nativeSessionId:'one',
