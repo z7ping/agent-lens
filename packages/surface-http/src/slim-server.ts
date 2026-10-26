@@ -10,7 +10,7 @@ import { AGENT_LENS_PROTOCOL_VERSION, type HostFilePreviewResponseDto, type PiEc
 import {
   AGENT_LENS_HTTP_HOST, DEFAULT_AGENT_LENS_HTTP_PORT,
   type RunningHttpSurface,
-} from './server'
+} from './server-contract'
 import { handleNativeSessionCatalogRequest } from './native-session-catalog-http'
 import {
   handleNativeSessionWindowRequest, handleNativeSessionAttachmentRequest,
