@@ -141,6 +141,11 @@ test('native Catalog HTTP routes slim session listing through coverage-aware met
     assert.equal(calls[0]?.coverageCertified,false)
     assert.equal(body.items[0]?.metricsState,'partial')
     assert.equal(body.items[0]?.titleProvenance,'native')
+    const unfiltered=await fetch(`http://${http.host}:${http.port}/api/v1/native-sessions`)
+    assert.equal(unfiltered.status,200)
+    assert.deepEqual(calls[1]?.sourceCertifications,[{
+      sourceId:'pi',parserVersion:'v1',coverageCertified:false,
+    }])
     assert.equal(JSON.stringify(body).includes('filePath'),false)
   } finally {await http.dispose()}
 })
