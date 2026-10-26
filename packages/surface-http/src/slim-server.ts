@@ -5,7 +5,7 @@ import type {
   SourceService, StorageHealth, BackupService, LiveService, LiveAttachmentService,
   AgentInstallation, AssetInventoryReader, AgentIntegrationRuntimeStatus,
 } from '@agent-lens/core'
-import { AGENT_LENS_PROTOCOL_VERSION, type HostFilePreviewResponseDto } from '@agent-lens/protocol'
+import { AGENT_LENS_PROTOCOL_VERSION, type HostFilePreviewResponseDto, type PiEcosystemQueryService } from '@agent-lens/protocol'
 import {
   AGENT_LENS_HTTP_HOST, DEFAULT_AGENT_LENS_HTTP_PORT,
   type RunningHttpSurface,
@@ -24,6 +24,7 @@ import { nativeOnlyAgentOverview, nativeOnlyAgentCoverage, nativeOnlyAgentDetail
 import { HttpEventHub } from './events'
 import { readLaunchableProjects } from './launchable-projects'
 import { handleBackupRequest } from './backup-http'
+import { handlePiEcosystemRequest } from './pi-ecosystem-http'
 import { handleAgentFilesRequest } from './agent-files-http'
 import { handleHostFilesystemRequest } from './host-filesystem-http'
 import { handleManagedAssetFilesRequest } from './managed-asset-files'
@@ -75,6 +76,7 @@ export interface NativeOnlyHttpOptions {
     failedScopes:number;deferredScopes:number;finished:boolean
   }
   backup?: BackupService
+  piEcosystem?:PiEcosystemQueryService
   openHostPath?:(path:string)=>Promise<'opened'|'revealed'>
   previewHostFile?:(path:string)=>Promise<HostFilePreviewResponseDto>
   lives?: LiveService
@@ -181,6 +183,8 @@ export async function startNativeOnlyHttpSurface(
 
       // Existing Vault endpoint and validation; its persistence owner is the
       // original Source/Vault filesystem plus Slim checkpoints, not Events.
+      if(await handlePiEcosystemRequest(request,response,url,
+        options.capturePolicy.isSourceEnabled('pi')?options.piEcosystem:undefined))return
       if(await handleBackupRequest(request,response,url,options.backup))return
       // The existing capture-policy handler owns source configuration on both runtimes.
       // No v38 StorageService or legacy write path is involved.

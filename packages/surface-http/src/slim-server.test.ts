@@ -159,6 +159,11 @@ test('Slim-only HTTP reads native Catalog/facets and refuses all old Event APIs'
       async grant(){return ['live' as const]},
     },
     lives:{list:()=>[liveAdapter]} as never,liveAttachments,
+    piEcosystem:{
+      async search(value={}){return {query:value.query??'',sort:'downloads' as const,
+        items:[],upstreamTotal:0,source:'pi-dev' as const,stale:false,
+        fetchedAt:'2026-10-26T00:00:00.000Z',meta:{protocolVersion:'1.0' as const}}},
+    },
     backup:{async overview(){return {
       vaultPath:'/existing-backup',sources:[],snapshots:[],
     }}} as never,
@@ -198,6 +203,13 @@ test('Slim-only HTTP reads native Catalog/facets and refuses all old Event APIs'
     assert.equal(changed.status,200)
     assert.deepEqual((await changed.json() as {settings:{configuredEnabledSources:string[]}}).settings.configuredEnabledSources,[])
     assert.equal((await fetch(base+'/api/v1/capture-policy/sources',{method:'POST'})).status,405)
+    enabledSources=['pi']
+    const catalog=await fetch(base+'/api/v1/integrations/pi/ecosystem?query=agent')
+    assert.equal(catalog.status,200)
+    assert.equal((await catalog.json() as {query:string}).query,'agent')
+    enabledSources=[]
+    const hiddenCatalog=await fetch(base+'/api/v1/integrations/pi/ecosystem')
+    assert.equal(hiddenCatalog.status,503)
     enabledSources=['pi']
     const locales=await fetch(base+'/api/v1/locales')
     assert.equal(locales.status,200)
