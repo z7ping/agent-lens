@@ -158,3 +158,32 @@ test('Slim HTTP bridge serves existing native list, facets, Catalog and aggregat
     assert.deepEqual(writer.log.filter(item=>item.method==='writer'),[])
   }finally{await runtime.shutdown();await rm(directory,{recursive:true,force:true})}
 })
+
+test('Slim Reader is composed directly from Native ports and owned by Slim shutdown',async()=>{
+  const directory=await mkdtemp(join(tmpdir(),'al-slim-reader-compose-'))
+  const dbPath=join(directory,'native.sqlite')
+  const db=await SqliteSlimStorage.createFresh(dbPath)
+  await db.close()
+  const writer=args('writer'),reader=args('reader')
+  const runtime=new SlimDataRuntime({
+    dbPath,writer:writer.port as never,reader:reader.port as never,
+  })
+  const sources={list:()=>[]} as never
+  const policy={isSourceEnabled:()=>false} as never
+  try{
+    assert.throws(()=>runtime.nativeReader(sources,policy),/not started/)
+    await runtime.start()
+    const first=runtime.nativeReader(sources,policy)
+    assert.equal(typeof first.read,'function')
+    assert.equal(typeof first.readArchivedHooks,'function')
+    const second=runtime.nativeReader(sources,policy)
+    assert.notEqual(first,second,'each caller owns its view, Runtime owns one bounded worker')
+    assert.deepEqual(writer.log.filter(item=>item.method==='writer'),[])
+    assert.deepEqual(reader.log.filter(item=>item.method==='reader'),[])
+    const denied=await first.read({
+      sourceId:'pi',installationId:'install',nativeSessionId:'s',
+      signal:new AbortController().signal,
+    })
+    assert.deepEqual(denied,{state:'unsupported',reason:'source-disabled'})
+  }finally{await runtime.shutdown();await rm(directory,{recursive:true,force:true})}
+})
