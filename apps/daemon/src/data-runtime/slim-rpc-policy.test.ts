@@ -11,6 +11,7 @@ test('Slim Data Runtime permits only current-state and numerical methods',()=>{
     ['identity','resolveInstallation'],['nativeSessionContexts','upsert'],
     ['repositories','hosts','get'],['repositories','installations','get'],
     ['assets','recordState'],['assetInventory','listByInstallation'],
+    ['runtimeProfiles','listByInstallation'],
   ]) assert.equal(slimStorageRootAllowed(path),true,path.join('.'))
 })
 test('Slim Data Runtime cannot reflect into legacy Writer or SQLite internals',()=>{
