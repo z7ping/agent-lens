@@ -7,7 +7,7 @@
 - `slim/001-schema.sql`：18 张表，身份（主机、产品、安装、运行配置）、项目/工作区、原生会话 Catalog/上下文、会话和工具名数值统计、Source checkpoint、资产绑定及当前状态、启动项目索引、维护任务。
 - 不包含旧 `source_records`、`observations`、`evidence`、`interactions`、`logical_sessions`、`source_sessions`、`native_session_write_claims`、事件级复制与 Hub 缓存。运行时仍可构造 Canonical/Evidence DTO，但不能长期保存事件正文。
 - `source_checkpoints.value_json` 可能携带运行时内容：**暂存时不复制任何旧 checkpoint**；必须审计后按 scope 制订白名单/重新发现策略。会话数值统计也不从旧库直接复制，待原生 Source 验证后重算。
-- `native_session_catalog` 暂时从旧库复制的路径和身份仅为**待核验线索**，不等于文件现在存在、Hook 完整或 Reader 可恢复。
+- **旧 `native_session_catalog` 的路径不迁入新库**：旧库路径只在只读 Preflight 报告中计数，新库 Catalog 从零开始，由可信 Source Reader 重新核验原生文件并构建。旧库 `source_sessions` 关联仅迁入 `native_session_context` 的轻量身份/项目元数据，不能伪装成可读取的原生会话。
 
 ## 2. 已确认的旧表消费者
 
@@ -30,7 +30,7 @@
 
 - `initializeSlimSchema(db)`：仅允许**空白暂存库**初始化，与旧 `migrateDatabase(v1–v38)` 完全隔离。
 - `inspectLegacyCutover(readonlyDb)`：只返回行数与匹配数，不暴露正文/路径，也不把 Catalog 缺失误报为原生文件已删除。
-- `stageSlimCutover({legacyPath,backupPath,stagingPath})`：仅允许三条互不相同的路径；只读打开 v38，使用 SQLite Backup API 处理 WAL 一致性备份；检查数据库与外键；只把明确白名单数据复制到**全新**暂存库；拒绝同一原生身份跨多个 profile 的歧义；**永远返回 `readyToSwitch:false`**。
+- `stageSlimCutover({legacyPath,backupPath,stagingPath})`：仅允许三条互不相同的路径；只读打开 v38，使用 SQLite Backup API 处理 WAL 一致性备份；检查数据库与外键；只把明确白名单数据复制到**全新**暂存库，**原生 Catalog 与统计从零开始**；拒绝同一原生身份跨多个 profile 的歧义；**永远返回 `readyToSwitch:false`**。
 - 现有文件不会被覆盖；生成的 backup 和 stage 目前**都不会自动安装、替换或删除**。若迁移中断，保留文件供诊断，不声称成功。
 
 ## 4. 手动预检与暂存命令（仅开发/迁移验收）
