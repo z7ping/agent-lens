@@ -113,6 +113,33 @@ test('native indexer enforces bounded sessions and preserves write errors',async
   }),/sqlite write failed/)
 })
 
+test('offline full enumeration distinguishes source-side skipped headers from true EOF',async()=>{
+  const entries=[session('a'),session('invalid-header'),session('b')]
+  const source=makeSource(entries)
+  const original=source.discoverNativeSessions!
+  source.discoverNativeSessions=async function*(ctx){
+    for await(const item of original(ctx)){
+      if(item.nativeSessionId!=='invalid-header')yield item
+    }
+  }
+  const saved:string[]=[]
+  const indexer=new NativeOnlySourceIndexer({async upsert(entry){saved.push(entry.nativeSessionId)}})
+  const bounded=await indexer.scan({source,host,installation,
+    signal:new AbortController().signal,maxSessions:2})
+  assert.equal(bounded.scanned,1)
+  saved.length=0
+  const complete=await indexer.scan({source,host,installation,
+    signal:new AbortController().signal,maxSessions:2,fullEnumeration:true})
+  assert.deepEqual(saved,['a','b'])
+  assert.equal(complete.scanned,2)
+  assert.equal(complete.exhausted,true,'exact-budget natural EOF is complete')
+  saved.length=0
+  const capped=await indexer.scan({source,host,installation,
+    signal:new AbortController().signal,maxSessions:1,fullEnumeration:true})
+  assert.equal(capped.scanned,1)
+  assert.equal(capped.exhausted,false,'remaining entries must be reported as unexamined')
+})
+
 test('indexer never trusts a mismatched Source installation',async()=>{
   const indexer=new NativeOnlySourceIndexer({async upsert(){throw new Error('should not write')}})
   await assert.rejects(indexer.scan({
