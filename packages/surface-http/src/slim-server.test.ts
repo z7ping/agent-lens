@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import type { CapturePolicyService, SourceService } from '@agent-lens/core'
 import { startNativeOnlyHttpSurface } from './slim-server'
+import { DefaultLiveAttachmentService } from '@agent-lens/core-services'
 
 test('Slim-only HTTP reads native Catalog/facets and refuses all old Event APIs',async()=>{
   let listed=0
@@ -58,8 +59,10 @@ test('Slim-only HTTP reads native Catalog/facets and refuses all old Event APIs'
       details:{schemaKind:'slim-native-session-v1'}}},
   }
   const reader={async read(){return {state:'unsupported',reason:'not-indexed'}}}
+  const liveAttachments=new DefaultLiveAttachmentService()
   const surface=await startNativeOnlyHttpSurface(storage as never,{
     port:0,sources,reader:reader as never,capturePolicy:policy,
+    lives:{list:()=>[]} as never,liveAttachments,
     backup:{async overview(){return {
       vaultPath:'/existing-backup',sources:[],snapshots:[],
     }}} as never,
@@ -69,6 +72,18 @@ test('Slim-only HTTP reads native Catalog/facets and refuses all old Event APIs'
     const backup=await fetch(base+'/api/v1/backups')
     assert.equal(backup.status,200)
     assert.equal((await backup.json() as {vaultPath:string}).vaultPath,'/existing-backup')
+    const live=await fetch(base+'/api/v1/live')
+    assert.equal(live.status,200)
+    assert.deepEqual((await live.json() as {items:unknown[]}).items,[])
+    const upload=await fetch(base+'/api/v1/live/attachments',{
+      method:'POST',body:new TextEncoder().encode('native-image-bytes'),
+      headers:{'content-type':'image/png'},
+    })
+    assert.equal(upload.status,201)
+    const attachmentId=(await upload.json() as {attachmentId:string}).attachmentId
+    const attached=await fetch(base+'/api/v1/live/attachments/'+encodeURIComponent(attachmentId))
+    assert.equal(attached.status,200)
+    assert.equal(await attached.text(),'native-image-bytes')
     const ready=await fetch(base+'/api/v1/ready')
     assert.equal(ready.status,200)
     assert.equal((await ready.json() as {storageMode:string}).storageMode,'native-only')
@@ -100,5 +115,5 @@ test('Slim-only HTTP reads native Catalog/facets and refuses all old Event APIs'
       assert.equal((await old.json() as {error:string}).error,
         'native_only_route_not_implemented')
     }
-  }finally{await surface.dispose()}
+  }finally{await surface.dispose();await liveAttachments.dispose()}
 })
