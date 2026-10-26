@@ -22,6 +22,7 @@ export interface SlimDaemonOptions {
   port?:number
   /** Existing web build; uses the same static bundle as the default Daemon. */
   webRoot?:string
+  localePackDirectory?:string
   vaultPath?:string
   /** Test-only external existing Vault; otherwise compose the same Local Vault as Cordis. */
   backup?:BackupService
@@ -107,6 +108,7 @@ export async function startSlimNativeDaemon(options:SlimDaemonOptions){
       lives:options.lives??live!.lives,
       liveAttachments:options.liveAttachments??live!.attachments,
       staticDir:resolveSlimWebRoot(options.webRoot),
+      ...(options.localePackDirectory?{localePackDirectory:options.localePackDirectory}:{}),
       reader:nativeReader,
     })
     const coordinator=new SlimSourceCoordinator(runtime,sources,policy)

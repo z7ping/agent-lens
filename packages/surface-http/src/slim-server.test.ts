@@ -11,7 +11,16 @@ test('Slim-only HTTP reads native Catalog/facets and refuses all old Event APIs'
     nativeSessionCoverageComplete:true,
   }
   const sources={list:()=>[source]} as unknown as SourceService
-  const policy={isSourceEnabled:()=>true} as unknown as CapturePolicyService
+  let enabledSources=['pi']
+  const policy={
+    isSourceEnabled:(sourceId:string)=>enabledSources.includes(sourceId),
+    getSourceConfiguration:()=>({
+      effectiveEnabledSources:enabledSources,
+      configuredEnabledSources:enabledSources,
+      source:'fixture',editable:true,restartRequired:false,
+    }),
+    async setEnabledSources(values:string[]){enabledSources=values},
+  } as unknown as CapturePolicyService
   const storage={
     nativeSessionCatalog:{
       async getByReviewSessionId(){return null},
@@ -84,6 +93,23 @@ test('Slim-only HTTP reads native Catalog/facets and refuses all old Event APIs'
     const attached=await fetch(base+'/api/v1/live/attachments/'+encodeURIComponent(attachmentId))
     assert.equal(attached.status,200)
     assert.equal(await attached.text(),'native-image-bytes')
+    const configuration=await fetch(base+'/api/v1/capture-policy/sources')
+    assert.equal(configuration.status,200)
+    assert.deepEqual((await configuration.json() as {settings:{effectiveEnabledSources:string[]}}).settings.effectiveEnabledSources,['pi'])
+    const changed=await fetch(base+'/api/v1/capture-policy/sources',{
+      method:'PUT',headers:{'content-type':'application/json'},
+      body:JSON.stringify({enabledSources:[]}),
+    })
+    assert.equal(changed.status,200)
+    assert.deepEqual((await changed.json() as {settings:{configuredEnabledSources:string[]}}).settings.configuredEnabledSources,[])
+    assert.equal((await fetch(base+'/api/v1/capture-policy/sources',{method:'POST'})).status,405)
+    enabledSources=['pi']
+    const locales=await fetch(base+'/api/v1/locales')
+    assert.equal(locales.status,200)
+    const localeBody=await locales.json() as {items:unknown[];meta:{protocolVersion:string}}
+    assert.deepEqual(localeBody.items,[])
+    assert.ok(localeBody.meta.protocolVersion)
+    assert.equal((await fetch(base+'/api/v1/locales',{method:'POST'})).status,405)
     const ready=await fetch(base+'/api/v1/ready')
     assert.equal(ready.status,200)
     assert.equal((await ready.json() as {storageMode:string}).storageMode,'native-only')

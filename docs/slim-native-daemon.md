@@ -22,7 +22,8 @@ Available: native sessions and deep links, native windows, authorized body searc
 attachments, archived Hook pages, native statistics/rebuild, aggregate Usage/Insights,
 the existing Pi Live create/send/stream/runtime controls and ephemeral attachment
 API, **verified Pi native resume/whole-session fork**,
-Facets, the existing Local Vault `/api/v1/backups` endpoints and
+Facets, the existing Local Vault `/api/v1/backups` endpoints, existing source capture-policy
+`GET/PUT /api/v1/capture-policy/sources`, `GET /api/v1/locales`, and
 `/api/v1/projects/launchable` project picker (with
 validated workspace paths), health and readiness. **Pi legacy logical-session history and Fork-at are still unavailable**.
 Pi native `native:...` Resume/Fork is resolved only through trusted Catalog,
