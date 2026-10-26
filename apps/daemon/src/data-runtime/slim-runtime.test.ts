@@ -66,6 +66,30 @@ test('slim runtime refuses legacy v38 and absent databases before worker start',
   }finally{await rm(directory,{recursive:true,force:true})}
 })
 
+test('native-only installation discovery writes identities/Profile through Slim Worker, not Legacy',async()=>{
+  const directory=await mkdtemp(join(tmpdir(),'al-slim-discovery-'))
+  const dbPath=join(directory,'native.sqlite')
+  const db=await SqliteSlimStorage.createFresh(dbPath)
+  await db.close()
+  const writer=args('writer'),reader=args('reader')
+  const runtime=new SlimDataRuntime({
+    dbPath,writer:writer.port as never,reader:reader.port as never,
+  })
+  try{
+    await runtime.start()
+    await runtime.resolveHost({name:'host',platform:'linux',arch:'x64'})
+    await runtime.resolveInstallation({hostId:'host-id',productId:'pi',dataRoot:'/native/pi'})
+    await runtime.resolveProfile({installationId:'pi-install',nativeProfileId:'main',
+      dataRoot:'/native/pi/profile'})
+    assert.deepEqual(writer.log.filter(x=>x.method==='writer').map(x=>x.path),[
+      ['identity','resolveHost'],
+      ['identity','resolveInstallation'],
+      ['runtimeProfiles','resolve'],
+    ])
+    assert.deepEqual(reader.log.filter(x=>x.method==='reader'),[])
+  }finally{await runtime.shutdown();await rm(directory,{recursive:true,force:true})}
+})
+
 test('slim Daemon bridge routes reader/catalog/context/metrics/checkpoints to isolated Worker roles',async()=>{
   const directory=await mkdtemp(join(tmpdir(),'al-slim-bridge-'))
   const dbPath=join(directory,'native.sqlite')
