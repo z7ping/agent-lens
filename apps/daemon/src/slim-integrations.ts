@@ -60,6 +60,7 @@ export function startSlimIntegrations(options:{
     })
   }
   return {
+    integrationStatus,
     discovery:{
       snapshot:()=>discovery.snapshot(),
       rescan:(id?:string)=>discovery.rescan(id),

@@ -85,6 +85,7 @@ export interface NativeOnlyHttpOptions {
   liveAttachments?: LiveAttachmentService
   integrationDiscovery?:IntegrationDiscoveryController
   integrationManagement?:IntegrationManagementController
+  integrationStatus?:(productId:string)=>Promise<AgentIntegrationRuntimeStatus|null>
   integrationAuthorization?:IntegrationAuthorizationController
   integrationPackages?:IntegrationPackageController
   rescanAgents?:(sourceId?:string)=>Promise<AgentRescanSummaryDto>
@@ -281,7 +282,8 @@ export async function startNativeOnlyHttpSurface(
         }
         const summary=await options.rescanAgents(sourceId)
         const [agents,facets]=await Promise.all([
-          nativeOnlyAgentOverview(storage,options.sources,options.capturePolicy),
+          nativeOnlyAgentOverview(storage,options.sources,options.capturePolicy,
+            options.integrationStatus),
           nativeOnlyFacetResponse(storage.nativeFacets,options.sources,options.capturePolicy),
         ])
         const payload:AgentRescanResponseDto={...summary,agents,facets}
@@ -319,7 +321,8 @@ export async function startNativeOnlyHttpSurface(
           writeJson(response,405,{error:'method_not_allowed'})
           return
         }
-        const view=await nativeOnlyAgentOverview(storage,options.sources,options.capturePolicy)
+        const view=await nativeOnlyAgentOverview(storage,options.sources,options.capturePolicy,
+          options.integrationStatus)
         if(url.pathname==='/api/v1/agents'){
           writeJson(response,200,view)
         }else if(url.pathname==='/api/v1/agents/coverage'){
