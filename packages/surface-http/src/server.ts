@@ -60,6 +60,7 @@ import { badRequest, statusCodeForError, writeJson } from './http-utils'
 import { handleLiveAttachmentRequest } from './live-attachments-http'
 import { handleNativeSessionWindowRequest, handleNativeSessionAttachmentRequest, handleNativeSessionHookRequest, type NativeSessionWindowReader } from './native-session-http'
 import { handleNativeSessionCatalogRequest } from './native-session-catalog-http'
+import { nativeOnlyFacetResponse } from './native-only-facets'
 import { handleNativeSessionBodySearchRequest } from './native-session-search-http'
 import { handleNativeSessionMetricsRequest } from './native-session-metrics-http'
 import { handleNativeSessionMetricsOverviewRequest } from './native-session-metrics-overview-http'
@@ -594,6 +595,17 @@ export async function startHttpSurface(
         return
       }
       if (url.pathname === '/api/v1/facets') {
+        if(storage.nativeFacets){
+          if(!options.sources || !options.capturePolicy){
+            writeJson(response,503,{
+              error:'native_facets_source_registry_unavailable',
+            })
+            return
+          }
+          writeJson(response,200,await withReadPriority(storage,'supporting',
+            ()=>nativeOnlyFacetResponse(storage.nativeFacets!,options.sources!,options.capturePolicy!)))
+          return
+        }
         writeJson(response, 200, await withReadPriority(storage, 'supporting', () => facets.query()))
         return
       }
