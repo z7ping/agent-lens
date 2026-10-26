@@ -14,7 +14,7 @@ import type {
   NativeSessionListReader, NativeFacetReader,
   StorageHealth, LaunchableProjectReader, AssetService, AssetInventoryReader,
 } from '@agent-lens/core'
-import { SqliteSlimStorage } from '@agent-lens/storage-sqlite'
+import { SqliteSlimStorage } from '@agent-lens/storage-sqlite/slim'
 import {
   indexNativeInstallation, NativeOnlyRuntimeCapture, NativeOnlyAssetScanner,
   NativeSessionReader, NativeReaderWorkerClient,
