@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import { copyFile, mkdtemp, stat, rm, writeFile } from 'node:fs/promises'
 import Database from 'better-sqlite3'
+import { createServer } from 'node:net'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { SqliteStorageService, SqliteSlimStorage } from '@agent-lens/storage-sqlite'
@@ -113,4 +114,37 @@ test('activation computes the final gate inside the frozen old SQLite transactio
     assert.equal(evaluated,true)
     assert.equal(await readActiveDatabasePointer(paths.pointerPath),null)
   }finally{await rm(root,{recursive:true,force:true})}
+})
+
+
+test('M3 rollback refuses an active Daemon port and preserves the Slim pointer',async()=>{
+  const root=await mkdtemp(join(tmpdir(),'al-m3-live-rollback-'))
+  const paths={legacyPath:join(root,'old.sqlite'),backupPath:join(root,'backup.sqlite'),
+    stagingPath:join(root,'stage.sqlite'),installedSlimPath:join(root,'installed.sqlite'),
+    pointerPath:join(root,'active.json')}
+  const server=createServer(socket=>socket.end())
+  try{
+    const old=new SqliteStorageService({path:paths.legacyPath})
+    await old.migrate();await old.close()
+    await copyFile(paths.legacyPath,paths.backupPath)
+    const stage=await SqliteSlimStorage.createFresh(paths.stagingPath)
+    await stage.close()
+    const pointer=await activateSlimCutover(paths,allowed)
+    await new Promise<void>((yes,no)=>{
+      server.once('error',no)
+      server.listen(0,'127.0.0.1',()=>yes())
+    })
+    const address=server.address()
+    assert.ok(address && typeof address!=='string')
+    const port=address.port
+    await assert.rejects(rollbackSlimCutover({
+      pointerPath:paths.pointerPath,legacyPath:paths.legacyPath,
+      backupPath:paths.backupPath,installedSlimPath:paths.installedSlimPath,
+      port,
+    }),/Daemon port occupied/)
+    assert.deepEqual(await readActiveDatabasePointer(paths.pointerPath),pointer)
+  }finally{
+    await new Promise<void>(done=>server.close(()=>done()))
+    await rm(root,{force:true,recursive:true})
+  }
 })
