@@ -72,8 +72,7 @@ export class NativeOnlySourceIndexer {
       || maxSessions < 1 || maxSessions > MAX_SESSION_BUDGET) {
       throw new RangeError('Native catalog scan budget must be between 1 and 128')
     }
-    if (source.manifest.sourceId !== installation.productId
-      && !source.manifest.sourceId.trim()) {
+    if (!source.manifest.sourceId.trim()) {
       throw new Error('Native catalog Source identity is missing')
     }
     if (!installation.id || installation.hostId !== host.id
@@ -138,6 +137,7 @@ export class NativeOnlySourceIndexer {
         failure('invalid-discovery')
         continue
       }
+      let verified = false
       try {
         // The first Source-owned record and its revision must match discovery
         // BEFORE any metadata becomes eligible for Review/Usage/Insights.
@@ -175,12 +175,16 @@ export class NativeOnlySourceIndexer {
           failure('recovery-unverified')
           continue
         }
-        await this.catalog.upsert(entry)
-        report.indexed++
+        verified = true
       } catch (error) {
         if (signal.aborted) throw error
-        // Do not expose raw original paths or payloads in operational reports.
+        // Original file churn is reported without leaking sensitive content.
         failure('source-read-error')
+      }
+      if (verified) {
+        // SQL write failure must abort, never silently report a skipped session.
+        await this.catalog.upsert(entry)
+        report.indexed++
       }
       if (input.onProgress) await input.onProgress({ ...report, failures: { ...report.failures } })
       if ((report.scanned & 7) === 0) await new Promise<void>(resolve => setImmediate(resolve))
