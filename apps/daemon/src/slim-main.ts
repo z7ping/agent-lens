@@ -108,7 +108,7 @@ export async function startSlimNativeDaemon(options:SlimDaemonOptions){
       lives:options.lives??live!.lives,
       liveAttachments:options.liveAttachments??live!.attachments,
       staticDir:resolveSlimWebRoot(options.webRoot),
-      localePackDirectory:options.localePackDirectory,
+      ...(options.localePackDirectory?{localePackDirectory:options.localePackDirectory}:{}),
       reader:nativeReader,
     })
     const coordinator=new SlimSourceCoordinator(runtime,sources,policy)
