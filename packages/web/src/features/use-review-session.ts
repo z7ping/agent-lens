@@ -59,6 +59,7 @@ export function useReviewSession(model: AgentLensClientModel, embedded: boolean)
   const followingTailRef = useRef(false)
   const roundExpansionRef = useRef(new Map<string, boolean>())
   const review = snapshot.review
+  const nativeOnly = snapshot.health?.storage.details?.schemaKind === 'slim-native-session-v1'
   const agents = snapshot.facets?.agents ?? []
   const projects = snapshot.facets?.projects ?? []
   const detail = review.detail
@@ -73,24 +74,36 @@ export function useReviewSession(model: AgentLensClientModel, embedded: boolean)
   // membership for a source that has not been persisted.
   const nativeFilterKey = JSON.stringify(review.filters)
   const visibleNativeSessions = useMemo(() => {
-    const { sourceIds, range } = review.filters
+    const { sourceIds, range, status, projectId } = review.filters
     const now = new Date()
     const start = range === 'all' ? Number.NEGATIVE_INFINITY
       : range === 'today'
         ? new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime()
         : now.getTime() - (range === '7d' ? 7 : 30) * 86_400_000
     const combined = new Map(nativeSessions.map(item => [item.id, item]))
-    for (const item of nativeBodySessions) combined.set(item.id,item)
+    for (const item of nativeBodySessions) {
+      // A text-search hit has no certified metric/project metadata. Keep the
+      // Catalog's authoritative metadata if the same session is present.
+      const catalog = combined.get(item.id)
+      combined.set(item.id, catalog ? { ...item, ...catalog } : item)
+    }
     return [...combined.values()].filter(item =>
       (sourceIds === null || sourceIds.includes(item.sourceId))
+      && (!projectId || item.projectId === projectId)
+      // Only verified counts can prove "clean". A partial positive error
+      // count proves errors but zero from a partial page proves nothing.
+      && (status === 'all' || (status === 'with-errors'
+        ? (item.metricsState === 'complete' || item.metricsState === 'partial')
+          && (item.metrics?.errorCount ?? 0) > 0
+        : item.metricsState === 'complete' && item.metrics?.errorCount === 0))
       && Number.isFinite(Date.parse(item.lastActivityAt))
       && Date.parse(item.lastActivityAt) >= start)
   }, [nativeSessions, nativeBodySessions, nativeFilterKey])
 
   useEffect(() => {
     const filters = review.filters
-    const allowed = !embedded && !filters.projectId
-      && filters.status === 'all'
+    const allowed = !embedded && (!filters.projectId || nativeOnly)
+      && (filters.status === 'all' || nativeOnly)
       && (filters.sourceIds === null || filters.sourceIds.length > 0)
     const filterChanged = nativeRequestKeyRef.current !== nativeFilterKey
     nativeRequestKeyRef.current = nativeFilterKey
@@ -110,7 +123,8 @@ export function useReviewSession(model: AgentLensClientModel, embedded: boolean)
     const sourceId = filters.sourceIds?.length === 1 ? filters.sourceIds[0] : undefined
     void model.nativeSessions({
       ...(sourceId ? { sourceId } : {}),
-      onlyWithoutLegacyReview: true, search: filters.search.trim(), limit: 100, signal: controller.signal,
+      ...(filters.projectId ? { projectId: filters.projectId } : {}),
+      onlyWithoutLegacyReview: !nativeOnly, search: filters.search.trim(), limit: 100, signal: controller.signal,
     }).then(page => {
       if (controller.signal.aborted) return
       setNativeSessions(page.items)
@@ -123,7 +137,7 @@ export function useReviewSession(model: AgentLensClientModel, embedded: boolean)
       // New selections still fail closed on the actual Reader when clicked.
     })
     return () => controller.abort()
-  }, [embedded, nativeFilterKey, review.response?.meta.generatedAt, model])
+  }, [embedded, nativeOnly, nativeFilterKey, review.response?.meta.generatedAt, review.nativeRefreshRevision, model])
 
   // Search sanitized Source content on demand without ever indexing
   // message bodies in the Catalog/SQLite. Every response scans one bounded
@@ -183,7 +197,8 @@ export function useReviewSession(model: AgentLensClientModel, embedded: boolean)
         try{
           const page=await model.nativeSessions({
             ...(sourceId?{sourceId}:{}),
-            onlyWithoutLegacyReview:true,search:review.filters.search.trim(),
+            ...(review.filters.projectId ? { projectId: review.filters.projectId } : {}),
+            onlyWithoutLegacyReview:!nativeOnly,search:review.filters.search.trim(),
             limit:100,cursor:nativeCursor,
           })
           if(nativeRequestKeyRef.current!==requestKey)return
@@ -227,7 +242,7 @@ export function useReviewSession(model: AgentLensClientModel, embedded: boolean)
         }
       }
     }finally{setNativeLoadingMore(false)}
-  },[nativeCursor,nativeBodyCursor,nativeLoadingMore,review.filters,model])
+  },[nativeCursor,nativeBodyCursor,nativeLoadingMore,review.filters,nativeOnly,model])
 
   const sessionGroups = useMemo(() => {
     const groups = new Map<ReviewDayGroup, UnifiedReviewSessionListEntry[]>()

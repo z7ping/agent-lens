@@ -10,6 +10,20 @@ export interface NativeSessionSummaryDto {
   locationKind: 'native' | 'archive'
   lastActivityAt: string
   title?: string
+  /** Optional Slim-only indexed association, never inferred from original title. */
+  projectId?: string
+  projectName?: string
+  /** Only a certified "complete" status may justify a clean-session verdict. */
+  metricsState?: 'missing' | 'stale' | 'partial' | 'complete'
+  metrics?: {
+    interactionCount: number
+    toolCallCount: number
+    toolResultCount: number
+    toolErrorCount: number
+    errorCount: number
+    inputTokens: number | null
+    outputTokens: number | null
+  }
 }
 
 export interface NativeSessionCatalogResponseDto {

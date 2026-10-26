@@ -294,7 +294,7 @@ export abstract class AgentLensIntegrationModel extends AgentLensModelBase {
   }
 
   ensureReview(): Promise<void> {
-    if (this.snapshot.review.response) return Promise.resolve()
+    if (this.snapshot.review.response || this.snapshot.review.nativeRefreshRevision > 0) return Promise.resolve()
     return this.reviewInFlight ?? this.refreshReview()
   }
 

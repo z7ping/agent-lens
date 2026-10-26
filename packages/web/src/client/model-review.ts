@@ -236,6 +236,7 @@ export abstract class AgentLensReviewModel extends AgentLensIntegrationModel {
       if (this.reviewPaginationDirty) return
     }
     const current = this.snapshot.review
+    if (this.snapshot.health?.storage.details?.schemaKind === 'slim-native-session-v1') return
     const cursor = current.response?.meta.nextCursor
     if (current.loading || current.loadingMore || !current.response?.meta.hasMore || !cursor) return
     const generation = ++this.reviewGeneration
@@ -451,6 +452,27 @@ export abstract class AgentLensReviewModel extends AgentLensIntegrationModel {
     this.refreshTimer = null
     this.reviewRefreshDueAt = null
     this.reviewLiveDirty = false
+    // Slim has no Legacy Review projection. The existing Review page owns a
+    // separate native Catalog stream and renders in the same Task Surface.
+    // Never fabricate ReviewSummary counters or call a retired SQL endpoint.
+    if (this.snapshot.health?.storage.details?.schemaKind === 'slim-native-session-v1') {
+      this.reviewGeneration += 1
+      this.reviewRequestDirty = false
+      const current = this.snapshot.review
+      this.publish({
+        ...this.snapshot,
+        review: {
+          ...current,
+          response: null,
+          limit: INITIAL_REVIEW_LIMIT,
+          nativeRefreshRevision: current.nativeRefreshRevision + 1,
+          loading: false,
+          loadingMore: false,
+          error: '',
+        },
+      })
+      return
+    }
     if (this.reviewInFlight) {
       this.reviewRequestDirty = true
       // 同一条件的新数据刷新保留首个可用结果；筛选切换才使旧响应失效。
