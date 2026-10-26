@@ -29,10 +29,22 @@ test('slim metadata retains project/title association without SQL session or evi
     await storage.nativeSessionContexts.upsert({...base,nativeSessionId:'one',
       projectId:'p1',titleOverride:'Saved Title',titleKind:'explicit'})
     await storage.nativeSessionContexts.upsert({...base,nativeSessionId:'two',projectId:'p2'})
+    db.exec(`INSERT INTO runtime_profiles(id,installation_id,native_profile_id,
+      first_seen_at,last_seen_at) VALUES
+      ('profile-one','install','profile-one','2026-10-26','2026-10-26'),
+      ('profile-two','install','profile-two','2026-10-26','2026-10-26')`)
+    await storage.nativeSessionContexts.upsert({...base,nativeSessionId:'one',
+      runtimeProfileId:'profile-one'})
+    await assert.rejects(storage.nativeSessionContexts.upsert({
+      ...base,nativeSessionId:'one',runtimeProfileId:'profile-two',
+    }),/collision/)
+    assert.equal((await storage.nativeSessionContexts.get({
+      ...base,nativeSessionId:'one',
+    }))?.runtimeProfileId,'profile-one')
     await storage.nativeSessionContexts.upsert({...base,nativeSessionId:'one',workspaceId:undefined})
     assert.deepEqual(await storage.nativeSessionContexts.get({...base,nativeSessionId:'one'}),{
       ...base,nativeSessionId:'one',projectId:'p1',titleOverride:'Saved Title',
-      titleKind:'explicit',updatedAt:(await storage.nativeSessionContexts.get({
+      titleKind:'explicit',runtimeProfileId:'profile-one',updatedAt:(await storage.nativeSessionContexts.get({
         ...base,nativeSessionId:'one',
       }))!.updatedAt,
     })

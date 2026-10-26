@@ -47,6 +47,8 @@ export interface NativeCatalogScanInput {
   /** Maximum original Source sessions inspected; >128 only for explicit offline migration. */
   maxSessions?: number
   onProgress?: (report: NativeCatalogScanReport) => void | Promise<void>
+  /** Optional metadata association, invoked before Catalog visibility. */
+  beforeCatalogUpsert?: (entry: import('@agent-lens/core').NativeSessionCatalogEntry) => Promise<void>
 }
 
 const readonlyCheckpoint: SourceCheckpointService = {
@@ -185,6 +187,7 @@ export class NativeOnlySourceIndexer {
         failure('source-read-error')
       }
       if (verified) {
+        if (input.beforeCatalogUpsert) await input.beforeCatalogUpsert(entry)
         // SQL write failure must abort, never silently report a skipped session.
         await this.catalog.upsert(entry)
         report.indexed++
@@ -202,7 +205,14 @@ export class NativeOnlySourceIndexer {
  * arbitrary host/source paths from a browser request.
  */
 export async function indexNativeInstallation(
-  storage: NativeSessionReaderStorage,
+  storage: NativeSessionReaderStorage & {
+    nativeSessionContexts?: {
+      upsert(input: {
+        sourceId: string; installationId: string; nativeSessionId: string;
+        runtimeProfileId?: string
+      }): Promise<void>
+    }
+  },
   input: Omit<NativeCatalogScanInput, 'host' | 'installation'> & {
     installationId: string
   },
@@ -213,10 +223,30 @@ export async function indexNativeInstallation(
   if (!installation) throw new Error('Native installation is not indexed')
   const host = await storage.repositories.hosts.get(installation.hostId)
   if (!host) throw new Error('Native installation host is unavailable')
+  if(input.runtimeProfile && input.runtimeProfile.installationId!==installation.id) {
+    throw new Error('Native profile belongs to another installation')
+  }
+  // Profile-owned native roots take precedence; some Agents keep multiple
+  // independent installations/profiles under the same product identity.
+  const effectiveInstallation=input.runtimeProfile ? {
+    ...installation,
+    configRoot:input.runtimeProfile.configRoot ?? installation.configRoot,
+    dataRoot:input.runtimeProfile.dataRoot ?? installation.dataRoot,
+  } : installation
+  if(input.runtimeProfile && !storage.nativeSessionContexts) {
+    throw new Error('Native profile indexing requires durable context association')
+  }
   return new NativeOnlySourceIndexer(catalog).scan({
     source: input.source,
     host,
-    installation,
+    installation: effectiveInstallation,
+    ...(input.runtimeProfile && storage.nativeSessionContexts
+      ? { beforeCatalogUpsert: async (entry: import('@agent-lens/core').NativeSessionCatalogEntry) => {
+        await storage.nativeSessionContexts!.upsert({
+          sourceId:entry.sourceId,installationId:entry.installationId,
+          nativeSessionId:entry.nativeSessionId,runtimeProfileId:input.runtimeProfile!.id,
+        })
+      } } : {}),
     ...(input.runtimeProfile ? { runtimeProfile: input.runtimeProfile } : {}),
     signal: input.signal,
     ...(input.historyWindow ? { historyWindow: input.historyWindow } : {}),
