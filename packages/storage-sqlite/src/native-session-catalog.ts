@@ -1,7 +1,6 @@
 import { isAbsolute } from 'node:path'
 import { createHash } from 'node:crypto'
 import type { SqliteExecutor } from './executor'
-import { isSlimDatabase } from './slim-schema'
 
 import {
   type NativeSessionCatalogEntry,
@@ -133,139 +132,11 @@ export class SqliteNativeSessionCatalog {
   async isNativeMetricsEligible(input: {
     sourceId: string; installationId: string; nativeSessionId: string
   }): Promise<boolean> {
-    return this.executor.run(() => {
-      if (isSlimDatabase(this.executor.db)) {
-        return Boolean(this.executor.db.prepare(`
-          SELECT 1 FROM native_session_catalog
-          WHERE source_id=? AND installation_id=? AND native_session_id=?
-            AND location_kind='native' AND review_session_id IS NOT NULL
-        `).get(input.sourceId,input.installationId,input.nativeSessionId))
-      }
-      // Until v38 is retired, only sessions owned by Native-only may use
-      // derived native rollups; Legacy will keep its own SQL aggregates.
-      return Boolean(this.executor.db.prepare(`
-        SELECT 1 FROM native_session_write_claims
-        WHERE source_id=? AND installation_id=? AND native_session_id=?
-          AND mode='native-only'
-      `).get(input.sourceId,input.installationId,input.nativeSessionId))
-    })
-  }
-
-  async hasNativeOnlyWriteClaim(input: {
-    sourceId: string; installationId: string; nativeSessionId: string
-  }): Promise<boolean> {
-    return this.executor.run(() => {
-      if (isSlimDatabase(this.executor.db)) {
-        throw new Error('Legacy write claims are not supported in the slim SQLite schema')
-      }
-      return Boolean(this.executor.db.prepare(`
-      SELECT 1 FROM native_session_write_claims
-      WHERE source_id=? AND installation_id=? AND native_session_id=? AND mode='native-only'
-    `).get(input.sourceId,input.installationId,input.nativeSessionId))
-    })
-  }
-
-  /**
-   * Atomic read/write eligibility check. Never claim sessions with existing
-   * event copies, even if their source_sessions row has no observations.
-   * This only records ownership: it deliberately does not skip Source writes
-   * before runtime consumers are audited and switched.
-   */
-  async getSessionWriteMode(input: {
-    sourceId: string; installationId: string; nativeSessionId: string
-  }): Promise<'legacy' | 'native-only' | null> {
-    return this.executor.run(() => {
-      if (isSlimDatabase(this.executor.db)) {
-        throw new Error('Legacy write ownership is not supported in the slim SQLite schema')
-      }
-      const row = this.executor.db.prepare(`
-        SELECT mode FROM native_session_write_claims
-        WHERE source_id=? AND installation_id=? AND native_session_id=?
-      `).get(input.sourceId,input.installationId,input.nativeSessionId) as
-        {mode:'legacy'|'native-only'} | undefined
-      return row?.mode ?? null
-    })
-  }
-
-  async claimLegacyWrite(input: {
-    sourceId: string; installationId: string; nativeSessionId: string
-  }): Promise<'legacy' | 'native-only'> {
-    if (!input.sourceId || !input.installationId || !input.nativeSessionId) {
-      throw new Error('Invalid legacy session write ownership identity')
-    }
-    return this.executor.run(() => {
-      if (isSlimDatabase(this.executor.db)) {
-        throw new Error('Legacy Writer is forbidden for slim-native-session-v1')
-      }
-      this.executor.db.prepare(`
-        INSERT OR IGNORE INTO native_session_write_claims
-          (source_id,installation_id,native_session_id,claimed_at,mode)
-        VALUES (?,?,?,?,'legacy')
-      `).run(input.sourceId,input.installationId,input.nativeSessionId,new Date().toISOString())
-      const row = this.executor.db.prepare(`
-        SELECT mode FROM native_session_write_claims
-        WHERE source_id=? AND installation_id=? AND native_session_id=?
-      `).get(input.sourceId,input.installationId,input.nativeSessionId) as
-        {mode:'legacy'|'native-only'} | undefined
-      if (!row) throw new Error('Native session write owner is unavailable')
-      return row.mode
-    })
-  }
-
-  async claimNativeOnlyWrite(input: {
-    sourceId: string; installationId: string; nativeSessionId: string
-    filePath: string; fileIdentity: string
-  }): Promise<boolean> {
-    if (!input.sourceId || !input.installationId || !input.nativeSessionId
-      || !isAbsolute(input.filePath) || !input.fileIdentity) {
-      throw new Error('Invalid native write ownership identity')
-    }
-    return this.executor.run(() => {
-      if (isSlimDatabase(this.executor.db)) {
-        throw new Error('Legacy write claims are not supported in the slim SQLite schema')
-      }
-      this.executor.db.prepare(`
-        INSERT OR IGNORE INTO native_session_write_claims
-          (source_id,installation_id,native_session_id,claimed_at,mode)
-        SELECT ?,?,?,?,'native-only'
-        WHERE EXISTS (
-          SELECT 1 FROM native_session_catalog AS catalog
-          WHERE catalog.source_id=?
-            AND catalog.installation_id=?
-            AND catalog.native_session_id=?
-            AND catalog.location_kind='native'
-            AND catalog.file_path=?
-            AND catalog.file_identity=?
-            AND catalog.review_session_id IS NOT NULL
-        )
-        AND NOT EXISTS (
-          SELECT 1 FROM source_records AS old
-          WHERE old.source_id=?
-            AND old.installation_id=?
-            AND old.source_session_native_id=?
-        )
-        AND NOT EXISTS (
-          SELECT 1 FROM source_sessions AS source_session
-          JOIN observations AS observation
-            ON observation.source_session_id=source_session.id
-          WHERE source_session.source_id=?
-            AND source_session.installation_id=?
-            AND source_session.native_session_id=?
-        )
-      `).run(
-        input.sourceId,input.installationId,input.nativeSessionId,new Date().toISOString(),
-        input.sourceId,input.installationId,input.nativeSessionId,
-        input.filePath,input.fileIdentity,
-        input.sourceId,input.installationId,input.nativeSessionId,
-        input.sourceId,input.installationId,input.nativeSessionId,
-      )
-      const row = this.executor.db.prepare(`
-        SELECT mode FROM native_session_write_claims
-        WHERE source_id=? AND installation_id=? AND native_session_id=?
-      `).get(input.sourceId,input.installationId,input.nativeSessionId) as
-        {mode:'native-only'|'legacy'} | undefined
-      return row?.mode === 'native-only'
-    })
+    return this.executor.run(() => Boolean(this.executor.db.prepare(`
+      SELECT 1 FROM native_session_catalog
+      WHERE source_id=? AND installation_id=? AND native_session_id=?
+        AND location_kind='native' AND review_session_id IS NOT NULL
+    `).get(input.sourceId,input.installationId,input.nativeSessionId)))
   }
 
   async query(input: NativeSessionCatalogQuery = {}): Promise<{
@@ -309,36 +180,8 @@ export class SqliteNativeSessionCatalog {
         // Do not advertise pre-v35 metadata rows that cannot be opened by
         // their synthetic Review ID until their next incremental upsert.
         predicates.push('review_session_id IS NOT NULL')
-        // Only the old v38 database has Legacy claims and stored observations.
-        // The standalone slim database contains only native entries, so it
-        // MUST NOT query tables that were deliberately removed at cutover.
-        if (!isSlimDatabase(this.executor.db)) {
-          // A Legacy owner may already be durable before its first SQL Review
-          // Observation becomes visible. Do not create a synthetic Native-only
-          // rail entry in that in-flight interval (or for SourceRecord-only
-          // legacy sessions) merely because the Review projection is empty.
-          predicates.push(`NOT EXISTS (
-            SELECT 1 FROM native_session_write_claims AS claim
-            WHERE claim.source_id = native_session_catalog.source_id
-              AND claim.installation_id = native_session_catalog.installation_id
-              AND claim.native_session_id = native_session_catalog.native_session_id
-              AND claim.mode = 'legacy'
-          )`)
-          // The existing SourceSession unique triple is the authoritative
-          // association between source-native and legacy logical identities.
-          // EXISTS uses the existing observations logical-session index, with
-          // no payload reads and no scan of unbounded Source records.
-          predicates.push(`NOT EXISTS (
-            SELECT 1 FROM source_sessions AS linked
-            WHERE linked.source_id = native_session_catalog.source_id
-              AND linked.installation_id = native_session_catalog.installation_id
-              AND linked.native_session_id = native_session_catalog.native_session_id
-              AND EXISTS (
-                SELECT 1 FROM observations AS stored
-                WHERE stored.logical_session_id = linked.logical_session_id
-              )
-          )`)
-        }
+        // Slim has no legacy SQL Review ownership; only indexed original files.
+      }
       }
       if (input.before) {
         predicates.push(`(last_activity_at,source_id,installation_id,native_session_id,location_kind) < (?,?,?,?,?)`)
