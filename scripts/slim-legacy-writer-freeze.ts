@@ -30,7 +30,7 @@ export async function withFrozenLegacyWriter<T>(
     }
     return await operation()
   }finally{
-    if(frozen)old.exec('ROLLBACK')
-    old.close()
+    try{if(frozen)old.exec('ROLLBACK')}
+    finally{old.close()}
   }
 }
