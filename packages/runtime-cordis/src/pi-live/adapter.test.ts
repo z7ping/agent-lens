@@ -815,3 +815,22 @@ test('Slim Pi Live advertises real streaming/creation capabilities but not old S
   // Existing v38 adapter contract remains unchanged during one-time cutover.
   assert.equal(new PiLiveAdapter({} as never,attachmentService()).capabilities.has('resume'),true)
 })
+
+test('Slim Pi Live declares only actions backed by Native Worker, never SQL history resume', async () => {
+  const service = {
+    async availability() { return { available: false, reason: 'fixture' } },
+    async list() { return [] },
+    async dispose() {},
+  } as unknown as PiLiveService
+  const adapter = new PiLiveAdapter(service, attachmentService(), undefined, { nativeOnly: true })
+  for (const capability of ['create', 'send', 'stream', 'queue', 'recovery', 'thinking-control'] as const) {
+    assert.equal(adapter.capabilities.has(capability), true, capability)
+    assert.equal(adapter.manifest.capabilities?.includes(capability), true, capability)
+  }
+  for (const capability of ['resume', 'fork', 'fork-at'] as const) {
+    assert.equal(adapter.capabilities.has(capability), false, capability)
+    assert.equal(adapter.manifest.capabilities?.includes(capability), false, capability)
+  }
+  const old = new PiLiveAdapter(service, attachmentService())
+  assert.equal(old.capabilities.has('resume'), true, 'unchanged legacy mode')
+})
