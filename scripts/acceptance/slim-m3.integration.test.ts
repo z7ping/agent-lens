@@ -1,3 +1,4 @@
+import { LegacyV38TestDatabase } from '../../packages/storage-sqlite/src/legacy-v38-test-fixture'
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { createHash } from 'node:crypto'
@@ -10,7 +11,7 @@ import { createServer } from 'node:net'
 import { createServer as createHttpServer } from 'node:http'
 import { runInNewContext } from 'node:vm'
 import Database from 'better-sqlite3'
-import { SqliteStorageService,auditSlimCutoverFreshness } from '@agent-lens/storage-sqlite'
+import { auditSlimCutoverFreshness } from '@agent-lens/storage-sqlite'
 import { piManifest } from '@agent-lens/source-pi'
 import { prepareSlimCutover } from '../slim-prepare-cutover'
 import { finalizeSlimCutover,rollbackSlimCutover,readActiveDatabasePointer } from '../slim-cutover-activation'
@@ -39,7 +40,7 @@ async function fixture(){
       stopReason:'stop',timestamp:Date.parse(at)}})
   await writeFile(file,[header,event,assistant].join('\n')+'\n')
   const legacyPath=join(data,'agent-lens.db')
-  const old=new SqliteStorageService({path:legacyPath})
+  const old=new LegacyV38TestDatabase({path:legacyPath})
   try{
     await old.migrate()
     old.db.prepare(`INSERT INTO hosts(id,name,platform,arch,created_at,last_seen_at) VALUES('h','test',?,?,?,?)`).run(process.platform,process.arch,at,at)
