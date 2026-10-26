@@ -63,6 +63,7 @@
     "storage:slim:stage": "tsx scripts/slim-cutover-preflight.ts stage",
     "storage:slim:verify": "tsx scripts/slim-cutover-preflight.ts verify",
     "storage:slim:reconcile": "tsx scripts/slim-cutover-preflight.ts reconcile",
+    "storage:slim:gate": "tsx scripts/slim-cutover-gate.ts",
     "storage:slim:reindex": "tsx scripts/slim-reindex-native.ts",
     "storage:slim:reindex-all": "tsx scripts/slim-reindex-all.ts",
     "storage:slim:audit-originals": "tsx scripts/slim-audit-originals.ts",
