@@ -12,7 +12,7 @@ import type {
   NativeSessionMetricRebuildCandidate,
   NativeSessionMetricsStore,
   NativeSessionListReader, NativeFacetReader,
-  StorageHealth,
+  StorageHealth, LaunchableProjectReader,
 } from '@agent-lens/core'
 import { SqliteSlimStorage } from '@agent-lens/storage-sqlite'
 import {
@@ -141,6 +141,7 @@ export class SlimDataRuntime {
       'get'|'getByReviewSessionId'|'query'|'isNativeMetricsEligible'>
     nativeSessionList:NativeSessionListReader
     nativeFacets:NativeFacetReader
+    launchableProjects:LaunchableProjectReader
     nativeSessionMetrics:NativeSessionMetricsStore
     health:()=>Promise<StorageHealth>
   }{
@@ -160,6 +161,15 @@ export class SlimDataRuntime {
       nativeFacets:{query(input={}){
         return self.read<Awaited<ReturnType<NativeFacetReader['query']>>>(['nativeFacets','query'],[input])
       }},
+      launchableProjects:{
+        query(input){
+          return self.read<Awaited<ReturnType<LaunchableProjectReader['query']>>>(
+            ['launchableProjects','query'],[input])
+        },
+        recordWorkspaceValidation(input){
+          return self.write<void>(['launchableProjects','recordWorkspaceValidation'],[input])
+        },
+      },
       nativeSessionMetrics:{
         get(input){return self.read<NativeSessionMetricReadResult>(['nativeSessionMetrics','get'],[input])},
         overview(input){return self.read<NativeSessionMetricOverview>(['nativeSessionMetrics','overview'],[input])},
