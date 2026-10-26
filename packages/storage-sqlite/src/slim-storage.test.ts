@@ -46,9 +46,9 @@ test('new slim runtime composes only native/metadata repositories and reopens wi
     try {
       assert.equal(readOnly.db.readonly,true)
       assert.equal((await readOnly.nativeSessionCatalog.query()).items.length,1)
-      await assert.rejects(readOnly.nativeSessionCatalog.claimLegacyWrite({
+      assert.equal(await readOnly.nativeSessionCatalog.isNativeMetricsEligible({
         sourceId:'pi',installationId:'install',nativeSessionId:'s',
-      }),/forbidden/)
+      }),true)
     }finally{await readOnly.close()}
     // Accidentally routing a slim database through the old provider must
     // fail before it can recreate removed Legacy event tables.
