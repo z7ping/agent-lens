@@ -1,3 +1,4 @@
+import { basename as invocationBaseName } from 'node:path'
 import { resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { stageSlimCutover } from '@agent-lens/storage-sqlite'
@@ -95,7 +96,8 @@ export async function prepareSlimCutover(args:readonly string[]):Promise<SlimPre
   }
 }
 
-if(process.argv[1]&&resolve(process.argv[1])===fileURLToPath(import.meta.url)){
+if(process.argv[1]&&resolve(process.argv[1])===fileURLToPath(import.meta.url)
+  &&["slim-prepare-cutover.ts","slim-prepare-cutover.js","slim-prepare-cutover.mjs"].includes(invocationBaseName(process.argv[1]))){
   prepareSlimCutover(process.argv.slice(2)).then(report=>{
     process.stdout.write(JSON.stringify(report,null,2)+'\n')
   }).catch(error=>{

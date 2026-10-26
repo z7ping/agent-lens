@@ -78,6 +78,7 @@ function usage(): string {
     '用法：',
     '  agent-lens setup [--json]',
     '  agent-lens start',
+    '  agent-lens migrate [--max-sessions N] [--max-pages N]',
     '  agent-lens status [--json]',
     '  agent-lens doctor [--json]',
     '  agent-lens service start|stop|restart|status [--json]',
@@ -839,6 +840,20 @@ async function runCaptureSources(action: string, values: string[], json: boolean
   return 0
 }
 
+async function runExplicitSlimMigration(args:readonly string[]):Promise<number>{
+  const bundled=import.meta.url.endsWith('.mjs')
+  const script=fileURLToPath(bundled
+    ? new URL('./slim-migrate.mjs',import.meta.url)
+    : new URL('../../../scripts/slim-migrate-once.ts',import.meta.url))
+  if(!existsSync(script))throw Error('Missing one-time Slim migrator in installation')
+  const execArgs=bundled?[script,...args]:['--import','tsx',script,...args]
+  return new Promise<number>((done,fail)=>{
+    const proc=spawn(process.execPath,execArgs,{stdio:'inherit',env:process.env})
+    proc.once('error',fail)
+    proc.once('exit',code=>done(code??1))
+  })
+}
+
 export async function main(argv = process.argv.slice(2)): Promise<number> {
   const json = argv.includes('--json')
   const args = argv.filter(arg => arg !== '--json')
@@ -853,6 +868,7 @@ export async function main(argv = process.argv.slice(2)): Promise<number> {
   }
   if (command === 'setup') return setup(json)
   if (command === 'start') return startDaemon()
+  if (command === 'migrate') return runExplicitSlimMigration(args.slice(1))
   if (command === 'status') return status(json)
   if (command === 'doctor') return doctor(json)
   if (command === 'service') return runService(args[1] ?? 'status', json)

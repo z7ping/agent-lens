@@ -1,3 +1,4 @@
+import { basename as invocationBaseName } from 'node:path'
 import { resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { DefaultSourceService } from '@agent-lens/core-services'
@@ -137,7 +138,8 @@ export async function rebuildAllSlimMetrics(args:readonly string[]):Promise<Offl
     return report
   }finally{await runtime.shutdown()}
 }
-if(process.argv[1]&&resolve(process.argv[1])===fileURLToPath(import.meta.url)){
+if(process.argv[1]&&resolve(process.argv[1])===fileURLToPath(import.meta.url)
+  &&["slim-rebuild-metrics-all.ts","slim-rebuild-metrics-all.js","slim-rebuild-metrics-all.mjs"].includes(invocationBaseName(process.argv[1]))){
   rebuildAllSlimMetrics(process.argv.slice(2)).then(report=>{
     process.stdout.write(JSON.stringify(report,null,2)+'\n')
   }).catch(error=>{

@@ -1,3 +1,4 @@
+import { basename as invocationBaseName } from 'node:path'
 import { resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import Database from 'better-sqlite3'
@@ -166,7 +167,8 @@ export async function auditSlimCutoverGate(args:readonly string[],
   })
 }
 
-if(process.argv[1]&&resolve(process.argv[1])===fileURLToPath(import.meta.url)){
+if(process.argv[1]&&resolve(process.argv[1])===fileURLToPath(import.meta.url)
+  &&["slim-cutover-gate.ts","slim-cutover-gate.js","slim-cutover-gate.mjs"].includes(invocationBaseName(process.argv[1]))){
   auditSlimCutoverGate(process.argv.slice(2)).then(report=>{
     process.stdout.write(JSON.stringify(report,null,2)+'\n')
   }).catch(error=>{

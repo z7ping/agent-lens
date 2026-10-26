@@ -51,6 +51,14 @@ await build({
   outfile: resolve(dist, 'daemon.mjs'),
 })
 
+// One-time read-only v38 migration preparation plus strictly gated Slim
+// promotion. This bundle is invoked explicitly by the installed CLI only.
+await build({
+  ...common,
+  entryPoints: [resolve(root, 'scripts/slim-migrate-once.ts')],
+  outfile: resolve(dist, 'slim-migrate.mjs'),
+})
+
 await build({
   ...common,
   entryPoints: [resolve(root, 'apps/daemon/src/data-runtime/worker.ts')],

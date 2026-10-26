@@ -181,3 +181,27 @@ pointer takes precedence over stale `AGENT_LENS_DB_PATH`; the Slim worker
 still asserts v1 Schema at startup. This is the same storage helper used by
 the activation command; it does not replace the default Daemon/desktop launch
 until M4 and does not certify M3 on its own.
+
+### One-time installed migration (M3)
+
+After stopping the old **Desktop and CLI/service Daemon**, use the installed
+`agent-lens migrate` command (the same orchestration is available in sources
+as `npm run storage:slim:migrate`). This command creates unique, consistent
+v38 backup and new Slim staging files, builds the native Catalog and numeric
+statistics from the Source-owned originals, verifies Hook archives and old
+Session metadata, and only activates Slim if the *final* gate passes while
+holding the legacy SQLite writer lock. It never copies SourceRecord,
+Observation, Evidence or the transcript itself into the new DB.
+
+If any old-only event, missing/partial transcript, Hook archive, disabled
+source, stale numeric snapshot or live Daemon is detected, the command stops
+without publishing a pointer. The original v38 file and any backup remain
+untouched, while staging is retained for diagnosis. Default CLI and Desktop
+then **refuse** to launch the legacy runtime until a verified cutover finishes.
+
+`agent-lens migrate --max-sessions 5000 --max-pages 16384` controls the bounded
+single-run verification budget. These are safety ceilings, not override flags.
+If there are more sessions than the budget, the audit fails closed. The active
+pointer normally lives alongside the user's existing `agent-lens.db` as
+`active-database.json`. Native-only default boot consumes it without a second
+legacy database copy.

@@ -1,3 +1,4 @@
+import { basename as invocationBaseName } from 'node:path'
 import { createHash } from 'node:crypto'
 import { resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -128,7 +129,8 @@ export async function auditLegacyHookOriginals(args:readonly string[]):Promise<L
     }finally{await slim.close()}
   }finally{old.close()}
 }
-if(process.argv[1]&&resolve(process.argv[1])===fileURLToPath(import.meta.url)){
+if(process.argv[1]&&resolve(process.argv[1])===fileURLToPath(import.meta.url)
+  &&["slim-audit-legacy-hooks.ts","slim-audit-legacy-hooks.js","slim-audit-legacy-hooks.mjs"].includes(invocationBaseName(process.argv[1]))){
   auditLegacyHookOriginals(process.argv.slice(2)).then(report=>{
     process.stdout.write(JSON.stringify(report,null,2)+'\n')
   }).catch(error=>{

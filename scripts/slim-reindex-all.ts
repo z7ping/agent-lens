@@ -1,3 +1,4 @@
+import { basename as invocationBaseName } from 'node:path'
 import { resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { indexNativeInstallation } from '@agent-lens/core-services'
@@ -114,7 +115,8 @@ export async function runNativeReindexAll(args:readonly string[]):Promise<Reinde
   }finally{await slim.close()}
 }
 
-if(process.argv[1]&&resolve(process.argv[1])===fileURLToPath(import.meta.url)){
+if(process.argv[1]&&resolve(process.argv[1])===fileURLToPath(import.meta.url)
+  &&["slim-reindex-all.ts","slim-reindex-all.js","slim-reindex-all.mjs"].includes(invocationBaseName(process.argv[1]))){
   runNativeReindexAll(process.argv.slice(2)).then(report=>{
     process.stdout.write(JSON.stringify(report,null,2)+'\n')
   }).catch(error=>{

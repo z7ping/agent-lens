@@ -1,3 +1,4 @@
+import { basename as invocationBaseName } from 'node:path'
 import { randomUUID } from 'node:crypto'
 import { link, lstat, open, rename, stat, unlink } from 'node:fs/promises'
 import { dirname, resolve } from 'node:path'
@@ -189,6 +190,26 @@ export async function assertNoDaemonListening(port:number):Promise<void>{
   })
 }
 
+export async function finalizeSlimCutover(input:SlimActivationPaths,port:number):
+  Promise<ActiveDatabasePointer>{
+  if(!Number.isSafeInteger(port)||port<1||port>65535){
+    throw new Error('Valid AgentLens port required for M3 cutover')
+  }
+  await assertNoDaemonListening(port)
+  return activateSlimCutover(input,async()=>{
+    await assertNoDaemonListening(port)
+    const result=await auditSlimCutoverGate([
+      '--legacy',input.legacyPath,'--backup',input.backupPath,
+      '--staging',input.stagingPath,
+    ],{writerFrozen:true,defaultDaemonSlim:true,oldDaemonStopped:true})
+    await assertNoDaemonListening(port)
+    if(!result.readyToSwitch){
+      throw new Error('M3 final cutover blocked: '+result.blockedBy.join(', '))
+    }
+    return result
+  })
+}
+
 function parse(args:readonly string[]){
   const action=args[0]
   if(action!=='activate'&&action!=='rollback'){
@@ -222,18 +243,11 @@ async function main(args:readonly string[]){
   if(!Number.isSafeInteger(observedPort)||observedPort<1||observedPort>65535){
     throw new Error('Valid AGENT_LENS_PORT required for cutover')
   }
-  await assertNoDaemonListening(observedPort)
-  return activateSlimCutover({legacyPath,backupPath,stagingPath,
-    installedSlimPath,pointerPath},async()=>{
-    await assertNoDaemonListening(observedPort)
-    const final:SlimCutoverGateReport=await auditSlimCutoverGate([
-      '--legacy',legacyPath,'--backup',backupPath,'--staging',stagingPath,
-    ],{writerFrozen:true,defaultDaemonSlim:true,oldDaemonStopped:true})
-    await assertNoDaemonListening(observedPort)
-    return final
-  })
+  return finalizeSlimCutover({legacyPath,backupPath,stagingPath,
+    installedSlimPath,pointerPath},observedPort)
 }
-if(process.argv[1]&&resolve(process.argv[1])===fileURLToPath(import.meta.url)){
+if(process.argv[1]&&resolve(process.argv[1])===fileURLToPath(import.meta.url)
+  &&["slim-cutover-activation.ts","slim-cutover-activation.js","slim-cutover-activation.mjs"].includes(invocationBaseName(process.argv[1]))){
   main(process.argv.slice(2)).then(result=>{
     process.stdout.write(JSON.stringify({mode:result.mode,activated:result.mode==='slim'})+'\n')
   }).catch(error=>{
