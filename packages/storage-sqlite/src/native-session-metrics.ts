@@ -172,6 +172,7 @@ export class SqliteNativeSessionMetrics implements NativeSessionMetricsStore {
     if(!input.sourceId || input.sourceId.length>128 || !input.parserVersion
       || input.parserVersion.length>512
       || (input.installationId!==undefined && (!input.installationId || input.installationId.length>512))
+      || (input.projectId!==undefined && (!input.projectId.trim() || input.projectId.length>512))
       || (input.from!==undefined && !Number.isFinite(Date.parse(input.from)))
       || (input.to!==undefined && !Number.isFinite(Date.parse(input.to)))
       || (input.from && input.to && Date.parse(input.from)>Date.parse(input.to))
