@@ -88,6 +88,7 @@
     "desktop:mac:x64:release": "npm run check:web-presentation && npm run check:brand-assets && npm run check:desktop-shell && npm run build:dist && npm run desktop:prepare && npm run dist:mac:x64:release --workspace @agent-lens/desktop",
     "desktop:linux": "npm run check:web-presentation && npm run check:brand-assets && npm run check:desktop-shell && npm run build:dist && npm run desktop:prepare && npm run dist:linux --workspace @agent-lens/desktop",
     "start": "npm run start --workspace @agent-lens/daemon",
+    "start:slim": "npm run start:slim --workspace @agent-lens/daemon",
     "typecheck": "npm run typecheck --workspaces --if-present",
     "test": "node --import tsx --test scripts/slim-cutover-gate.test.ts && node --test scripts/slim-cutover-gate.test.mjs scripts/slim-prepare-cutover.test.mjs scripts/slim-discover-assets.test.mjs scripts/slim-audit-originals.test.mjs scripts/slim-reindex-all.test.mjs scripts/slim-reindex-native.test.mjs scripts/slim-cutover-preflight.test.mjs scripts/audit-legacy-storage-consumers.test.mjs scripts/dev-runtime.test.mjs scripts/build-integration-packages.test.mjs scripts/task-session-ownership.test.mjs scripts/agent-convergence-ownership.test.mjs && npm run test --workspaces --if-present",
     "perf:session-summary": "tsx scripts/performance/session-summary-benchmark.ts",
