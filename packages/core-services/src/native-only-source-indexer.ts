@@ -1,4 +1,5 @@
 import { isAbsolute } from 'node:path'
+import type { NativeSessionReaderStorage } from './native-session-reader'
 import type {
   AgentInstallation,
   Host,
@@ -192,4 +193,32 @@ export class NativeOnlySourceIndexer {
     report.exhausted = !hitBudget && report.scanned < budget
     return report
   }
+}
+
+/** Bridge for SlimStorage and NativeSessionReader's shared identity port.
+ * Resolve both parent identities from trusted SQLite metadata; never take
+ * arbitrary host/source paths from a browser request.
+ */
+export async function indexNativeInstallation(
+  storage: NativeSessionReaderStorage,
+  input: Omit<NativeCatalogScanInput, 'host' | 'installation'> & {
+    installationId: string
+  },
+): Promise<NativeCatalogScanReport> {
+  const catalog = storage.nativeSessionCatalog
+  if (!catalog) throw new Error('Native Catalog Store is unavailable')
+  const installation = await storage.repositories.installations.get(input.installationId)
+  if (!installation) throw new Error('Native installation is not indexed')
+  const host = await storage.repositories.hosts.get(installation.hostId)
+  if (!host) throw new Error('Native installation host is unavailable')
+  return new NativeOnlySourceIndexer(catalog).scan({
+    source: input.source,
+    host,
+    installation,
+    ...(input.runtimeProfile ? { runtimeProfile: input.runtimeProfile } : {}),
+    signal: input.signal,
+    ...(input.historyWindow ? { historyWindow: input.historyWindow } : {}),
+    ...(input.maxSessions === undefined ? {} : { maxSessions: input.maxSessions }),
+    ...(input.onProgress ? { onProgress: input.onProgress } : {}),
+  })
 }
