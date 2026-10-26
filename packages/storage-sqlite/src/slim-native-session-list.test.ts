@@ -89,7 +89,7 @@ test('unfiltered multi-Agent lists validate metrics against each Source independ
     assert.equal(revised.get('codex')?.metricsState,'complete')
     const unavailable=await slim.nativeSessionList.query({limit:5,sourceCertifications:[]})
     assert.equal(unavailable.items.every(item=>item.metricsState==='stale'),true)
-    await assert.rejects(slim.nativeSessionList.query({limit:5,sourceCertifications:[
+    assert.throws(()=>slim.nativeSessionList.query({limit:5,sourceCertifications:[
       {sourceId:'pi',parserVersion:'pi-v1',coverageCertified:true},
       {sourceId:'pi',parserVersion:'pi-v1',coverageCertified:false},
     ]}),/certifications/)

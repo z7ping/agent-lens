@@ -1,10 +1,7 @@
 import { Buffer } from 'node:buffer'
-import { mkdtemp, rm, writeFile } from 'node:fs/promises'
-import { tmpdir } from 'node:os'
-import { join } from 'node:path'
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import type { LiveAttachmentService, StorageService } from '@agent-lens/core'
+import type { LiveAttachmentService } from '@agent-lens/core'
 import { normalizePiLiveEvent, normalizePiLiveRuntimeEvent, PiLiveAdapter } from './adapter'
 import type { PiLiveImageInput, PiLiveRuntimeState, PiLiveService } from './types'
 
@@ -669,67 +666,6 @@ test('Pi Live Adapter exposes native session tree only through the generic sessi
   assert.equal(Object.hasOwn(tree.nodes[0]!, 'entry'), false)
 })
 
-test('Pi history round fork validates the native assistant anchor in the original session', async () => {
-  const root = await mkdtemp(join(tmpdir(), 'agentlens-pi-fork-at-'))
-  const file = join(root, 'session.jsonl')
-  const header = { type: 'session', id: 'native-session', cwd: root }
-  const assistant = { type: 'message', id: 'assistant-1', message: { role: 'assistant' } }
-  const user = { type: 'message', id: 'user-1', message: { role: 'user' } }
-  try {
-    await writeFile(file, [header, assistant, user].map(value => JSON.stringify(value)).join('\n') + '\n')
-    const sourceRecord = (entry: typeof header | typeof assistant | typeof user) => ({
-      sourceId: 'pi',
-      installationId: 'installation-1',
-      sourceSessionNativeId: 'native-session',
-      nativeType: `history/${entry.type}`,
-      locator: { kind: 'file', path: file },
-      payload: { entry, session: { cwd: root } },
-    })
-    const records = new Map([
-      [header.id, sourceRecord(header)],
-      [assistant.id, sourceRecord(assistant)],
-      [user.id, sourceRecord(user)],
-    ])
-    const storage = {
-      repositories: {
-        sessions: {
-          getLogicalSession: async () => ({ workspaceId: 'workspace-1' }),
-          getWorkspace: async () => ({ path: root }),
-          listSourceSessionsByLogicalSession: async () => [
-            { installationId: 'installation-1', nativeSessionId: 'native-session' },
-          ],
-        },
-        sourceRecords: {
-          findByNativeId: async (_sourceId: string, _installationId: string, nativeId: string) => records.get(nativeId) ?? null,
-        },
-      },
-    } as unknown as StorageService
-    const started: unknown[] = []
-    const service = {
-      start: async (input: unknown) => {
-        started.push(input)
-        return readyState
-      },
-    } as unknown as PiLiveService
-    const adapter = new PiLiveAdapter(service, attachmentService(), storage)
-
-    await adapter.forkAt('logical-1', assistant.id)
-    assert.equal(started.length, 1)
-    assert.deepEqual(started[0], {
-      cwd: root,
-      sessionPath: file,
-      historyAction: 'fork',
-      logicalSessionId: 'logical-1',
-      branchFromEntryId: assistant.id,
-    })
-    await assert.rejects(() => adapter.forkAt('logical-1', user.id), /uniquely verified Pi assistant/)
-    await assert.rejects(() => adapter.forkAt('logical-1', 'unknown-entry'), /uniquely verified Pi assistant/)
-    assert.equal(started.length, 1)
-  } finally {
-    await rm(root, { recursive: true, force: true })
-  }
-})
-
 test('Pi native extension notify is normalized while status widgets remain transient', () => {
   assert.deepEqual(normalizePiLiveEvent({
     type: 'extension_ui_request', id: 'notice-571', method: 'notify',
@@ -803,7 +739,7 @@ test('Pi native cache status is projected into a typed, agent-neutral runtime me
 
 
 test('Slim Pi Live advertises real streaming/creation capabilities but not old SQL resume/fork',()=>{
-  const native=new PiLiveAdapter({} as never,attachmentService(),undefined,{nativeOnly:true})
+  const native=new PiLiveAdapter({} as never,attachmentService())
   for(const capability of ['resume','fork','fork-at'] as const){
     assert.equal(native.capabilities.has(capability),false,capability)
     assert.equal(native.manifest.capabilities?.includes(capability),false,capability)
@@ -812,8 +748,6 @@ test('Slim Pi Live advertises real streaming/creation capabilities but not old S
     assert.equal(native.capabilities.has(capability),true,capability)
     assert.equal(native.manifest.capabilities?.includes(capability),true,capability)
   }
-  // Existing v38 adapter contract remains unchanged during one-time cutover.
-  assert.equal(new PiLiveAdapter({} as never,attachmentService()).capabilities.has('resume'),true)
 })
 
 test('Slim Pi Live declares only actions backed by Native Worker, never SQL history resume', async () => {
@@ -822,7 +756,7 @@ test('Slim Pi Live declares only actions backed by Native Worker, never SQL hist
     async list() { return [] },
     async dispose() {},
   } as unknown as PiLiveService
-  const adapter = new PiLiveAdapter(service, attachmentService(), undefined, { nativeOnly: true })
+  const adapter = new PiLiveAdapter(service, attachmentService())
   for (const capability of ['create', 'send', 'stream', 'queue', 'recovery', 'thinking-control'] as const) {
     assert.equal(adapter.capabilities.has(capability), true, capability)
     assert.equal(adapter.manifest.capabilities?.includes(capability), true, capability)
@@ -831,8 +765,6 @@ test('Slim Pi Live declares only actions backed by Native Worker, never SQL hist
     assert.equal(adapter.capabilities.has(capability), false, capability)
     assert.equal(adapter.manifest.capabilities?.includes(capability), false, capability)
   }
-  const old = new PiLiveAdapter(service, attachmentService())
-  assert.equal(old.capabilities.has('resume'), true, 'unchanged legacy mode')
 })
 
 test('Pi Live Slim native resume and whole-session fork use authorized Catalog inputs',async()=>{
@@ -843,8 +775,7 @@ test('Pi Live Slim native resume and whole-session fork use authorized Catalog i
       return {runtimeSessionId:'runtime',status:'ready'}
     },
   } as never
-  const adapter=new PiLiveAdapter(service,attachmentService(),undefined,{
-    nativeOnly:true,
+  const adapter=new PiLiveAdapter(service,attachmentService(),{
     nativeHistory:{
       async resolveForkAt(id,nativeEventId){
         assert.equal(id,'native:0123456789abcdef0123456789abcdef')

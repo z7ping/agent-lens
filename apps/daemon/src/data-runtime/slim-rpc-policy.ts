@@ -23,5 +23,6 @@ export function slimStorageRootAllowed(path:readonly string[]):boolean {
     return path.length===3 && ['hosts','installations'].includes(path[1]!)
       && path[2]==='get'
   }
-  return path.length===2 && Boolean(methods[path[0]!] && methods[path[0]!]!.includes(path[1]!))
+  return path.length===2 && Object.hasOwn(methods,path[0]!)
+    && methods[path[0]!]!.includes(path[1]!)
 }

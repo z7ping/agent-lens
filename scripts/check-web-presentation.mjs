@@ -162,13 +162,13 @@ const surfaces = [
 ]
 const insightMetricPage = readFileSync(p('features/InsightsPage.tsx'), 'utf8')
 const integrationMetricPage = readFileSync(p('features/IntegrationManagementPage.tsx'), 'utf8')
-// Insights uses four full Workspace KPI cards. Integration Management is now
+// Each Insights mode uses four full Workspace KPI cards. Integration Management is now
 // a compact three-counter navigator strip, not four full cards. Keep this
 // distinction intentional; neither feature may introduce private card styling.
 const integrationCounterStrip = integrationMetricPage.match(
   /<div className="integration-management-summary"[^>]*>([\s\S]*?)<\/div>/,
 )?.[1] ?? ''
-if ((insightMetricPage.match(/className="workspace-metric-card insight-kpi"/g) ?? []).length !== 4
+if ((insightMetricPage.match(/className="workspace-metric-card insight-kpi"/g) ?? []).length !== 8
   || (integrationCounterStrip.match(/<span><strong>/g) ?? []).length !== 3
   || !integrationMetricPage.includes('className="integration-management-navigator"')
   || !integrationsCss.includes('.integration-management-summary {')

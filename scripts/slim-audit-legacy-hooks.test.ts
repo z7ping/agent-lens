@@ -1,13 +1,14 @@
+import { LegacyV38TestDatabase } from '../packages/storage-sqlite/src/legacy-v38-test-fixture'
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { mkdtemp,rm,writeFile,readFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { SqliteStorageService,SqliteSlimStorage } from '@agent-lens/storage-sqlite'
+import {SqliteSlimStorage} from '@agent-lens/storage-sqlite'
 import { auditLegacyHookOriginals,parseHookAuditArgs } from './slim-audit-legacy-hooks'
 import { archiveAcceptedHookInboxFile } from '@agent-lens/source-support'
 import { codexSourceDefinition } from '@agent-lens/source-codex'
-import { stageSlimCutover } from '@agent-lens/storage-sqlite'
+import {stageSlimCutover} from '@agent-lens/storage-sqlite'
 
 test('old Hook audit validates explicit paths and bounded record budget',()=>{
   assert.throws(()=>parseHookAuditArgs([]),/explicit --legacy and --staging/)
@@ -19,7 +20,7 @@ test('Hook audit reads locator metadata but never exposes prior payloads',async(
   const dir=await mkdtemp(join(tmpdir(),'al-hooks-'))
   const legacyPath=join(dir,'legacy.sqlite'),stagingPath=join(dir,'slim.sqlite')
   try{
-    const old=new SqliteStorageService({path:legacyPath})
+    const old=new LegacyV38TestDatabase({path:legacyPath})
     await old.migrate()
     old.db.prepare(`INSERT INTO hosts(id,name,platform,arch,created_at,last_seen_at)
       VALUES('host','host','linux','x64','2026-10-26','2026-10-26')`).run()
@@ -66,7 +67,7 @@ test('M3 旧 Hook 原件：真实归档通过，checksum 变化和原件丢失�
     await archiveAcceptedHookInboxFile({inbox:root,fileName:'one.json',nativeSessionId:'s',installationId:'i'})
     const record=(await codexSourceDefinition.readArchivedNativeHooks!('s',context))[0]!
     assert.ok(record)
-    const old=new SqliteStorageService({path:legacyPath})
+    const old=new LegacyV38TestDatabase({path:legacyPath})
     try{
       await old.migrate()
       old.db.prepare(`INSERT INTO hosts(id,name,platform,arch,created_at,last_seen_at) VALUES('h','test',?,?,?,?)`).run(process.platform,process.arch,at,at)

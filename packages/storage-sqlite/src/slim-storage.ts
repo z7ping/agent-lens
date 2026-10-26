@@ -23,8 +23,7 @@ import { assertSlimSchema, initializeSlimSchema } from './slim-schema'
  * Observations, Evidence, SessionSummary projections, replication journal,
  * Legacy Claims, old migration chain, or Legacy Writer are constructed.
  *
- * This is a SEPARATE service from SqliteStorageService until its consumers are
- * migrated. Never silently downgrade to a v38 database.
+ * Never silently downgrade to a v38 database.
  */
 export class SqliteSlimStorage {
   readonly executor: SqliteExecutor

@@ -26,7 +26,7 @@ test('Review message node exposes canonical historical image attachments', () =>
     attachments: [{ type: 'image', mimeType: 'image/png', data: 'aGVsbG8=' }],
   })])
 
-  assert.ok(node?.type === 'message')
+  if (node?.type !== 'message') throw new Error('Expected a message node')
   assert.equal(node.text, '看看图片')
   assert.equal(node.attachments?.[0]?.type, 'image')
   assert.equal(node.attachments?.[0]?.dataUrl, undefined)
@@ -38,7 +38,7 @@ test('Review pure-image legacy Pi messages do not fall back to no-displayable-te
     nonTextContent: [{ type: 'image', mimeType: 'image/jpeg', data: 'ZmFrZQ==' }],
   })])
 
-  assert.ok(node?.type === 'message')
+  if (node?.type !== 'message') throw new Error('Expected a message node')
   assert.equal(node.text, '')
   assert.equal(node.attachments?.[0]?.dataUrl, undefined)
   assert.doesNotMatch(JSON.stringify(node.payload), /ZmFrZQ==/)

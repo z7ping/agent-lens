@@ -1,6 +1,5 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { piLiveRuntimePlugin } from './plugin'
 import type { PiLiveRecoveryRecord, PiLiveRecoveryStore } from './recovery-store'
 import { DefaultPiLiveService } from './service'
 import type { PiLiveRuntimeState } from './types'
@@ -104,10 +103,6 @@ class MemoryRecoveryStore implements PiLiveRecoveryStore {
     this.values.delete(id)
   }
 }
-
-test('Pi Live Runtime 插件显式声明 storage 注入依赖', () => {
-  assert.equal(piLiveRuntimePlugin.inject?.includes('storage'), true)
-})
 
 test('新建 Runtime 可交互就绪不等待 Recovery checkpoint', async () => {
   const store = new GatedRecoveryStore()

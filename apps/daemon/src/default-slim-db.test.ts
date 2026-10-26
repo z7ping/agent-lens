@@ -26,7 +26,7 @@ test('default main refuses v38 rather than invoking retired migration/Writer',as
     await old.close()
     await assert.rejects(resolveDefaultSlimDb({dataRoot}),/old v38 Writer is retired/)
     const reopened=new LegacyV38TestDatabase({path:legacyPath})
-    try{assert.equal((await reopened.health()).schemaVersion,38)}
+    try{assert.equal((reopened.db.prepare('SELECT MAX(version) AS version FROM schema_migrations').get() as {version:number}).version,38)}
     finally{await reopened.close()}
   }finally{await rm(dataRoot,{force:true,recursive:true})}
 })

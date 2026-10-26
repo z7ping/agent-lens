@@ -81,7 +81,7 @@ export async function runOriginalsAudit(args:readonly string[]):Promise<Original
     while(counts.scanned<input.maxSessions){
       const remaining=input.maxSessions-counts.scanned
       const page=await storage.nativeSessionCatalog.query({
-        locationKind:'native',onlyWithoutLegacyReview:true,
+        locationKind:'native',
         ...(input.sourceId?{sourceId:input.sourceId}:{}),
         limit:Math.min(remaining,100),
         ...(before?{before}:{})

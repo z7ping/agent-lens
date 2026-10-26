@@ -5,7 +5,7 @@ import test from 'node:test'
 const worker = await readFile(new URL('./worker-entry.mjs', import.meta.url), 'utf8')
 const host = await readFile(new URL('./worker-host.ts', import.meta.url), 'utf8')
 const service = await readFile(new URL('./service.ts', import.meta.url), 'utf8')
-const plugin = await readFile(new URL('./plugin.ts', import.meta.url), 'utf8')
+const slimLive = await readFile(new URL('../../../../apps/daemon/src/slim-live.ts', import.meta.url), 'utf8')
 
 function section(source: string, start: string, end: string): string {
   const from = source.indexOf(start)
@@ -143,8 +143,8 @@ test('ready warm worker reuses prewarm SDK discovery before foreground rediscove
   assert.match(host, /interface WarmWorker[\s\S]*executable\?: string/)
 })
 
-test('Pi Live plugin still starts prewarm eagerly in the background', () => {
-  assert.match(plugin, /void service\.preload\(\)/)
+test('Slim Pi Live starts prewarm eagerly in the background', () => {
+  assert.match(slimLive, /void piService\.preload\(\)/)
 })
 
 

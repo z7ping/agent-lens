@@ -6,7 +6,7 @@ import Database from 'better-sqlite3'
 import type { SourceCheckpointService } from '@agent-lens/core'
 import { resolveCapturePolicyPluginState } from '@agent-lens/capture-policy'
 import { SqliteSlimStorage } from '@agent-lens/storage-sqlite'
-import { mapSourceRecord } from '../packages/storage-sqlite/src/repository-row-mappers'
+import { mapSourceRecord } from './legacy-source-record'
 import { NATIVE_REINDEX_SOURCES } from './slim-reindex-native'
 
 interface AuditOptions {legacyPath:string;stagingPath:string;maxRecords:number}

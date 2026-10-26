@@ -9,7 +9,6 @@ const css = readFileSync(new URL('./ui-primitives.css', import.meta.url), 'utf8'
 const index = readFileSync(new URL('./index.ts', import.meta.url), 'utf8')
 const overlay = readFileSync(new URL('./Overlay.tsx', import.meta.url), 'utf8')
 const overlayCss = readFileSync(new URL('./overlay.css', import.meta.url), 'utf8')
-const piStartup = readFileSync(new URL('../PiStartupDisclosure.tsx', import.meta.url), 'utf8')
 const piStartupCss = readFileSync(new URL('../live-runtime-disclosure.css', import.meta.url), 'utf8')
 const taskViewCss = readFileSync(new URL('../../task-view-options.css', import.meta.url), 'utf8')
 const composerPill = readFileSync(new URL('../ComposerPillSelect.tsx', import.meta.url), 'utf8')
@@ -145,7 +144,6 @@ test('Popover 在异步内容改变尺寸后重新定位', () => {
 test('shared composites and Pi surfaces reuse UI primitives', () => {
   assert.match(composerPill, /import \{ SelectMenu, type SelectMenuOption \} from '\.\/ui'/)
   assert.match(stateViews, /import \{ Button \} from '\.\/ui'/)
-  assert.match(piStartup, /import \{ Button, UiIcon \} from '\.\/ui'/)
   assert.match(liveExtensionPrompt, /import \{ Button, Dialog, Input, Textarea \} from '\.\.\/components\/ui'/)
   assert.match(liveExtensionPrompt, /<Textarea className="live-extension-input"/)
   assert.match(liveExtensionPrompt, /<Input className="live-extension-input"/)

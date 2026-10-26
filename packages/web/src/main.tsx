@@ -4,7 +4,6 @@ import { App } from './App'
 import { installLiveRecovery } from './client/live-recovery'
 import { clientModel } from './client/model'
 import { installTaskNotificationMonitor } from './features/task-notifications'
-import { installPiLiveKeyboard } from './client/pi-live-keyboard'
 import { readTheme, writeTheme } from './client/preferences'
 import { initializeI18n } from './i18n/runtime'
 import './styles.css'
@@ -61,11 +60,9 @@ import './task-session-view.css'
 
 writeTheme(readTheme())
 const disposeLiveRecovery = installLiveRecovery(clientModel)
-const disposePiLiveKeyboard = installPiLiveKeyboard()
 const disposeTaskNotifications = installTaskNotificationMonitor()
 void clientModel.start()
 window.addEventListener('pagehide', () => {
-  disposePiLiveKeyboard()
   disposeTaskNotifications()
   disposeLiveRecovery()
   clientModel.stop()

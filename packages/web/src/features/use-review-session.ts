@@ -124,7 +124,7 @@ export function useReviewSession(model: AgentLensClientModel, embedded: boolean)
     void model.nativeSessions({
       ...(sourceId ? { sourceId } : {}),
       ...(filters.projectId ? { projectId: filters.projectId } : {}),
-      onlyWithoutLegacyReview: !nativeOnly, search: filters.search.trim(), limit: 100, signal: controller.signal,
+      search: filters.search.trim(), limit: 100, signal: controller.signal,
     }).then(page => {
       if (controller.signal.aborted) return
       setNativeSessions(page.items)
@@ -198,7 +198,7 @@ export function useReviewSession(model: AgentLensClientModel, embedded: boolean)
           const page=await model.nativeSessions({
             ...(sourceId?{sourceId}:{}),
             ...(review.filters.projectId ? { projectId: review.filters.projectId } : {}),
-            onlyWithoutLegacyReview:!nativeOnly,search:review.filters.search.trim(),
+            search:review.filters.search.trim(),
             limit:100,cursor:nativeCursor,
           })
           if(nativeRequestKeyRef.current!==requestKey)return

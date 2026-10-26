@@ -21,7 +21,6 @@ const port = process.env.AGENT_LENS_PORT ? Number(process.env.AGENT_LENS_PORT) :
 const trustedOrigin = `http://127.0.0.1:${port}`
 const projectDirectoryUrls = [
   `${trustedOrigin}/api/v1/live/project-directory`,
-  `${trustedOrigin}/api/v1/pi-live/project-directory`,
 ]
 const openPathUrl = `${trustedOrigin}/api/v1/host/open-path`
 const openDirectoryUrl = `${trustedOrigin}/api/v1/host/open-directory`

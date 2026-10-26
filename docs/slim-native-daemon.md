@@ -215,7 +215,13 @@ npm run accept:slim-m3
 ```
 
 `typecheck:slim` 校验迁移脚本及其验收用例，并由根目录 `npm run typecheck` 统一执行。
-`accept:slim-m3` 使用系统临时目录和独立用户目录，复用项目 v38 迁移链、真实 Pi JSONL 原件及正式分发 CLI，验证备份、重建、激活、默认 Daemon 原生读取、停机回滚和失败阻断；不读取或切换用户真实数据库，也不停止现有服务。分发构建必须先完成，否则分发入口验收无法运行。
+`accept:slim-m3` 使用系统临时目录和独立用户目录，以测试专用 v38 SQL 夹具构造旧库，复用真实 Pi JSONL 原件及正式分发 CLI，验证备份、重建、激活、默认 Daemon 原生读取、停机回滚和失败阻断；不读取或切换用户真实数据库，也不停止现有服务。分发构建必须先完成，否则分发入口验收无法运行。
+
+## M6 旧系统退役
+
+默认运行态只加载 Slim v1 Schema、元数据和原生会话链。旧 Writer、v1–v38 默认迁移链、事件仓库、旧 SessionSummary / TaskFileChange SQL 投影及 Pi 专用 HTTP/Web 兼容入口已删除。Pi Live 的继续、分叉和快照只走原生 Catalog 与 Worker；通用 Live HTTP 保留原生历史引用。一次性迁移器仍可只读解析旧库，测试夹具从隔离目录构造 v38 输入，不在运行时执行旧迁移。
+
+`slim-storage-boundary.test.ts` 防止这些旧入口重新出现。M6 的代码验证包括 `npm run typecheck`、`npm test`、`npm run check:web-presentation`、`npm run build:dist`、`npm run smoke:dist` 和 `npm run accept:slim-m3`。真实用户数据库、五来源完整场景、Windows 安装和 UI 手工验收属于 M7。
 
 最终原件审计会重新读取来源授权；准备阶段之后撤销授权，也必须阻断激活。分发 Daemon 只允许默认入口启动，不得因打包而再次执行独立 Slim 启动入口。
 

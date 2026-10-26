@@ -58,7 +58,7 @@ function post(path, body) {
 }
 
 function eventType(value) {
-  return value?.event && typeof value.event.type === 'string' ? value.event.type : ''
+  return typeof value?.normalizedEvent?.type === 'string' ? value.normalizedEvent.type : ''
 }
 
 function createEventCollector(runtimeSessionId) {
@@ -104,7 +104,7 @@ function createEventCollector(runtimeSessionId) {
 
   const start = async () => {
     try {
-      const response = await fetch(`${baseUrl}/api/v1/pi-live/${encodeURIComponent(runtimeSessionId)}/events`, {
+      const response = await fetch(`${baseUrl}/api/v1/live/pi/runtimes/${encodeURIComponent(runtimeSessionId)}/events`, {
         headers: { accept: 'text/event-stream' },
         signal: controller.signal,
       })
@@ -123,7 +123,7 @@ function createEventCollector(runtimeSessionId) {
           const frame = buffer.slice(0, boundary)
           buffer = buffer.slice(boundary + 2)
           const eventName = frame.split('\n').find(line => line.startsWith('event:'))?.slice(6).trim()
-          if (eventName && eventName !== 'pi-live') continue
+          if (eventName && eventName !== 'live') continue
           const data = frame.split('\n').filter(line => line.startsWith('data:')).map(line => line.slice(5).trimStart()).join('\n')
           if (!data) continue
           try {
@@ -161,7 +161,7 @@ async function waitForState(runtimeSessionId, predicate, label, ms = timeoutMs) 
   const deadline = Date.now() + ms
   let last
   while (Date.now() < deadline) {
-    last = await json(`/api/v1/pi-live/${encodeURIComponent(runtimeSessionId)}/state`)
+    last = await json(`/api/v1/live/pi/runtimes/${encodeURIComponent(runtimeSessionId)}/state`)
     if (predicate(last)) return last
     await new Promise(resolveDelay => setTimeout(resolveDelay, 300))
   }
@@ -195,11 +195,11 @@ async function runSoak(runtimeSessionId, collector) {
     round += 1
     const roundStartedAt = Date.now()
     const token = `${marker}-soak-${round}`
-    await post(`/api/v1/pi-live/${encodeURIComponent(runtimeSessionId)}/prompt`, {
+    await post(`/api/v1/live/pi/runtimes/${encodeURIComponent(runtimeSessionId)}/messages`, {
       message: `长时验收 ${token}：请使用只读工具读取 package.json 的 name 与 version，然后只用一行回复结果和 ${token}。`,
     })
-    await collector.waitFor(`soak round ${round} streaming`, value => (Number(value.sequence) || 0) > lastSequence && ['message_start', 'message_update'].includes(eventType(value)))
-    await collector.waitFor(`soak round ${round} settled`, value => (Number(value.sequence) || 0) > lastSequence && ['agent_settled', 'agent_end'].includes(eventType(value)))
+    await collector.waitFor(`soak round ${round} streaming`, value => (Number(value.sequence) || 0) > lastSequence && ['message.start', 'text.delta'].includes(eventType(value)))
+    await collector.waitFor(`soak round ${round} settled`, value => (Number(value.sequence) || 0) > lastSequence && ['completed'].includes(eventType(value)))
     lastSequence = Math.max(lastSequence, ...collector.events.map(value => Number(value.sequence) || 0))
     report.soak.rounds = round
     console.log(`✓ soak round ${round} settled`)
@@ -217,13 +217,13 @@ try {
   const health = await json('/api/v1/health')
   check('AgentLens Runtime 可用', Boolean(health), `protocol=${health?.protocolVersion || 'unknown'}`)
 
-  const availability = await json('/api/v1/pi-live/availability')
+  const availability = await json('/api/v1/live/pi/availability')
   check('真实 Pi 可发现', availability?.available === true, availability?.executable || availability?.reason || '')
 
-  const state = await post('/api/v1/pi-live', {
-    cwd,
-    name: `${marker} 真实验收`,
-  })
+  const state = await post('/api/v1/live/pi/runtimes', { input: {
+    workspacePath: cwd,
+    title: `${marker} 真实验收`,
+  } })
   runtimeSessionId = state.runtimeSessionId
   report.runtimeSessionId = runtimeSessionId
   check('创建真实 Pi Runtime', Boolean(runtimeSessionId), runtimeSessionId)
@@ -239,65 +239,67 @@ try {
   )
   check('真实 Pi Runtime 已就绪', ready?.status === 'ready')
 
-  const controls = await json(`/api/v1/pi-live/${encodeURIComponent(runtimeSessionId)}/controls`)
-  const thinkingOptions = Array.isArray(controls?.thinking?.options)
-    ? controls.thinking.options.filter(item => item && typeof item.value === 'string' && item.value)
+  const runtimePath = `/api/v1/live/pi/runtimes/${encodeURIComponent(runtimeSessionId)}`
+  const [modelControl, thinkingControl] = await Promise.all([
+    json(`${runtimePath}/model-control`), json(`${runtimePath}/thinking-control`),
+  ])
+  const thinkingOptions = Array.isArray(thinkingControl?.options)
+    ? thinkingControl.options.filter(item => item && typeof item.value === 'string' && item.value)
     : []
   report.controls = {
-    modelCount: Array.isArray(controls?.models) ? controls.models.length : 0,
+    modelCount: Array.isArray(modelControl?.options) ? modelControl.options.length : 0,
     thinkingValues: thinkingOptions.map(item => item.value),
   }
   check('真实 Pi Controls 可读取', report.controls.modelCount > 0, `${report.controls.modelCount} models`)
 
-  if (controls?.models?.length) {
-    const current = state.model && typeof state.model === 'object' ? state.model : {}
-    const same = controls.models.find(item => item.provider === current.provider && item.id === current.id) || controls.models[0]
-    const changed = await post(`/api/v1/pi-live/${encodeURIComponent(runtimeSessionId)}/model`, { provider: same.provider, modelId: same.id })
-    check('真实 Pi Model 设置链路', Boolean(changed?.model), `${same.provider}/${same.id}`)
+  if (modelControl?.options?.length) {
+    const same = modelControl.options.find(item => item.value === modelControl.value) || modelControl.options[0]
+    const changed = await post(`${runtimePath}/model-control`, { value: same.value })
+    check('真实 Pi Model 设置链路', changed?.runtimeSessionId === runtimeSessionId, same.value)
   }
 
-  if (controls?.thinking?.capability === 'thinking-control' && thinkingOptions.length) {
+  if (thinkingControl?.capability === 'thinking-control' && thinkingOptions.length) {
     const offered = thinkingOptions.map(item => item.value)
-    const level = offered.includes(controls.thinking.value) ? controls.thinking.value : offered[0]
-    const changed = await post(`/api/v1/pi-live/${encodeURIComponent(runtimeSessionId)}/thinking-level`, { level })
-    check('真实 Pi Thinking Level 设置链路', changed?.thinkingLevel === level, String(level))
+    const level = offered.includes(thinkingControl.value) ? thinkingControl.value : offered[0]
+    const changed = await post(`/api/v1/live/pi/runtimes/${encodeURIComponent(runtimeSessionId)}/thinking-control`, { value: level })
+    check('真实 Pi Thinking Level 设置链路', changed?.runtimeSessionId === runtimeSessionId, String(level))
   }
 
-  await post(`/api/v1/pi-live/${encodeURIComponent(runtimeSessionId)}/prompt`, {
+  await post(`/api/v1/live/pi/runtimes/${encodeURIComponent(runtimeSessionId)}/messages`, {
     message: `这是 AgentLens alpha.3 真实链路验收，标记 ${marker}。请务必使用一个只读工具读取当前工作目录中的 package.json；如果不存在就列出当前目录。工具执行后，用一句话回复，并原样包含 ${marker}。`,
   })
-  await collector.waitFor('Streaming', value => ['message_start', 'message_update'].includes(eventType(value)))
+  await collector.waitFor('Streaming', value => ['message.start', 'text.delta'].includes(eventType(value)))
   check('Prompt → Streaming', true)
 
-  await post(`/api/v1/pi-live/${encodeURIComponent(runtimeSessionId)}/steer`, { message: `补充要求：最终回复再包含 ${marker}-steer。` })
+  await post(`/api/v1/live/pi/runtimes/${encodeURIComponent(runtimeSessionId)}/messages`, { message: `补充要求：最终回复再包含 ${marker}-steer。`, behavior: 'steer' })
   check('Steer 已被真实 Runtime 接收', true)
-  await post(`/api/v1/pi-live/${encodeURIComponent(runtimeSessionId)}/follow-up`, { message: `当前轮结束后，请再回复一句 ${marker}-followup。` })
+  await post(`/api/v1/live/pi/runtimes/${encodeURIComponent(runtimeSessionId)}/messages`, { message: `当前轮结束后，请再回复一句 ${marker}-followup。`, behavior: 'follow-up' })
   check('Follow-up 已被真实 Runtime 接收', true)
 
-  await collector.waitFor('Tool', value => ['tool_execution_start', 'tool_execution_end', 'bash_execution_start', 'bash_execution_update', 'bash_execution_end'].includes(eventType(value)))
+  await collector.waitFor('Tool', value => ['tool.start', 'tool.result', 'tool.output'].includes(eventType(value)))
   check('Streaming → Tool', true)
-  await collector.waitFor('第一轮 settled', value => ['agent_settled', 'agent_end'].includes(eventType(value)))
+  await collector.waitFor('第一轮 settled', value => ['completed'].includes(eventType(value)))
   check('首轮完成并 settled', true)
 
-  await post(`/api/v1/pi-live/${encodeURIComponent(runtimeSessionId)}/prompt`, {
+  await post(`/api/v1/live/pi/runtimes/${encodeURIComponent(runtimeSessionId)}/messages`, {
     message: `继续做一次可中止验收 ${marker}-abort：请读取 README.md 和 package.json，并比较两者的项目描述后再回答。`,
   })
   await waitForState(runtimeSessionId, current => current.isStreaming === true, 'Abort 前进入 Streaming', 30_000)
-  const restored = await post(`/api/v1/pi-live/${encodeURIComponent(runtimeSessionId)}/abort`, { restoreQueue: true })
-  check('Abort + Queue Restore', Array.isArray(restored?.steering) && Array.isArray(restored?.followUp), `steering=${restored?.steering?.length || 0}, followUp=${restored?.followUp?.length || 0}`)
+  const restored = await post(`/api/v1/live/pi/runtimes/${encodeURIComponent(runtimeSessionId)}/interrupt`, {})
+  check('Abort + Queue Restore', Array.isArray(restored?.restoredQueue?.steering) && Array.isArray(restored?.restoredQueue?.followUp), `steering=${restored?.restoredQueue?.steering?.length || 0}, followUp=${restored?.restoredQueue?.followUp?.length || 0}`)
   await waitForState(runtimeSessionId, current => current.isStreaming === false, 'Abort 后停止 Streaming', 30_000)
 
-  const beforeReconnect = await json(`/api/v1/pi-live/${encodeURIComponent(runtimeSessionId)}/snapshot`)
+  const beforeReconnect = await json(`/api/v1/live/pi/runtimes/${encodeURIComponent(runtimeSessionId)}/snapshot`)
   const leafId = beforeReconnect?.leafId || undefined
   await collector.close()
   collector = createEventCollector(runtimeSessionId)
   await collector.connect()
-  const recovered = await json(`/api/v1/pi-live/${encodeURIComponent(runtimeSessionId)}/snapshot${leafId ? `?since=${encodeURIComponent(leafId)}` : ''}`)
+  const recovered = await json(`/api/v1/live/pi/runtimes/${encodeURIComponent(runtimeSessionId)}/snapshot${leafId ? `?since=${encodeURIComponent(leafId)}` : ''}`)
   check('Reconnect + Snapshot 恢复', recovered?.state?.runtimeSessionId === runtimeSessionId, `leaf=${recovered?.leafId || 'none'}`)
 
   const reconnectSequence = Math.max(0, ...collector.events.map(value => Number(value.sequence) || 0))
-  await post(`/api/v1/pi-live/${encodeURIComponent(runtimeSessionId)}/prompt`, { message: `只回复 ${marker}-reconnect。` })
-  await collector.waitFor('Reconnect 后 settled', value => (Number(value.sequence) || 0) > reconnectSequence && ['agent_settled', 'agent_end'].includes(eventType(value)))
+  await post(`/api/v1/live/pi/runtimes/${encodeURIComponent(runtimeSessionId)}/messages`, { message: `只回复 ${marker}-reconnect。` })
+  await collector.waitFor('Reconnect 后 settled', value => (Number(value.sequence) || 0) > reconnectSequence && ['completed'].includes(eventType(value)))
   check('Reconnect 后继续对话', true)
 
   await runSoak(runtimeSessionId, collector)
@@ -306,8 +308,8 @@ try {
   check('source-pi / Review 可看到同一真实会话历史', Boolean(report.history), report.history?.id || '')
 
   if (!keepRuntime) {
-    await json(`/api/v1/pi-live/${encodeURIComponent(runtimeSessionId)}`, { method: 'DELETE' })
-    const runtimes = await json('/api/v1/pi-live')
+    await json(`/api/v1/live/pi/runtimes/${encodeURIComponent(runtimeSessionId)}`, { method: 'DELETE' })
+    const runtimes = await json('/api/v1/live/pi/runtimes')
     check('Terminate Runtime 后从活跃列表移除', !runtimes.some(item => item.runtimeSessionId === runtimeSessionId))
   } else {
     console.log(`• 保留 Runtime：${runtimeSessionId}`)
@@ -324,7 +326,7 @@ try {
 } finally {
   await collector?.close().catch(() => undefined)
   if (runtimeSessionId && !keepRuntime && !report.ok) {
-    await json(`/api/v1/pi-live/${encodeURIComponent(runtimeSessionId)}`, { method: 'DELETE', signal: AbortSignal.timeout(5_000) }).catch(() => undefined)
+    await json(`/api/v1/live/pi/runtimes/${encodeURIComponent(runtimeSessionId)}`, { method: 'DELETE', signal: AbortSignal.timeout(5_000) }).catch(() => undefined)
   }
   await mkdir(outputDir, { recursive: true })
   const path = resolve(outputDir, `pi-live-real-${marker}.json`)

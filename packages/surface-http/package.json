@@ -21,6 +21,7 @@
     "@deepseek-ai/cordis": "4.0.1"
   },
   "devDependencies": {
-    "@agent-lens/storage-sqlite": "1.0.0-alpha.7"
+    "@agent-lens/storage-sqlite": "1.0.0-alpha.7",
+    "@types/node": "22.20.0"
   }
 }

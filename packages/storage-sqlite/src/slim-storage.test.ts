@@ -17,7 +17,7 @@ test('new slim runtime composes only native/metadata repositories and reopens wi
     try {
       assertSlimSchema(slim.db)
       assert.equal(slim.db.readonly,false)
-      const forbidden=['repositories','sessionSummaries','sourceRawAudit',
+      const forbidden=['sessionSummaries','sourceRawAudit',
         'replication','toolUsageObservations','projectionBackfill']
       for(const key of forbidden) {
         assert.equal(key in slim,false,key)

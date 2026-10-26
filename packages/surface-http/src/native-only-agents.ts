@@ -7,7 +7,7 @@ import type {
   AgentCoverageResponseDto, AgentEnrichmentResponseDto,
 } from '@agent-lens/protocol'
 import { AGENT_LENS_PROTOCOL_VERSION } from '@agent-lens/protocol'
-import { projectAgentAssetInventory } from '@agent-lens/projection-overview'
+import { projectAgentAssetInventory } from './native-asset-projection'
 
 interface NativeAgentStorage {
   nativeFacets:NativeFacetReader

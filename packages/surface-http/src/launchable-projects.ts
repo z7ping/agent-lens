@@ -5,7 +5,7 @@ import {
   type LaunchableProjectsResponseDto,
 } from '@agent-lens/protocol'
 import { badRequest, httpError } from './http-utils'
-import { validatePiWorkingDirectory } from './pi-live'
+import { validateHostWorkingDirectory } from './host-working-directory'
 import { parseLimit } from './query-params'
 
 const DEFAULT_LIMIT = 20
@@ -129,7 +129,7 @@ function refreshValidationInBackground(
 
 async function launchableWorkspace(
   candidate: LaunchableProjectCandidate,
-  validateWorkspace: WorkspaceValidator = validatePiWorkingDirectory,
+  validateWorkspace: WorkspaceValidator = validateHostWorkingDirectory,
   recorder?: WorkspaceValidationRecorder,
   nowMs = Date.now(),
 ): Promise<LaunchableProjectDto | undefined> {
@@ -171,7 +171,7 @@ async function launchableWorkspace(
 export async function readLaunchableProjects(
   storage: Pick<StorageService,'launchableProjects'>,
   params: URLSearchParams,
-  validateWorkspace: WorkspaceValidator = validatePiWorkingDirectory,
+  validateWorkspace: WorkspaceValidator = validateHostWorkingDirectory,
   observeTiming?: TimingObserver,
 ): Promise<LaunchableProjectsResponseDto> {
   const reader = storage.launchableProjects

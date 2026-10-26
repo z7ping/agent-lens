@@ -3,4 +3,4 @@
  * The one-time offline migrator continues to use explicit legacy readers.
  */
 export { SqliteSlimStorage } from './slim-storage'
-export { readActiveDatabasePointer } from './slim-active-pointer'
+export { readActiveDatabasePointer, type ActiveDatabasePointer } from './slim-active-pointer'
