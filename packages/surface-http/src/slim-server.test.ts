@@ -157,6 +157,24 @@ test('Slim-only HTTP reads native Catalog/facets and refuses all old Event APIs'
       enabled:()=>({configured:true,effective:true,editable:true,managedBy:'file' as const,restartRequired:false}),
       async setEnabled(){return {configured:false,effective:true,editable:true,managedBy:'file' as const,restartRequired:true}},
     },
+    integrationPackages:{
+      catalog:()=>[{integrationId:'pi',productId:'pi',displayName:'Pi',
+        packageName:'@agent-lens/integration-pi',apiVersion:'1.0',source:'bundled' as const}],
+      states:()=>[{integrationId:'pi',installed:false,compatibility:'unknown' as const,
+        integrity:'unknown' as const,restartRequired:false}],
+      state:id=>id==='pi'?{integrationId:'pi',installed:false,
+        compatibility:'unknown' as const,integrity:'unknown' as const,
+        restartRequired:false}:null,
+      install:async id=>({operationId:'operation-1',integrationId:id,
+        kind:'install' as const,status:'completed' as const,startedAt:'2026-10-26T00:00:00Z'}),
+      update:async id=>({operationId:'operation-2',integrationId:id,
+        kind:'update' as const,status:'completed' as const,startedAt:'2026-10-26T00:00:00Z'}),
+      remove:async id=>({operationId:'operation-3',integrationId:id,
+        kind:'remove' as const,status:'completed' as const,startedAt:'2026-10-26T00:00:00Z'}),
+      operation:id=>id==='operation-1'?{
+        operationId:id,integrationId:'pi',kind:'install' as const,status:'completed' as const,
+        startedAt:'2026-10-26T00:00:00Z'}:null,
+    },
     integrationAuthorization:{
       available:()=>['live' as const],
       async grant(){return ['live' as const]},
@@ -220,6 +238,20 @@ test('Slim-only HTTP reads native Catalog/facets and refuses all old Event APIs'
     assert.deepEqual(localeBody.items,[])
     assert.ok(localeBody.meta.protocolVersion)
     assert.equal((await fetch(base+'/api/v1/locales',{method:'POST'})).status,405)
+    const packageCatalog=await fetch(base+'/api/v1/integrations/catalog')
+    assert.equal(packageCatalog.status,200)
+    assert.equal((await packageCatalog.json() as {catalog:Array<{integrationId:string}>})
+      .catalog[0]?.integrationId,'pi')
+    assert.equal((await fetch(base+'/api/v1/integrations/unknown/package')).status,404)
+    assert.equal((await fetch(base+'/api/v1/integrations/pi/package')).status,200)
+    const installed=await fetch(base+'/api/v1/integrations/pi/install',{method:'POST'})
+    assert.equal(installed.status,200)
+    assert.equal((await installed.json() as {operation:{integrationId:string}})
+      .operation.integrationId,'pi')
+    assert.equal((await fetch(base+'/api/v1/integration-operations/operation-1')).status,200)
+    assert.equal((await fetch(base+'/api/v1/integrations/pi/update',{method:'POST'})).status,200)
+    assert.equal((await fetch(base+'/api/v1/integrations/pi',{method:'DELETE'})).status,200)
+    assert.equal((await fetch(base+'/api/v1/integrations/pi/install',{method:'GET'})).status,405)
     const integrationList=await fetch(base+'/api/v1/integrations')
     assert.equal(integrationList.status,200)
     const integrationPrefs=await fetch(base+'/api/v1/integrations/preferences')
