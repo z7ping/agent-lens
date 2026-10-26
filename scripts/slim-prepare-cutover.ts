@@ -58,6 +58,20 @@ export interface SlimPrepareReport {
   readyToSwitch:false
 }
 
+/** Readiness for finalization may ignore ONLY the two proof requirements
+ * that the actual frozen finalizer supplies. Every Source, budget, Hook,
+ * archive, freshness and numerical problem must stop before activation.
+ */
+export function unresolvedSlimPrepareBlockers(
+  report:Pick<SlimPrepareReport,'blockedBy'>,
+):string[]{
+  const finalizerProofs=new Set([
+    'full-consumer-and-legacy-writer-retirement-pending',
+    'old-writer-freeze-and-atomic-swap-not-certified',
+  ])
+  return report.blockedBy.filter(reason=>!finalizerProofs.has(reason))
+}
+
 /** Reuse the existing staging, verified Source discovery and read-only gate
  * in ONE explicitly authorized command. All original and backup paths remain
  * untouched; only NEW backup/staging files may be created.

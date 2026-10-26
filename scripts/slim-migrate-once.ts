@@ -5,7 +5,7 @@ import { join,resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { resolveAgentLensNodeRuntime } from '@agent-lens/runtime-cordis'
 import { readActiveDatabasePointer } from '@agent-lens/storage-sqlite'
-import { prepareSlimCutover } from './slim-prepare-cutover'
+import { prepareSlimCutover,unresolvedSlimPrepareBlockers } from './slim-prepare-cutover'
 import { finalizeSlimCutover,assertNoDaemonListening } from './slim-cutover-activation'
 
 export interface MigrateOnceOptions {
@@ -69,13 +69,17 @@ export async function runSlimMigrateOnce(args:readonly string[]){
     '--staging',plan.stagingPath,'--limit',String(plan.maxSessions),
     '--max-pages',String(plan.maxPages),
   ])
+  const blockers=unresolvedSlimPrepareBlockers(prepared)
+  if(blockers.length){
+    throw new Error('M3 preparation not complete: '+blockers.join(', '))
+  }
   // Rehearsal is never a green final gate: the finalizer recalculates
   // everything under the actual old SQLite writer freeze.
   const activated=await finalizeSlimCutover({
     legacyPath:plan.legacyPath,backupPath:plan.backupPath,
     stagingPath:plan.stagingPath,installedSlimPath:plan.installedSlimPath,
     pointerPath:plan.pointerPath,
-  },plan.port)
+  },plan.port,{maxSessions:plan.maxSessions,maxPages:plan.maxPages})
   return {
     state:'activated' as const,mode:activated.mode,
     backupPath:plan.backupPath,slimPath:activated.slimPath,

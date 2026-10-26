@@ -75,7 +75,14 @@ export async function rebuildAllSlimMetrics(args:readonly string[]):Promise<Offl
       const per={sourceId:source.manifest.sourceId,scanned:0,complete:0,partial:0,failed:0}
       report.sourceResults.push(per)
       if(!policy.isSourceEnabled(source.manifest.sourceId)){
-        report.disabledSources.push(source.manifest.sourceId)
+        // Disabled sources which have NO sessions in the staged native
+        // catalog are not a coverage gap. Installed-but-unindexed sources
+        // remain blocked by the separate full Source enumeration report.
+        const sessions=await catalog.query({
+          sourceId:source.manifest.sourceId,locationKind:'native',
+          onlyWithoutLegacyReview:true,limit:1,
+        })
+        if(sessions.items.length)report.disabledSources.push(source.manifest.sourceId)
         continue
       }
       let before:NonNullable<Parameters<NonNullable<typeof metrics.findRebuildCandidates>>[2]>
@@ -133,7 +140,20 @@ export async function rebuildAllSlimMetrics(args:readonly string[]):Promise<Offl
       // authoritative current/partial/stale/missing SQL reconciliation.
       if(report.scanned>=options.maxSessions)break
     }
-    report.budgetReached=report.scanned>=options.maxSessions
+    if(report.scanned>=options.maxSessions){
+      // Exactly N fully processed sessions with a budget of N must NOT
+      // create a false exhaustion alarm. Only an actual remaining candidate
+      // proves that the budget was insufficient.
+      for(const source of sources.list()){
+        if(!policy.isSourceEnabled(source.manifest.sourceId))continue
+        const candidates=await metrics.findRebuildCandidates({
+          sourceId:source.manifest.sourceId,
+          parserVersion:source.manifest.parserVersion,
+          coverageCertified:source.nativeSessionCoverageComplete===true,
+        },1)
+        if(candidates.length){report.budgetReached=true;break}
+      }
+    }
     report.unfinished=report.failed+report.partial+report.disabledSources.length
     return report
   }finally{await runtime.shutdown()}
