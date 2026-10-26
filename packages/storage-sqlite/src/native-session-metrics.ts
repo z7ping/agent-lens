@@ -9,6 +9,7 @@ import type {
 } from '@agent-lens/core'
 import { NATIVE_SESSION_METRIC_PROJECTION_VERSION } from '@agent-lens/core'
 import type { SqliteExecutor } from './executor'
+import { isSlimDatabase } from './slim-schema'
 
 type Identity = Pick<NativeSessionMetricSnapshot,'sourceId'|'installationId'|'nativeSessionId'>
 
@@ -178,6 +179,7 @@ export class SqliteNativeSessionMetrics implements NativeSessionMetricsStore {
       throw new TypeError('Invalid Native-only metrics aggregate query')
     }
     return this.executor.run(()=>{
+      const slim = isSlimDatabase(this.executor.db)
       const cte=`
         WITH selected AS (
           SELECT catalog.source_id,catalog.installation_id,catalog.native_session_id,
@@ -194,18 +196,20 @@ export class SqliteNativeSessionMetrics implements NativeSessionMetricsStore {
                    WHEN metrics.coverage='complete' AND ?<>1 THEN 'partial'
                    ELSE metrics.coverage
                  END AS metric_status
+          ${slim ? 'FROM native_session_catalog AS catalog' : `
           FROM native_session_write_claims AS claim
           JOIN native_session_catalog AS catalog
             ON catalog.source_id=claim.source_id
            AND catalog.installation_id=claim.installation_id
            AND catalog.native_session_id=claim.native_session_id
-           AND catalog.location_kind='native'
+          `}
           LEFT JOIN native_session_metrics AS metrics
             ON metrics.source_id=catalog.source_id
            AND metrics.installation_id=catalog.installation_id
            AND metrics.native_session_id=catalog.native_session_id
-          WHERE claim.mode='native-only' AND claim.source_id=?
-            ${input.installationId?"AND claim.installation_id=?":""}
+          WHERE catalog.location_kind='native'
+            ${slim ? '' : "AND claim.mode='native-only'"} AND catalog.source_id=?
+            ${input.installationId?"AND catalog.installation_id=?":""}
             ${input.from?"AND catalog.last_activity_at>=?":""}
             ${input.to?"AND catalog.last_activity_at<=?":""}
         )
@@ -290,23 +294,27 @@ export class SqliteNativeSessionMetrics implements NativeSessionMetricsStore {
       throw new TypeError('Invalid native metric refresh scope')
     }
     return this.executor.run(()=>{
+      const slim = isSlimDatabase(this.executor.db)
       const rows=this.executor.db.prepare(`
         SELECT catalog.review_session_id AS reviewSessionId,
           catalog.source_id AS sourceId,
           catalog.installation_id AS installationId,
           catalog.native_session_id AS nativeSessionId,
           catalog.last_activity_at AS lastActivityAt
+        ${slim ? 'FROM native_session_catalog AS catalog' : `
         FROM native_session_write_claims AS claim
         JOIN native_session_catalog AS catalog
           ON catalog.source_id=claim.source_id
           AND catalog.installation_id=claim.installation_id
           AND catalog.native_session_id=claim.native_session_id
-          AND catalog.location_kind='native'
+        `}
         LEFT JOIN native_session_metrics AS metrics
           ON metrics.source_id=catalog.source_id
           AND metrics.installation_id=catalog.installation_id
           AND metrics.native_session_id=catalog.native_session_id
-        WHERE claim.mode='native-only' AND claim.source_id=?
+        WHERE catalog.location_kind='native'
+          ${slim ? '' : "AND claim.mode='native-only'"}
+          AND catalog.source_id=?
           AND catalog.review_session_id IS NOT NULL
           AND (metrics.source_id IS NULL
             OR metrics.file_identity<>catalog.file_identity
