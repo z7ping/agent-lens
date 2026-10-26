@@ -94,10 +94,15 @@ export async function nativeLiveHistoryReference(
   state:LiveRuntimeState,
 ):Promise<HistoryReference>{
   if(!state.nativeSessionId || state.nativeSessionId.length>256)return {}
+  const enabledSourceIds=sources.list()
+    .filter(source=>source.manifest.productId===adapter.manifest.productId
+      && policy.isSourceEnabled(source.manifest.sourceId))
+    .map(source=>source.manifest.sourceId).sort()
+  if(!enabledSourceIds.length || enabledSourceIds.length>16)return {}
   let entries=nativeCache.get(sessions)
   if(!entries){entries=new Map();nativeCache.set(sessions,entries)}
   const key=JSON.stringify([
-    adapter.manifest.productId,state.nativeSessionId,
+    enabledSourceIds,state.nativeSessionId,
     state.workspacePath,state.logicalSessionId,
   ])
   let entry=entries.get(key)
