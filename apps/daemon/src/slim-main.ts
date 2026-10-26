@@ -13,7 +13,8 @@ import { codexSourceDefinition } from '@agent-lens/source-codex'
 import { claudeSourceDefinition } from '@agent-lens/source-claude'
 import { hermesSourceDefinition } from '@agent-lens/source-hermes'
 import { openCodeSourceDefinition } from '@agent-lens/source-opencode'
-import { startNativeOnlyHttpSurface, previewLocalHostTextFile } from '@agent-lens/surface-http'
+import { startNativeOnlyHttpSurface, previewLocalHostTextFile, type IntegrationPackageController } from '@agent-lens/surface-http'
+import { IntegrationPackageService } from '@agent-lens/integration-packages'
 import type { PiEcosystemQueryService } from '@agent-lens/protocol'
 import { openLocalPath } from './local-path-opener.js'
 import { SlimDataRuntime } from './data-runtime/slim-runtime.js'
@@ -40,6 +41,8 @@ export interface SlimDaemonOptions {
   runtime?:SlimDataRuntime
   sources?:SourceService
   capturePolicy?:CapturePolicyService
+  /** Tests can inject the official package lifecycle, no second implementation. */
+  integrationPackages?:IntegrationPackageController
 }
 
 export function resolveSlimWebRoot(configured?:string):string{
@@ -116,6 +119,41 @@ export async function startSlimNativeDaemon(options:SlimDaemonOptions){
         httpPort.nativeSessionCatalog,nativeReader,policy,enabledLiveProducts,
       )
     }
+    // Exactly the existing package service (bundle checksums, atomically
+    // installed pointers and restart semantics), not a Slim-only installer.
+    let packages:IntegrationPackageController|undefined=options.integrationPackages
+    if(!packages&&!options.runtime){
+      const bundled=fileURLToPath(new URL('./integration-packages/',import.meta.url))
+      const workspace=fileURLToPath(new URL('../../../dist/integration-packages/',import.meta.url))
+      const bundleDir=process.env.AGENT_LENS_INTEGRATION_BUNDLE_DIR
+        ??(existsSync(join(bundled,'catalog.json'))?bundled:workspace)
+      const installRoot=process.env.AGENT_LENS_INTEGRATIONS_DIR
+        ??join(homedir(),'.agent-lens','1.0','integrations')
+      const service=new IntegrationPackageService({
+        bundleDir,installRoot,
+        canRemove:id=>{
+          const loaded=sources.list().some(source=>source.manifest.productId===id
+            &&policy.isSourceEnabled(source.manifest.sourceId))
+          return loaded?{
+            allowed:false,reason:'Disable Integration Source and restart before removal',
+          }:{allowed:true}
+        },
+      })
+      try{
+        await service.initialize()
+        packages={
+          catalog:()=>service.catalog(),
+          states:()=>service.statesSnapshot(),
+          state:id=>{try{return service.state(id)}catch{return null}},
+          install:id=>service.install(id),
+          remove:id=>service.remove(id),
+          update:id=>service.update(id),
+          operation:id=>service.operation(id),
+        }
+      }catch(error){
+        console.warn('[AgentLens] Slim official package lifecycle unavailable',error)
+      }
+    }
     const integrations=startSlimIntegrations({
       sources,policy,lives:options.lives??live!.lives,
       scanOnStart:!options.runtime,
@@ -135,6 +173,7 @@ export async function startSlimNativeDaemon(options:SlimDaemonOptions){
       integrationManagement:integrations.management,
       integrationDiscovery:integrations.discovery,
       integrationAuthorization:integrations.authorization,
+      integrationPackages:packages,
       backup:options.backup??vault!.service,
       lives:options.lives??live!.lives,
       liveAttachments:options.liveAttachments??live!.attachments,
