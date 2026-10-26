@@ -174,6 +174,7 @@ export async function startSlimNativeDaemon(options:SlimDaemonOptions){
       openHostPath:openLocalPath,
       previewHostFile:previewLocalHostTextFile,
       integrationManagement:integrations.management,
+      integrationStatus:integrations.integrationStatus,
       integrationDiscovery:integrations.discovery,
       integrationAuthorization:integrations.authorization,
       ...(packages?{integrationPackages:packages}:{}),

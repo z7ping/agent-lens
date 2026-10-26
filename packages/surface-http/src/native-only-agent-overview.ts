@@ -1,5 +1,6 @@
 import type {
-  AgentInstallation, AssetInventoryReader, CapturePolicyService, NativeFacetReader, SourceService,
+  AgentInstallation, AgentIntegrationRuntimeStatus,
+  AssetInventoryReader, CapturePolicyService, NativeFacetReader, SourceService,
 } from '@agent-lens/core'
 import {
   AGENT_LENS_PROTOCOL_VERSION,
@@ -20,6 +21,7 @@ export async function nativeOnlyAgentOverview(
   storage:NativeAgentOverviewStorage,
   sources:SourceService,
   policy:CapturePolicyService,
+  integrationStatus?:(productId:string)=>Promise<AgentIntegrationRuntimeStatus|null>,
 ):Promise<AgentOverviewResponseDto & {meta:ReturnType<typeof meta> & {native:{usedAssets:'unavailable';capabilities:'unavailable'}}}> {
   const catalog=await storage.nativeFacets.query()
   const installationsByProduct=new Map(catalog.installedProducts.map(item=>[
@@ -36,6 +38,10 @@ export async function nativeOnlyAgentOverview(
       }
       return installation
     }))
+    const runtimeStatus=integrationStatus?await integrationStatus(productId):null
+    if(runtimeStatus&&runtimeStatus.productId!==productId){
+      throw new Error('Slim Integration status identity mismatch')
+    }
     const assetPages=enabled
       ?await Promise.all(installations.map(item=>storage.assetInventory.listByInstallation(item.id)))
       :[]
@@ -43,6 +49,10 @@ export async function nativeOnlyAgentOverview(
       sourceId:source.manifest.sourceId,productId,
       displayName:source.manifest.displayName,
       supported:true,enabled,detected:installations.length>0,
+      ...(runtimeStatus?{integration:{
+        availability:runtimeStatus.availability,
+        capabilities:runtimeStatus.capabilities,
+      }}:{}),
       installations:installations.map(item=>({
         id:item.id,
         ...(item.version?{version:item.version}:{}),

@@ -154,6 +154,12 @@ test('Slim-only HTTP reads native Catalog/facets and refuses all old Event APIs'
       snapshot:()=>({status:'idle',items:[],generatedAt:'2026-10-26T00:00:00Z'}),
       async rescan(){return {status:'complete' as const,items:[],generatedAt:'2026-10-26T00:00:00Z'}},
     },
+    integrationStatus:async id=>id==='pi'?{
+      integrationId:'pi',productId:'pi',enabled:true,availability:'available' as const,
+      capabilities:[{capability:'source' as const,availability:'available' as const},
+        {capability:'live' as const,availability:'unavailable' as const,
+          authorization:'required' as const,reasonCode:'authorization-required' as const}],
+    }:null,
     integrationManagement:{
       async query(){return {items:[],discovery:{status:'idle' as const,generatedAt:'2026-10-26T00:00:00Z'},preferences}},
       preferences:()=>preferences,
@@ -404,8 +410,11 @@ test('Slim-only HTTP reads native Catalog/facets and refuses all old Event APIs'
     assert.equal(agents.status,200)
     const agentsView=await agents.json() as {items:Array<{
       sourceId:string;assetInventory:Array<{canonicalName:string;bindings:unknown[]}>
+      integration?:{availability:string;capabilities:Array<{authorization?:string}>}
     }>;meta:{native:{usedAssets:string}}}
     assert.equal(agentsView.items[0]?.sourceId,'pi')
+    assert.equal(agentsView.items[0]?.integration?.availability,'available')
+    assert.equal(agentsView.items[0]?.integration?.capabilities[1]?.authorization,'required')
     assert.equal(agentsView.items[0]?.assetInventory[0]?.canonicalName,'pi-agent')
     assert.equal(agentsView.items[0]?.assetInventory[0]?.bindings.length,1)
     assert.equal(agentsView.meta.native.usedAssets,'unavailable')
