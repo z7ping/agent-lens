@@ -265,8 +265,8 @@ export async function startNativeOnlyHttpSurface(
         return
       }
       if(url.pathname==='/api/v1/agents'||url.pathname==='/api/v1/agents/coverage'
-        ||(new RegExp('^/api/v1/agents/[^/]+(?:/enrichment)?
-          && !url.pathname.endsWith('/summary'))){
+        ||(/^\/api\/v1\/agents\/[^/]+(?:\/enrichment)?$/.test(url.pathname)
+          && url.pathname!='/api/v1/agents/rescan')){
         if(request.method!=='GET'){
           response.setHeader('allow','GET')
           writeJson(response,405,{error:'method_not_allowed'})
