@@ -114,8 +114,27 @@ test('Slim-only HTTP reads native Catalog/facets and refuses all old Event APIs'
       isStreaming:false,pendingMessageCount:0,
     }],
   }
+  const preferences={
+    onboarding:{completed:false},displayOrder:['pi'],
+    displayOrderConfigured:false,acknowledgedIntegrationIds:[],updatedAt:'2026-10-26T00:00:00Z',
+  }
   const surface=await startNativeOnlyHttpSurface(storage as never,{
     port:0,sources,reader:reader as never,capturePolicy:policy,
+    integrationDiscovery:{
+      snapshot:()=>({status:'idle',items:[],generatedAt:'2026-10-26T00:00:00Z'}),
+      async rescan(){return {status:'complete' as const,items:[],generatedAt:'2026-10-26T00:00:00Z'}},
+    },
+    integrationManagement:{
+      async query(){return {items:[],discovery:{status:'idle' as const,generatedAt:'2026-10-26T00:00:00Z'},preferences}},
+      preferences:()=>preferences,
+      async updatePreferences(){return preferences},
+      enabled:()=>({configured:true,effective:true,editable:true,managedBy:'file' as const,restartRequired:false}),
+      async setEnabled(){return {configured:false,effective:true,editable:true,managedBy:'file' as const,restartRequired:true}},
+    },
+    integrationAuthorization:{
+      available:()=>['live' as const],
+      async grant(){return ['live' as const]},
+    },
     lives:{list:()=>[liveAdapter]} as never,liveAttachments,
     backup:{async overview(){return {
       vaultPath:'/existing-backup',sources:[],snapshots:[],
@@ -163,6 +182,21 @@ test('Slim-only HTTP reads native Catalog/facets and refuses all old Event APIs'
     assert.deepEqual(localeBody.items,[])
     assert.ok(localeBody.meta.protocolVersion)
     assert.equal((await fetch(base+'/api/v1/locales',{method:'POST'})).status,405)
+    const integrationList=await fetch(base+'/api/v1/integrations')
+    assert.equal(integrationList.status,200)
+    const integrationPrefs=await fetch(base+'/api/v1/integrations/preferences')
+    assert.equal(integrationPrefs.status,200)
+    assert.equal((await integrationPrefs.json() as {preferences:{displayOrder:string[]}})
+      .preferences.displayOrder[0],'pi')
+    const discovery=await fetch(base+'/api/v1/integrations/discovery')
+    assert.equal(discovery.status,200)
+    const auth=await fetch(base+'/api/v1/integrations/pi/authorization',{
+      method:'PUT',headers:{'content-type':'application/json'},
+      body:JSON.stringify({capabilities:['live']}),
+    })
+    assert.equal(auth.status,200)
+    assert.equal((await auth.json() as {restartRequired:boolean}).restartRequired,true)
+    assert.equal((await fetch(base+'/api/v1/integrations',{method:'POST'})).status,405)
     const agentFiles=await fetch(
       base+'/api/v1/agents/pi/files?installationId=install&root=config')
     assert.equal(agentFiles.status,200)

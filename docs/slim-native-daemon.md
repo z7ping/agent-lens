@@ -143,3 +143,15 @@ The state-only asset rows pass through the same
 The Slim response explicitly declares native usage/capability enrichment
 unavailable rather than recreating an event-store projection or claiming
 unknown counters as zero. Disabled Sources do not expose asset contents.
+
+### Integration settings and permissions in native mode
+
+The existing Integration management, official tool discovery, preferences,
+source enablement and explicit Live authorization handlers now run against
+their original configuration services. Discovery is asynchronous and never
+blocks HTTP readiness. Preferences/permissions remain in their original
+configuration files; no legacy Event database is written. New authorization
+grants and source enablement take effect after restart; previously running
+Live adapters are not silently elevated. Physical Integration package install
+and update operations remain separate M5 work and are not misrepresented as
+installed when the package runtime is unavailable.
