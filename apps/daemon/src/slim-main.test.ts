@@ -37,6 +37,11 @@ test('Slim standalone entry wires only native Reader and HTTP, and disposes on s
   const running=await startSlimNativeDaemon({
     dbPath:'test-is-injected',
     runtime:runtime as never,sources,capturePolicy:policy,port:0,webRoot,
+    backup:{
+      async overview(){return {
+        vaultPath:'/unit-vault',sources:[],snapshots:[],
+      }},
+    } as never,
   })
   try{
     assert.deepEqual(actions,['start','nativeHttpPort','nativeReader'])
@@ -48,6 +53,9 @@ test('Slim standalone entry wires only native Reader and HTTP, and disposes on s
     const rootPage=await fetch(base+'/')
     assert.equal(rootPage.status,200)
     assert.match(await rootPage.text(),/existing-task-surface/)
+    const backup=await fetch(base+'/api/v1/backups')
+    assert.equal(backup.status,200)
+    assert.equal((await backup.json() as {vaultPath:string}).vaultPath,'/unit-vault')
     const old=await fetch(base+'/api/v1/review')
     assert.equal(old.status,501)
   }finally{
