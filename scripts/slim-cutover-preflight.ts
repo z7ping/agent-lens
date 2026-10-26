@@ -4,9 +4,10 @@ import Database from 'better-sqlite3'
 import {
   inspectLegacyCutover,
   stageSlimCutover,
+  auditSlimNativeCoverage,
 } from '../packages/storage-sqlite/src/index'
 
-type Command = 'preflight' | 'stage'
+type Command = 'preflight' | 'stage' | 'verify'
 
 export interface CutoverCliArgs {
   command: Command
@@ -17,8 +18,8 @@ export interface CutoverCliArgs {
 
 export function parseCutoverArgs(args: readonly string[]): CutoverCliArgs {
   const command = args[0]
-  if (command !== 'preflight' && command !== 'stage') {
-    throw new Error('Use preflight or stage (never auto-switch or auto-delete)')
+  if (command !== 'preflight' && command !== 'stage' && command !== 'verify') {
+    throw new Error('Use preflight, stage or verify (never auto-switch or auto-delete)')
   }
   const named = new Map<string,string>()
   for (let i=1;i<args.length;i++) {
@@ -42,6 +43,12 @@ export function parseCutoverArgs(args: readonly string[]): CutoverCliArgs {
   }
   const backupPath=named.get('--backup')
   const stagingPath=named.get('--staging')
+  if(command==='verify') {
+    if(!stagingPath || backupPath) {
+      throw new Error('Verify requires --staging and rejects --backup; both DBs are read-only')
+    }
+    return {command,legacyPath,stagingPath}
+  }
   if (!backupPath || !stagingPath) {
     throw new Error('Stage requires both --backup and --staging (new, separate paths)')
   }
@@ -60,6 +67,15 @@ export async function runSlimCutoverCli(args: readonly string[]): Promise<object
     } finally {
       db.close()
     }
+  }
+  if(options.command==='verify') {
+    if(!options.stagingPath) throw new Error('Verify staging path required')
+    const old=new Database(options.legacyPath,{readonly:true,fileMustExist:true})
+    try {
+      const slim=new Database(options.stagingPath,{readonly:true,fileMustExist:true})
+      try { return auditSlimNativeCoverage(old,slim) }
+      finally { slim.close() }
+    } finally { old.close() }
   }
   if (!options.backupPath || !options.stagingPath) throw new Error('Stage paths required')
   const result=await stageSlimCutover({
