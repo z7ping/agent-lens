@@ -144,6 +144,10 @@ test('Slim-only HTTP reads native Catalog/facets and refuses all old Event APIs'
       return 'revealed' as const
     },
     previewHostFile:previewLocalHostTextFile,
+    rescanAgents:async sourceId=>({status:'completed' as const,
+      startedAt:'2026-10-26T00:00:00Z',completedAt:'2026-10-26T00:00:01Z',
+      sourcesDetected:sourceId==='pi'?1:1,assetSourcesScanned:1,
+      assetsDiscovered:2,assetsRemoved:0,statesRecorded:1,statesCleared:0,failures:[]}),
     backgroundProgress:()=>({examinedScopes:2,indexedSessions:14,runningCaptures:1,
       failedScopes:0,deferredScopes:1,finished:true}),
     integrationDiscovery:{
@@ -413,6 +417,17 @@ test('Slim-only HTTP reads native Catalog/facets and refuses all old Event APIs'
     assert.deepEqual(data.items[0]?.installationIds,['install'])
     const summaryPost=await fetch(base+'/api/v1/agents/summary',{method:'POST'})
     assert.equal(summaryPost.status,405)
+    const rescanned=await fetch(base+'/api/v1/agents/rescan?sourceId=pi',{method:'POST'})
+    assert.equal(rescanned.status,200)
+    const scanBody=await rescanned.json() as {status:string;assetsDiscovered:number;
+      agents:{items:unknown[]};facets:{agents:unknown[]}}
+    assert.equal(scanBody.status,'completed')
+    assert.equal(scanBody.assetsDiscovered,2)
+    assert.ok(scanBody.agents.items.length>0)
+    assert.ok(scanBody.facets.agents.length>0)
+    assert.equal((await fetch(base+'/api/v1/agents/rescan?sourceId=unknown',
+      {method:'POST'})).status,404)
+    assert.equal((await fetch(base+'/api/v1/agents/rescan',{method:'GET'})).status,405)
     const agents=await fetch(base+'/api/v1/agents')
     assert.equal(agents.status,200)
     const agentsView=await agents.json() as {items:Array<{

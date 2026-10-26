@@ -182,3 +182,39 @@ test('Slim asset scan runs after bounded native Catalog indexing and never block
   await coordinator.dispose()
   assert.equal(calls.at(-1),'dispose')
 })
+
+
+test('manual native rescan reuses the scanner without opening duplicate capture handles',async()=>{
+  const calls:string[]=[]
+  const source={manifest:{sourceId:'pi',productId:'pi'},
+    detect:async()=>[{sourceId:'pi',productId:'pi',confidence:'high'}],
+    startCapture:async()=>({}),
+    discoverAssets:async function*(){yield {definition:{type:'skill',canonicalName:'x'}}},
+  }
+  const runtime={
+    async resolveHost(){return {id:'host'}},
+    async resolveInstallation(){return {id:'install'}},
+    async facets(){return {installedProducts:[{productId:'pi',installationIds:['install']}]}},
+    async profiles(){return []},
+    async reindexInstallation(){calls.push('index');return {indexed:1}},
+    async scanInstallationAssets(){calls.push('assets');return {
+      assetsDiscovered:2,assetsRemoved:0,statesRecorded:1,statesCleared:0,
+    }},
+    async captureInstallation(){calls.push('capture');return {dispose:async()=>{calls.push('dispose')}}},
+  }
+  const policy={isSourceEnabled:()=>true} as never
+  const coordinator=new SlimSourceCoordinator(runtime as never,
+    {list:()=>[source]} as never,policy,policy)
+  coordinator.start()
+  for(let i=0;i<100&&!coordinator.snapshot().finished;i++)await new Promise(
+    resolve=>setImmediate(resolve))
+  const summary=await coordinator.rescan('pi')
+  assert.equal(summary.status,'completed')
+  assert.equal(summary.sourcesDetected,1)
+  assert.equal(summary.assetSourcesScanned,1)
+  assert.equal(summary.assetsDiscovered,2)
+  assert.equal(summary.statesRecorded,1)
+  assert.deepEqual(calls,['index','assets','capture','index','assets'])
+  await coordinator.dispose()
+  assert.equal(calls.at(-1),'dispose')
+})
