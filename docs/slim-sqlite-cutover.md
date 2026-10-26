@@ -64,7 +64,23 @@ npm run storage:slim:verify -- --legacy /path/to/legacy.sqlite --staging /path/t
 
 只读打开两份库，输出旧 `source_sessions` 唯一身份数量、新库 `native_session_context` 关联数量、已索引原生会话、仅归档会话、无对应 Catalog、缺失 Context 和需要重算的数值统计。最多附带 32 个带 SHA-256 摘要的差异身份，不输出原始会话 ID、文件路径或内容。**即使差异为 0，`readyToSwitch` 仍是 false**：仅证明目录映射，不等于所有正文完整可读，原生 Source/Hook 证据核验和正式切换仍必须另行验收。
 
-## 7. 后续硬阻塞
+## 7. 原生目录重建命令（显式运行）
+
+```bash
+# 仅对指定来源/安装实例，用真实 Source 文件重建精简暂存库目录
+npm run storage:slim:reindex -- --staging /path/to/slim-staging.sqlite --source pi --installation <installation-id> --limit 5000
+
+# 完成各来源原生索引后重新查看旧/新身份差异
+npm run storage:slim:verify -- --legacy /path/to/legacy.sqlite --staging /path/to/slim-staging.sqlite
+```
+
+- 必须显式指定来源、安装身份和已存在的精简库；可选 `--runtime-profile` 和 `--since`（ISO 时间）。
+- 普通入口默认仅检查 **32** 条；针对一次性离线历史迁移才允许通过 `--limit` 显式扩大到 **5000** 条，并定期让出执行权。
+- 每条记录均由 Source 自己授权并验证物理文件身份和指纹，只有通过时写入原生 Catalog，失败计入覆盖报告；**不会**写消息正文、创建 SQL Observation 或重新启用 Legacy Writer。
+- 因 Source 发现分页不统一，达到 `--limit` 时报告 `exhausted:false`，不可据此宣称全量恢复。各来源的完整覆盖验收仍需完善。
+- 本命令**只修改用户明确指定的精简暂存库**，不读取/修改旧数据库，也不进行运行时切换、删除和安装目录替换。
+
+## 8. 后续硬阻塞
 
 1. 审计 checkpoint、用户标签、项目/资产、文件变更与备份状态的具体保留合同，完善迁移白名单和失联清单。
 2. 全五个 Source 的原生文件真实性、归档、工具/附件/错误、Hook 缺口适配；统计从 Source 重算且不重复。

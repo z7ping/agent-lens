@@ -11,7 +11,9 @@ import type {
 } from '@agent-lens/core'
 
 const DEFAULT_SESSION_BUDGET = 32
-const MAX_SESSION_BUDGET = 128
+// Large explicit migration scans may inspect 5000 identities; the default
+// interactive slice remains 32 to protect cold-start performance.
+const MAX_SESSION_BUDGET = 5000
 
 export type NativeCatalogFailure =
   | 'invalid-discovery'
@@ -42,7 +44,7 @@ export interface NativeCatalogScanInput {
   runtimeProfile?: RuntimeProfile
   signal: AbortSignal
   historyWindow?: SourceHistoryWindow
-  /** Maximum original Source sessions inspected in this foreground slice. */
+  /** Maximum original Source sessions inspected; >128 only for explicit offline migration. */
   maxSessions?: number
   onProgress?: (report: NativeCatalogScanReport) => void | Promise<void>
 }
@@ -71,7 +73,7 @@ export class NativeOnlySourceIndexer {
     const maxSessions = input.maxSessions ?? DEFAULT_SESSION_BUDGET
     if (!Number.isSafeInteger(maxSessions)
       || maxSessions < 1 || maxSessions > MAX_SESSION_BUDGET) {
-      throw new RangeError('Native catalog scan budget must be between 1 and 128')
+      throw new RangeError('Native catalog scan budget must be between 1 and 5000')
     }
     if (!source.manifest.sourceId.trim()) {
       throw new Error('Native catalog Source identity is missing')
