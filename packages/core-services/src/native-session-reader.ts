@@ -1,4 +1,6 @@
 import type {
+  AgentInstallation,
+  RuntimeProfile,
   CapturePolicyService,
   EvidenceCandidate,
   ObservationCandidate,
@@ -17,6 +19,11 @@ import type { NativeWorkerNormalizedRecord } from './native-reader-worker-protoc
 export type NativeSessionReaderStorage = {
   /** Legacy Claim methods are intentionally NOT part of this read/index port. */
   nativeSessionCatalog?: Pick<NativeSessionCatalogStore,'get'|'upsert'>
+  /** Slim-only native Profile association, keyed by Source session identity. */
+  nativeSessionContexts?: {get(input:{
+    sourceId:string;installationId:string;nativeSessionId:string
+  }):Promise<{runtimeProfileId?:string}|null>}
+  runtimeProfiles?: {get(id:string):Promise<RuntimeProfile|null>}
 } & {
     repositories: {
       installations: Pick<StorageService['repositories']['installations'],'get'>
@@ -80,6 +87,36 @@ export class NativeSessionReader {
     private readonly nativeWorker?: NativeReaderWorkerPort,
   ) {}
 
+  /** Resolve effective native roots from trusted Slim metadata. A stale or
+   * missing Profile must fail closed rather than reading another Agent root.
+   * Legacy databases with no nativeSessionContexts remain unchanged.
+   */
+  private async sessionRoots(input:{
+    sourceId:string;installationId:string;nativeSessionId:string
+  }, installation:AgentInstallation):Promise<
+    | {state:'available';installation:AgentInstallation;runtimeProfile?:RuntimeProfile}
+    | {state:'unavailable'|'drifted';reason:string}
+  > {
+    const context=await this.storage.nativeSessionContexts?.get(input)
+    if(!context?.runtimeProfileId)return {state:'available',installation}
+    if(!this.storage.runtimeProfiles)return {
+      state:'unavailable',reason:'native-runtime-profile-reader-unavailable',
+    }
+    const profile=await this.storage.runtimeProfiles.get(context.runtimeProfileId)
+    if(!profile)return {state:'unavailable',reason:'native-runtime-profile-missing'}
+    if(profile.installationId!==installation.id)return {
+      state:'drifted',reason:'native-runtime-profile-installation-mismatch',
+    }
+    return {
+      state:'available',runtimeProfile:profile,
+      installation:{
+        ...installation,
+        configRoot:profile.configRoot??installation.configRoot,
+        dataRoot:profile.dataRoot??installation.dataRoot,
+      },
+    }
+  }
+
   /** Hook-only source lane: never reads a client-supplied path, does not
    * advance capture checkpoints, and never returns raw Hook/Evidence payloads.
    * It is not a complete-turn history reader or a replacement for legacy
@@ -107,6 +144,9 @@ export class NativeSessionReader {
     if (!installation || installation.productId !== source.manifest.productId) {
       return { state: 'drifted', reason: 'native-installation-identity-changed' }
     }
+    const scoped=await this.sessionRoots(query,installation)
+    if(scoped.state!=='available')return scoped
+    const effectiveInstallation=scoped.installation
     const host = await this.storage.repositories.hosts.get(installation.hostId)
     if (!host) return { state: 'unavailable', reason: 'native-source-host-unavailable' }
     let rows: NativeWorkerNormalizedRecord[]
@@ -121,7 +161,8 @@ export class NativeSessionReader {
         parserVersion: source.manifest.parserVersion,
         nativeSessionId: query.nativeSessionId,
         ...(query.cursor ? {cursor: query.cursor} : {}),
-        host, installation,
+        host, installation:effectiveInstallation,
+        ...(scoped.runtimeProfile?{runtimeProfile:scoped.runtimeProfile}:{}),
       }, query.signal)
       if (result.state !== 'available') return result
       rows = result.entries
@@ -130,7 +171,9 @@ export class NativeSessionReader {
     } else {
       let page: { records: import('@agent-lens/core').SourceRecord[]; hasMore: boolean; nextCursor?: string }
       try {
-        const context = { host, installation, abortSignal: query.signal, checkpoint: readOnlyCheckpoint }
+        const context = { host, installation:effectiveInstallation,
+          ...(scoped.runtimeProfile?{runtimeProfile:scoped.runtimeProfile}:{}),
+          abortSignal: query.signal, checkpoint: readOnlyCheckpoint }
         page = source.readArchivedNativeHooksPage
           ? await source.readArchivedNativeHooksPage(query.nativeSessionId, context, query.cursor)
           : { records: await source.readArchivedNativeHooks!(query.nativeSessionId, context), hasMore: false }
@@ -160,7 +203,8 @@ export class NativeSessionReader {
           sourceId: record.sourceId,
           installationId: record.installationId,
           sourceSessionNativeId: record.sourceSessionNativeId,
-          normalized: await source.normalize(record, {host, installation}),
+          normalized: await source.normalize(record, {host,installation:effectiveInstallation,
+            ...(scoped.runtimeProfile?{runtimeProfile:scoped.runtimeProfile}:{})}),
         })
       }
     }
@@ -225,6 +269,9 @@ export class NativeSessionReader {
     if (!installation || installation.productId!==source.manifest.productId) {
       return {state:'drifted',reason:'native-installation-identity-changed'}
     }
+    const scoped=await this.sessionRoots(query,installation)
+    if(scoped.state!=='available')return scoped
+    const effectiveInstallation=scoped.installation
     const host=await this.storage.repositories.hosts.get(installation.hostId)
     if (!host) return {state:'unavailable',reason:'native-source-host-unavailable'}
     if (!query.cursor || !Number.isSafeInteger(query.cursor.offset)
@@ -235,7 +282,9 @@ export class NativeSessionReader {
     const page=await source.readNativeSessionPage({
       filePath:catalog.filePath,nativeSessionId:catalog.nativeSessionId,
       cursor:query.cursor,limit:1,
-    },{host,installation,abortSignal:query.signal,checkpoint:readOnlyCheckpoint})
+    },{host,installation:effectiveInstallation,
+      ...(scoped.runtimeProfile?{runtimeProfile:scoped.runtimeProfile}:{}),
+      abortSignal:query.signal,checkpoint:readOnlyCheckpoint})
     if (page.state!=='available') return page
     if (page.nextCursor.fileIdentity!==catalog.fileIdentity
       || !page.recordCursors || page.recordCursors.length!==page.records.length
@@ -265,7 +314,8 @@ export class NativeSessionReader {
     if (sourceBytes > 3 * 1024 * 1024) {
       return {state:'unsupported',reason:'native-attachment-source-payload-too-large'}
     }
-    const normalized=await source.normalize(record,{host,installation})
+    const normalized=await source.normalize(record,{host,installation:effectiveInstallation,
+      ...(scoped.runtimeProfile?{runtimeProfile:scoped.runtimeProfile}:{})})
     query.signal.throwIfAborted()
     let normalizedBytes: number
     try {
@@ -314,6 +364,9 @@ export class NativeSessionReader {
     if (!installation || installation.productId !== source.manifest.productId) {
       return { state: 'drifted', reason: 'native-installation-identity-changed' }
     }
+    const scoped=await this.sessionRoots(query,installation)
+    if(scoped.state!=='available')return scoped
+    const effectiveInstallation=scoped.installation
     const host = await this.storage.repositories.hosts.get(installation.hostId)
     if (!host) return { state: 'unavailable', reason: 'native-source-host-unavailable' }
 
@@ -337,7 +390,8 @@ export class NativeSessionReader {
         expectedFileIdentity: catalog.fileIdentity,
         query: sourceQuery,
         host,
-        installation,
+        installation:effectiveInstallation,
+        ...(scoped.runtimeProfile?{runtimeProfile:scoped.runtimeProfile}:{}),
       }, query.signal)
       if (result.state !== 'available') return result
       nextCursor = result.nextCursor
@@ -347,7 +401,9 @@ export class NativeSessionReader {
     } else {
       // Unported Source integrations retain the current in-process reader.
       const result = await source.readNativeSessionPage(sourceQuery, {
-        host, installation, abortSignal: query.signal, checkpoint: readOnlyCheckpoint,
+        host, installation:effectiveInstallation,
+        ...(scoped.runtimeProfile?{runtimeProfile:scoped.runtimeProfile}:{}),
+        abortSignal: query.signal, checkpoint: readOnlyCheckpoint,
       })
       if (result.state !== 'available') return result
       if (result.nextCursor.fileIdentity !== catalog.fileIdentity) {
@@ -369,7 +425,8 @@ export class NativeSessionReader {
           sourceId: record.sourceId,
           installationId: record.installationId,
           ...(record.sourceSessionNativeId ? { sourceSessionNativeId: record.sourceSessionNativeId } : {}),
-          normalized: await source.normalize(record, { host, installation }),
+          normalized: await source.normalize(record, { host,installation:effectiveInstallation,
+            ...(scoped.runtimeProfile?{runtimeProfile:scoped.runtimeProfile}:{}) }),
         })
       }
     }
