@@ -127,11 +127,13 @@ test('native session catalog remains metadata-only, stable and independently pag
       fileIdentity: old.fileIdentity,
     }
     assert.equal(await catalog.hasNativeOnlyWriteClaim(ownership),false)
+    assert.equal(await catalog.isNativeMetricsEligible(ownership),false)
     assert.equal(await catalog.claimNativeOnlyWrite({
       ...ownership, fileIdentity: 'forged',
     }),false)
     assert.equal(await catalog.claimNativeOnlyWrite(ownership),true)
     assert.equal(await catalog.hasNativeOnlyWriteClaim(ownership),true)
+    assert.equal(await catalog.isNativeMetricsEligible(ownership),true)
     assert.equal(await catalog.getSessionWriteMode(ownership),'native-only')
     assert.equal(await catalog.claimLegacyWrite(ownership),'native-only') // no mixed writer
     assert.equal(await catalog.claimNativeOnlyWrite(ownership),true) // idempotent
