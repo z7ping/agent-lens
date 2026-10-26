@@ -139,6 +139,7 @@ test('Slim-only HTTP reads native Catalog/facets and refuses all old Event APIs'
   }
   const surface=await startNativeOnlyHttpSurface(storage as never,{
     port:0,sources,reader:reader as never,capturePolicy:policy,
+    selectProjectDirectory:async()=>'/projects/SlowLight',
     openHostPath:async path=>{
       assert.equal(path,join(agentRoot,'config','AGENTS.md'))
       return 'revealed' as const
@@ -207,6 +208,11 @@ test('Slim-only HTTP reads native Catalog/facets and refuses all old Event APIs'
     const live=await fetch(base+'/api/v1/live')
     assert.equal(live.status,200)
     assert.equal((await live.json() as {items:unknown[]}).items.length,1)
+    const selectDirectory=await fetch(base+'/api/v1/live/project-directory',{
+      method:'POST',headers:{'content-type':'application/json'},body:'{}',
+    })
+    assert.equal(selectDirectory.status,200)
+    assert.deepEqual(await selectDirectory.json(),{workspacePath:'/projects/SlowLight'})
     const runtimeList=await fetch(base+'/api/v1/live/runtimes')
     assert.equal(runtimeList.status,200)
     const runtimeBody=await runtimeList.json() as {items:Array<{

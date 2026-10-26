@@ -17,6 +17,7 @@ import { openCodeSourceDefinition } from '@agent-lens/source-opencode'
 import { startNativeOnlyHttpSurface, previewLocalHostTextFile, type IntegrationPackageController } from '@agent-lens/surface-http'
 import type { PiEcosystemQueryService } from '@agent-lens/protocol'
 import { openLocalPath } from './local-path-opener.js'
+import { createProjectDirectoryPicker } from './project-directory-picker.js'
 import { SlimDataRuntime } from './data-runtime/slim-runtime.js'
 import { SlimSourceCoordinator } from './slim-source-coordinator.js'
 import { startSlimLive } from './slim-live.js'
@@ -171,6 +172,7 @@ export async function startSlimNativeDaemon(options:SlimDaemonOptions){
       ...(policy.isSourceEnabled('pi')?{
         piEcosystem:options.piEcosystem??new NpmPiEcosystemProvider(),
       }:{}),
+      selectProjectDirectory:createProjectDirectoryPicker().select,
       openHostPath:openLocalPath,
       previewHostFile:previewLocalHostTextFile,
       integrationManagement:integrations.management,
