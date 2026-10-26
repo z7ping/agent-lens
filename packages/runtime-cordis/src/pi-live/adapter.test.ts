@@ -836,9 +836,9 @@ test('Slim Pi Live declares only actions backed by Native Worker, never SQL hist
 })
 
 test('Pi Live Slim native resume and whole-session fork use authorized Catalog inputs',async()=>{
-  const actions:Array<{cwd:string;sessionPath?:string;historyAction?:string}>=[]
+  const actions:Array<{cwd:string;sessionPath?:string;historyAction?:string;branchFromEntryId?:string}>=[]
   const service={
-    async start(input:{cwd:string;sessionPath?:string;historyAction?:string}){
+    async start(input:{cwd:string;sessionPath?:string;historyAction?:string;branchFromEntryId?:string}){
       actions.push(input)
       return {runtimeSessionId:'runtime',status:'ready'}
     },
@@ -846,6 +846,12 @@ test('Pi Live Slim native resume and whole-session fork use authorized Catalog i
   const adapter=new PiLiveAdapter(service,attachmentService(),undefined,{
     nativeOnly:true,
     nativeHistory:{
+      async resolveForkAt(id,nativeEventId){
+        assert.equal(id,'native:0123456789abcdef0123456789abcdef')
+        assert.equal(nativeEventId,'assistant-1')
+        return {cwd:'/verified/work',sessionPath:'/verified/native.jsonl',
+          historyAction:'fork' as const,logicalSessionId:id,branchFromEntryId:nativeEventId}
+      },
       async resolve(id,action){
         assert.equal(id,'native:0123456789abcdef0123456789abcdef')
         return {
@@ -859,11 +865,13 @@ test('Pi Live Slim native resume and whole-session fork use authorized Catalog i
   })
   assert.equal(adapter.capabilities.has('resume'),true)
   assert.equal(adapter.capabilities.has('fork'),true)
-  assert.equal(adapter.capabilities.has('fork-at'),false)
+  assert.equal(adapter.capabilities.has('fork-at'),true)
   const id='native:0123456789abcdef0123456789abcdef'
   await adapter.resume(id)
   await adapter.fork(id)
-  assert.deepEqual(actions.map(x=>x.historyAction),['continue','fork'])
+  await adapter.forkAt(id,'assistant-1')
+  assert.deepEqual(actions.map(x=>x.historyAction),['continue','fork','fork'])
   assert.deepEqual(actions.map(x=>x.sessionPath),
-    ['/verified/native.jsonl','/verified/native.jsonl'])
+    ['/verified/native.jsonl','/verified/native.jsonl','/verified/native.jsonl'])
+  assert.equal((actions.at(-1) as {branchFromEntryId?:string}|undefined)?.branchFromEntryId,'assistant-1')
 })
