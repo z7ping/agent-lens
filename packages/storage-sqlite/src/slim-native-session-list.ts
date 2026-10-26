@@ -54,6 +54,19 @@ export class SqliteSlimNativeSessionList implements NativeSessionListReader {
     if(input.coverageCertified!==undefined&&typeof input.coverageCertified!=='boolean'){
       throw new TypeError('Invalid native coverage certification')
     }
+    if(input.sourceCertifications!==undefined && (
+      !Array.isArray(input.sourceCertifications)
+      || input.sourceCertifications.length>64
+      || input.sourceCertifications.some(source=>
+        !source.sourceId || source.sourceId.length>128
+        || !source.parserVersion || source.parserVersion.length>512
+        || typeof source.coverageCertified!=='boolean')
+      || new Set(input.sourceCertifications.map(source=>source.sourceId)).size
+        !==input.sourceCertifications.length)){
+      throw new TypeError('Invalid per-source native metric certifications')
+    }
+    const certifications=input.sourceCertifications===undefined?undefined
+      :new Map(input.sourceCertifications.map(source=>[source.sourceId,source] as const))
     const clauses=["c.location_kind='native'","c.review_session_id IS NOT NULL"]
     const values:Array<string|number>=[]
     if(input.sourceId){clauses.push('c.source_id=?');values.push(input.sourceId)}
@@ -106,13 +119,19 @@ export class SqliteSlimNativeSessionList implements NativeSessionListReader {
           c.installation_id DESC,c.native_session_id DESC
         LIMIT ?
       `).all(...values,input.limit+1) as ListRow[]
-      const complete=input.coverageCertified===true && Boolean(input.parserVersion)
       const items:NativeSessionListItem[]=rows.slice(0,input.limit).map(item=>{
+        const certified=certifications?.get(item.source_id)
+        const expectedVersion=certifications===undefined
+          ?input.parserVersion:certified?.parserVersion
+        const complete=certifications===undefined
+          ?input.coverageCertified===true&&Boolean(expectedVersion)
+          :certified?.coverageCertified===true
         const stale=item.metric_identity!==null && (
+          (certifications!==undefined && !certified)
           item.metric_identity!==item.file_identity
           || item.metric_size!==item.file_size || item.metric_mtime!==item.file_mtime_ms
           || item.projection_version!==NATIVE_SESSION_METRIC_PROJECTION_VERSION
-          || (input.parserVersion!==undefined && item.parser_version!==input.parserVersion)
+          || (expectedVersion!==undefined && item.parser_version!==expectedVersion)
         )
         const status:NativeSessionListItem['metricsState']=item.metric_identity===null
           ?'missing':stale?'stale'
