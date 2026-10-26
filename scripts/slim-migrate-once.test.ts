@@ -26,7 +26,7 @@ test('M3 migration reserves distinct one-time files without overriding original 
 
 
 test('bundled migrator imports never trigger other original script entrypoints',async()=>{
-  const root=fileURLToPath(new URL('../',import.meta.url))
+  const root=fileURLToPath(new URL('./',import.meta.url))
   for(const name of ['slim-prepare-cutover','slim-reindex-all','slim-reindex-native',
     'slim-rebuild-metrics-all','slim-cutover-gate','slim-audit-originals',
     'slim-audit-legacy-hooks','slim-cutover-activation']){
