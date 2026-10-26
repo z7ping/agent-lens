@@ -17,7 +17,8 @@ const PATH=/^\/api\/v1\/native-sessions\/([^/]+)\/metrics(?:\/(rebuild))?$/
 
 export async function handleNativeSessionMetricsRequest(
   request:IncomingMessage,response:ServerResponse,url:URL,
-  catalog?:NativeSessionCatalogStore,
+  catalog?:Pick<NativeSessionCatalogStore,'getByReviewSessionId'>
+    & Partial<Pick<NativeSessionCatalogStore,'isNativeMetricsEligible'|'hasNativeOnlyWriteClaim'>>,
   metrics?:NativeSessionMetricsStore,
   reader?:NativeSessionWindowReader,
   sources?:SourceService,
@@ -57,7 +58,9 @@ export async function handleNativeSessionMetricsRequest(
   // table. Older v38 databases still use ownership to avoid double counts.
   const eligible = catalog.isNativeMetricsEligible
     ? await catalog.isNativeMetricsEligible(identity)
-    : await catalog.hasNativeOnlyWriteClaim(identity)
+    : catalog.hasNativeOnlyWriteClaim
+      ? await catalog.hasNativeOnlyWriteClaim(identity)
+      : false
   if(!eligible){
     writeJson(response,200,{state:'unsupported',reason:'native-metrics-legacy-session'})
     return true
