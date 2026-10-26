@@ -44,3 +44,16 @@ test('perfect original coverage still cannot silently bypass legacy Writer/Hook/
   assert.equal(report.blockedBy.includes('hook-and-archival-coverage-not-certified'),true)
   assert.equal(report.oldDatabaseChanged,false)
 })
+
+test('partial metric and archived-only sessions cannot be marked cutover-complete',()=>{
+  const report=summarizeSlimGate({
+    ...example,
+    identities:{...example.identities,archivedOnly:1,legacyHookRecords:2,
+      nativeMetricsPartial:3},
+  })
+  assert.equal(report.partialNativeMetrics,3)
+  assert.equal(report.legacyHookRecords,2)
+  assert.ok(report.blockedBy.includes('native-metrics-partial-not-certified'))
+  assert.ok(report.blockedBy.includes('legacy-hook-records-require-archive-verification'))
+  assert.ok(report.blockedBy.includes('archived-only-sessions-not-deep-audited'))
+})
