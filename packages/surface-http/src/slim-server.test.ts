@@ -63,6 +63,15 @@ test('Slim-only HTTP reads native Catalog/facets and refuses all old Event APIs'
       return {id:'install',hostId:'host',productId:'pi',
         configRoot:join(agentRoot,'config'),dataRoot:join(agentRoot,'data')}
     }},
+    assetInventory:{async listByInstallation(id:string){
+      assert.equal(id,'install')
+      return [{
+        definition:{id:'asset-1',type:'skill',canonicalName:'pi-agent'},
+        binding:{id:'binding-1',assetId:'asset-1',installationId:'install',
+          path:join(agentRoot,'config')},
+        states:[],
+      }]
+    }},
     launchableProjects:{
       async query(){
         return {items:[{
@@ -173,6 +182,28 @@ test('Slim-only HTTP reads native Catalog/facets and refuses all old Event APIs'
     const wrong=await fetch(
       base+'/api/v1/agents/pi/files?installationId=other&root=config')
     assert.equal(wrong.status,404)
+    const assetDir=await fetch(base+
+      '/api/v1/integrations/pi/assets/files?installationId=install&root=config')
+    assert.equal(assetDir.status,200)
+    const assetPreview=await fetch(base+
+      '/api/v1/integrations/pi/assets/file?installationId=install&root=config&path=AGENTS.md')
+    assert.equal(assetPreview.status,200)
+    assert.equal((await assetPreview.json() as {content:string}).content,'# Pi config\\n')
+    const assetBinding=await fetch(base+
+      '/api/v1/integrations/pi/assets/files?installationId=install&root=binding&bindingId=binding-1')
+    assert.equal(assetBinding.status,200)
+    const assetSecret=await fetch(base+
+      '/api/v1/integrations/pi/assets/file?installationId=install&root=config&path=.env')
+    assert.equal(assetSecret.status,200)
+    assert.equal((await assetSecret.json() as {previewStatus:string}).previewStatus,'metadata-only')
+    const otherAgent=await fetch(base+
+      '/api/v1/integrations/unknown/assets/files?installationId=install&root=config')
+    assert.equal(otherAgent.status,404)
+    enabledSources=[]
+    const disabledAsset=await fetch(base+
+      '/api/v1/integrations/pi/assets/files?installationId=install&root=config')
+    assert.equal(disabledAsset.status,503)
+    enabledSources=['pi']
     const ready=await fetch(base+'/api/v1/ready')
     assert.equal(ready.status,200)
     assert.equal((await ready.json() as {storageMode:string}).storageMode,'native-only')

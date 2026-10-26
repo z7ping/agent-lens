@@ -3,7 +3,7 @@ import type {
   CapturePolicyService, NativeFacetReader, NativeSessionCatalogStore,
   NativeSessionListReader, NativeSessionMetricsStore, LaunchableProjectReader,
   SourceService, StorageHealth, BackupService, LiveService, LiveAttachmentService,
-  AgentInstallation,
+  AgentInstallation, AssetInventoryReader, AgentIntegrationRuntimeStatus,
 } from '@agent-lens/core'
 import { AGENT_LENS_PROTOCOL_VERSION } from '@agent-lens/protocol'
 import {
@@ -23,6 +23,7 @@ import { nativeOnlyFacetResponse } from './native-only-facets'
 import { readLaunchableProjects } from './launchable-projects'
 import { handleBackupRequest } from './backup-http'
 import { handleAgentFilesRequest } from './agent-files-http'
+import { handleManagedAssetFilesRequest } from './managed-asset-files'
 import { handleCapturePolicyRequest } from './capture-policy-http'
 import { discoverLocalePacks } from './locale-packs'
 import { handleLiveRequest } from './live-http'
@@ -42,6 +43,7 @@ export interface NativeOnlyHttpStorage {
   nativeSessionList: NativeSessionListReader
   nativeFacets: NativeFacetReader
   installations: {get(id:string):Promise<AgentInstallation|null>}
+  assetInventory:Pick<AssetInventoryReader,'listByInstallation'>
   launchableProjects: LaunchableProjectReader
   nativeSessionMetrics: NativeSessionMetricsStore
   health(): Promise<StorageHealth>
@@ -120,6 +122,24 @@ export async function startNativeOnlyHttpSurface(
       if(await handleAgentFilesRequest(request,response,url,{
         repositories:{installations:storage.installations},
       },options.sources,options.capturePolicy))return
+
+      // Reuse the installed Integration's existing file/asset protections and
+      // native Slim current-state inventory. No legacy StorageService.
+      if(await handleManagedAssetFilesRequest(request,response,url,{
+        repositories:{installations:storage.installations},
+        assetInventory:storage.assetInventory,
+      },productId=>{
+        const definitions=options.sources.list().filter(source=>
+          source.manifest.productId===productId)
+        if(!definitions.length)return null
+        const active=definitions.some(source=>
+          options.capturePolicy.isSourceEnabled(source.manifest.sourceId))
+        return {
+          integrationId:productId,productId,enabled:active,
+          availability:active?'available':'unavailable',
+          capabilities:[{capability:'assets',availability:active?'available':'unavailable'}],
+        } satisfies AgentIntegrationRuntimeStatus
+      }))return
 
       // Existing Vault endpoint and validation; its persistence owner is the
       // original Source/Vault filesystem plus Slim checkpoints, not Events.

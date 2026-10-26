@@ -12,7 +12,7 @@ import type {
   NativeSessionMetricRebuildCandidate,
   NativeSessionMetricsStore,
   NativeSessionListReader, NativeFacetReader,
-  StorageHealth, LaunchableProjectReader, AssetService,
+  StorageHealth, LaunchableProjectReader, AssetService, AssetInventoryReader,
 } from '@agent-lens/core'
 import { SqliteSlimStorage } from '@agent-lens/storage-sqlite'
 import {
@@ -143,6 +143,7 @@ export class SlimDataRuntime {
     nativeFacets:NativeFacetReader
     /** Narrow read-only identity: never export the old RepositorySet. */
     installations:{get(id:string):Promise<AgentInstallation|null>}
+    assetInventory:Pick<AssetInventoryReader,'listByInstallation'>
     launchableProjects:LaunchableProjectReader
     nativeSessionMetrics:NativeSessionMetricsStore
     health:()=>Promise<StorageHealth>
@@ -167,6 +168,10 @@ export class SlimDataRuntime {
         get(id){
           return self.read<AgentInstallation|null>(['repositories','installations','get'],[id])
         },
+      },
+      assetInventory:{
+        listByInstallation(id){return self.read<Awaited<ReturnType<AssetInventoryReader['listByInstallation']>>>(
+          ['assetInventory','listByInstallation'],[id])},
       },
       launchableProjects:{
         query(input){
