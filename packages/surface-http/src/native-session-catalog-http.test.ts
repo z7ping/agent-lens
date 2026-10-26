@@ -67,10 +67,14 @@ test('native Catalog HTTP exposes only authorized session identities, no physica
     const onlyNative = await fetch(`${base}?onlyWithoutLegacyReview=1&limit=2`)
     assert.equal(onlyNative.status,200)
     assert.equal(seen[3]?.onlyWithoutLegacyReview,true)
+    const project=await fetch(`${base}?projectId=project-123&limit=2`)
+    assert.equal(project.status,200)
+    assert.equal(seen[4]?.projectId,'project-123')
+    assert.equal(JSON.stringify(await project.json()).includes('/private/native'),false)
     const filtered=await fetch(`${base}?sourceId=codex`)
     assert.equal(filtered.status,200)
     assert.deepEqual(await filtered.json(),{items:[],hasMore:false})
-    assert.equal(seen.length,4)
+    assert.equal(seen.length,5)
   } finally { await http.dispose() }
 })
 
@@ -85,7 +89,7 @@ test('native Catalog HTTP rejects invalid cursors and parameters before accessin
   const base=`http://${http.host}:${http.port}/api/v1/native-sessions`
   try{
     for(const suffix of ['?limit=0','?limit=101','?limit=abc','?sourceId=pi&sourceId=codex',
-      '?installationId=', '?cursor=not-valid', '?onlyWithoutLegacyReview=0', '?onlyWithoutLegacyReview=2', '?onlyWithoutLegacyReview=1&onlyWithoutLegacyReview=1',
+      '?installationId=', '?projectId=', '?projectId=p&projectId=q', '?cursor=not-valid', '?onlyWithoutLegacyReview=0', '?onlyWithoutLegacyReview=2', '?onlyWithoutLegacyReview=1&onlyWithoutLegacyReview=1',
       '?cursor='+Buffer.from(JSON.stringify(['x','y','z'])).toString('base64url')]){
       const response=await fetch(base+suffix)
       assert.equal(response.status,400,suffix)
