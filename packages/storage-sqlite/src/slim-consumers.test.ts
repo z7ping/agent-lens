@@ -45,12 +45,6 @@ test('slim Catalog, numerical overview, profile and current assets use no Legacy
         .update(JSON.stringify(['pi','installation','session']))
         .digest('hex').slice(0,32)
     assert.equal((await catalog.getByReviewSessionId(reviewId))?.nativeSessionId,'session')
-    await assert.rejects(catalog.getSessionWriteMode(identity), /not supported/)
-    await assert.rejects(catalog.hasNativeOnlyWriteClaim(identity), /not supported/)
-    await assert.rejects(catalog.claimLegacyWrite(identity), /forbidden/)
-    await assert.rejects(catalog.claimNativeOnlyWrite({
-      ...identity,filePath:location.filePath,fileIdentity:location.fileIdentity,
-    }), /not supported/)
 
     const profiles = new SqliteRuntimeProfileRepository(executor)
     const runtime = await profiles.resolve({

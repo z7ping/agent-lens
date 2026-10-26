@@ -3,7 +3,6 @@ import type { AgentLensContext } from '../context'
 import { CheckpointPiLiveRecoveryStore } from './recovery-store'
 import { PiLiveAdapter } from './adapter'
 import { DefaultPiLiveService } from './service'
-import { createPiLiveStartupAuditSink } from './startup-audit'
 import type { PiLiveService } from './types'
 
 declare module '@deepseek-ai/cordis' {
@@ -14,8 +13,7 @@ declare module '@deepseek-ai/cordis' {
 
 const applyPiLiveRuntime: Plugin.Function<void> = (ctx: AgentLensContext) => {
   const recoveryStore = new CheckpointPiLiveRecoveryStore(ctx.storage.checkpoints)
-  const startupAudit = createPiLiveStartupAuditSink(ctx)
-  const service = new DefaultPiLiveService(undefined, recoveryStore, startupAudit)
+  const service = new DefaultPiLiveService(undefined, recoveryStore)
   const adapter = new PiLiveAdapter(service, ctx.liveAttachments, ctx.storage)
   const liveRegistration = ctx.lives.register(adapter)
   const unprovide = ctx.provide('piLive', service)
@@ -29,7 +27,7 @@ const applyPiLiveRuntime: Plugin.Function<void> = (ctx: AgentLensContext) => {
   }
 }
 
-applyPiLiveRuntime.inject = ['storage', 'lives', 'liveAttachments', 'sources', 'identity', 'observations', 'capturePolicy']
+applyPiLiveRuntime.inject = ['storage', 'lives', 'liveAttachments']
 
-/** Internal runtime service. Native Pi history remains owned by @agent-lens/source-pi; Live only adds runtime-only audit facts such as the startup resource snapshot. */
+/** Internal runtime service. Native Pi history remains owned by @agent-lens/source-pi. */
 export const piLiveRuntimePlugin = applyPiLiveRuntime

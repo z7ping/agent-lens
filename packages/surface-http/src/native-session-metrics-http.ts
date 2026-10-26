@@ -18,7 +18,7 @@ const PATH=/^\/api\/v1\/native-sessions\/([^/]+)\/metrics(?:\/(rebuild))?$/
 export async function handleNativeSessionMetricsRequest(
   request:IncomingMessage,response:ServerResponse,url:URL,
   catalog?:Pick<NativeSessionCatalogStore,'getByReviewSessionId'>
-    & Partial<Pick<NativeSessionCatalogStore,'isNativeMetricsEligible'|'hasNativeOnlyWriteClaim'>>,
+    & Partial<Pick<NativeSessionCatalogStore,'isNativeMetricsEligible'>>,
   metrics?:NativeSessionMetricsStore,
   reader?:NativeSessionWindowReader,
   sources?:SourceService,
@@ -53,14 +53,9 @@ export async function handleNativeSessionMetricsRequest(
     sourceId:entry.sourceId,installationId:entry.installationId,
     nativeSessionId:entry.nativeSessionId,
   }
-  // On slim-only SQLite, verified Native Catalog presence is sufficient
-  // for eligible on-demand numerical computation; there is no write-claim
-  // table. Older v38 databases still use ownership to avoid double counts.
   const eligible = catalog.isNativeMetricsEligible
     ? await catalog.isNativeMetricsEligible(identity)
-    : catalog.hasNativeOnlyWriteClaim
-      ? await catalog.hasNativeOnlyWriteClaim(identity)
-      : false
+    : false
   if(!eligible){
     writeJson(response,200,{state:'unsupported',reason:'native-metrics-legacy-session'})
     return true
