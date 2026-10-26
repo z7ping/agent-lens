@@ -251,6 +251,50 @@ export class FacetProjection {
   }
 }
 
+/** One verified asset inventory projection for both legacy and Slim Source views. */
+export function projectAgentAssetInventory(
+  pages:readonly (readonly AssetInventoryEntry[])[],
+):AgentAssetInventoryDto[] {
+  const inventory = new Map<string, AgentAssetInventoryDto>()
+    for (const entries of pages) {
+      for (const entry of entries) {
+        const states = latestStates(entry)
+        if (!bindingIsCurrent(states)) continue
+        let asset = inventory.get(entry.definition.id)
+        if (!asset) {
+          asset = {
+            id: entry.definition.id,
+            type: entry.definition.type,
+            canonicalName: entry.definition.canonicalName,
+            ...(entry.definition.displayName ? { displayName: entry.definition.displayName } : {}),
+            ...(entry.definition.upstreamIdentity ? { upstreamIdentity: entry.definition.upstreamIdentity } : {}),
+            bindings: [],
+          }
+          inventory.set(entry.definition.id, asset)
+        }
+        asset.bindings.push({
+          id: entry.binding.id,
+          installationId: entry.binding.installationId,
+          ...(entry.binding.scope ? { scope: entry.binding.scope } : {}),
+          ...(entry.binding.scopeRoot ? { scopeRoot: entry.binding.scopeRoot } : {}),
+          ...(entry.binding.path ? { path: entry.binding.path } : {}),
+          ...(entry.binding.source ? { source: entry.binding.source } : {}),
+          ...(entry.binding.version ? { version: entry.binding.version } : {}),
+          states,
+        })
+      }
+    }
+
+    const assetInventory = [...inventory.values()]
+    for (const asset of assetInventory) {
+      asset.bindings.sort((a, b) => (a.path ?? a.source ?? a.id).localeCompare(b.path ?? b.source ?? b.id))
+    }
+    assetInventory.sort((a, b) => a.type.localeCompare(b.type)
+      || (a.displayName ?? a.canonicalName).localeCompare(b.displayName ?? b.canonicalName))
+
+  return assetInventory
+}
+
 export class AgentOverviewProjection {
   private readonly usage: ToolAssetUsageProjection
   private cachedResponse: AgentOverviewResponseDto | null = null
@@ -439,7 +483,6 @@ export class AgentOverviewProjection {
       ? await this.integrationStatus(definition.manifest.productId)
       : null
     const usedAssets = new Map<string, AgentOverviewDto['usedAssets'][number]>()
-    const inventory = new Map<string, AgentAssetInventoryDto>()
 
     const assets = includeUsage
       ? (prefetchedAssets ?? await this.usage.queryAssets({ sourceId: definition.manifest.sourceId }))
@@ -462,41 +505,7 @@ export class AgentOverviewProjection {
     const inventoryPages = this.storage.assetInventory
       ? await Promise.all(installations.map(installation => this.storage.assetInventory!.listByInstallation(installation.id)))
       : []
-    for (const entries of inventoryPages) {
-      for (const entry of entries) {
-        const states = latestStates(entry)
-        if (!bindingIsCurrent(states)) continue
-        let asset = inventory.get(entry.definition.id)
-        if (!asset) {
-          asset = {
-            id: entry.definition.id,
-            type: entry.definition.type,
-            canonicalName: entry.definition.canonicalName,
-            ...(entry.definition.displayName ? { displayName: entry.definition.displayName } : {}),
-            ...(entry.definition.upstreamIdentity ? { upstreamIdentity: entry.definition.upstreamIdentity } : {}),
-            bindings: [],
-          }
-          inventory.set(entry.definition.id, asset)
-        }
-        asset.bindings.push({
-          id: entry.binding.id,
-          installationId: entry.binding.installationId,
-          ...(entry.binding.scope ? { scope: entry.binding.scope } : {}),
-          ...(entry.binding.scopeRoot ? { scopeRoot: entry.binding.scopeRoot } : {}),
-          ...(entry.binding.path ? { path: entry.binding.path } : {}),
-          ...(entry.binding.source ? { source: entry.binding.source } : {}),
-          ...(entry.binding.version ? { version: entry.binding.version } : {}),
-          states,
-        })
-      }
-    }
-
-    const assetInventory = [...inventory.values()]
-    for (const asset of assetInventory) {
-      asset.bindings.sort((a, b) => (a.path ?? a.source ?? a.id).localeCompare(b.path ?? b.source ?? b.id))
-    }
-    assetInventory.sort((a, b) => a.type.localeCompare(b.type)
-      || (a.displayName ?? a.canonicalName).localeCompare(b.displayName ?? b.canonicalName))
+    const assetInventory = projectAgentAssetInventory(inventoryPages)
 
     const item: AgentOverviewDto = {
       sourceId: definition.manifest.sourceId,
