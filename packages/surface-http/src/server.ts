@@ -295,7 +295,9 @@ export async function startHttpSurface(
         options.nativeSessionReader,options.sources,options.capturePolicy)) return
       if (await handleNativeSessionBodySearchRequest(request, response, url,
         storage.nativeSessionCatalog, options.nativeSessionReader, options.capturePolicy)) return
-      if (await handleNativeSessionCatalogRequest(request, response, url, storage.nativeSessionCatalog, options.capturePolicy)) return
+      if (await handleNativeSessionCatalogRequest(request, response, url,
+        storage.nativeSessionCatalog, options.capturePolicy,
+        storage.nativeSessionList, options.sources)) return
       if (await handleNativeSessionAttachmentRequest(request, response, url, options.nativeSessionReader, storage.nativeSessionCatalog)) return
       if (await handleNativeSessionHookRequest(request, response, url, options.nativeSessionReader, storage.nativeSessionCatalog)) return
       if (await handleNativeSessionWindowRequest(request, response, url, options.nativeSessionReader, storage.nativeSessionCatalog)) return
