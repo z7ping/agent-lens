@@ -124,6 +124,14 @@ function compatibleHealth(value: unknown): Record<string, unknown> {
   if (health.protocolVersion !== PROTOCOL_VERSION) {
     throw new Error(`AgentLens 协议不兼容：期望 ${PROTOCOL_VERSION}，实际 ${String(health.protocolVersion ?? 'unknown')}`)
   }
+  const storage = health.storage
+  const detail = storage && typeof storage === 'object'
+    ? (storage as Record<string, unknown>).details : null
+  if (health.storageMode !== 'native-only'
+    || !detail || typeof detail !== 'object'
+    || (detail as Record<string,unknown>).schemaKind !== 'slim-native-session-v1') {
+    throw new Error('检测到旧版 AgentLens 数据运行时。请先停止 v38 Writer 并执行 Slim 一次性切库。')
+  }
   return health
 }
 

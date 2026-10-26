@@ -118,8 +118,13 @@ async function readDaemonHealth(timeoutMs = DAEMON_HEALTH_TIMEOUT_MS) {
 }
 
 function assertCompatibleDaemon(health) {
-  if (health.protocolVersion === EXPECTED_PROTOCOL_VERSION) return
-  throw new Error(`检测到不兼容的 AgentLens 运行时：Protocol ${String(health.protocolVersion ?? 'unknown')}，当前客户端要求 ${EXPECTED_PROTOCOL_VERSION}`)
+  if (health.protocolVersion !== EXPECTED_PROTOCOL_VERSION) {
+    throw new Error(`检测到不兼容的 AgentLens 运行时：Protocol ${String(health.protocolVersion ?? 'unknown')}，当前客户端要求 ${EXPECTED_PROTOCOL_VERSION}`)
+  }
+  if (health.storageMode !== 'native-only'
+      || health.storage?.details?.schemaKind !== 'slim-native-session-v1') {
+    throw new Error('检测到旧版 AgentLens Daemon：必须先停止旧运行时并完成 Slim 一次性迁移；桌面端不会复用旧 Writer。')
+  }
 }
 
 function isDaemonPortOpen(timeoutMs = DAEMON_PORT_TIMEOUT_MS) {
