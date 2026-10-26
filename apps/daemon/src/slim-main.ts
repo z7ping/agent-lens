@@ -1,4 +1,5 @@
-import { isAbsolute, resolve } from 'node:path'
+import { existsSync } from 'node:fs'
+import { isAbsolute, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { DefaultCapturePolicyService, resolveCapturePolicyPluginState } from '@agent-lens/capture-policy'
 import type { CapturePolicyService, SourceService } from '@agent-lens/core'
@@ -16,10 +17,20 @@ export interface SlimDaemonOptions {
   /** Existing slim v1 only; absent/v38 paths are never upgraded at boot. */
   dbPath:string
   port?:number
+  /** Existing web build; uses the same static bundle as the default Daemon. */
+  webRoot?:string
   /** Testable injection, not a Legacy StorageService adapter. */
   runtime?:SlimDataRuntime
   sources?:SourceService
   capturePolicy?:CapturePolicyService
+}
+
+export function resolveSlimWebRoot(configured?:string):string{
+  if(configured)return configured
+  if(process.env.AGENT_LENS_WEB_ROOT)return process.env.AGENT_LENS_WEB_ROOT
+  const bundled=fileURLToPath(new URL('./web/',import.meta.url))
+  const workspace=fileURLToPath(new URL('../../../packages/web/dist/',import.meta.url))
+  return existsSync(join(bundled,'index.html'))?bundled:workspace
 }
 
 export function registeredNativeSources():SourceService{
@@ -51,6 +62,7 @@ export async function startSlimNativeDaemon(options:SlimDaemonOptions){
     const http=await startNativeOnlyHttpSurface(runtime.nativeHttpPort(),{
       ...(options.port===undefined?{}:{port:options.port}),
       sources,capturePolicy:policy,
+      staticDir:resolveSlimWebRoot(options.webRoot),
       reader:runtime.nativeReader(sources,policy),
     })
     const coordinator=new SlimSourceCoordinator(runtime,sources,policy)
