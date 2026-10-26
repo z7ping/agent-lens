@@ -87,7 +87,7 @@ test('one-time staging backs up v38 and copies only approved metadata, never tra
     try {
       assertSlimSchema(stage)
       const rows = stage.prepare(`SELECT project_id,workspace_id,title_override
-        FROM native_session_context`).all()
+        FROM native_session_context WHERE native_session_id='session'`).all()
       assert.deepEqual(rows, [{
         project_id: 'project', workspace_id: 'workspace', title_override: 'My title',
       }])

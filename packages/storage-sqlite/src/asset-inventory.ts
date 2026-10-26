@@ -9,7 +9,6 @@ import type {
 } from '@agent-lens/core'
 import { rebuildAssetCurrentState } from './asset-current-state'
 import { SqliteExecutor } from './executor'
-import { isSlimDatabase } from './slim-schema'
 
 type AssetRow = Record<string, unknown>
 const ASSET_TYPES = ['skill', 'mcp', 'plugin', 'extension', 'hook', 'memory', 'model', 'prompt', 'theme', 'context', 'rule', 'builtin', 'unknown'] as const
@@ -125,7 +124,7 @@ export class SqliteAssetInventoryReader implements AssetInventoryReader {
 
   async listByInstallation(installationId: string): Promise<AssetInventoryEntry[]> {
     return this.executor.run(() => {
-      const slim = isSlimDatabase(this.executor.db)
+      const slim = this.executor.slimSchema === true
       const rows = this.executor.db.prepare(`
         SELECT
           b.id AS binding_id,
@@ -183,7 +182,7 @@ export class SqliteAssetInventoryReader implements AssetInventoryReader {
   rebuildCurrentState(): Promise<void> {
     return this.executor.transaction(async () => {
       // Slim stores the latest state directly, not a full observation history.
-      if (isSlimDatabase(this.executor.db)) return
+      if (this.executor.slimSchema === true) return
       rebuildAssetCurrentState(this.executor.db)
     })
   }
