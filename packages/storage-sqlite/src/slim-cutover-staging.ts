@@ -18,11 +18,14 @@ export interface SlimStagingReport {
   readonly stagingPath: string
   readonly source: SlimCutoverPreflight
   readonly copiedRows: Readonly<Record<string, number>>
+  /** Original Catalog paths are only preflight hints; no stale location is copied. */
+  readonly nativeCatalogReindexRequired: true
   readonly readyToSwitch: false
 }
 
 /** Explicit data allowlist. DO NOT add event, payload, reflection, or cursor JSON.
- * Metrics and Catalog identities are rebuilt/verified from Source before cutover.
+ * Native Catalog/metrics must be rebuilt from original Source before cutover.
+ * Never import old file paths as supposedly verified new locations.
  */
 const COPY_TABLES = {
   hosts: ['id', 'name', 'platform', 'arch', 'created_at', 'last_seen_at'],
@@ -40,9 +43,6 @@ const COPY_TABLES = {
     'repository_identity', 'last_seen_at'],
   launchable_workspace_index: ['project_key', 'workspace_id', 'workspace_path',
     'last_seen_at', 'validation_status', 'validated_at', 'validated_path'],
-  native_session_catalog: ['source_id', 'installation_id', 'native_session_id',
-    'location_kind', 'file_path', 'file_identity', 'file_size', 'file_mtime_ms',
-    'last_activity_at', 'title', 'updated_at', 'review_session_id'],
 } as const
 
 type CopiedTable = keyof typeof COPY_TABLES
@@ -193,6 +193,8 @@ export async function stageSlimCutover(paths: SlimStagingPaths): Promise<SlimSta
       await initializeSlimSchema(stage)
       const copiedRows = stage.transaction(() => {
         const counts = copyWhitelistedRows(snapshot, stage)
+        counts.native_session_catalog = 0
+        counts.native_session_metrics = 0
         counts.asset_current_state = copyCurrentAssetState(snapshot, stage)
         counts.native_session_context = copySessionContexts(snapshot, stage)
         return counts
@@ -201,6 +203,7 @@ export async function stageSlimCutover(paths: SlimStagingPaths): Promise<SlimSta
       assertSlimSchema(stage)
       return {
         backupPath, stagingPath, source: preflight, copiedRows,
+        nativeCatalogReindexRequired: true,
         readyToSwitch: false,
       }
     } finally {
