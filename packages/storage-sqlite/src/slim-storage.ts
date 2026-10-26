@@ -7,6 +7,7 @@ import { mapHost, mapInstallation } from './repository-row-mappers'
 import { SqliteNativeSessionCatalog } from './native-session-catalog'
 import { SqliteSlimNativeSessionContexts } from './slim-native-session-contexts'
 import { SqliteSlimIdentityService } from './slim-identity-service'
+import { SqliteSlimAssetService } from './slim-asset-service'
 import { SqliteNativeSessionMetrics } from './native-session-metrics'
 import { SqliteRuntimeProfileRepository } from './runtime-profiles'
 import { SqliteAssetInventoryReader } from './asset-inventory'
@@ -35,6 +36,7 @@ export class SqliteSlimStorage {
   readonly nativeSessionCatalog: SqliteNativeSessionCatalog
   readonly nativeSessionContexts: SqliteSlimNativeSessionContexts
   readonly identity: SqliteSlimIdentityService
+  readonly assets: SqliteSlimAssetService
   readonly nativeSessionMetrics: SqliteNativeSessionMetrics
   readonly runtimeProfiles: SqliteRuntimeProfileRepository
   readonly assetInventory: SqliteAssetInventoryReader
@@ -69,6 +71,7 @@ export class SqliteSlimStorage {
     this.nativeSessionCatalog = new SqliteNativeSessionCatalog(this.executor)
     this.nativeSessionContexts = new SqliteSlimNativeSessionContexts(this.executor)
     this.identity = new SqliteSlimIdentityService(this.executor)
+    this.assets = new SqliteSlimAssetService(this.executor)
     this.nativeSessionMetrics = new SqliteNativeSessionMetrics(this.executor)
     this.runtimeProfiles = new SqliteRuntimeProfileRepository(this.executor)
     this.assetInventory = new SqliteAssetInventoryReader(this.executor)
