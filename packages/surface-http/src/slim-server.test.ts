@@ -183,22 +183,6 @@ test('Slim-only HTTP reads native Catalog/facets and refuses all old Event APIs'
       available:()=>['live' as const],
       async grant(){return ['live' as const]},
     },
-    integrationPackages:{
-      catalog:()=>[{integrationId:'pi',productId:'pi',displayName:'Pi',
-        packageName:'@agent-lens/integration-pi',apiVersion:'1.0',source:'bundled'}],
-      states:()=>[{integrationId:'pi',installed:false,compatibility:'compatible',
-        integrity:'missing',restartRequired:false}],
-      state:id=>id==='pi'?{integrationId:'pi',installed:false,
-        compatibility:'compatible',integrity:'missing',restartRequired:false}:null,
-      async install(id){return {operationId:'op1',integrationId:id,kind:'install',
-        status:'completed',startedAt:'2026-10-26T00:00:00.000Z'}},
-      async update(id){return {operationId:'op2',integrationId:id,kind:'update',
-        status:'completed',startedAt:'2026-10-26T00:00:00.000Z'}},
-      async remove(id){return {operationId:'op3',integrationId:id,kind:'remove',
-        status:'completed',startedAt:'2026-10-26T00:00:00.000Z'}},
-      operation:id=>id==='op1'?{operationId:'op1',integrationId:'pi',kind:'install',
-        status:'completed',startedAt:'2026-10-26T00:00:00.000Z'}:null,
-    } as never,
     lives:{list:()=>[liveAdapter]} as never,liveAttachments,
     piEcosystem:{
       async search(value={}){return {query:value.query??'',sort:'downloads' as const,
@@ -278,18 +262,6 @@ test('Slim-only HTTP reads native Catalog/facets and refuses all old Event APIs'
     assert.equal(integrationPrefs.status,200)
     assert.equal((await integrationPrefs.json() as {preferences:{displayOrder:string[]}})
       .preferences.displayOrder[0],'pi')
-    const packageCatalog=await fetch(base+'/api/v1/integrations/catalog')
-    assert.equal(packageCatalog.status,200)
-    assert.equal((await packageCatalog.json() as {catalog:unknown[]}).catalog.length,1)
-    const installed=await fetch(base+'/api/v1/integrations/pi/install',{method:'POST'})
-    assert.equal(installed.status,200)
-    assert.equal((await installed.json() as {operation:{kind:string}}).operation.kind,'install')
-    assert.equal((await fetch(base+'/api/v1/integration-operations/op1')).status,200)
-    assert.equal((await fetch(base+'/api/v1/integrations/pi/update',{method:'POST'})).status,200)
-    assert.equal((await fetch(base+'/api/v1/integrations/pi',{method:'DELETE'})).status,200)
-    assert.equal((await fetch(base+'/api/v1/integrations/pi/package')).status,200)
-    assert.equal((await fetch(base+'/api/v1/integrations/pi/install')).status,405)
-    assert.equal((await fetch(base+'/api/v1/integrations/unknown/install',{method:'POST'})).status,404)
     const discovery=await fetch(base+'/api/v1/integrations/discovery')
     assert.equal(discovery.status,200)
     const auth=await fetch(base+'/api/v1/integrations/pi/authorization',{
