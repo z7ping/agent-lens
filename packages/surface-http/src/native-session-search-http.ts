@@ -115,7 +115,7 @@ export async function handleNativeSessionBodySearchRequest(
   request: IncomingMessage,
   response: ServerResponse,
   url: URL,
-  catalog?: NativeSessionCatalogStore,
+  catalog?: Pick<NativeSessionCatalogStore,'query'>,
   reader?: NativeSessionWindowReader,
   policy?: CapturePolicyService,
 ): Promise<boolean> {
