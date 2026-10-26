@@ -800,3 +800,18 @@ test('Pi native cache status is projected into a typed, agent-neutral runtime me
   assert.equal(normalizePiLiveEvent({ ...raw, statusKey: 'other-extension' }), undefined)
   assert.deepEqual(normalizePiLiveEvent({ ...raw, statusText: undefined }), { type: 'runtime.metrics.changed', cacheMetrics: null })
 })
+
+
+test('Slim Pi Live advertises real streaming/creation capabilities but not old SQL resume/fork',()=>{
+  const native=new PiLiveAdapter({} as never,attachmentService(),undefined,{nativeOnly:true})
+  for(const capability of ['resume','fork','fork-at'] as const){
+    assert.equal(native.capabilities.has(capability),false,capability)
+    assert.equal(native.manifest.capabilities?.includes(capability),false,capability)
+  }
+  for(const capability of ['create','send','stream','recovery','thinking-control'] as const){
+    assert.equal(native.capabilities.has(capability),true,capability)
+    assert.equal(native.manifest.capabilities?.includes(capability),true,capability)
+  }
+  // Existing v38 adapter contract remains unchanged during one-time cutover.
+  assert.equal(new PiLiveAdapter({} as never,attachmentService()).capabilities.has('resume'),true)
+})
