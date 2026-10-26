@@ -188,7 +188,7 @@ test('Slim-only HTTP reads native Catalog/facets and refuses all old Event APIs'
     const assetPreview=await fetch(base+
       '/api/v1/integrations/pi/assets/file?installationId=install&root=config&path=AGENTS.md')
     assert.equal(assetPreview.status,200)
-    assert.equal((await assetPreview.json() as {content:string}).content,'# Pi config\\n')
+    assert.equal((await assetPreview.json() as {content:string}).content,'# Pi config' + String.fromCharCode(10))
     const assetBinding=await fetch(base+
       '/api/v1/integrations/pi/assets/files?installationId=install&root=binding&bindingId=binding-1')
     assert.equal(assetBinding.status,200)
