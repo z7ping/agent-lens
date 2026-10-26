@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto'
 import { link, lstat, open, rename, stat, unlink } from 'node:fs/promises'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { connect } from 'node:net'
 import Database from 'better-sqlite3'
 import { assertSlimSchema,auditSlimCutoverFreshness,
   readActiveDatabasePointer,type ActiveDatabasePointer } from '@agent-lens/storage-sqlite'
@@ -103,15 +104,16 @@ async function writePointer(path:string,state:ActiveDatabasePointer):Promise<voi
  * from the mere existence of staging files or an operator flag.
  */
 export async function activateSlimCutover(
-  input:SlimActivationPaths,gate:FinalCutoverGate,
+  input:SlimActivationPaths,gate:FinalCutoverGate|(()=>Promise<FinalCutoverGate>),
 ):Promise<ActiveDatabasePointer>{
   const value=paths(input)
-  if(!gate.readyToSwitch||gate.blockedBy.length||gate.oldDatabaseChanged){
-    throw new Error('Cutover blocked: final Source, Hook, writer and freshness gates not certified')
-  }
   // The snapshot/recheck and pointer publication must be within one
   // SQLite writer-freeze window. A standalone preflight has a TOCTOU race.
   return withFrozenLegacyWriter(value.legacyPath,async()=>{
+    const checked=typeof gate==='function'?await gate():gate
+    if(!checked.readyToSwitch||checked.blockedBy.length||checked.oldDatabaseChanged){
+      throw new Error('Cutover blocked: final Source, Hook, writer and freshness gates not certified')
+    }
     // A readiness report computed before the write lock is a TOCTOU snapshot.
     // Recompute the entire v38/backup/schema fingerprint while the old writer
     // is physically frozen, rather than trusting any caller's boolean.
@@ -165,6 +167,28 @@ export async function rollbackSlimCutover(input:{
   await writePointer(path,legacy)
   return legacy
 }
+/** A live Daemon on the configured port must be stopped before cutover.
+ * Custom-port processes must also be stopped explicitly by the operator. */
+export async function assertNoDaemonListening(port:number):Promise<void>{
+  await new Promise<void>((done,fail)=>{
+    const socket=connect({host:'127.0.0.1',port})
+    let settled=false
+    const finish=(error?:Error)=>{
+      if(settled)return
+      settled=true
+      socket.destroy()
+      error?fail(error):done()
+    }
+    socket.setTimeout(500)
+    socket.once('connect',()=>finish(new Error('Daemon port occupied; stop the old AgentLens first')))
+    socket.once('error',error=>{
+      if((error as NodeJS.ErrnoException).code==='ECONNREFUSED')finish()
+      else finish(new Error('Cannot certify Daemon shutdown: '+error.message))
+    })
+    socket.once('timeout',()=>finish(new Error('Daemon port probe timed out')))
+  })
+}
+
 function parse(args:readonly string[]){
   const action=args[0]
   if(action!=='activate'&&action!=='rollback'){
@@ -193,13 +217,21 @@ async function main(args:readonly string[]){
     return rollbackSlimCutover({legacyPath,backupPath,pointerPath,installedSlimPath})
   }
   const stagingPath=values.get('--staging')!
-  const preflight: SlimCutoverGateReport=await auditSlimCutoverGate([
-    '--legacy',legacyPath,'--backup',backupPath,'--staging',stagingPath,
-  ])
-  // Rehearsal gate has mandatory unfinished prerequisites; never turn a
-  // static operator flag into an authorization to overwrite the active DB.
+  const observedPort=process.env.AGENT_LENS_PORT
+    ?Number(process.env.AGENT_LENS_PORT):56789
+  if(!Number.isSafeInteger(observedPort)||observedPort<1||observedPort>65535){
+    throw new Error('Valid AGENT_LENS_PORT required for cutover')
+  }
+  await assertNoDaemonListening(observedPort)
   return activateSlimCutover({legacyPath,backupPath,stagingPath,
-    installedSlimPath,pointerPath},preflight)
+    installedSlimPath,pointerPath},async()=>{
+    await assertNoDaemonListening(observedPort)
+    const final:SlimCutoverGateReport=await auditSlimCutoverGate([
+      '--legacy',legacyPath,'--backup',backupPath,'--staging',stagingPath,
+    ],{writerFrozen:true,defaultDaemonSlim:true,oldDaemonStopped:true})
+    await assertNoDaemonListening(observedPort)
+    return final
+  })
 }
 if(process.argv[1]&&resolve(process.argv[1])===fileURLToPath(import.meta.url)){
   main(process.argv.slice(2)).then(result=>{

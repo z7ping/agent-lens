@@ -75,3 +75,30 @@ test('verified old Hook originals remove Hook blocker but cannot bypass Writer r
   assert.ok(report.blockedBy.includes('old-writer-freeze-and-atomic-swap-not-certified'))
   assert.equal(report.readyToSwitch,false)
 })
+
+
+test('final M3 audit releases static blockers ONLY with real frozen and stopped scope',()=>{
+  const complete={
+    identities:{...example.identities,oldSessionIdentities:1,nativeIndexed:1,
+      archivedOnly:0,missingFromNativeCatalog:0,missingContext:0,
+      invalidOldIdentities:0,legacyRecordsWithoutSession:0,
+      nativeMetricsMissingOrStale:0,nativeMetricsPartial:0,legacyHookRecords:0},
+    originals:{...example.originals,verified:1,partial:0,unavailable:0,
+      drifted:0,unsupported:0,catalogEnumerationComplete:true,
+      allCurrentOriginalsVerified:true},
+    hooks:{found:0,verified:0,scanComplete:true,allLegacyHookOriginalsVerified:true},
+    oldDatabaseUnchanged:true,
+  }
+  assert.equal(summarizeSlimGate(complete).readyToSwitch,false)
+  const final=summarizeSlimGate({...complete,finalization:{
+    writerFrozen:true as const,defaultDaemonSlim:true as const,
+    oldDaemonStopped:true as const,
+  }})
+  assert.equal(final.readyToSwitch,true)
+  assert.deepEqual(final.blockedBy,[])
+  const incomplete=summarizeSlimGate({...complete,identities:{
+    ...complete.identities,nativeMetricsPartial:1,
+  },finalization:{writerFrozen:true,defaultDaemonSlim:true,oldDaemonStopped:true}})
+  assert.equal(incomplete.readyToSwitch,false)
+  assert.ok(incomplete.blockedBy.includes('native-metrics-partial-not-certified'))
+})

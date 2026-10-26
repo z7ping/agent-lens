@@ -59,7 +59,7 @@ export interface SlimCutoverGateReport {
   legacyRecordsWithoutSession:number
   blockedBy:readonly string[]
   /** No automatic promotion is possible while the old full Service is active. */
-  readyToSwitch:false
+  readyToSwitch:boolean
 }
 
 export function summarizeSlimGate(input:{
@@ -75,6 +75,8 @@ export function summarizeSlimGate(input:{
     'verified'|'partial'|'unavailable'|'drifted'|'unsupported'
     |'catalogEnumerationComplete'|'allCurrentOriginalsVerified'>
   oldDatabaseUnchanged:boolean
+  /** Only a finalizer holding the real old SQLite writer lock may supply. */
+  finalization?:{writerFrozen:true;defaultDaemonSlim:true;oldDaemonStopped:true}
   hooks?:Pick<LegacyHookAuditReport,'found'|'verified'|'scanComplete'|'allLegacyHookOriginalsVerified'>
 }):SlimCutoverGateReport{
   const {identities,originals}=input
@@ -99,8 +101,12 @@ export function summarizeSlimGate(input:{
   // Hook-only history, application configuration, daemon writer ownership,
   // cleanup/rollback and migration ownership have separate mandatory gates.
   if(!hooksComplete||identities.archivedOnly)blockedBy.push('hook-and-archival-coverage-not-certified')
-  blockedBy.push('full-consumer-and-legacy-writer-retirement-pending')
-  blockedBy.push('old-writer-freeze-and-atomic-swap-not-certified')
+  if(!input.finalization?.defaultDaemonSlim||!input.finalization.oldDaemonStopped){
+    blockedBy.push('full-consumer-and-legacy-writer-retirement-pending')
+  }
+  if(!input.finalization?.writerFrozen){
+    blockedBy.push('old-writer-freeze-and-atomic-swap-not-certified')
+  }
   return {
     originalIdentities:identities.oldSessionIdentities,
     catalogNative:identities.nativeIndexed,
@@ -118,7 +124,7 @@ export function summarizeSlimGate(input:{
     legacyHookOriginalsIncomplete:!hooksComplete,
     legacyRecordsWithoutSession:identities.legacyRecordsWithoutSession,
     blockedBy,
-    readyToSwitch:false,
+    readyToSwitch:blockedBy.length===0&&Boolean(input.finalization),
   }
 }
 
@@ -126,7 +132,9 @@ export function summarizeSlimGate(input:{
  * re-check old DB after slow original-file verification to detect drift during
  * the audit. Never promotes a DB, stops an Agent, or deletes old data.
  */
-export async function auditSlimCutoverGate(args:readonly string[]):Promise<SlimCutoverGateReport>{
+export async function auditSlimCutoverGate(args:readonly string[],
+  finalization?:{writerFrozen:true;defaultDaemonSlim:true;oldDaemonStopped:true},
+):Promise<SlimCutoverGateReport>{
   const input=parseSlimGateArgs(args)
   const paths={
     legacyPath:input.legacyPath,
@@ -153,6 +161,7 @@ export async function auditSlimCutoverGate(args:readonly string[]):Promise<SlimC
   const finalFreshness=await auditSlimCutoverFreshness(paths)
   return summarizeSlimGate({
     identities,originals,hooks,
+    ...(finalization?{finalization}:{}),
     oldDatabaseUnchanged:freshness.unchangedSinceBackup&&finalFreshness.unchangedSinceBackup,
   })
 }

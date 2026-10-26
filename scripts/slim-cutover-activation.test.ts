@@ -89,3 +89,28 @@ test('M3 cutover rehashes v38 under writer lock, rejecting changes after a previ
     await assert.rejects(stat(paths.installedSlimPath),/ENOENT/)
   }finally{await rm(root,{force:true,recursive:true})}
 })
+
+
+test('activation computes the final gate inside the frozen old SQLite transaction',async()=>{
+  const root=await mkdtemp(join(tmpdir(),'al-m3-conditional-gate-'))
+  const paths={legacyPath:join(root,'old.sqlite'),backupPath:join(root,'backup.sqlite'),
+    stagingPath:join(root,'stage.sqlite'),installedSlimPath:join(root,'installed.sqlite'),
+    pointerPath:join(root,'active.json')}
+  try{
+    const db=new SqliteStorageService({path:paths.legacyPath})
+    await db.migrate();await db.close()
+    await copyFile(paths.legacyPath,paths.backupPath)
+    const staging=await SqliteSlimStorage.createFresh(paths.stagingPath)
+    await staging.close()
+    let evaluated=false
+    await assert.rejects(activateSlimCutover(paths,async()=>{
+      evaluated=true
+      const concurrent=new Database(paths.legacyPath,{timeout:0})
+      try{assert.throws(()=>concurrent.exec('BEGIN IMMEDIATE'),/locked|SQLITE_BUSY/)}
+      finally{concurrent.close()}
+      return {readyToSwitch:false,blockedBy:['not-certified'],oldDatabaseChanged:false}
+    }),/Cutover blocked/)
+    assert.equal(evaluated,true)
+    assert.equal(await readActiveDatabasePointer(paths.pointerPath),null)
+  }finally{await rm(root,{recursive:true,force:true})}
+})
