@@ -1,6 +1,9 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { parseMigrateOnceArgs } from './slim-migrate-once'
+import { resolve } from 'node:path'
+import { readFile } from 'node:fs/promises'
+import { fileURLToPath } from 'node:url'
 
 const env={AGENT_LENS_PORT:'56789',AGENT_LENS_DB_PATH:'/tmp/original-v38.sqlite',
   AGENT_LENS_ACTIVE_DB_POINTER:'/tmp/active-database.json'}
@@ -14,9 +17,22 @@ test('M3 single migration refuses oversized scans, extra options, and invalid po
 test('M3 migration reserves distinct one-time files without overriding original database',()=>{
   const p=parseMigrateOnceArgs(['--max-sessions','128'],env,uuid)
   assert.equal(p.maxSessions,128)
-  assert.equal(p.legacyPath,'/tmp/original-v38.sqlite')
-  assert.equal(p.pointerPath,'/tmp/active-database.json')
+  assert.equal(p.legacyPath,resolve('/tmp/original-v38.sqlite'))
+  assert.equal(p.pointerPath,resolve('/tmp/active-database.json'))
   assert.notEqual(p.backupPath,p.legacyPath)
   assert.notEqual(p.stagingPath,p.installedSlimPath)
   assert.equal(p.stagingPath.endsWith('.staging.sqlite'),true)
+})
+
+
+test('bundled migrator imports never trigger other original script entrypoints',async()=>{
+  const root=fileURLToPath(new URL('../',import.meta.url))
+  for(const name of ['slim-prepare-cutover','slim-reindex-all','slim-reindex-native',
+    'slim-rebuild-metrics-all','slim-cutover-gate','slim-audit-originals',
+    'slim-audit-legacy-hooks','slim-cutover-activation']){
+    const body=await readFile(resolve(root,name+'.ts'),'utf8')
+    assert.match(body,/invocationBaseName\(process\.argv\[1\]\)/)
+    assert.equal(body.includes('"slim-migrate.mjs"'),false,
+      name+' must not start when bundled as slim-migrate.mjs')
+  }
 })
