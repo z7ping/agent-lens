@@ -180,6 +180,18 @@ test('Slim-only HTTP reads native Catalog/facets and refuses all old Event APIs'
     assert.equal(list.status,200)
     assert.deepEqual((await list.json() as {items:unknown[]}).items,[])
     assert.equal(listed,1)
+    const summary=await fetch(base+'/api/v1/agents/summary')
+    assert.equal(summary.status,200)
+    const data=await summary.json() as {items:Array<{
+      sourceId:string;detected:boolean;installationCount:number;
+      installationIds:string[];enabled:boolean
+    }>}
+    assert.deepEqual(data.items.map(x=>x.sourceId),['pi'])
+    assert.equal(data.items[0]?.detected,true)
+    assert.equal(data.items[0]?.installationCount,1)
+    assert.deepEqual(data.items[0]?.installationIds,['install'])
+    const summaryPost=await fetch(base+'/api/v1/agents/summary',{method:'POST'})
+    assert.equal(summaryPost.status,405)
     const facets=await fetch(base+'/api/v1/facets')
     assert.equal(facets.status,200)
     assert.equal((await facets.json() as {agents:Array<{sourceId:string}>}).agents[0]?.sourceId,'pi')
