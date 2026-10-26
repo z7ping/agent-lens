@@ -15,7 +15,6 @@ import { claudeSourceDefinition } from '@agent-lens/source-claude'
 import { hermesSourceDefinition } from '@agent-lens/source-hermes'
 import { openCodeSourceDefinition } from '@agent-lens/source-opencode'
 import { startNativeOnlyHttpSurface, previewLocalHostTextFile, type IntegrationPackageController } from '@agent-lens/surface-http'
-import { IntegrationPackageService } from '@agent-lens/integration-packages'
 import type { PiEcosystemQueryService } from '@agent-lens/protocol'
 import { openLocalPath } from './local-path-opener.js'
 import { SlimDataRuntime } from './data-runtime/slim-runtime.js'
@@ -35,9 +34,6 @@ export interface SlimDaemonOptions {
   backup?:BackupService
   /** Test injection for the existing remote Pi catalog; never persisted to SQLite. */
   piEcosystem?:PiEcosystemQueryService
-  /** Test-injected existing package lifecycle controller. */
-  integrationPackages?:Pick<IntegrationPackageService,
-    'catalog'|'statesSnapshot'|'state'|'install'|'update'|'remove'|'operation'>
   /** Test-only injected Live Registry/attachments; real runtime is Pi Worker. */
   lives?:LiveService
   liveAttachments?:LiveAttachmentService
@@ -138,7 +134,9 @@ export async function startSlimNativeDaemon(options:SlimDaemonOptions){
         canRemove:id=>{
           const loaded=sources.list().some(source=>source.manifest.productId===id
             &&policy.isSourceEnabled(source.manifest.sourceId))
-          return loaded?{
+          const liveLoaded=(options.lives??live!.lives).list().some(adapter=>
+            adapter.manifest.productId===id)
+          return loaded||liveLoaded?{
             allowed:false,reason:'Disable Integration Source and restart before removal',
           }:{allowed:true}
         },
@@ -162,38 +160,6 @@ export async function startSlimNativeDaemon(options:SlimDaemonOptions){
       sources,policy,lives:options.lives??live!.lives,
       scanOnStart:!options.runtime,
     })
-    // The same verified, atomically installed official Integration package
-    // lifecycle as the old Daemon, but no Legacy physicalization or Writer.
-    // Disabled/active Source and Live registrations may not be removed while
-    // the current process still owns their resources.
-    let integrationPackages=options.integrationPackages
-    if(!integrationPackages&&!options.runtime){
-      const bundled=fileURLToPath(new URL('./integration-packages/',import.meta.url))
-      const workspace=fileURLToPath(new URL('../../../dist/integration-packages/',import.meta.url))
-      const bundleDir=process.env.AGENT_LENS_INTEGRATION_BUNDLE_DIR
-        ??(existsSync(join(bundled,'catalog.json'))?bundled:workspace)
-      const installRoot=process.env.AGENT_LENS_INTEGRATIONS_DIR
-        ??join(homedir(),'.agent-lens','1.0','integrations')
-      const service=new IntegrationPackageService({
-        bundleDir,installRoot,
-        canRemove:integrationId=>{
-          const enabled=sources.list().some(source=>
-            source.manifest.productId===integrationId
-            &&policy.isSourceEnabled(source.manifest.sourceId))
-          const liveRegistered=(options.lives??live!.lives).list().some(adapter=>
-            adapter.manifest.productId===integrationId)
-          return enabled||liveRegistered
-            ?{allowed:false,reason:'Integration is active; disable and restart before removal'}
-            :{allowed:true}
-        },
-      })
-      try{
-        await service.initialize()
-        integrationPackages=service
-      }catch(error){
-        console.warn('[AgentLens] Slim Integration package service unavailable',error)
-      }
-    }
     let notifyActivity=()=>{}
     const coordinator=new SlimSourceCoordinator(runtime,sources,policy,policy,
       ()=>notifyActivity())
@@ -210,15 +176,6 @@ export async function startSlimNativeDaemon(options:SlimDaemonOptions){
       integrationManagement:integrations.management,
       integrationDiscovery:integrations.discovery,
       integrationAuthorization:integrations.authorization,
-      ...(integrationPackages?{integrationPackages:{
-        catalog:()=>integrationPackages!.catalog(),
-        states:()=>integrationPackages!.statesSnapshot(),
-        state:(id:string)=>{try{return integrationPackages!.state(id)}catch{return null}},
-        install:(id:string)=>integrationPackages!.install(id),
-        update:(id:string)=>integrationPackages!.update(id),
-        remove:(id:string)=>integrationPackages!.remove(id),
-        operation:(id:string)=>integrationPackages!.operation(id),
-      }}:{}),
       ...(packages?{integrationPackages:packages}:{}),
       backup:options.backup??vault!.service,
       lives:options.lives??live!.lives,
