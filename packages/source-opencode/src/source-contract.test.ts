@@ -267,13 +267,14 @@ test('OpenCode V2 assets parse JSONC and preserve user/project scope', async () 
 })
 
 
-test('OpenCode Raw recovery 将数据库 rowId 标成 best-effort 而不是稳定引用', () => {
+test('OpenCode Raw recovery 使用可核验的当前态引用，但不承诺历史版本稳定', () => {
   const database = record({ type: 'text', text: 'hello' }, { role: 'assistant' }, 'part-1')
   const capability = openCodeSourceDefinition.rawRecovery?.describe(database)
   assert.equal(capability?.authority, 'native-store')
   assert.equal(capability?.locatorStability, 'best-effort')
   assert.equal(capability?.verification, 'fingerprint')
-  assert.equal(capability?.persistencePreference, 'preserve')
+  assert.equal(capability?.persistencePreference, 'reference')
+  assert.equal(capability?.recoveryScope, 'session-current-state')
 })
 
 
