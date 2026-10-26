@@ -19,6 +19,12 @@ export interface NativeSessionListQuery {
   coverageCertified?: boolean
   /** Expected live parser version for this Source; omit to mark metrics partial. */
   parserVersion?: string
+  /** Per-source live parser/coverage attestation for an unfiltered multi-Agent list. */
+  sourceCertifications?: ReadonlyArray<{
+    sourceId: string
+    parserVersion: string
+    coverageCertified: boolean
+  }>
 }
 
 export interface NativeSessionListItem {
