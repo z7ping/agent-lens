@@ -61,7 +61,15 @@ export class SlimSourceCoordinator {
       if(!available.length)continue
       for(const installationId of product.installationIds){
         if(this.abort.signal.aborted)break
-        const profiles=await this.runtime.profiles(installationId)
+        let profiles:RuntimeProfile[]
+        try{profiles=await this.runtime.profiles(installationId)}catch(error){
+          if(this.abort.signal.aborted)break
+          this.progress.failedScopes++
+          console.warn('[AgentLens] Slim native Profile enumeration failed',{
+            installationId,error,
+          })
+          continue
+        }
         // Profiles own their own native roots. Never scan the installation
         // root as a second identity when Profiles were explicitly indexed.
         const scopes:(RuntimeProfile|undefined)[]=profiles.length?profiles:[undefined]
