@@ -33,7 +33,21 @@
 - `stageSlimCutover({legacyPath,backupPath,stagingPath})`：仅允许三条互不相同的路径；只读打开 v38，使用 SQLite Backup API 处理 WAL 一致性备份；检查数据库与外键；只把明确白名单数据复制到**全新**暂存库；拒绝同一原生身份跨多个 profile 的歧义；**永远返回 `readyToSwitch:false`**。
 - 现有文件不会被覆盖；生成的 backup 和 stage 目前**都不会自动安装、替换或删除**。若迁移中断，保留文件供诊断，不声称成功。
 
-## 4. 后续硬阻塞
+## 4. 手动预检与暂存命令（仅开发/迁移验收）
+
+命令必须提供明确的**旧库、备份和暂存库**路径，不修改旧库，不自动重启 AgentLens，不替换正式数据库文件，也不删除任何数据库。
+
+```bash
+# 只读盘点：只输出表行数/版本/Native Catalog 缺口，不读取正文
+npm run storage:slim:preflight -- --legacy /path/to/agent-lens-old.sqlite
+
+# 分别生成完整 SQLite 一致性备份和精简暂存库，文件必须事先不存在
+npm run storage:slim:stage -- --legacy /path/to/agent-lens-old.sqlite --backup /path/to/old-backup.sqlite --staging /path/to/slim-staging.sqlite
+```
+
+`stage` 仅接受 v38；输出 `readyToSwitch:false` 是刻意的强制保护。生成目标后仍必须完成 Source 原生正文可恢复覆盖率、统计重算、用户配置审计、增量追平、旧 Writer 退出、Windows 实机和原子替换验证，才能执行未来单独开发的最终切换动作。
+
+## 5. 后续硬阻塞
 
 1. 审计 checkpoint、用户标签、项目/资产、文件变更与备份状态的具体保留合同，完善迁移白名单和失联清单。
 2. 全五个 Source 的原生文件真实性、归档、工具/附件/错误、Hook 缺口适配；统计从 Source 重算且不重复。
