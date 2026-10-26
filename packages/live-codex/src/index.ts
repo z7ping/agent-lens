@@ -71,8 +71,8 @@ const APPROVAL_METHODS = new Set([
 ])
 
 export class CodexLiveAdapter implements LiveAdapter {
-  readonly manifest = codexLiveManifest
-  readonly capabilities = createLiveCapabilitySet(CAPABILITIES)
+  readonly manifest:LiveAdapterManifest
+  readonly capabilities:ReadonlySet<LiveCapabilityName>
   readonly inputCapabilities = createLiveInputCapabilities({
     text: 'native', largeText: 'transform', image: 'unsupported',
     file: 'unsupported', multiline: 'native',
@@ -87,7 +87,15 @@ export class CodexLiveAdapter implements LiveAdapter {
     readonly rpc = new CodexRpc(),
     private readonly recovery?: CodexRecoveryStore,
     private readonly storage?: StorageService,
+    options:{nativeOnly?:boolean}={},
   ) {
+    const advertised=options.nativeOnly
+      ?CAPABILITIES.filter(capability=>capability!=='resume')
+      :[...CAPABILITIES]
+    this.manifest=options.nativeOnly
+      ?{...codexLiveManifest,capabilities:[...advertised]}
+      :codexLiveManifest
+    this.capabilities=createLiveCapabilitySet(advertised)
     this.unsubscribe = rpc.subscribe(message => this.receive(message))
   }
 

@@ -295,3 +295,25 @@ test('Codex snapshot falls back to full turn pages when item paging is unsupport
     'unsupported native item pagination must not be retried every poll')
   await adapter.dispose()
 })
+
+
+test('Slim Codex uses existing App Server but does not advertise obsolete SQL logical-session resume',async()=>{
+  const rpc=new FakeRpc()
+  const adapter=new CodexLiveAdapter(rpc as unknown as CodexRpc,
+    undefined,undefined,{nativeOnly:true})
+  assert.equal(adapter.capabilities.has('create'),true)
+  assert.equal(adapter.capabilities.has('send'),true)
+  assert.equal(adapter.capabilities.has('stream'),true)
+  assert.equal(adapter.capabilities.has('recovery'),true)
+  assert.equal(adapter.capabilities.has('resume'),false)
+  assert.equal(adapter.manifest.capabilities?.includes('resume'),false)
+  const state=await adapter.start({workspacePath:'/project'})
+  assert.equal(state.nativeSessionId,'thread-1')
+  assert.deepEqual(rpc.calls[0]?.method,'thread/start')
+  await adapter.send(state.runtimeSessionId,'hello')
+  assert.equal(rpc.calls.at(-1)?.method,'turn/start')
+  await adapter.dispose()
+  const normal=new CodexLiveAdapter(new FakeRpc() as unknown as CodexRpc)
+  assert.equal(normal.capabilities.has('resume'),true)
+  await normal.dispose()
+})

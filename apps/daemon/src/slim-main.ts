@@ -14,7 +14,7 @@ import { openCodeSourceDefinition } from '@agent-lens/source-opencode'
 import { startNativeOnlyHttpSurface } from '@agent-lens/surface-http'
 import { SlimDataRuntime } from './data-runtime/slim-runtime.js'
 import { SlimSourceCoordinator } from './slim-source-coordinator.js'
-import { startSlimPiLive } from './slim-live.js'
+import { startSlimAgentLives } from './slim-live.js'
 
 export interface SlimDaemonOptions {
   /** Existing slim v1 only; absent/v38 paths are never upgraded at boot. */
@@ -72,7 +72,7 @@ export async function startSlimNativeDaemon(options:SlimDaemonOptions){
   }
   await runtime.start()
   let vault:ReturnType<typeof startLocalVault>|undefined
-  let live:ReturnType<typeof startSlimPiLive>|undefined
+  let live:ReturnType<typeof startSlimAgentLives>|undefined
   try {
     if(!options.backup){
       const vaultPath=options.vaultPath??process.env.AGENT_LENS_VAULT_PATH
@@ -96,7 +96,7 @@ export async function startSlimNativeDaemon(options:SlimDaemonOptions){
     }
     const httpPort=runtime.nativeHttpPort()
     const nativeReader=runtime.nativeReader(sources,policy)
-    if(!options.lives)live=startSlimPiLive(
+    if(!options.lives)live=startSlimAgentLives(
       runtime.nativePort().checkpoints,
       httpPort.nativeSessionCatalog,
       nativeReader,policy,

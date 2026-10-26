@@ -88,6 +88,16 @@ agree. Ambiguous, disabled, missing, or truncated indexes return no link
 rather than guessing a LogicalSession/SourceRecord identity. The result is
 metadata-only and does not persist Live bodies.
 
+### Codex Live on Slim
+
+The SAME `CodexLiveAdapter` / App Server transport is registered beside Pi
+in the Slim Live Registry, with only runtime recovery hints persisted into
+Slim checkpoints. Create, send, stream, interrupt and native turn history
+continue to use Codex's Source-owned thread. Old SQL logical-session Resume
+is not advertised until the native Catalog resolver is verified; there is no
+Legacy event fallback. Missing App Server availability remains an explicit
+runtime error, not an invented session.
+
 ### Existing Pi Live on Slim
 
 The existing Pi Worker-backed LiveAdapter and DefaultLiveService serve
