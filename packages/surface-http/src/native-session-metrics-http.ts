@@ -122,7 +122,9 @@ export async function rebuildNativeSessionMetrics(
   reader:NativeSessionWindowReader,
   source:SourceDefinition,
   signal:AbortSignal,
-  incremental?:{enabled:true;progress?:NativeMetricRebuildProgress;reviewSessionId?:string},
+  incremental?:{enabled:true;progress?:NativeMetricRebuildProgress;reviewSessionId?:string;
+    /** Offline migration can enforce an exact remaining-page budget. */
+    maxPages?:number},
 ){
   const identity={
     sourceId:entry.sourceId,installationId:entry.installationId,
@@ -131,6 +133,10 @@ export async function rebuildNativeSessionMetrics(
   const reviewSessionId=incremental?.reviewSessionId ?? incremental?.progress?.reviewSessionId
   if(incremental && (!reviewSessionId || !reviewSessionId.startsWith('native:') || reviewSessionId.length>96)){
     return {state:'unsupported' as const,reason:'native-metrics-resume-session-id-missing'}
+  }
+  const maxPages=incremental?.maxPages??MAX_PAGES
+  if(!Number.isSafeInteger(maxPages)||maxPages<1||maxPages>MAX_PAGES){
+    throw new RangeError('Native metric page budget must be 1-64')
   }
   const prior=incremental?.progress
   const reusable=prior && prior.sourceId===entry.sourceId
@@ -145,7 +151,7 @@ export async function rebuildNativeSessionMetrics(
   let exhausted=false
   let pendingTail=false
   let scannedRecords=reusable && prior?prior.scannedRecords:0
-  for(let pageIndex=0;pageIndex<MAX_PAGES;pageIndex++){
+  for(let pageIndex=0;pageIndex<maxPages;pageIndex++){
     signal.throwIfAborted()
     const result=await reader.read({
       ...identity,limit:PAGE_LIMIT,signal,

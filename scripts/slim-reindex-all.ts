@@ -1,6 +1,7 @@
 import { resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { indexNativeInstallation } from '@agent-lens/core-services'
+import { resolveCapturePolicyPluginState } from '@agent-lens/capture-policy'
 import { SqliteSlimStorage } from '@agent-lens/storage-sqlite'
 import { NATIVE_REINDEX_SOURCES } from './slim-reindex-native'
 
@@ -64,11 +65,13 @@ export async function runNativeReindexAll(args:readonly string[]):Promise<Reinde
       SELECT id,product_id FROM agent_installations ORDER BY product_id,id
     `).all() as Array<{id:string;product_id:string}>
     const reports:ReindexAllReport['sourceResults']=[]
+    const enabled=new Set(resolveCapturePolicyPluginState().settings.enabledSources)
     const skipped=new Set<string>()
     for(const row of installations) {
       const candidates=[...NATIVE_REINDEX_SOURCES.values()]
         .filter(source=>source.manifest.productId===row.product_id
-          && (!input.sourceId||source.manifest.sourceId===input.sourceId))
+          && (!input.sourceId||source.manifest.sourceId===input.sourceId)
+          && enabled.has(source.manifest.sourceId))
       if(!candidates.length) {
         if(!input.sourceId)skipped.add(row.product_id)
         continue

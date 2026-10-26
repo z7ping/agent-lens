@@ -85,6 +85,7 @@ export async function prepareSlimCutover(args:readonly string[]):Promise<SlimPre
     ...gate.blockedBy,
     ...(discovery.discoveryComplete?[]:['native-source-enumeration-incomplete']),
     ...(metrics.failed||metrics.partial?['native-numerical-metrics-not-fully-certified']:[]),
+    ...(metrics.disabledSources.length?['native-source-disabled-by-capture-policy']:[]),
     ...(metrics.budgetReached?['native-numerical-metrics-budget-exhausted']:[]),
   ])]
   return {
