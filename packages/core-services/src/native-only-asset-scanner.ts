@@ -36,7 +36,7 @@ export class NativeOnlyAssetScanner {
     private readonly assets:AssetService,
     private readonly checkpoints:Pick<CheckpointRepository,'get'|'set'>,
     private readonly capturePolicy:Pick<CapturePolicyService,
-      'isEnabled'|'sanitizeDiscoveredAsset'>,
+      'isEnabled'|'isSourceEnabled'|'sanitizeDiscoveredAsset'>,
   ){}
 
   async scan(input:{
@@ -54,7 +54,8 @@ export class NativeOnlyAssetScanner {
       assetsDiscovered:0,statesRecorded:0,assetsRemoved:0,
       statesCleared:0,eventCopiesWritten:0,
     }
-    if(!source.discoverAssets||!this.capturePolicy.isEnabled('config'))return report
+    if(!source.discoverAssets||!this.capturePolicy.isEnabled('config')
+      || !this.capturePolicy.isSourceEnabled(source.manifest.sourceId))return report
     const key=JSON.stringify([
       source.manifest.sourceId,installation.id,runtimeProfile?.id??'default'])
     const previous=await this.checkpoints.get<Snapshot>(SCOPE,key)
