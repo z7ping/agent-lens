@@ -87,8 +87,7 @@ export class SlimSourceCoordinator {
         this.onProgress?.()
       }
       report.status=report.failures.length
-        ?(report.failures.length>=this.sources.list().filter(x=>
-          !sourceId||x.manifest.sourceId===sourceId).length?'failed':'partial')
+        ?(report.sourcesDetected||report.assetSourcesScanned?'partial':'failed')
         :'completed'
       report.completedAt=new Date().toISOString()
     })
