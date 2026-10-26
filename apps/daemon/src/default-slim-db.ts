@@ -33,6 +33,9 @@ export async function resolveDefaultSlimDb(
       ||pointer.backupPath===legacyPath||pointer.backupPath===pointerPath){
       throw new Error('Slim pointer has unsafe database paths')
     }
+    if(!existsSync(pointer.legacyPath)||!existsSync(pointer.backupPath)){
+      throw new Error('Activated Slim pointer refers to missing original or backup v38 database')
+    }
     const stage=SqliteSlimStorage.openExisting(pointer.slimPath,true)
     try{await stage.health()}finally{await stage.close()}
     return {dbPath:pointer.slimPath,mode:'activated'}
