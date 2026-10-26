@@ -57,3 +57,21 @@ test('partial metric and archived-only sessions cannot be marked cutover-complet
   assert.ok(report.blockedBy.includes('legacy-hook-records-require-archive-verification'))
   assert.ok(report.blockedBy.includes('archived-only-sessions-not-deep-audited'))
 })
+
+
+test('verified old Hook originals remove Hook blocker but cannot bypass Writer retirement',()=>{
+  const report=summarizeSlimGate({
+    identities:{...example.identities,archivedOnly:0,legacyHookRecords:2,
+      legacyRecordsWithoutSession:0,nativeMetricsPartial:0},
+    originals:{...example.originals,catalogEnumerationComplete:true,
+      allCurrentOriginalsVerified:true},
+    oldDatabaseUnchanged:true,
+    hooks:{found:2,verified:2,scanComplete:true,allLegacyHookOriginalsVerified:true},
+  })
+  assert.equal(report.legacyHookOriginalsVerified,2)
+  assert.equal(report.legacyHookOriginalsIncomplete,false)
+  assert.equal(report.blockedBy.includes('legacy-hook-records-require-archive-verification'),false)
+  assert.equal(report.blockedBy.includes('hook-and-archival-coverage-not-certified'),false)
+  assert.ok(report.blockedBy.includes('old-writer-freeze-and-atomic-swap-not-certified'))
+  assert.equal(report.readyToSwitch,false)
+})

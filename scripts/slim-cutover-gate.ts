@@ -3,6 +3,7 @@ import { fileURLToPath } from 'node:url'
 import Database from 'better-sqlite3'
 import { auditSlimNativeCoverage, auditSlimCutoverFreshness } from '@agent-lens/storage-sqlite'
 import { runOriginalsAudit, type OriginalsAuditReport } from './slim-audit-originals'
+import { auditLegacyHookOriginals,type LegacyHookAuditReport } from './slim-audit-legacy-hooks'
 
 export interface SlimCutoverGateArgs {
   legacyPath:string
@@ -52,6 +53,8 @@ export interface SlimCutoverGateReport {
   unfinishedNativeMetrics:number
   partialNativeMetrics:number
   legacyHookRecords:number
+  legacyHookOriginalsVerified:number
+  legacyHookOriginalsIncomplete:boolean
   /** Unmapped legacy SourceRecords cannot be certified by native session catalog. */
   legacyRecordsWithoutSession:number
   blockedBy:readonly string[]
@@ -72,6 +75,7 @@ export function summarizeSlimGate(input:{
     'verified'|'partial'|'unavailable'|'drifted'|'unsupported'
     |'catalogEnumerationComplete'|'allCurrentOriginalsVerified'>
   oldDatabaseUnchanged:boolean
+  hooks?:Pick<LegacyHookAuditReport,'found'|'verified'|'scanComplete'|'allLegacyHookOriginalsVerified'>
 }):SlimCutoverGateReport{
   const {identities,originals}=input
   const blockedBy:string[]=[]
@@ -84,11 +88,17 @@ export function summarizeSlimGate(input:{
   if(!originals.allCurrentOriginalsVerified)blockedBy.push('original-session-content-unverified')
   if(identities.nativeMetricsMissingOrStale)blockedBy.push('native-metrics-missing-or-stale')
   if(identities.nativeMetricsPartial)blockedBy.push('native-metrics-partial-not-certified')
-  if(identities.legacyHookRecords)blockedBy.push('legacy-hook-records-require-archive-verification')
+  const hooksComplete=Boolean(input.hooks?.scanComplete
+    &&input.hooks.allLegacyHookOriginalsVerified
+    &&input.hooks.found===(identities.legacyHookRecords??0)
+    &&input.hooks.verified===(identities.legacyHookRecords??0))
+  if(identities.legacyHookRecords&&!hooksComplete){
+    blockedBy.push('legacy-hook-records-require-archive-verification')
+  }
   if(identities.archivedOnly)blockedBy.push('archived-only-sessions-not-deep-audited')
   // Hook-only history, application configuration, daemon writer ownership,
   // cleanup/rollback and migration ownership have separate mandatory gates.
-  blockedBy.push('hook-and-archival-coverage-not-certified')
+  if(!hooksComplete||identities.archivedOnly)blockedBy.push('hook-and-archival-coverage-not-certified')
   blockedBy.push('full-consumer-and-legacy-writer-retirement-pending')
   blockedBy.push('old-writer-freeze-and-atomic-swap-not-certified')
   return {
@@ -104,6 +114,8 @@ export function summarizeSlimGate(input:{
     unfinishedNativeMetrics:identities.nativeMetricsMissingOrStale,
     partialNativeMetrics:identities.nativeMetricsPartial??0,
     legacyHookRecords:identities.legacyHookRecords??0,
+    legacyHookOriginalsVerified:input.hooks?.verified??0,
+    legacyHookOriginalsIncomplete:!hooksComplete,
     legacyRecordsWithoutSession:identities.legacyRecordsWithoutSession,
     blockedBy,
     readyToSwitch:false,
@@ -134,9 +146,13 @@ export async function auditSlimCutoverGate(args:readonly string[]):Promise<SlimC
     '--max-sessions',String(input.maxSessions),
     '--max-pages',String(input.maxPages),
   ])
+  const hooks=await auditLegacyHookOriginals([
+    '--legacy',input.legacyPath,'--staging',input.stagingPath,
+    '--max-records',String(input.maxSessions),
+  ])
   const finalFreshness=await auditSlimCutoverFreshness(paths)
   return summarizeSlimGate({
-    identities,originals,
+    identities,originals,hooks,
     oldDatabaseUnchanged:freshness.unchangedSinceBackup&&finalFreshness.unchangedSinceBackup,
   })
 }
