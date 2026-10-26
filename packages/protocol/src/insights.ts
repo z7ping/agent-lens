@@ -86,6 +86,8 @@ export interface InsightsResponseDto {
     sessionSampleLimit: number
     workflowPatternMinimumSessions: number
     notes: string[]
+    /** When native-only, Legacy aggregate fields are intentionally not authoritative. */
+    mode?: 'native-only'
     native?: NativeMetricContributionDto
   }
 }
