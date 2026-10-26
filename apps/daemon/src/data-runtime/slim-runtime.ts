@@ -88,6 +88,14 @@ export class SlimDataRuntime {
     return this.read(['nativeSessionList','query'],[query])
   }
 
+  facets():Promise<{
+    installedProducts:Array<{productId:string;installationIds:string[]}>
+    projects:Array<{id:string;name?:string;repositoryIdentity?:string;lastActivityAt?:string}>
+    projectsTruncated:boolean
+  }>{
+    return this.read(['nativeFacets','query'])
+  }
+
   catalog(query:{
     sourceId?:string;installationId?:string;projectId?:string;limit?:number
   }={}):Promise<{items:NativeSessionCatalogEntry[];hasMore:boolean}>{
