@@ -52,10 +52,13 @@ export async function handleNativeSessionMetricsRequest(
     sourceId:entry.sourceId,installationId:entry.installationId,
     nativeSessionId:entry.nativeSessionId,
   }
-  // Only sessions durably owned by Native-only may materialize metrics.
-  // Legacy sessions continue to use their existing SQL projections without
-  // a second, unused native scan or a misleading ready snapshot.
-  if(!await catalog.hasNativeOnlyWriteClaim(identity)){
+  // On slim-only SQLite, verified Native Catalog presence is sufficient
+  // for eligible on-demand numerical computation; there is no write-claim
+  // table. Older v38 databases still use ownership to avoid double counts.
+  const eligible = catalog.isNativeMetricsEligible
+    ? await catalog.isNativeMetricsEligible(identity)
+    : await catalog.hasNativeOnlyWriteClaim(identity)
+  if(!eligible){
     writeJson(response,200,{state:'unsupported',reason:'native-metrics-legacy-session'})
     return true
   }
