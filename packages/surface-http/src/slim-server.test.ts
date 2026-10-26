@@ -225,19 +225,20 @@ test('Slim-only HTTP reads native Catalog/facets and refuses all old Event APIs'
     assert.equal(summaryPost.status,405)
     const agents=await fetch(base+'/api/v1/agents')
     assert.equal(agents.status,200)
-    const agentList=await agents.json() as {items:Array<{
-      sourceId:string;assetInventory:Array<{canonicalName:string}>
-    }> ;meta:{native:{usageState:string}}}
-    assert.equal(agentList.items[0]?.sourceId,'pi')
-    assert.deepEqual(agentList.items[0]?.assetInventory.map(item=>item.canonicalName),['pi-agent'])
-    assert.equal(agentList.meta.native.usageState,'unavailable')
+    const agentsView=await agents.json() as {items:Array<{
+      sourceId:string;assetInventory:Array<{canonicalName:string;bindings:unknown[]}>
+    }>;meta:{native:{usedAssets:string}}}
+    assert.equal(agentsView.items[0]?.sourceId,'pi')
+    assert.equal(agentsView.items[0]?.assetInventory[0]?.canonicalName,'pi-agent')
+    assert.equal(agentsView.items[0]?.assetInventory[0]?.bindings.length,1)
+    assert.equal(agentsView.meta.native.usedAssets,'unavailable')
     const agentDetail=await fetch(base+'/api/v1/agents/pi')
     assert.equal(agentDetail.status,200)
-    const agentDetailBody=await agentDetail.json() as {item:{sourceId:string}}
-    assert.equal(agentDetailBody.item.sourceId,'pi')
+    assert.equal((await agentDetail.json() as {item:{assetInventory:unknown[]}})
+      .item.assetInventory.length,1)
+    assert.equal((await fetch(base+'/api/v1/agents/unknown')).status,404)
     assert.equal((await fetch(base+'/api/v1/agents/coverage')).status,200)
     assert.equal((await fetch(base+'/api/v1/agents/pi/enrichment')).status,200)
-    assert.equal((await fetch(base+'/api/v1/agents/unknown')).status,404)
     assert.equal((await fetch(base+'/api/v1/agents',{method:'POST'})).status,405)
     const facets=await fetch(base+'/api/v1/facets')
     assert.equal(facets.status,200)

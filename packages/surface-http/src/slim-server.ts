@@ -20,9 +20,7 @@ import { handleNativeSessionMetricsRequest } from './native-session-metrics-http
 import { handleNativeSessionMetricsOverviewRequest } from './native-session-metrics-overview-http'
 import { NativeMetricsAutoRefresh } from './native-metrics-auto-refresh'
 import { nativeOnlyFacetResponse } from './native-only-facets'
-import {
-  nativeOnlyAgentOverview,nativeAgentDetail,nativeAgentCoverage,nativeAgentEnrichment,
-} from './native-only-agents'
+import { nativeOnlyAgentOverview, nativeOnlyAgentCoverage, nativeOnlyAgentDetail } from './native-only-agent-overview'
 import { readLaunchableProjects } from './launchable-projects'
 import { handleBackupRequest } from './backup-http'
 import { handleAgentFilesRequest } from './agent-files-http'
@@ -208,30 +206,31 @@ export async function startNativeOnlyHttpSurface(
         })
         return
       }
-      if(url.pathname==='/api/v1/agents'
-        ||url.pathname==='/api/v1/agents/coverage'
-        ||/^\\/api\\/v1\\/agents\\/[^/]+(?:\\/enrichment)?$/.test(url.pathname)){
+      if(url.pathname==='/api/v1/agents'||url.pathname==='/api/v1/agents/coverage'
+        ||(/^\\/api\\/v1\\/agents\\/[^/]+(?:\\/enrichment)?$/.test(url.pathname)
+          && !url.pathname.endsWith('/summary'))){
         if(request.method!=='GET'){
           response.setHeader('allow','GET')
           writeJson(response,405,{error:'method_not_allowed'})
           return
         }
-        const overview=await nativeOnlyAgentOverview(
-          storage,options.sources,options.capturePolicy)
+        const view=await nativeOnlyAgentOverview(storage,options.sources,options.capturePolicy)
         if(url.pathname==='/api/v1/agents'){
-          writeJson(response,200,overview)
+          writeJson(response,200,view)
         }else if(url.pathname==='/api/v1/agents/coverage'){
-          writeJson(response,200,nativeAgentCoverage(overview))
+          writeJson(response,200,nativeOnlyAgentCoverage(view.items))
         }else{
           const enrichment=url.pathname.endsWith('/enrichment')
-          const encoded=url.pathname.slice('/api/v1/agents/'.length)
-            .replace(/\\/enrichment$/,'')
-          let sourceId:string
-          try{sourceId=decodeURIComponent(encoded)}
-          catch{throw badRequest('Invalid Agent source identity')}
-          const body=enrichment?nativeAgentEnrichment(overview,sourceId)
-            :nativeAgentDetail(overview,sourceId)
-          writeJson(response,body?200:404,body??{error:'not_found'})
+          const encodedId=url.pathname.slice('/api/v1/agents/'.length,
+            enrichment? -'/enrichment'.length:undefined)
+          let id:string
+          try{id=decodeURIComponent(encodedId)}catch{throw badRequest('Invalid source identifier')}
+          const detail=nativeOnlyAgentDetail(view.items,id)
+          if(!detail){writeJson(response,404,{error:'not_found'});return}
+          writeJson(response,200,enrichment?{
+            sourceId:id,capabilities:detail.item.capabilities,
+            usedAssets:detail.item.usedAssets,meta:detail.meta,
+          }:detail)
         }
         return
       }
