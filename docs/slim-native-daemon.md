@@ -155,3 +155,19 @@ grants and source enablement take effect after restart; previously running
 Live adapters are not silently elevated. Physical Integration package install
 and update operations remain separate M5 work and are not misrepresented as
 installed when the package runtime is unavailable.
+
+### M3 offline cutover activation (preparatory, currently blocked)
+
+`scripts/slim-cutover-activation.ts` provides separate `activate` and
+`rollback` actions. The original v38 database and its backup are never
+overwritten or deleted. Promotion uses an exclusive hard link from a closed
+Slim staging DB to a new installed DB file, then atomically writes the active
+database pointer by same-directory rename. A crash before pointer publication
+leaves Legacy active. Rollback changes only the pointer and keeps both files.
+
+**Not yet authorized:** the comprehensive M3 gate still returns
+`readyToSwitch:false` because Writer freeze, original Hook/archive coverage
+and runtime retirement remain uncertified. The CLI has no bypass flag.
+The M4 default Daemon/CLI must consume the pointer before this mechanism can
+become the real application's activation path. Rollback requires the new
+Daemon to be stopped and does not replay Slim-only writes into v38.
