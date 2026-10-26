@@ -81,7 +81,12 @@ export function useReviewSession(model: AgentLensClientModel, embedded: boolean)
         ? new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime()
         : now.getTime() - (range === '7d' ? 7 : 30) * 86_400_000
     const combined = new Map(nativeSessions.map(item => [item.id, item]))
-    for (const item of nativeBodySessions) combined.set(item.id,item)
+    for (const item of nativeBodySessions) {
+      // A text-search hit has no certified metric/project metadata. Keep the
+      // Catalog's authoritative metadata if the same session is present.
+      const catalog = combined.get(item.id)
+      combined.set(item.id, catalog ? { ...item, ...catalog } : item)
+    }
     return [...combined.values()].filter(item =>
       (sourceIds === null || sourceIds.includes(item.sourceId))
       && (!projectId || item.projectId === projectId)
