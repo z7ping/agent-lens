@@ -2,7 +2,7 @@ import { createServer, type Server } from 'node:http'
 import type {
   CapturePolicyService, NativeFacetReader, NativeSessionCatalogStore,
   NativeSessionListReader, NativeSessionMetricsStore, LaunchableProjectReader,
-  SourceService, StorageHealth,
+  SourceService, StorageHealth, BackupService,
 } from '@agent-lens/core'
 import { AGENT_LENS_PROTOCOL_VERSION } from '@agent-lens/protocol'
 import {
@@ -20,6 +20,7 @@ import { handleNativeSessionMetricsOverviewRequest } from './native-session-metr
 import { NativeMetricsAutoRefresh } from './native-metrics-auto-refresh'
 import { nativeOnlyFacetResponse } from './native-only-facets'
 import { readLaunchableProjects } from './launchable-projects'
+import { handleBackupRequest } from './backup-http'
 import { nativeMetricContribution } from './native-metrics-contribution'
 import { nativeOnlyInsightsResponse, nativeOnlyToolUsageResponse } from './native-only-usage-insights'
 import { parseInsightsQuery, parseUsageQuery } from './query-params'
@@ -45,6 +46,7 @@ export interface NativeOnlyHttpOptions {
   sources:SourceService
   capturePolicy:CapturePolicyService
   reader:NativeSessionWindowReader
+  backup?: BackupService
 }
 
 /** Reuse the existing native HTTP handlers, but NEVER construct retired
@@ -94,6 +96,10 @@ export async function startNativeOnlyHttpSurface(
         request,response,url,options.reader,storage.nativeSessionCatalog))return
       if(await handleNativeSessionWindowRequest(
         request,response,url,options.reader,storage.nativeSessionCatalog))return
+
+      // Existing Vault endpoint and validation; its persistence owner is the
+      // original Source/Vault filesystem plus Slim checkpoints, not Events.
+      if(await handleBackupRequest(request,response,url,options.backup))return
 
       if(url.pathname==='/api/v1/ready'){
         writeJson(response,200,{status:'ok',protocolVersion:AGENT_LENS_PROTOCOL_VERSION,
