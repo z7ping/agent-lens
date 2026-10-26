@@ -1,5 +1,6 @@
 import { AsyncLocalStorage } from 'node:async_hooks'
 import type Database from 'better-sqlite3'
+import { isSlimDatabase } from './slim-schema'
 
 const SAMPLE_LIMIT = 256
 
@@ -53,7 +54,13 @@ export class SqliteExecutor {
   private readonly executionSamples: number[] = []
   private readonly transactionSamples: number[] = []
 
-  constructor(readonly db: Database.Database) {}
+  readonly slimSchema: boolean
+
+  constructor(readonly db: Database.Database) {
+    // The schema lineage is immutable for this connection. Legacy v38 will
+    // never be upgraded into slim v1 in place, so probe once at construction.
+    this.slimSchema = isSlimDatabase(db)
+  }
 
   run<T>(operation: () => T | Promise<T>): Promise<T> {
     if (this.transactionScope.getStore() || this.externalTransaction) {
