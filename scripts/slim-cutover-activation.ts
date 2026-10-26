@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url'
 import Database from 'better-sqlite3'
 import { assertSlimSchema } from '@agent-lens/storage-sqlite'
 import { auditSlimCutoverGate, type SlimCutoverGateReport } from './slim-cutover-gate'
+import { withFrozenLegacyWriter } from './slim-legacy-writer-freeze'
 
 /** M3 requires a separate finalized, certified gate. The existing preparatory
  * gate deliberately cannot return readyToSwitch=true until Hook coverage,
@@ -136,23 +137,27 @@ export async function activateSlimCutover(
   if(!gate.readyToSwitch||gate.blockedBy.length||gate.oldDatabaseChanged){
     throw new Error('Cutover blocked: final Source, Hook, writer and freshness gates not certified')
   }
-  await Promise.all([value.legacyPath,value.backupPath,value.stagingPath].map(regular))
-  await Promise.all([value.legacyPath,value.backupPath,value.stagingPath].map(noActiveWal))
-  await mustNotExist(value.installedSlimPath)
-  if(await readActiveDatabasePointer(value.pointerPath))throw new Error('Cutover pointer is already active')
-  database(value.legacyPath,'legacy')
-  database(value.backupPath,'legacy')
-  database(value.stagingPath,'slim')
-  // link is atomic and EXCLUSIVE (fails EEXIST), and the pointer only becomes
-  // visible afterwards. A crash before pointer creation keeps Legacy active.
-  await link(value.stagingPath,value.installedSlimPath)
-  const pointer:ActiveDatabasePointer={
-    schemaVersion:1,mode:'slim',legacyPath:value.legacyPath,
-    backupPath:value.backupPath,slimPath:value.installedSlimPath,
-    changedAt:new Date().toISOString(),
-  }
-  await writePointer(value.pointerPath,pointer)
-  return pointer
+  // The snapshot/recheck and pointer publication must be within one
+  // SQLite writer-freeze window. A standalone preflight has a TOCTOU race.
+  return withFrozenLegacyWriter(value.legacyPath,async()=>{
+    await Promise.all([value.legacyPath,value.backupPath,value.stagingPath].map(regular))
+    await Promise.all([value.legacyPath,value.backupPath,value.stagingPath].map(noActiveWal))
+    await mustNotExist(value.installedSlimPath)
+    if(await readActiveDatabasePointer(value.pointerPath))throw new Error('Cutover pointer is already active')
+    database(value.legacyPath,'legacy')
+    database(value.backupPath,'legacy')
+    database(value.stagingPath,'slim')
+    // link is atomic and EXCLUSIVE (fails EEXIST), and the pointer only becomes
+    // visible afterwards. A crash before pointer creation keeps Legacy active.
+    await link(value.stagingPath,value.installedSlimPath)
+    const pointer:ActiveDatabasePointer={
+      schemaVersion:1,mode:'slim',legacyPath:value.legacyPath,
+      backupPath:value.backupPath,slimPath:value.installedSlimPath,
+      changedAt:new Date().toISOString(),
+    }
+    await writePointer(value.pointerPath,pointer)
+    return pointer
+  })
 }
 /** Switches the active pointer back. Never deletes either database or backup.
  * A rollback is a routing operation, not conversion of Slim writes to v38.
