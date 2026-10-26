@@ -15,6 +15,8 @@ export interface NativeSessionMetricOverviewQuery {
   installationId?:string
   /** Slim-only project attribution; never infer it from legacy event bodies. */
   projectId?:string
+  /** Optional exact tool name for SQL-indexed drilldown; not an event search. */
+  nativeToolName?:string
   from?:string
   to?:string
 }

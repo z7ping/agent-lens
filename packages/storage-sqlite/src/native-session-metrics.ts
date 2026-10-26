@@ -173,6 +173,7 @@ export class SqliteNativeSessionMetrics implements NativeSessionMetricsStore {
       || input.parserVersion.length>512
       || (input.installationId!==undefined && (!input.installationId || input.installationId.length>512))
       || (input.projectId!==undefined && (!input.projectId.trim() || input.projectId.length>512))
+      || (input.nativeToolName!==undefined && (!input.nativeToolName.trim() || input.nativeToolName.length>128))
       || (input.from!==undefined && !Number.isFinite(Date.parse(input.from)))
       || (input.to!==undefined && !Number.isFinite(Date.parse(input.to)))
       || (input.from && input.to && Date.parse(input.from)>Date.parse(input.to))
@@ -271,9 +272,10 @@ export class SqliteNativeSessionMetrics implements NativeSessionMetricsStore {
          AND tool.installation_id=selected.installation_id
          AND tool.native_session_id=selected.native_session_id
         WHERE selected.metric_status='complete'
+          ${input.nativeToolName?"AND tool.native_tool_name=?":""}
         GROUP BY tool.native_tool_name
         ORDER BY callCount DESC,tool.native_tool_name ASC LIMIT 257
-      `).all(...params) as NativeSessionMetricOverview['tools']
+      `).all(...params,...(input.nativeToolName?[input.nativeToolName]:[])) as NativeSessionMetricOverview['tools']
       return {
         sourceId:input.sourceId,
         eligibleSessions:row.eligibleSessions,readySessions:row.readySessions,

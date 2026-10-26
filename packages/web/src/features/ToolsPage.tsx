@@ -128,6 +128,9 @@ export function ToolsPage({ model, toolbarHost }: { model: AgentLensClientModel;
   const canRelaxFilters = Boolean(usage.filters.sourceIds !== null || usage.filters.projectId || usage.filters.range !== 'all')
   const blockingError = Boolean(usage.error && !data)
   const [selectedToolKey, setSelectedToolKey] = useState<string | null>(null)
+  const [selectedNativeTool,setSelectedNativeTool]=useState<(typeof nativeTools)[number]|null>(null)
+  const [nativeDetailLoading,setNativeDetailLoading]=useState(false)
+  const [nativeDetailError,setNativeDetailError]=useState('')
   const [detailTools, setDetailTools] = useState<Map<string, ToolUsageDto>>(() => new Map())
   const [detailLoadingKey, setDetailLoadingKey] = useState<string | null>(null)
   const [detailError, setDetailError] = useState('')
@@ -147,10 +150,36 @@ export function ToolsPage({ model, toolbarHost }: { model: AgentLensClientModel;
   }), [tools, sort])
   useEffect(() => {
     setSelectedToolKey(null)
+    setSelectedNativeTool(null)
+    setNativeDetailError('')
     setDetailTools(new Map())
     setDetailLoadingKey(null)
     setDetailError('')
   }, [usage.filters.sourceIds, usage.filters.projectId, usage.filters.range])
+
+  // Native-only usage drills into indexed numeric facts. It must never fake
+  // per-session/event links or success duration from an aggregate row.
+  const selectNativeTool=async(tool:(typeof nativeTools)[number])=>{
+    setSelectedNativeTool(tool)
+    setNativeDetailLoading(true)
+    setNativeDetailError('')
+    const originalFilters={...usage.filters}
+    try{
+      const detail=await toolDetailApi.usageDetail(
+        {...originalFilters,sourceIds:[tool.sourceId]},tool.nativeToolName)
+      if(!sameUsageFilters(model.getSnapshot().usage.filters,originalFilters))return
+      if(detail.meta.native?.state!=='available'){
+        throw new Error(t('page.nativePartialNote'))
+      }
+      const precise=detail.meta.native.tools?.find(item=>
+        item.sourceId===tool.sourceId&&item.nativeToolName===tool.nativeToolName)
+      if(precise)setSelectedNativeTool(precise)
+    }catch(error){
+      if(sameUsageFilters(model.getSnapshot().usage.filters,originalFilters)){
+        setNativeDetailError(error instanceof Error?error.message:String(error))
+      }
+    }finally{setNativeDetailLoading(false)}
+  }
 
   const selectTool = async (key: string) => {
     setShowAllSessions(false)
@@ -238,7 +267,11 @@ export function ToolsPage({ model, toolbarHost }: { model: AgentLensClientModel;
                 <th scope="col">{t('page.failure')}</th>
                 <th scope="col">{t('page.sessions')}</th>
               </tr></thead>
-              <tbody>{nativeTools.map(tool=><tr key={tool.sourceId+'::'+tool.nativeToolName}>
+              <tbody>{nativeTools.map(tool=><tr key={tool.sourceId+'::'+tool.nativeToolName}
+                tabIndex={0} onClick={()=>{void selectNativeTool(tool)}}
+                onKeyDown={event=>{if(event.key==='Enter'||event.key===' '){
+                  event.preventDefault();void selectNativeTool(tool)
+                }}}>
                 <td><span className="tool-table-name"><ToolKindIcon kind={toolVisualKind(tool.nativeToolName)}/>
                   <span><b className="tool-name">{tool.nativeToolName}</b>
                     <span className="tool-source">{sourceLabels([tool.sourceId])}</span></span></span></td>
@@ -332,6 +365,26 @@ export function ToolsPage({ model, toolbarHost }: { model: AgentLensClientModel;
           </section> : null}
         </>}
       </div>
+
+      {selectedNativeTool && <Drawer
+        open
+        className="tool-drill-overlay"
+        title={<span className="tool-drawer-title"><ToolKindIcon kind={toolVisualKind(selectedNativeTool.nativeToolName)}/>{selectedNativeTool.nativeToolName}</span>}
+        description={sourceLabels([selectedNativeTool.sourceId])}
+        onClose={()=>setSelectedNativeTool(null)}
+      >
+        <div className="tool-drill-body">
+          <div className="tool-drill-grid">
+            <div className="tool-drill-stat"><b>{selectedNativeTool.callCount}</b><span>{t('page.callCount')}</span></div>
+            <div className="tool-drill-stat"><b>{selectedNativeTool.resultCount}</b><span>{t('page.nativeResults')}</span></div>
+            <div className="tool-drill-stat"><b>{selectedNativeTool.errorCount}</b><span>{t('page.failureCount')}</span></div>
+            <div className="tool-drill-stat"><b>{selectedNativeTool.sessionCount}</b><span>{t('page.involvedSessions')}</span></div>
+          </div>
+          {nativeDetailLoading&&<div className="tool-drill-note">{t('page.loadingSessions')}</div>}
+          {nativeDetailError&&<div className="tool-drill-note">{nativeDetailError}</div>}
+          <div className="tool-drill-note">{t('page.nativeOnlyModeNote')}</div>
+        </div>
+      </Drawer>}
 
       {selectedTool && <Drawer
         open

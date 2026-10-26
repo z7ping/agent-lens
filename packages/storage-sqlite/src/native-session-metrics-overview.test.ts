@@ -80,6 +80,16 @@ test('native metrics overview counts only complete, current Native-only owned se
       totalDurationMs:200,sessionCount:1,
     }])
     assert.equal(overview.toolsTruncated,false)
+    const shellDetail=await metrics.overview({sourceId:source,parserVersion,
+      coverageCertified:true,nativeToolName:'shell'})
+    assert.deepEqual(shellDetail.tools,overview.tools)
+    assert.equal(shellDetail.eligibleSessions,overview.eligibleSessions)
+    const absentDetail=await metrics.overview({sourceId:source,parserVersion,
+      coverageCertified:true,nativeToolName:'does-not-exist'})
+    assert.deepEqual(absentDetail.tools,[])
+    assert.equal(absentDetail.toolsTruncated,false)
+    await assert.rejects(()=>metrics.overview({sourceId:source,parserVersion,
+      nativeToolName:'  '}),/Invalid Native-only metrics aggregate query/)
     assert.equal((await metrics.overview({sourceId:'other',parserVersion,coverageCertified:true})).eligibleSessions,0)
     const unknownParser=await metrics.overview({sourceId:source,parserVersion:'new-parser',coverageCertified:true})
     assert.equal(unknownParser.readySessions,0)
