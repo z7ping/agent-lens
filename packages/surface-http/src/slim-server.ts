@@ -3,6 +3,7 @@ import type {
   CapturePolicyService, NativeFacetReader, NativeSessionCatalogStore,
   NativeSessionListReader, NativeSessionMetricsStore, LaunchableProjectReader,
   SourceService, StorageHealth, BackupService, LiveService, LiveAttachmentService,
+  AgentInstallation,
 } from '@agent-lens/core'
 import { AGENT_LENS_PROTOCOL_VERSION } from '@agent-lens/protocol'
 import {
@@ -21,6 +22,7 @@ import { NativeMetricsAutoRefresh } from './native-metrics-auto-refresh'
 import { nativeOnlyFacetResponse } from './native-only-facets'
 import { readLaunchableProjects } from './launchable-projects'
 import { handleBackupRequest } from './backup-http'
+import { handleAgentFilesRequest } from './agent-files-http'
 import { handleCapturePolicyRequest } from './capture-policy-http'
 import { discoverLocalePacks } from './locale-packs'
 import { handleLiveRequest } from './live-http'
@@ -39,6 +41,7 @@ export interface NativeOnlyHttpStorage {
     'get'|'getByReviewSessionId'|'query'|'isNativeMetricsEligible'>
   nativeSessionList: NativeSessionListReader
   nativeFacets: NativeFacetReader
+  installations: {get(id:string):Promise<AgentInstallation|null>}
   launchableProjects: LaunchableProjectReader
   nativeSessionMetrics: NativeSessionMetricsStore
   health(): Promise<StorageHealth>
@@ -109,6 +112,10 @@ export async function startNativeOnlyHttpSurface(
         request,response,url,options.reader,storage.nativeSessionCatalog))return
       if(await handleNativeSessionWindowRequest(
         request,response,url,options.reader,storage.nativeSessionCatalog))return
+
+      if(await handleAgentFilesRequest(request,response,url,{
+        repositories:{installations:storage.installations},
+      },options.sources,options.capturePolicy))return
 
       // Existing Vault endpoint and validation; its persistence owner is the
       // original Source/Vault filesystem plus Slim checkpoints, not Events.
