@@ -36,7 +36,6 @@ const COPY_TABLES = {
   asset_definitions: ['id', 'type', 'canonical_name', 'display_name', 'upstream_identity'],
   asset_bindings: ['id', 'asset_id', 'installation_id', 'runtime_profile_id',
     'path', 'source', 'version', 'scope', 'scope_root'],
-  asset_current_state: ['asset_binding_id', 'state', 'observation_id', 'value', 'observed_at'],
   launchable_project_index: ['project_key', 'project_id', 'project_name',
     'repository_identity', 'last_seen_at'],
   launchable_workspace_index: ['project_key', 'workspace_id', 'workspace_path',
@@ -81,6 +80,32 @@ function copyWhitelistedRows(
     counts[table] = copied
   }
   return counts
+}
+
+function copyCurrentAssetState(snapshot: Database.Database, stage: Database.Database): number {
+  // Old observation_id was a FK into historical asset observations. Keep the
+  // stable identifier as a state ID only; the observation/evidence history is
+  // deliberately NOT present in the replacement database.
+  const reader = snapshot.prepare(`
+    SELECT asset_binding_id,state,observation_id,value,observed_at
+    FROM asset_current_state
+  `)
+  const writer = stage.prepare(`
+    INSERT INTO asset_current_state(asset_binding_id,state,state_id,value,observed_at)
+    VALUES (?,?,?,?,?)
+  `)
+  let count = 0
+  for (const item of reader.iterate() as Iterable<{
+    asset_binding_id:string
+    state:string
+    observation_id:string
+    value:string
+    observed_at:string
+  }>) {
+    writer.run(item.asset_binding_id,item.state,item.observation_id,item.value,item.observed_at)
+    count += 1
+  }
+  return count
 }
 
 function copySessionContexts(snapshot: Database.Database, stage: Database.Database): number {
@@ -165,6 +190,7 @@ export async function stageSlimCutover(paths: SlimStagingPaths): Promise<SlimSta
       await initializeSlimSchema(stage)
       const copiedRows = stage.transaction(() => {
         const counts = copyWhitelistedRows(snapshot, stage)
+        counts.asset_current_state = copyCurrentAssetState(snapshot, stage)
         counts.native_session_context = copySessionContexts(snapshot, stage)
         return counts
       })()
