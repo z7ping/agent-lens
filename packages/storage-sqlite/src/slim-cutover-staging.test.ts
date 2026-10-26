@@ -43,6 +43,14 @@ test('one-time staging backs up v38 and copies only approved metadata, never tra
       old.db.prepare(`INSERT INTO source_sessions(
         id,source_id,installation_id,native_session_id,logical_session_id
       ) VALUES ('source','pi','install','session','logical')`).run()
+      old.db.prepare(`INSERT INTO logical_sessions(
+        id,installation_id,project_id,workspace_id,title,title_kind
+      ) VALUES (
+        'unverified','install','project','workspace','PRIVATE FIRST USER MESSAGE','unverified'
+      )`).run()
+      old.db.prepare(`INSERT INTO source_sessions(
+        id,source_id,installation_id,native_session_id,logical_session_id
+      ) VALUES ('unverified-source','pi','install','session-unverified','unverified')`).run()
       old.db.prepare(`INSERT INTO source_records(
         id,source_id,installation_id,native_type,captured_at,locator_json,
         payload_json,parser_version
@@ -66,7 +74,7 @@ test('one-time staging backs up v38 and copies only approved metadata, never tra
     assert.equal(report.source.legacySchemaVersion, 38)
     assert.equal(report.source.verifiedOriginalSourceRecovery, false)
     assert.equal(report.copiedRows.native_session_catalog, 1)
-    assert.equal(report.copiedRows.native_session_context, 1)
+    assert.equal(report.copiedRows.native_session_context, 2)
     assert.equal(report.copiedRows.asset_current_state, 1)
     const backup = new Database(backupPath, { readonly:true, fileMustExist:true })
     try {
@@ -86,6 +94,11 @@ test('one-time staging backs up v38 and copies only approved metadata, never tra
       assert.deepEqual(stage.prepare('SELECT state_id,value FROM asset_current_state').all(), [
         { state_id:'old-state', value:'true' },
       ])
+      const unsafeTitle = stage.prepare(`SELECT title_override,title_kind FROM native_session_context
+        WHERE native_session_id='session-unverified'`).get() as {
+          title_override:string|null;title_kind:string|null
+        }
+      assert.deepEqual(unsafeTitle,{title_override:null,title_kind:null})
       assert.equal((stage.prepare('SELECT COUNT(*) AS c FROM native_session_metrics')
         .get() as {c:number}).c, 0) // Must be recalculated from native source.
       assert.deepEqual(stage.pragma('foreign_key_check'), [])
