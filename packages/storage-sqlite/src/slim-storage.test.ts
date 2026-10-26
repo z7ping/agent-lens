@@ -37,6 +37,15 @@ test('new slim runtime composes only native/metadata repositories and reopens wi
         sourceId:'pi',installationId:'install',nativeSessionId:'s',
       }),/forbidden/)
     }finally{await readOnly.close()}
+    // Accidentally routing a slim database through the old provider must
+    // fail before it can recreate removed Legacy event tables.
+    const oldProvider=new SqliteStorageService({path})
+    try {
+      await assert.rejects(oldProvider.migrate(),/cannot upgrade a slim/)
+      assertSlimSchema(oldProvider.db)
+      assert.equal((oldProvider.db.prepare(`SELECT COUNT(*) AS n FROM sqlite_master
+        WHERE type='table' AND name='observations'`).get() as {n:number}).n,0)
+    } finally { await oldProvider.close() }
     await assert.rejects(SqliteSlimStorage.createFresh(path),/EEXIST/)
   }finally{await rm(directory,{recursive:true,force:true})}
 })
