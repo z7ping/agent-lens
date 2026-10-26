@@ -44,8 +44,8 @@ export class SqliteSlimStorage {
   }
 
   /** Opens ONLY a pre-existing slim database. A legacy database must fail. */
-  static openExisting(path: string, readonly = false): SqliteSlimStorage {
-    const db = new Database(path, { readonly, fileMustExist:true })
+  static openExisting(path: string, readOnly = false): SqliteSlimStorage {
+    const db = new Database(path, { readonly: readOnly, fileMustExist:true })
     try {
       return new SqliteSlimStorage(db)
     } catch (error) {
