@@ -22,6 +22,7 @@ test('Slim standalone entry wires only native Reader and HTTP, and disposes on s
   const runtime={
     async start(){actions.push('start')},
     nativeHttpPort(){actions.push('nativeHttpPort');return native},
+    async facets(){return {installedProducts:[],projects:[],projectsTruncated:false}},
     nativeReader(){actions.push('nativeReader');return {
       async read(){return {state:'unsupported',reason:'test'}}}},
     async shutdown(){actions.push('shutdown')},

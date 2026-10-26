@@ -71,6 +71,23 @@ export class SqliteRuntimeProfileRepository {
     })
   }
 
+  /** Bounded, deterministic Profile discovery for the standalone Slim
+   * Source coordinator. No SQL session or event data is queried.
+   */
+  async listByInstallation(installationId:string):Promise<RuntimeProfile[]> {
+    if(!installationId||installationId.length>512){
+      throw new TypeError('Invalid runtime Profile installation identity')
+    }
+    return this.executor.run(()=>{
+      const rows=this.executor.db.prepare(`
+        SELECT * FROM runtime_profiles WHERE installation_id=?
+        ORDER BY native_profile_id,id LIMIT 201
+      `).all(installationId) as RuntimeProfileRow[]
+      if(rows.length>200)throw new Error('Too many runtime Profiles for one installation')
+      return rows.map(mapRuntimeProfile)
+    })
+  }
+
   async attachSession(
     sourceId: string,
     installationId: string,

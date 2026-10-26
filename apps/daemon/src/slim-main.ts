@@ -10,6 +10,7 @@ import { hermesSourceDefinition } from '@agent-lens/source-hermes'
 import { openCodeSourceDefinition } from '@agent-lens/source-opencode'
 import { startNativeOnlyHttpSurface } from '@agent-lens/surface-http'
 import { SlimDataRuntime } from './data-runtime/slim-runtime.js'
+import { SlimSourceCoordinator } from './slim-source-coordinator.js'
 
 export interface SlimDaemonOptions {
   /** Existing slim v1 only; absent/v38 paths are never upgraded at boot. */
@@ -52,13 +53,19 @@ export async function startSlimNativeDaemon(options:SlimDaemonOptions){
       sources,capturePolicy:policy,
       reader:runtime.nativeReader(sources,policy),
     })
+    const coordinator=new SlimSourceCoordinator(runtime,sources,policy)
+    // HTTP is already ready; directory scans are now isolated, bounded and
+    // asynchronous, so startup never waits for large original Source roots.
+    coordinator.start()
     let closed=false
     return {
-      http,runtime,
+      http,runtime,coordinator,
       async dispose(){
         if(closed)return
         closed=true
-        try{await http.dispose()}finally{await runtime.shutdown()}
+        try{await http.dispose()}finally{
+          try{await coordinator.dispose()}finally{await runtime.shutdown()}
+        }
       },
     }
   }catch(error){

@@ -159,6 +159,24 @@ test('Slim HTTP bridge serves existing native list, facets, Catalog and aggregat
   }finally{await runtime.shutdown();await rm(directory,{recursive:true,force:true})}
 })
 
+test('Slim Profile enumeration is routed through the read-only Worker allowlist',async()=>{
+  const directory=await mkdtemp(join(tmpdir(),'al-slim-profiles-'))
+  const dbPath=join(directory,'native.sqlite')
+  const db=await SqliteSlimStorage.createFresh(dbPath)
+  await db.close()
+  const writer=args('writer'),reader=args('reader')
+  const runtime=new SlimDataRuntime({
+    dbPath,writer:writer.port as never,reader:reader.port as never,
+  })
+  try{
+    await runtime.start()
+    await runtime.profiles('installation')
+    assert.deepEqual(reader.log.filter(item=>item.method==='reader').map(item=>item.path),
+      [['runtimeProfiles','listByInstallation']])
+    assert.equal(writer.log.filter(item=>item.method==='writer').length,0)
+  }finally{await runtime.shutdown();await rm(directory,{recursive:true,force:true})}
+})
+
 test('Slim Reader is composed directly from Native ports and owned by Slim shutdown',async()=>{
   const directory=await mkdtemp(join(tmpdir(),'al-slim-reader-compose-'))
   const dbPath=join(directory,'native.sqlite')

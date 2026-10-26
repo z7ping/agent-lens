@@ -13,7 +13,7 @@ const methods:Readonly<Record<string,readonly string[]>>={
   assets:['resolveDefinition','resolveBinding','recordState'],
   assetInventory:['listByInstallation'],
   launchableProjects:['query','recordWorkspaceValidation','rebuild'],
-  runtimeProfiles:['get','resolve'],
+  runtimeProfiles:['get','resolve','listByInstallation'],
   checkpoints:['get','getWithRevision','compareAndSet','set','clear'],
 }
 
