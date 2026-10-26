@@ -177,7 +177,7 @@ CREATE INDEX idx_slim_asset_installation ON asset_bindings(installation_id, runt
 CREATE TABLE asset_current_state (
   asset_binding_id TEXT NOT NULL REFERENCES asset_bindings(id) ON DELETE CASCADE,
   state TEXT NOT NULL,
-  observation_id TEXT NOT NULL,
+  state_id TEXT NOT NULL,
   value TEXT NOT NULL CHECK(value IN ('true','false','unknown')),
   observed_at TEXT NOT NULL,
   PRIMARY KEY(asset_binding_id, state)
