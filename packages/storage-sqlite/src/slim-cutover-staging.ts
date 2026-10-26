@@ -142,14 +142,13 @@ export async function stageSlimCutover(paths: SlimStagingPaths): Promise<SlimSta
   }
   // Exclusive creation prevents overwriting an existing DB or backup.
   await stat(legacyPath)
-  await reserveNewFile(backupPath)
   const live = new Database(legacyPath, { readonly: true, fileMustExist: true })
-  let source: SlimCutoverPreflight
   try {
-    source = inspectLegacyCutover(live)
-    if (source.legacySchemaVersion !== 38) {
+    const inspection = inspectLegacyCutover(live)
+    if (inspection.legacySchemaVersion !== 38) {
       throw new Error('Unsupported Legacy schema version; expected 38')
     }
+    await reserveNewFile(backupPath)
     await live.backup(backupPath)
   } finally {
     live.close()
