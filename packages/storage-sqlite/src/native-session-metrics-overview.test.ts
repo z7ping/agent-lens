@@ -6,6 +6,7 @@ import {
   type NativeSessionMetricSnapshot,
 } from '@agent-lens/core'
 import {SqliteStorageService} from './storage'
+import { SqliteSlimStorage } from './slim-storage'
 
 const at='2026-10-25T00:00:00Z'
 const source='pi',installation='pi-local',parserVersion='pi-v2'
@@ -173,4 +174,53 @@ test('revoked Source certification instantly masks previously complete Native-on
     const recertified=await storage.nativeSessionMetrics.overview({...scope,coverageCertified:true})
     assert.equal(recertified.readySessions,1)
   }finally{await storage.close()}
+})
+
+test('slim metrics are scoped by project context, never legacy SQL observations',async()=>{
+  const slim=await SqliteSlimStorage.createFresh(':memory:')
+  try{
+    const host=await slim.identity.resolveHost({name:'local'})
+    const install=await slim.identity.resolveInstallation({hostId:host.id,productId:'pi'})
+    const p1=await slim.identity.resolveProject({name:'Project One'})
+    const p2=await slim.identity.resolveProject({name:'Project Two'})
+    assert.ok(p1&&p2)
+    for(const [id,projectId] of [['one',p1.id],['two',p2.id]]){
+      const native={...location(id),installationId:install.id}
+      await slim.nativeSessionCatalog.upsert(native)
+      await slim.nativeSessionContexts.upsert({
+        sourceId:source,installationId:install.id,nativeSessionId:id,projectId,
+      })
+      const saved=await slim.nativeSessionMetrics.replace({
+        ...metric(id),installationId:install.id,
+      })
+      assert.equal(saved,true)
+    }
+    const q={sourceId:source,parserVersion,coverageCertified:true}
+    const all=await slim.nativeSessionMetrics.overview(q)
+    assert.equal(all.eligibleSessions,2)
+    assert.equal(all.totals.toolCallCount,6)
+    for(const project of [p1,p2]){
+      const scoped=await slim.nativeSessionMetrics.overview({...q,projectId:project.id})
+      assert.equal(scoped.eligibleSessions,1)
+      assert.equal(scoped.readySessions,1)
+      assert.equal(scoped.totals.toolCallCount,3)
+      assert.equal(scoped.tools[0]?.callCount,3)
+    }
+    assert.equal((await slim.nativeSessionMetrics.overview({
+      ...q,projectId:'missing-project',
+    })).eligibleSessions,0)
+    assert.deepEqual(await slim.nativeSessionMetrics.findRebuildCandidates({
+      ...q,projectId:p1.id,
+    },4),[])
+    // A changed original revision makes only its project's metrics stale.
+    await slim.nativeSessionCatalog.upsert({
+      ...location('one',121),installationId:install.id,
+    })
+    assert.deepEqual((await slim.nativeSessionMetrics.findRebuildCandidates({
+      ...q,projectId:p1.id,
+    },4)).map(x=>x.nativeSessionId),['one'])
+    assert.deepEqual(await slim.nativeSessionMetrics.findRebuildCandidates({
+      ...q,projectId:p2.id,
+    },4),[])
+  }finally{await slim.close()}
 })
