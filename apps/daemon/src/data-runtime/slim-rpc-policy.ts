@@ -7,6 +7,7 @@ const methods:Readonly<Record<string,readonly string[]>>={
     'isNativeMetricsEligible'],
   nativeSessionMetrics:['replace','get','overview','findRebuildCandidates','invalidate'],
   nativeSessionList:['query'],
+  nativeFacets:['query'],
   nativeSessionContexts:['get','upsert'],
   identity:['resolveHost','resolveInstallation','resolveProject','resolveWorkspace'],
   assets:['resolveDefinition','resolveBinding','recordState'],
