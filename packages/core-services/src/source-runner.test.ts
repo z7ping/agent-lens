@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
+import { resolve } from 'node:path'
 import type {
   AgentInstallation,
   CapabilityService,
@@ -96,10 +97,31 @@ test('metadata-only Source history stage updates Catalog, never ingests SourceRe
       yield {
         sourceId:'test-source', installationId:installation.id,
         nativeSessionId:'native-1',locationKind:'native',
-        filePath:'/tmp/native-1.jsonl',fileIdentity:'10:20',fileSize:900,
+        filePath:resolve('tmp','native-1.jsonl'),fileIdentity:'10:20',fileSize:900,
         fileMtimeMs:100,lastActivityAt:'2026-10-25T00:00:00Z',
         updatedAt:'2026-10-25T00:00:00Z',
       }
+    },
+    async readNativeSessionPage(query){
+      return {state:'available' as const,
+        records:[{
+          ...record('first','2026-10-25T00:00:00Z'),
+          sourceSessionNativeId:'native-1',
+          locator:{kind:'file' as const,path:query.filePath,offset:0},
+          fingerprint:'native-fingerprint',
+        }],
+        nextCursor:{fileIdentity:'10:20',offset:10,sequence:1},
+        hasMore:false,pendingTail:false,
+      }
+    },
+    rawRecovery:{
+      describe(){return {
+        authority:'native-store',locatorStability:'stable',
+        mutability:'append-oriented',verification:'fingerprint',
+        canReread:true,canReparse:true,replayable:true,
+        persistencePreference:'reference',
+      } as const},
+      async verify(){return {state:'verified' as const,checkedAt:'2026-10-25T00:00:00Z'}},
     },
     async *ingestHistory(){ reads++;yield record('old','2026-10-25T00:00:00Z') },
     async normalize(value){ normalizeCalls++; return normalized(value) },
@@ -125,6 +147,9 @@ test('metadata-only Source history stage updates Catalog, never ingests SourceRe
   })
   assert.deepEqual(indexed,[{nativeSessionId:'native-1',fileSize:900}])
   assert.equal(result.nativeSessionsIndexed,1)
+  assert.equal(result.nativeSessionsFailed,0)
+  assert.equal(result.nativeCatalogScanExhausted,true)
+  assert.equal(result.nativeCoverage,'partial')
   assert.equal(result.records,0)
   assert.equal(reads,0)
   assert.equal(normalizeCalls,0)

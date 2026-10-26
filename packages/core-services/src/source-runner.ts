@@ -25,6 +25,7 @@ import type {
 } from '@agent-lens/core'
 import { materializeEvidence } from './index'
 import { NativeSessionCatalogTracker } from './native-session-catalog-tracker'
+import { NativeOnlySourceIndexer } from './native-only-source-indexer'
 import { deriveParentRelationshipCandidates } from './relationship-hints'
 import { queuedHistoryStatus, SourceHistoryProgressTracker } from './source-history-progress'
 
@@ -180,6 +181,11 @@ export interface SourceHistorySyncResult {
   records: number
   /** Catalog-only files indexed; no equivalent legacy event rows. */
   nativeSessionsIndexed?: number
+  /** Session identities that could not be verified; do not invent history data. */
+  nativeSessionsFailed?: number
+  /** A bounded native scan cannot claim full coverage when truncated. */
+  nativeCatalogScanExhausted?: boolean
+  nativeCoverage?: 'certified' | 'partial'
   observationsCreated: number
   observationsMerged: number
   observationsUnchanged: number
@@ -859,36 +865,33 @@ export class SourceHistoryRunner {
 
       if (input.mode === 'native-catalog') {
         const catalog = this.storage.nativeSessionCatalog
-        if (!catalog || !source.discoverNativeSessions) {
-          throw new Error('Source native catalog discovery is unsupported')
-        }
-        const checkpoint = new ScopedCheckpointService(
-          this.storage,
-          checkpointScope(source.manifest.sourceId, installation.id, runtimeProfile),
-        )
-        let indexed = 0
-        for await (const entry of source.discoverNativeSessions({
-          host, installation,
+        if (!catalog) throw new Error('Source native catalog discovery is unsupported')
+        // This mode is now strictly a Source-verified metadata scan. It must
+        // never invoke ingestHistory, SourceRecord storage, or Legacy Claims.
+        const maxSessions = input.historyWindow?.sessionLimit ?? 32
+        const activeInstallation = runtimeProfile
+          ? { ...installation,
+              configRoot: runtimeProfile.configRoot ?? installation.configRoot,
+              dataRoot: runtimeProfile.dataRoot ?? installation.dataRoot }
+          : installation
+        const scanned = await new NativeOnlySourceIndexer(catalog).scan({
+          source,host,installation:activeInstallation,
           ...(runtimeProfile ? { runtimeProfile } : {}),
-          abortSignal, checkpoint,
-          ...(input.historyWindow ? { historyWindow: input.historyWindow } : {}),
-        })) {
-          if (abortSignal.aborted) break
-          if (entry.sourceId !== source.manifest.sourceId
-            || entry.installationId !== installation.id
-            || entry.locationKind !== 'native') {
-            throw new Error('Native Catalog Source returned a foreign session identity')
-          }
-          await catalog.upsert(entry)
-          indexed += 1
-          if (input.cooperate) await input.cooperate()
-          await yieldForInteractivity()
-        }
-        result.nativeSessionsIndexed = indexed
+          signal:abortSignal,maxSessions,
+          ...(input.historyWindow ? { historyWindow:input.historyWindow } : {}),
+        })
+        result.nativeSessionsIndexed = scanned.indexed
+        result.nativeSessionsFailed = scanned.scanned - scanned.indexed
+        result.nativeCatalogScanExhausted = scanned.exhausted
+        result.nativeCoverage = scanned.nativeCoverage
+        // Partial or truncated scans remain visible to the caller; they
+        // must never trigger a second copy in Canonical SQL.
+        input.onNativeCatalogReady?.()
         await progress.phase('checkpoint')
         await progress.settle(abortSignal.aborted ? 'cancelled' : 'completed')
         return result
       }
+
 
       if (!source.ingestHistory) {
         await progress.phase('checkpoint')
