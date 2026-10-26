@@ -22,7 +22,7 @@ export interface NativeCaptureHandle {
 }
 
 interface NativeCapturePort {
-  nativeSessionCatalog:NativeSessionCatalogStore
+  nativeSessionCatalog:Pick<NativeSessionCatalogStore,'upsert'>
   nativeSessionMetrics?:Pick<NativeSessionMetricsStore,'invalidate'>
   checkpoints:Pick<CheckpointRepository,'get'|'set'|'clear'>
 }
