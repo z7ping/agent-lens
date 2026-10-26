@@ -176,11 +176,7 @@ export class SqliteNativeSessionCatalog {
           OR instr(lower(source_id), lower(?)) > 0)`)
         values.push(search, search, search)
       }
-      if (input.onlyWithoutLegacyReview) {
-        // Do not advertise pre-v35 metadata rows that cannot be opened by
-        // their synthetic Review ID until their next incremental upsert.
-        predicates.push('review_session_id IS NOT NULL')
-      }
+      predicates.push('review_session_id IS NOT NULL')
       if (input.before) {
         predicates.push(`(last_activity_at,source_id,installation_id,native_session_id,location_kind) < (?,?,?,?,?)`)
         values.push(input.before.lastActivityAt,input.before.sourceId,input.before.installationId,
