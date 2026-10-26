@@ -2,7 +2,19 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import { resolve } from 'node:path'
 import type { NativeSessionMetricSnapshot } from '@agent-lens/core'
-import { SqliteStorageService } from './storage'
+import { SqliteSlimStorage } from './slim-storage'
+
+async function createFixture() {
+  const storage=await SqliteSlimStorage.createFresh(':memory:')
+  storage.db.exec(`
+    INSERT INTO hosts(id,name,platform,arch,created_at,last_seen_at)
+      VALUES ('test-host','test','linux','x64','2026-10-25','2026-10-25');
+    INSERT INTO agent_products(id,name) VALUES ('pi','Pi');
+    INSERT INTO agent_installations(id,host_id,product_id,first_seen_at,last_seen_at)
+      VALUES ('pi-local','test-host','pi','2026-10-25','2026-10-25');
+  `)
+  return storage
+}
 
 const at='2026-10-25T00:00:00.000Z'
 const identity={sourceId:'pi',installationId:'pi-local',nativeSessionId:'session-1'}
@@ -26,8 +38,7 @@ const snapshot=():NativeSessionMetricSnapshot=>({
 })
 
 test('native metrics persist only bounded numerical rollups, never event contents',async()=>{
-  const storage=new SqliteStorageService({path:':memory:'})
-  await storage.migrate()
+  const storage=await createFixture()
   try{
     const metrics=storage.nativeSessionMetrics
     assert.deepEqual(await metrics.get(identity),{state:'missing'})
@@ -72,8 +83,7 @@ test('native metrics persist only bounded numerical rollups, never event content
 })
 
 test('native metric revisions become stale on source changes and reject invalid replacement',async()=>{
-  const storage=new SqliteStorageService({path:':memory:'})
-  await storage.migrate()
+  const storage=await createFixture()
   try{
     const metrics=storage.nativeSessionMetrics
     await storage.nativeSessionCatalog.upsert(location)
@@ -102,8 +112,7 @@ test('native metric revisions become stale on source changes and reject invalid 
 })
 
 test('native metric replacement is atomic if tool inserts fail',async()=>{
-  const storage=new SqliteStorageService({path:':memory:'})
-  await storage.migrate()
+  const storage=await createFixture()
   try{
     await storage.nativeSessionCatalog.upsert(location)
     const metrics=storage.nativeSessionMetrics
