@@ -27,6 +27,20 @@ test('Slim-only HTTP reads native Catalog/facets and refuses all old Event APIs'
       return {installedProducts:[{productId:'pi',installationIds:['install']}],
         projects:[],projectsTruncated:false}
     }},
+    launchableProjects:{
+      async query(){
+        return {items:[{
+          key:'project-1',projectId:'project-1',projectName:'SlowLight',
+          lastSeenAt:new Date().toISOString(),
+          workspaces:[{
+            workspaceId:'workspace-1',workspacePath:'/projects/SlowLight',
+            lastSeenAt:new Date().toISOString(),validationStatus:'valid' as const,
+            validatedAt:new Date().toISOString(),
+          }],
+        }],hasMore:false}
+      },
+      async recordWorkspaceValidation(){},
+    },
     nativeSessionMetrics:{
       async get(){return {state:'missing' as const}},
       async replace(){return true},
@@ -62,6 +76,18 @@ test('Slim-only HTTP reads native Catalog/facets and refuses all old Event APIs'
     const health=await fetch(base+'/api/v1/health')
     assert.equal(health.status,200)
     assert.equal((await health.json() as {storage:{schemaVersion:number}}).storage.schemaVersion,1)
+    const projects=await fetch(base+'/api/v1/projects/launchable')
+    assert.equal(projects.status,200)
+    const projectPage=await projects.json() as {items:Array<{
+      key:string;workspaceId:string;workspacePath:string
+    }>}
+    assert.equal(projectPage.items[0]?.key,'project-1')
+    assert.equal(projectPage.items[0]?.workspaceId,'workspace-1')
+    assert.equal(projectPage.items[0]?.workspacePath,'/projects/SlowLight')
+    const invalid=await fetch(base+'/api/v1/projects/launchable?limit=999')
+    assert.equal(invalid.status,400)
+    const method=await fetch(base+'/api/v1/projects/launchable',{method:'POST'})
+    assert.equal(method.status,405)
     for(const name of ['source-records','timeline','review','sessions','assets']){
       const old=await fetch(base+'/api/v1/'+name)
       assert.equal(old.status,501,name)

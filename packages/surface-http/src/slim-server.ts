@@ -1,7 +1,7 @@
 import { createServer, type Server } from 'node:http'
 import type {
   CapturePolicyService, NativeFacetReader, NativeSessionCatalogStore,
-  NativeSessionListReader, NativeSessionMetricsStore,
+  NativeSessionListReader, NativeSessionMetricsStore, LaunchableProjectReader,
   SourceService, StorageHealth,
 } from '@agent-lens/core'
 import { AGENT_LENS_PROTOCOL_VERSION } from '@agent-lens/protocol'
@@ -19,6 +19,7 @@ import { handleNativeSessionMetricsRequest } from './native-session-metrics-http
 import { handleNativeSessionMetricsOverviewRequest } from './native-session-metrics-overview-http'
 import { NativeMetricsAutoRefresh } from './native-metrics-auto-refresh'
 import { nativeOnlyFacetResponse } from './native-only-facets'
+import { readLaunchableProjects } from './launchable-projects'
 import { nativeMetricContribution } from './native-metrics-contribution'
 import { nativeOnlyInsightsResponse, nativeOnlyToolUsageResponse } from './native-only-usage-insights'
 import { parseInsightsQuery, parseUsageQuery } from './query-params'
@@ -33,6 +34,7 @@ export interface NativeOnlyHttpStorage {
     'get'|'getByReviewSessionId'|'query'|'isNativeMetricsEligible'>
   nativeSessionList: NativeSessionListReader
   nativeFacets: NativeFacetReader
+  launchableProjects: LaunchableProjectReader
   nativeSessionMetrics: NativeSessionMetricsStore
   health(): Promise<StorageHealth>
 }
@@ -106,6 +108,17 @@ export async function startNativeOnlyHttpSurface(
           storage:{ok:health.ok,schemaVersion:health.schemaVersion,
             details:health.details},
         })
+        return
+      }
+      if(url.pathname==='/api/v1/projects/launchable'){
+        if(request.method!=='GET'){
+          response.setHeader('allow','GET')
+          writeJson(response,405,{error:'method_not_allowed'})
+          return
+        }
+        // Exact existing product route and validation rules, powered by the
+        // Slim workspace index rather than old LogicalSession SQL tables.
+        writeJson(response,200,await readLaunchableProjects(storage,url.searchParams))
         return
       }
       if(url.pathname==='/api/v1/facets'){

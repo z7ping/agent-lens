@@ -169,7 +169,7 @@ async function launchableWorkspace(
 }
 
 export async function readLaunchableProjects(
-  storage: StorageService,
+  storage: Pick<StorageService,'launchableProjects'>,
   params: URLSearchParams,
   validateWorkspace: WorkspaceValidator = validatePiWorkingDirectory,
   observeTiming?: TimingObserver,
