@@ -98,6 +98,7 @@ export class NativeMetricsAutoRefresh {
     }
     const candidates=await this.metrics!.findRebuildCandidates!({
       sourceId,parserVersion:source.manifest.parserVersion,
+      coverageCertified:source.nativeSessionCoverageComplete===true,
     },MAX_SESSIONS_PER_TRIGGER,this.beforeBySource.get(sourceId))
     // Advance past the selected metadata page even if some sessions fail or
     // are cooling down. Otherwise the newest four block every older session.
