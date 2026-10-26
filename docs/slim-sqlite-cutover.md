@@ -154,3 +154,7 @@ npm run storage:slim:gate -- --legacy /path/to/legacy.sqlite --backup /path/to/b
 ## Facets 原生筛选项
 
 精简库 `SqliteSlimNativeFacetReader` 直接使用安装身份、项目和原生会话 Catalog 构造智能体/项目筛选项，不读取旧 SessionSummary、Observations 或 Evidence。HTTP `/api/v1/facets` 在 SlimStore 可用时走这条读取器，并根据当前 Source 注册表与启用策略标记检测状态；日期范围暂标 `unavailable`，因为仅有会话最后活动日期不能证明完整的原生起止时间。Worker 已开放严格只读 `nativeFacets.query`，供默认 Daemon 完成切库后使用。
+
+## Usage / Insights 消费者按精简模式实际切换
+
+`/api/v1/usage` 和 `/api/v1/insights` 在发现 `nativeSessionList`（独立 Slim Runtime）时，不再调用旧 ToolAssetUsageProjection / UsageInsightsProjection，也不扫描 SourceRecords、Observation 或会话摘要；通过 `NativeSessionMetricsStore.overview` 按 Source/Project/时间过滤获得已验证数字。DTO 显式标 `meta.mode:'native-only'`；过时 Legacy 结构字段保持空壳**不得当作真实的 0**，可信值仅在 `meta.native`。Tools/Insights 页面据此隐藏旧汇总和明细面板，使用原生已验证工具表及数字卡，错误/未覆盖来源按部分/不可用提示；不推断时长、成功率、趋势或不存在的完整会话记录。`/usage/detail` 在 Slim 中明确报告未实现，不再偷偷调用旧事件读取。默认 Daemon 尚未正式切库，完整新详情与备份等消费者仍待收敛。
