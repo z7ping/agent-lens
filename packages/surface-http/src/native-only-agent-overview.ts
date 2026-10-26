@@ -76,8 +76,9 @@ export function nativeOnlyAgentDetail(items:readonly AgentOverviewDto[],id:strin
 }
 export function nativeOnlyAgentCoverage(items:readonly AgentOverviewDto[]):AgentCoverageResponseDto{
   return {
-    items:items.map(({sourceId,productId,displayName,detected,enabled,assetInventory,usedAssets})=>({
+    items:items.map(({sourceId,productId,displayName,detected,enabled,assetInventory,usedAssets,usedAssetsStatus})=>({
       sourceId,productId,displayName,detected,enabled,assetInventory,usedAssets,
+      ...(usedAssetsStatus?{usedAssetsStatus}:{}),
     })),
     meta:meta(),
   }
