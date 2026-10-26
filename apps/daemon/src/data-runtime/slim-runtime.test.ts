@@ -164,6 +164,11 @@ test('Slim HTTP bridge serves existing native list, facets, Catalog and aggregat
     })
     await http.nativeSessionList.query({limit:10})
     await http.nativeFacets.query()
+    await http.launchableProjects.query({limit:10})
+    await http.launchableProjects.recordWorkspaceValidation?.({
+      workspaceId:'workspace-1',workspacePath:'/work/example',
+      status:'valid',validatedAt:'2026-10-26T00:00:00.000Z',
+    })
     await http.nativeSessionMetrics.get({
       sourceId:'pi',installationId:'i',nativeSessionId:'s',
     })
@@ -176,10 +181,13 @@ test('Slim HTTP bridge serves existing native list, facets, Catalog and aggregat
       ['nativeSessionCatalog','get'],['nativeSessionCatalog','getByReviewSessionId'],
       ['nativeSessionCatalog','query'],['nativeSessionCatalog','isNativeMetricsEligible'],
       ['nativeSessionList','query'],['nativeFacets','query'],
+      ['launchableProjects','query'],
       ['nativeSessionMetrics','get'],['nativeSessionMetrics','overview'],
       ['nativeSessionMetrics','findRebuildCandidates'],['health'],
     ])
-    assert.deepEqual(writer.log.filter(item=>item.method==='writer'),[])
+    assert.deepEqual(writer.log.filter(item=>item.method==='writer').map(item=>item.path),[
+      ['launchableProjects','recordWorkspaceValidation'],
+    ])
   }finally{await runtime.shutdown();await rm(directory,{recursive:true,force:true})}
 })
 
