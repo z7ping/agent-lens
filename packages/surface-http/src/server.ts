@@ -289,7 +289,8 @@ export async function startHttpSurface(
         '/api/v1/native-sessions/metrics/overview',
       ].includes(url.pathname))nativeMetricsRefresh.schedule()
       if (await handleNativeSessionMetricsOverviewRequest(request,response,url,
-        storage.nativeSessionMetrics,options.sources,options.capturePolicy)) return
+        storage.nativeSessionMetrics,options.sources,options.capturePolicy,
+        Boolean(storage.nativeSessionList))) return
       if (await handleNativeSessionMetricsRequest(request,response,url,
         storage.nativeSessionCatalog,storage.nativeSessionMetrics,
         options.nativeSessionReader,options.sources,options.capturePolicy)) return
