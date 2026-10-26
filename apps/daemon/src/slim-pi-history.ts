@@ -26,7 +26,7 @@ export function createSlimPiHistoryResolver(
   reader:Pick<NativeSessionReader,'read'>,
   policy:Pick<CapturePolicyService,'isSourceEnabled'>,
 ):NativePiLiveHistoryResolver{
-  return {
+  const resolver:NativePiLiveHistoryResolver={
     async resolve(sessionId,action){
       if(!NATIVE_REVIEW_ID.test(sessionId))throw unavailable('无效的原生 Pi 会话身份')
       if(!policy.isSourceEnabled('pi'))throw unavailable('Pi 来源已禁用，拒绝访问原生会话')
@@ -86,5 +86,55 @@ export function createSlimPiHistoryResolver(
         await file.close().catch(()=>undefined)
       }
     },
+    async resolveForkAt(sessionId,nativeEventId){
+      if(typeof nativeEventId!=='string'||!nativeEventId.trim()
+        || nativeEventId.length>256){
+        throw unavailable('原生 Pi 分叉锚点无效')
+      }
+      // Authorize the requested Source and original Pi session before even
+      // inspecting an attacker-supplied event ID.
+      const input=await resolver.resolve(sessionId,'fork')
+      const entry=await catalog.getByReviewSessionId(sessionId)
+      if(!entry||entry.sourceId!=='pi'||entry.locationKind!=='native'){
+        throw unavailable('原生 Pi 会话已失联，不能从消息分叉')
+      }
+      const signal=AbortSignal.timeout(30_000)
+      const MAX_PAGES=128
+      const PAGE_SIZE=32
+      let matches=0
+      let cursor:import('@agent-lens/core').SourceNativeSessionCursor|undefined
+      for(let page=0;page<MAX_PAGES;page++){
+        signal.throwIfAborted()
+        const window=await reader.read({
+          sourceId:'pi',installationId:entry.installationId,
+          nativeSessionId:entry.nativeSessionId,
+          ...(cursor?{cursor}:{}),
+          limit:PAGE_SIZE,signal,
+        })
+        if(window.state!=='available'){
+          throw unavailable('原生 Pi 消息锚点验证失败：'+window.reason)
+        }
+        for(const fact of window.observations){
+          if(fact.kind==='message.assistant' && fact.nativeEventId===nativeEventId){
+            matches++
+            if(matches>1)throw unavailable('原生 Pi 助手消息锚点不唯一')
+          }
+        }
+        if(window.pendingTail){
+          throw unavailable('原生 Pi 消息尾部尚未完整，拒绝分叉')
+        }
+        if(!window.hasMore){
+          if(matches!==1)throw unavailable('未验证到唯一的 Pi 助手消息分叉点')
+          return {...input,branchFromEntryId:nativeEventId}
+        }
+        if(!window.nextCursor
+          || window.nextCursor.offset<=(cursor?.offset??0)){
+          throw unavailable('原生 Pi 记录游标无进展，拒绝分叉')
+        }
+        cursor=window.nextCursor
+      }
+      throw unavailable('Pi 原生消息超过有界扫描预算，无法证明分叉点唯一')
+    },
   }
+  return resolver
 }
