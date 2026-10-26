@@ -40,8 +40,7 @@ export async function startSlimLive(
       const piService=new DefaultPiLiveService(
         undefined,new CheckpointPiLiveRecoveryStore(checkpoints),
       )
-      const adapter=new PiLiveAdapter(piService,attachments,undefined,{
-        nativeOnly:true,
+      const adapter=new PiLiveAdapter(piService,attachments,{
         nativeHistory:createSlimPiHistoryResolver(catalog,reader,policy),
       })
       const registration=lives.register(adapter)

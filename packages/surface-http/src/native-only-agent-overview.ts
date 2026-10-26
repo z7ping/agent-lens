@@ -7,7 +7,7 @@ import {
   type AgentOverviewDto, type AgentOverviewResponseDto,
   type AgentDetailResponseDto, type AgentCoverageResponseDto,
 } from '@agent-lens/protocol'
-import { projectAgentAssetInventory } from '@agent-lens/projection-overview'
+import { projectAgentAssetInventory } from './native-asset-projection'
 
 export interface NativeAgentOverviewStorage {
   nativeFacets: NativeFacetReader

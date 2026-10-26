@@ -33,7 +33,7 @@ test('slim Catalog, numerical overview, profile and current assets use no Legacy
       fileSize:120,fileMtimeMs:12,lastActivityAt:at,updatedAt:at,
     }
     await catalog.upsert(location)
-    const projected = await catalog.query({ onlyWithoutLegacyReview:true, limit:10 })
+    const projected = await catalog.query({  limit:10 })
     assert.equal(projected.items.length,1)
     assert.equal(projected.items[0]?.nativeSessionId,'session')
     assert.equal(await catalog.isNativeMetricsEligible(identity),true)

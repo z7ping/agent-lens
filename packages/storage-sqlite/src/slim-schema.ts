@@ -4,8 +4,7 @@ import { SLIM_SCHEMA_SQL } from './slim-schema-sql'
 export const SLIM_SCHEMA_VERSION = 1
 
 /** Only create the replacement schema in an EMPTY staging database.
- * This is deliberately separate from migrateDatabase(v1-v38), so no existing
- * installation can accidentally receive destructive DDL during startup.
+ * An existing v38 installation cannot receive replacement DDL during startup.
  */
 export async function initializeSlimSchema(db: Database.Database): Promise<void> {
   if (db.readonly) throw new Error('Slim schema initialization requires a writable staging database')

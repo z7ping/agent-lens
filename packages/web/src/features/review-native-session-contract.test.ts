@@ -9,13 +9,12 @@ const model=read('../client/model-review.ts')
 const storage=read('../../../storage-sqlite/src/native-session-catalog.ts')
 const api=read('../client/api.ts')
 
-test('native-only entries use indexed SQL source identity dedup before pagination',()=>{
+test('native-only entries use their catalog identity and stable pagination',()=>{
   assert.match(storage,/review_session_id IS NOT NULL/)
-  assert.match(storage,/linked\.source_id = native_session_catalog\.source_id/)
-  assert.match(storage,/linked\.installation_id = native_session_catalog\.installation_id/)
-  assert.match(storage,/linked\.native_session_id = native_session_catalog\.native_session_id/)
-  assert.match(storage,/stored\.logical_session_id = linked\.logical_session_id/)
-  assert.match(hook,/onlyWithoutLegacyReview: !nativeOnly/)
+  assert.match(storage,/ORDER BY last_activity_at DESC,source_id DESC,installation_id DESC,native_session_id DESC,location_kind DESC/)
+  assert.match(storage,/WHERE ctx\.source_id=native_session_catalog\.source_id/)
+  assert.match(storage,/ctx\.installation_id=native_session_catalog\.installation_id/)
+  assert.match(storage,/ctx\.native_session_id=native_session_catalog\.native_session_id/)
   assert.match(hook,/filters\.projectId \? \{ projectId: filters\.projectId \} : \{\}/)
   assert.match(hook,/item\.metricsState === 'complete'/)
   assert.match(hook,/origin: 'native'/)

@@ -293,7 +293,7 @@ export function TaskCenterPage({ model, mode, sidebarHost }: { model: AgentLensC
     const sourceId=filters.sourceIds?.length===1?filters.sourceIds[0]:undefined
     void model.nativeSessions({
       ...(sourceId?{sourceId}:{}),
-      onlyWithoutLegacyReview:true,search:filters.search.trim(),
+      search:filters.search.trim(),
       limit:100,signal:controller.signal,
     }).then(page=>{
       if(controller.signal.aborted)return
@@ -359,7 +359,7 @@ export function TaskCenterPage({ model, mode, sidebarHost }: { model: AgentLensC
         try{
           const page=await model.nativeSessions({
             ...(sourceId?{sourceId}:{}),
-            onlyWithoutLegacyReview:true,search:filters.search.trim(),
+            search:filters.search.trim(),
             limit:100,cursor:nativeCursor,
           })
           if(nativeRequestKeyRef.current!==key)return

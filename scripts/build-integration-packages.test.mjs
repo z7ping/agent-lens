@@ -73,7 +73,6 @@ test('build contract loads pure Integration manifest modules without loading run
       capabilities: ['source', 'runtime', 'live', 'assets'],
       componentPluginIds: [
         '@agent-lens/source-pi',
-        '@agent-lens/runtime-cordis/pi-live',
         '@agent-lens/integration-pi/ecosystem',
       ],
     },

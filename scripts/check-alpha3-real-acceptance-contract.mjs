@@ -25,7 +25,6 @@ const runtimeCss = readFileSync('packages/web/src/live-task.css', 'utf8')
 const composerCss = readFileSync('packages/web/src/task-session-composer.css', 'utf8')
 const liveTimeline = readFileSync('packages/web/src/features/LiveTaskTimeline.tsx', 'utf8')
 const liveProcessOwner = readFileSync('packages/web/src/features/TaskSessionContent.tsx', 'utf8')
-const piHistory = readFileSync('packages/web/src/features/pi-live-history.ts', 'utf8')
 const mainEntry = readFileSync('packages/web/src/main.tsx', 'utf8')
 const pkg = readFileSync('package.json', 'utf8')
 const failures = []
@@ -36,7 +35,7 @@ function requireText(source, pattern, message) {
 
 /* 真实 Pi：必须覆盖 Runtime 生命周期、两类队列、Abort 恢复、重连和历史回流。 */
 for (const token of [
-  '/api/v1/pi-live/availability', '/events', '/prompt', '/steer', '/follow-up', '/abort', '/snapshot', '/model', '/thinking-level', '/api/v1/review?limit=500',
+  '/api/v1/live/pi/availability', '/events', '/messages', "behavior: 'steer'", "behavior: 'follow-up'", '/interrupt', '/snapshot', '/model-control', '/thinking-control', '/api/v1/review?limit=500',
 ]) {
   if (!pi.includes(token)) failures.push(`真实 Pi 验收缺少 ${token}`)
 }
@@ -130,8 +129,6 @@ requireText(toolIcon, /return 'test'/, '测试类 Tool 必须归一到 test 语�
 requireText(toolIcon, /test:\s*'tool-test'/, '测试类 Tool 必须有稳定语义图标')
 requireText(toolIcon, /return 'tool'/, '未知 Tool 必须有中性降级')
 
-requireText(piHistory, /durationMs\?: number/, 'Pi History Tool 必须保留可推导耗时')
-requireText(piHistory, /elapsedMs\(fact\.at, paired\.at\)/, 'Pi History 必须用 Call / Result 时间推导耗时')
 requireText(liveTimeline, /<TaskSessionTool model=/, '通用 Live Tool 必须使用唯一 TaskSessionTool')
 requireText(liveTimeline, /<TaskProcessSequence id=/, 'Live 过程应复用通用 TaskProcessSequence')
 requireText(liveTimeline, /<TaskSessionProcess/, 'Live 过程必须使用共享 SessionProcess')

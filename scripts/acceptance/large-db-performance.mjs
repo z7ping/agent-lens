@@ -58,7 +58,7 @@ const options = {
 const probes = [
   { id: 'ready', label: '/ready', path: '/api/v1/ready', p95BudgetMs: 100, acceptedStatuses: new Set([200]) },
   { id: 'health', label: '/health', path: '/api/v1/health', p95BudgetMs: 500, acceptedStatuses: new Set([200, 503]) },
-  { id: 'piAvailability', label: 'Pi availability', path: '/api/v1/pi-live/availability', p95BudgetMs: 100, acceptedStatuses: new Set([200]) },
+  { id: 'piAvailability', label: 'Pi availability', path: '/api/v1/live/pi/availability', p95BudgetMs: 100, acceptedStatuses: new Set([200]) },
   { id: 'taskCenter', label: 'Task Center summary first page', path: '/api/v1/review?limit=20', p95BudgetMs: 500, acceptedStatuses: new Set([200]) },
   { id: 'tools', label: 'Tools summary', path: '/api/v1/usage?limit=500', p95BudgetMs: 1_000, acceptedStatuses: new Set([200]) },
   { id: 'insights', label: 'Insights summary', path: '/api/v1/insights', p95BudgetMs: 1_000, acceptedStatuses: new Set([200]) },

@@ -1,10 +1,7 @@
 import { readFile } from 'node:fs/promises'
 
 const [
-  history,
   piNative,
-  piClient,
-  piHttp,
   runtime,
   workerHost,
   workerEntry,
@@ -14,16 +11,12 @@ const [
   runtimePackage,
   coreObservation,
   timelineProtocol,
-  piLiveProtocol,
-  resumeWrapper,
-  historyInteraction,
   piAdapter,
+  nativeHistory,
+  slimLive,
   recoveryStore,
 ] = await Promise.all([
-  readFile(new URL('../packages/web/src/features/pi-live-history.ts', import.meta.url), 'utf8'),
   readFile(new URL('../packages/protocol/src/pi-native.ts', import.meta.url), 'utf8'),
-  readFile(new URL('../packages/web/src/client/pi-live.ts', import.meta.url), 'utf8'),
-  readFile(new URL('../packages/surface-http/src/pi-live.ts', import.meta.url), 'utf8'),
   readFile(new URL('../packages/runtime-cordis/src/pi-live/service.ts', import.meta.url), 'utf8'),
   readFile(new URL('../packages/runtime-cordis/src/pi-live/worker-host.ts', import.meta.url), 'utf8'),
   readFile(new URL('../packages/runtime-cordis/src/pi-live/worker-entry.mjs', import.meta.url), 'utf8'),
@@ -33,10 +26,9 @@ const [
   readFile(new URL('../packages/runtime-cordis/package.json', import.meta.url), 'utf8'),
   readFile(new URL('../packages/core/src/domain/observation.ts', import.meta.url), 'utf8'),
   readFile(new URL('../packages/protocol/src/timeline.ts', import.meta.url), 'utf8'),
-  readFile(new URL('../packages/protocol/src/pi-live.ts', import.meta.url), 'utf8'),
-  readFile(new URL('../packages/surface-http/src/pi-live-resume.ts', import.meta.url), 'utf8'),
-  readFile(new URL('../packages/runtime-cordis/src/pi-live/history-interaction.ts', import.meta.url), 'utf8'),
   readFile(new URL('../packages/runtime-cordis/src/pi-live/adapter.ts', import.meta.url), 'utf8'),
+  readFile(new URL('../apps/daemon/src/slim-pi-history.ts', import.meta.url), 'utf8'),
+  readFile(new URL('../apps/daemon/src/slim-live.ts', import.meta.url), 'utf8'),
   readFile(new URL('../packages/runtime-cordis/src/pi-live/recovery-store.ts', import.meta.url), 'utf8'),
 ])
 
@@ -58,48 +50,26 @@ requireText(piAdapter, /image:\s*'native'/, 'Pi Live Adapter 必须显式声明�
 requireText(piAdapter, /file:\s*'unsupported'/, 'Pi Live Adapter 不得伪装文件输入能力')
 requireText(piAdapter, /workspace:\s*'required'/, 'Pi Live start workspace 必须保持 required')
 requireText(piAdapter, /title:\s*'optional'/, 'Pi Live start title 必须保持 optional')
-requireText(piAdapter, /resolvePiLiveHistoryInput\(this\.storage, logicalSessionId, 'continue'\)/, 'Pi Adapter resume 必须走受控历史恢复')
-requireText(piAdapter, /resolvePiLiveHistoryInput\(this\.storage, logicalSessionId, 'fork'\)/, 'Pi Adapter fork 必须走受控历史分叉')
+requireText(piAdapter, /this\.options\.nativeHistory\.resolve\(logicalSessionId, 'continue'\)/, 'Pi Adapter resume 必须走原生历史恢复')
+requireText(piAdapter, /this\.options\.nativeHistory\.resolve\(logicalSessionId, 'fork'\)/, 'Pi Adapter fork 必须走原生历史分叉')
 requireText(piAdapter, /this\.attachments\.get\(part\.attachmentId\)/, 'Pi Adapter 必须通过 opaque attachmentId 读取图片')
 requireText(piAdapter, /Buffer\.from\(attachment\.data\)\.toString\('base64'\)/, 'Pi Adapter 必须在适配边界转换官方图片载荷')
 requireText(piAdapter, /this\.service\.steer\(runtimeSessionId, resolved\.text, resolved\.images\)/, 'Pi steer 必须通过 Adapter 转入 Runtime')
 requireText(piAdapter, /this\.service\.followUp\(runtimeSessionId, resolved\.text, resolved\.images\)/, 'Pi follow-up 必须通过 Adapter 转入 Runtime')
 
 /* Historical facts and native Pi entries stay normalized at the Pi boundary. */
-requireText(history, /normalizePiSessionEntry/, 'Pi 历史投影必须复用 Pi Native Normalizer')
 requireText(piNative, /type === 'model_change'/, 'Pi Native Normalizer 缺少 model_change')
 requireText(piNative, /type === 'thinking_level_change'/, 'Pi Native Normalizer 缺少 thinking_level_change')
 requireText(piNative, /role === 'tool' \|\| role === 'toolResult'/, 'Pi Native Normalizer 缺少 Tool Result')
-forbidText(history, /function\s+(?:messageItems|lifecycleItem|toolResultFacts)\b/, 'Web 不得重复维护 Pi Session Entry Parser')
 requireText(coreObservation, /'thinking\.level\.changed'/, 'Core 缺少 thinking.level.changed')
 requireText(timelineProtocol, /'thinking\.level\.changed'/, 'Timeline 缺少 thinking.level.changed')
 
-/* Compatibility client remains server-owned: no local runtime registry. */
-requireText(piClient, /requestJson<PiLiveStateDto\[]>\('\/api\/v1\/pi-live'\)/, 'Pi compatibility client 必须从服务端列举 Runtime')
-forbidText(piClient, /readKnownRuntimeIds|agent-lens:pi-live-runtime-ids/, 'Pi Runtime registry 不得退回 localStorage')
-requireText(piClient, /HIDDEN_FLUSH_MS = 250/, 'Pi compatibility scheduler 后台提交频率必须受控')
-requireText(piClient, /requestAnimationFrame/, 'Pi compatibility scheduler 前台必须按动画帧提交')
-requireText(piClient, /coalescedEvents/, 'Pi compatibility scheduler 必须保留事件合并诊断')
-requireText(piClient, /source\.close\(\)/, '关闭 Pi View 必须只关闭 EventSource')
-forbidText(piClient, /terminate\([^)]*\)[\s\S]{0,120}source\.close/, 'View dispose 不得隐式 terminate Pi Runtime')
-
-/* Legacy Pi HTTP surface is compatibility-only but must remain safe while present. */
-requireText(piLiveProtocol, /interface PiLiveResumeRequestDto[\s\S]{0,120}logicalSessionId:\s*string/, 'Pi compatibility protocol 缺少历史恢复请求')
-requireText(piClient, /'\/api\/v1\/pi-live\/resume'[\s\S]{0,220}logicalSessionId/, 'Pi compatibility client 缺少历史恢复端点')
-requireText(piHttp, /url\.pathname === '\/api\/v1\/pi-live'[\s\S]*request\.method === 'GET'[\s\S]*service\.list\(\)/, 'Pi compatibility HTTP 必须支持列举活跃 Runtime')
-requireText(piHttp, /url\.pathname === '\/api\/v1\/pi-live\/resume'[\s\S]{0,600}resolvePiLiveResumeInput[\s\S]{0,220}service\.start\(input\)/, 'Pi compatibility HTTP 恢复必须走安全解析')
-requireText(resumeWrapper, /return resolvePiLiveHistoryInput\(storage, logicalSessionId, historyAction\)/, 'Pi HTTP 兼容 wrapper 必须委托 Pi Integration 的历史恢复 Owner')
-requireText(historyInteraction, /item\.sourceId === 'pi'/, 'Pi 历史恢复只能选择 Pi SourceRecord')
-requireText(historyInteraction, /isAbsolute\(item\.locator\.path\)/, 'Pi 历史恢复只接受绝对原生路径')
-requireText(historyInteraction, /extname\(item\.locator\.path\)\.toLowerCase\(\) === '\.jsonl'/, 'Pi 历史恢复只接受 JSONL 原生会话文件')
-requireText(historyInteraction, /listSourceSessionsByLogicalSession[\s\S]{0,800}sourceId:\s*'pi'[\s\S]{0,120}limit:\s*MAX_RESUME_SOURCE_SESSIONS/, 'Pi 恢复解析器必须先用 sourceId + limit 有界定位 SourceSession')
-requireText(historyInteraction, /sourceRecords\.findByNativeId\([\s\S]{0,180}'pi'[\s\S]{0,180}sourceSession\.nativeSessionId/, 'Pi 恢复解析器必须通过 native identity 精确读取 SourceRecord')
-forbidText(historyInteraction, /observations\.query|repositories\.evidence|limit:\s*5_000/, 'Pi 恢复解析器不得恢复 Observation / Evidence 全时间线扫描')
-requireText(historyInteraction, /await stat\(sessionPath\)/, 'Pi 恢复解析器必须验证原生文件存在')
-requireText(historyInteraction, /await isMatchingPiSessionFile\(sessionPath, nativeSessionIds\)/, 'Pi 恢复解析器必须验证原生 JSONL 身份')
-requireText(historyInteraction, /workspace\?\.path\?\.trim\(\) \|\| sourceRecordCwd\(sourceRecord\)/, 'Pi 恢复解析器必须恢复原工作目录')
-requireText(piHttp, /request\.once\('close', cleanup\)/, 'Pi SSE 断开必须释放订阅')
-requireText(piHttp, /service\.terminate\(runtimeSessionId\)/, 'Pi Runtime 只能显式 DELETE 终止')
+/* Native Pi history uses verified Catalog identity and original JSONL. */
+requireText(slimLive, /createSlimPiHistoryResolver\(catalog,reader,policy\)/, 'Pi Live 必须使用原生历史解析器')
+requireText(nativeHistory, /reader\.read\(/, 'Pi 原生历史恢复必须先通过 Source Reader 校验')
+requireText(nativeHistory, /file\.stat\(\)/, 'Pi 原生历史恢复必须复核文件身份')
+requireText(nativeHistory, /data\.type!=='session'\|\|data\.id!==entry\.nativeSessionId/, 'Pi 原生历史恢复必须验证 JSONL 头身份')
+forbidText(piAdapter, /resolvePiLiveHistoryInput|canonicalPiLiveSnapshot|\.repositories\.sourceRecords/, 'Pi Adapter 不得加载旧 SQL 历史')
 
 /* Runtime lifecycle and ownership. */
 requireText(runtime, /async list\(\): Promise<PiLiveRuntimeState\[]>/, 'Pi Runtime Service 必须提供活跃任务列举')
@@ -164,9 +134,9 @@ forbidText(sdkLoader, /export interface PiSdk(?:Session|Module|Model)/, 'Pi SDK 
 forbidText(`${runtime}\n${sdkLoader}`, /PiRpcClient|--mode['"\s,]+rpc|child_process/, 'Pi Runtime 不得重新引入自维护 RPC 子进程协议')
 
 if (failures.length) {
-  console.error('Pi Runtime / 兼容层契约检查失败：')
+  console.error('Pi Runtime 原生契约检查失败：')
   for (const failure of failures) console.error(`- ${failure}`)
   process.exit(1)
 }
 
-console.log('Pi Runtime / 兼容层契约检查通过：Adapter capability、历史恢复、服务端所有权、独立 SDK Worker、官方类型边界、图片转换与兼容 HTTP 均已锁定。')
+console.log('Pi Runtime 原生契约检查通过：Adapter capability、原生历史恢复、独立 SDK Worker、官方类型边界与图片转换均已锁定。')

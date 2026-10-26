@@ -154,7 +154,7 @@ export async function handleNativeSessionBodySearchRequest(
     return true
   }
   const page=await catalog.query({
-    limit:1,locationKind:'native',onlyWithoutLegacyReview:true,
+    limit:1,locationKind:'native',
     ...(sourceId ? {sourceId} : {}),
     ...(cursor?.before ? {before:cursor.before} : {}),
   })

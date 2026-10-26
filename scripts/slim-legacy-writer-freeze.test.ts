@@ -1,17 +1,18 @@
+import { LegacyV38TestDatabase } from '../packages/storage-sqlite/src/legacy-v38-test-fixture'
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import Database from 'better-sqlite3'
-import { SqliteStorageService } from '@agent-lens/storage-sqlite'
+
 import { withFrozenLegacyWriter } from './slim-legacy-writer-freeze'
 
 test('M3 freeze blocks concurrent v38 writes until the entire finalizer completes',async()=>{
   const dir=await mkdtemp(join(tmpdir(),'al-m3-lock-'))
   const legacyPath=join(dir,'legacy.sqlite')
   try{
-    const storage=new SqliteStorageService({path:legacyPath})
+    const storage=new LegacyV38TestDatabase({path:legacyPath})
     await storage.migrate()
     await storage.close()
     await withFrozenLegacyWriter(legacyPath,async()=>{
@@ -35,7 +36,7 @@ test('M3 freeze always releases after thrown finalizer and rejects wrong schema'
   const dir=await mkdtemp(join(tmpdir(),'al-m3-lock-exception-'))
   const legacyPath=join(dir,'legacy.sqlite')
   try{
-    const storage=new SqliteStorageService({path:legacyPath})
+    const storage=new LegacyV38TestDatabase({path:legacyPath})
     await storage.migrate()
     await storage.close()
     await assert.rejects(withFrozenLegacyWriter(legacyPath,async()=>{

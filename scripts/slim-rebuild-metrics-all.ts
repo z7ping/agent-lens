@@ -80,7 +80,7 @@ export async function rebuildAllSlimMetrics(args:readonly string[]):Promise<Offl
         // remain blocked by the separate full Source enumeration report.
         const sessions=await catalog.query({
           sourceId:source.manifest.sourceId,locationKind:'native',
-          onlyWithoutLegacyReview:true,limit:1,
+          limit:1,
         })
         if(sessions.items.length)report.disabledSources.push(source.manifest.sourceId)
         continue

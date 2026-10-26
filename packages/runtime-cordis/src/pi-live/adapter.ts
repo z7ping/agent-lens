@@ -15,7 +15,6 @@ import type {
   LiveRuntimeEvent,
   LiveSendOptions,
   LiveSnapshotWindow,
-  StorageService,
 } from '@agent-lens/core'
 import {
   createLiveCapabilitySet,
@@ -23,8 +22,6 @@ import {
   dispatchLiveSend,
   requireLiveMessageSupport,
 } from '@agent-lens/live-support'
-import { canonicalPiLiveSnapshot, isCanonicalHistoryCursor } from './canonical-history'
-import { resolvePiLiveHistoryInput } from './history-interaction'
 import { parsePiCacheOptimizerStatus } from './cache-status'
 import type {
   PiLiveImageInput,
@@ -194,8 +191,8 @@ function piMessageUpdateEvent(event: Record<string, unknown>): LiveEvent | undef
 
 /**
  * Maps Pi-native runtime events to the Agent-neutral Live event vocabulary.
- * Unmapped Pi events remain available through event.event for diagnostics and
- * Pi-only compatibility UI, but shared renderers must consume normalizedEvent.
+ * Unmapped Pi events remain available through event.event for diagnostics;
+ * shared renderers consume normalizedEvent.
  */
 export function normalizePiLiveEvent(event: Readonly<Record<string, unknown>>): LiveEvent | undefined {
   const type = liveText(event.type)
@@ -380,7 +377,7 @@ export interface NativePiLiveHistoryResolver {
   resolveForkAt?(sessionId: string, nativeEventId: string): Promise<PiLiveStartInput>
 }
 
-const NO_LEGACY_HISTORY_CAPABILITIES = new Set<LiveCapabilityName>([
+const NATIVE_HISTORY_CAPABILITIES = new Set<LiveCapabilityName>([
   'resume', 'fork', 'fork-at',
 ])
 
@@ -396,25 +393,14 @@ export class PiLiveAdapter implements LiveAdapter {
   constructor(
     readonly service: PiLiveService,
     private readonly attachments: LiveAttachmentService,
-    private readonly storage?: StorageService,
-    private readonly options: {
-      nativeOnly?: boolean
-      nativeHistory?: NativePiLiveHistoryResolver
-    } = {},
+    private readonly options: { nativeHistory?: NativePiLiveHistoryResolver } = {},
   ) {
-    // Slim must not advertise actions whose implementation still needs the
-    // retired SourceRecord/LogicalSession SQL graph. The native Pi Worker
-    // continues to support create, stream, send, queue, and recovery.
-    const features=options.nativeOnly
-      ? CAPABILITIES.filter(capability=>
-        !NO_LEGACY_HISTORY_CAPABILITIES.has(capability)
-        || (Boolean(options.nativeHistory) && (capability==='resume'||capability==='fork'))
-        || (Boolean(options.nativeHistory?.resolveForkAt) && capability==='fork-at'))
-      : [...CAPABILITIES]
-    this.manifest=options.nativeOnly
-      ? {...piLiveAdapterManifest,capabilities:[...features]}
-      : piLiveAdapterManifest
-    this.capabilities=createLiveCapabilitySet(features)
+    const features = CAPABILITIES.filter(capability =>
+      !NATIVE_HISTORY_CAPABILITIES.has(capability)
+      || (Boolean(options.nativeHistory) && (capability === 'resume' || capability === 'fork'))
+      || (Boolean(options.nativeHistory?.resolveForkAt) && capability === 'fork-at'))
+    this.manifest = { ...piLiveAdapterManifest, capabilities: [...features] }
+    this.capabilities = createLiveCapabilitySet(features)
   }
 
   availability() {
@@ -430,83 +416,26 @@ export class PiLiveAdapter implements LiveAdapter {
   }
 
   async resume(logicalSessionId: string): Promise<PiLiveRuntimeState> {
-    if (this.options.nativeHistory) {
-      return this.service.start(await this.options.nativeHistory.resolve(logicalSessionId,'continue'))
-    }
-    if (!this.storage) throw new Error('Pi Live history interactions are unavailable')
-    return this.service.start(await resolvePiLiveHistoryInput(this.storage, logicalSessionId, 'continue'))
+    if (!this.options.nativeHistory) throw new Error('Pi native history interactions are unavailable')
+    return this.service.start(await this.options.nativeHistory.resolve(logicalSessionId, 'continue'))
   }
 
   async fork(logicalSessionId: string): Promise<PiLiveRuntimeState> {
-    if (this.options.nativeHistory) {
-      return this.service.start(await this.options.nativeHistory.resolve(logicalSessionId,'fork'))
-    }
-    if (!this.storage) throw new Error('Pi Live history interactions are unavailable')
-    return this.service.start(await resolvePiLiveHistoryInput(this.storage, logicalSessionId, 'fork'))
+    if (!this.options.nativeHistory) throw new Error('Pi native history interactions are unavailable')
+    return this.service.start(await this.options.nativeHistory.resolve(logicalSessionId, 'fork'))
   }
 
   async forkAt(logicalSessionId: string, nativeEventId: string): Promise<PiLiveRuntimeState> {
-    if (this.options.nativeHistory?.resolveForkAt) {
-      return this.service.start(await this.options.nativeHistory.resolveForkAt(logicalSessionId,nativeEventId))
-    }
-    if (!this.storage) throw new Error('Pi Live history interactions are unavailable')
-    if (!nativeEventId || nativeEventId.length > 256) throw new Error('Invalid history fork anchor')
-    const input = await resolvePiLiveHistoryInput(this.storage, logicalSessionId, 'fork')
-    const listSessions = this.storage.repositories.sessions.listSourceSessionsByLogicalSession
-    if (!listSessions) throw new Error('Pi history source sessions are unavailable')
-    const sessions = await listSessions(logicalSessionId, { sourceId: 'pi', limit: 8 })
-    const installations = [...new Set(sessions.map(session => session.installationId))]
-    const records = await Promise.all(installations.map(installationId =>
-      this.storage!.repositories.sourceRecords.findByNativeId('pi', installationId, nativeEventId),
-    ))
-    const valid = records.filter((record): record is NonNullable<typeof record> => {
-      if (!record || record.sourceId !== 'pi' || record.nativeType !== 'history/message'
-        || record.locator.kind !== 'file' || record.locator.path !== input.sessionPath
-        || !sessions.some(session => session.installationId === record.installationId
-          && session.nativeSessionId === record.sourceSessionNativeId)) return false
-      const payload = record.payload as { entry?: { type?: string; id?: string; message?: { role?: string } } }
-      return payload.entry?.type === 'message' && payload.entry.id === nativeEventId
-        && payload.entry.message?.role === 'assistant'
-    })
-    if (valid.length !== 1) throw new Error('No uniquely verified Pi assistant message at this round boundary')
-    return this.service.start({ ...input, branchFromEntryId: nativeEventId })
+    if (!this.options.nativeHistory?.resolveForkAt) throw new Error('Pi native history fork is unavailable')
+    return this.service.start(await this.options.nativeHistory.resolveForkAt(logicalSessionId, nativeEventId))
   }
 
   state(runtimeSessionId: string): Promise<PiLiveRuntimeState> {
     return this.service.state(runtimeSessionId)
   }
 
-  async snapshot(runtimeSessionId: string, since?: string, window?: LiveSnapshotWindow): Promise<PiLiveSnapshot> {
-    const canonicalSelector = isCanonicalHistoryCursor(since)
-      || isCanonicalHistoryCursor(window?.before)
-      || isCanonicalHistoryCursor(window?.after)
-      || isCanonicalHistoryCursor(window?.around)
-
-    if (canonicalSelector) {
-      if (!this.storage) throw new Error('Canonical Pi Live history is unavailable without storage')
-      const state = await this.service.state(runtimeSessionId)
-      if (!state.logicalSessionId) throw new Error('Canonical Pi Live history has no logical session identity')
-      return canonicalPiLiveSnapshot(this.storage, state, state.logicalSessionId, since, window)
-    }
-
-    const snapshot = await this.service.snapshot(runtimeSessionId, since, window)
-    if (!this.storage
-      || snapshot.entries.length > 0
-      || snapshot.state.status === 'ready'
-      || !snapshot.state.logicalSessionId) {
-      return snapshot
-    }
-
-    // While the Worker hydrates, render the already-canonicalized AgentLens
-    // history instead of blocking on AgentSession creation. Once Ready, the
-    // normal Pi SessionManager Snapshot replaces/reconciles this temporary view.
-    return canonicalPiLiveSnapshot(
-      this.storage,
-      snapshot.state,
-      snapshot.state.logicalSessionId,
-      since,
-      window,
-    ).catch(() => snapshot)
+  snapshot(runtimeSessionId: string, since?: string, window?: LiveSnapshotWindow): Promise<PiLiveSnapshot> {
+    return this.service.snapshot(runtimeSessionId, since, window)
   }
 
   historyIndex(runtimeSessionId: string, query?: LiveHistoryIndexQuery) {
