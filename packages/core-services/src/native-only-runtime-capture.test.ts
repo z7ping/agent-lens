@@ -27,14 +27,14 @@ test('native runtime capture verifies original and updates Catalog/metrics witho
         describe:()=>({canReread:true}),
         verify:async()=>({state:'verified',checkedAt:at}),
       },
-      async startCapture(_ctx,emitter){
+      async startCapture(_ctx:Parameters<NonNullable<SourceDefinition['startCapture']>>[0],emitter:Parameters<NonNullable<SourceDefinition['startCapture']>>[1]){
         await emitter.emit(record)
         return {dispose(){}}
       },
     } as unknown as SourceDefinition
     const runner=new NativeOnlyRuntimeCapture({
       nativeSessionCatalog:{
-        async upsert(entry){upserts.push(entry)},
+        async upsert(entry:import('@agent-lens/core').NativeSessionCatalogEntry){upserts.push(entry)},
       } as never,
       nativeSessionMetrics:{async invalidate(identity){invalidations.push(identity)}},
       checkpoints:{async get(){return null},async set(){},async clear(){}},
@@ -76,7 +76,7 @@ test('Slim capture writes verified native Profile association before Catalog vis
     readNativeSessionPage:async()=>({state:'unsupported'}),
     rawRecovery:{describe:()=>({canReread:true}),
       verify:async()=>({state:'verified',checkedAt:at})},
-    async startCapture(_ctx,emitter){await emitter.emit(record);return{dispose(){}}},
+    async startCapture(_ctx:Parameters<NonNullable<SourceDefinition['startCapture']>>[0],emitter:Parameters<NonNullable<SourceDefinition['startCapture']>>[1]){await emitter.emit(record);return{dispose(){}}},
   } as unknown as SourceDefinition
   const host={id:'host',name:'local',platform:'linux',arch:'x64',
     createdAt:at,lastSeenAt:at}
@@ -115,7 +115,7 @@ test('uncertified runtime-only Hook increments gap instead of writing Evidence o
     manifest:{sourceId:'hermes',productId:'hermes'},
     readNativeSessionPage:async()=>({state:'unsupported'}),
     rawRecovery:{verify:async()=>({state:'verified'})},
-    async startCapture(_ctx,emitter){
+    async startCapture(_ctx:Parameters<NonNullable<SourceDefinition['startCapture']>>[0],emitter:Parameters<NonNullable<SourceDefinition['startCapture']>>[1]){
       await emitter.emit({
         id:'hook',sourceId:'hermes',installationId:'install',
         sourceSessionNativeId:'native-1',nativeType:'tool',
@@ -126,7 +126,7 @@ test('uncertified runtime-only Hook increments gap instead of writing Evidence o
     },
   } as unknown as SourceDefinition
   const runner=new NativeOnlyRuntimeCapture({
-    nativeSessionCatalog:{async upsert(entry){upserts.push(entry)}} as never,
+    nativeSessionCatalog:{async upsert(entry:import('@agent-lens/core').NativeSessionCatalogEntry){upserts.push(entry)}} as never,
     checkpoints:{async get(){return null},async set(){},async clear(){}},
   })
   const handle=await runner.start({

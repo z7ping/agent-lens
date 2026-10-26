@@ -50,12 +50,13 @@ export function parseNativeReindexArgs(args:readonly string[]):NativeReindexArgs
     throw new RangeError('Native reindex --limit must be between 1 and 5000')
   }
   const activeSince=values.get('--since')
+  const runtimeProfileId=values.get('--runtime-profile')
   if(activeSince && (!Number.isFinite(Date.parse(activeSince))
     || !/^\d{4}-\d{2}-\d{2}T/.test(activeSince))) {
     throw new TypeError('Native reindex --since must be an ISO date-time')
   }
   return {stagingPath,sourceId,installationId,maxSessions,
-    ...(values.has('--runtime-profile')?{runtimeProfileId:values.get('--runtime-profile')}:{}),
+    ...(runtimeProfileId?{runtimeProfileId}:{}),
     ...(activeSince?{activeSince}:{})}
 }
 

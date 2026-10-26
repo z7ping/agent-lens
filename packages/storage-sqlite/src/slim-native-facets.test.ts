@@ -34,7 +34,7 @@ test('new Slim agent/project filters require no Legacy observations or session s
     assert.equal(all.projectsTruncated,false)
     assert.equal(all.projects.find(x=>x.id===p1.id)?.lastActivityAt,'2026-10-26T09:00:00Z')
     assert.equal(all.projects.find(x=>x.id===p2.id)?.lastActivityAt,undefined)
-    assert.equal(slim.db.prepare(`SELECT COUNT(*) AS n FROM sqlite_master
+    assert.equal((slim.db.prepare(`SELECT COUNT(*) AS n FROM sqlite_master
       WHERE name IN ('logical_sessions','source_sessions','observations')`).get() as {n:number}).n,0)
   }finally{await slim.close()}
 })

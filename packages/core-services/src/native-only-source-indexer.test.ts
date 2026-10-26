@@ -27,10 +27,10 @@ function makeSource(entries:NativeSessionCatalogEntry[],options:{
     manifest:{pluginType:'source',sourceId:'pi',productId:'pi',parserVersion:'v1',name:'Pi'},
     // Intentionally NO nativeSessionCoverageComplete flag: Hook gaps must not
     // turn an original native file into a Legacy Writer record.
-    async *discoverNativeSessions(ctx){
+    async *discoverNativeSessions(ctx:Parameters<NonNullable<SourceDefinition['discoverNativeSessions']>>[0]){
       for(const entry of entries.slice(0,ctx.historyWindow?.sessionLimit??entries.length))yield entry
     },
-    async readNativeSessionPage(query){
+    async readNativeSessionPage(query:Parameters<NonNullable<SourceDefinition['readNativeSessionPage']>>[0]){
       if(options.throwRead)throw new Error('source file missing')
       return {
         state:'available',hasMore:false,pendingTail:false,
@@ -194,7 +194,7 @@ test('profile-owned native roots and metadata stay attached to the verified sess
     nativeSessionContexts:{async upsert(input:{
       sourceId:string;installationId:string;nativeSessionId:string;runtimeProfileId?:string
     }){saved.push({sourceId:input.sourceId,nativeSessionId:input.nativeSessionId,
-      runtimeProfileId:input.runtimeProfileId})}},
+      ...(input.runtimeProfileId?{runtimeProfileId:input.runtimeProfileId}:{})})}},
     repositories:{
       installations:{async get(){return installation}},
       hosts:{async get(){return host}},

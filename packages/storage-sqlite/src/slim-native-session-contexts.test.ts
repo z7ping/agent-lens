@@ -41,7 +41,7 @@ test('slim metadata retains project/title association without SQL session or evi
     assert.equal((await storage.nativeSessionContexts.get({
       ...base,nativeSessionId:'one',
     }))?.runtimeProfileId,'profile-one')
-    await storage.nativeSessionContexts.upsert({...base,nativeSessionId:'one',workspaceId:undefined})
+    await storage.nativeSessionContexts.upsert({...base,nativeSessionId:'one'})
     assert.deepEqual(await storage.nativeSessionContexts.get({...base,nativeSessionId:'one'}),{
       ...base,nativeSessionId:'one',projectId:'p1',titleOverride:'Saved Title',
       titleKind:'explicit',runtimeProfileId:'profile-one',updatedAt:(await storage.nativeSessionContexts.get({
@@ -70,11 +70,11 @@ test('slim metadata retains project/title association without SQL session or evi
       ['two','workspace-only'])
     const p1Unchanged=await storage.nativeSessionCatalog.query({projectId:'p1',limit:10})
     assert.deepEqual(p1Unchanged.items.map(item=>item.nativeSessionId),['one'])
-    assert.equal(db.prepare(`SELECT COUNT(*) AS n FROM sqlite_master
+    assert.equal((db.prepare(`SELECT COUNT(*) AS n FROM sqlite_master
       WHERE name IN ('logical_sessions','observations','source_records')`).get() as {n:number}).n,0)
-    await assert.rejects(storage.nativeSessionContexts.upsert({...base,nativeSessionId:'one',
+    await assert.rejects(async()=>storage.nativeSessionContexts.upsert({...base,nativeSessionId:'one',
       titleOverride:'unverified first prompt'}),/provenance/)
-    await assert.rejects(storage.nativeSessionContexts.upsert({...base,nativeSessionId:'one',
+    await assert.rejects(async()=>storage.nativeSessionContexts.upsert({...base,nativeSessionId:'one',
       titleKind:'generated'}),/same update/)
   } finally {await storage.close()}
 })

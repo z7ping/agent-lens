@@ -165,12 +165,10 @@ Slim staging DB to a new installed DB file, then atomically writes the active
 database pointer by same-directory rename. A crash before pointer publication
 leaves Legacy active. Rollback changes only the pointer and keeps both files.
 
-**Not yet authorized:** the comprehensive M3 gate still returns
-`readyToSwitch:false` because Writer freeze, original Hook/archive coverage
-and runtime retirement remain uncertified. The CLI has no bypass flag.
-The M4 default Daemon/CLI must consume the pointer before this mechanism can
-become the real application's activation path. Rollback requires the new
-Daemon to be stopped and does not replay Slim-only writes into v38.
+准备阶段始终返回 `readyToSwitch:false`。正式激活仅在旧 Daemon 停止、
+真实 SQLite Writer 锁内完成全表新鲜度复核、原件/Hook/统计全部认证后放行。
+CLI 没有绕过门禁的参数。M4 默认 Daemon/CLI/Desktop 已消费同一活动指针。
+回滚要求新 Daemon 已停止，只改变活动路由，不把 Slim 新增数据反向写回 v38。
 
 ### M3 active pointer consumption
 
@@ -178,9 +176,9 @@ An explicit Slim start can consume the exact M3 activated DB pointer via
 `AGENT_LENS_ACTIVE_DB_POINTER=/absolute/path/to/active.json npm run start:slim`.
 A corrupt/missing pointer or one rolled back to Legacy fails closed. The
 pointer takes precedence over stale `AGENT_LENS_DB_PATH`; the Slim worker
-still asserts v1 Schema at startup. This is the same storage helper used by
-the activation command; it does not replace the default Daemon/desktop launch
-until M4 and does not certify M3 on its own.
+still asserts v1 Schema at startup.
+默认 Daemon/CLI/Desktop 也通过共享的受检指针选择新库；未迁移 v38 明确阻断。
+单独具备指针读取能力不能代替 M3 完整迁移验收。
 
 ### One-time installed migration (M3)
 
@@ -205,3 +203,20 @@ If there are more sessions than the budget, the audit fails closed. The active
 pointer normally lives alongside the user's existing `agent-lens.db` as
 `active-database.json`. Native-only default boot consumes it without a second
 legacy database copy.
+
+## M3 隔离代码验收
+
+在仓库根目录执行以下命令，可复现隔离的 v38 → Slim 迁移验收：
+
+```powershell
+npm run typecheck:slim
+npm run build:dist
+npm run accept:slim-m3
+```
+
+`typecheck:slim` 校验迁移脚本及其验收用例，并由根目录 `npm run typecheck` 统一执行。
+`accept:slim-m3` 使用系统临时目录和独立用户目录，复用项目 v38 迁移链、真实 Pi JSONL 原件及正式分发 CLI，验证备份、重建、激活、默认 Daemon 原生读取、停机回滚和失败阻断；不读取或切换用户真实数据库，也不停止现有服务。分发构建必须先完成，否则分发入口验收无法运行。
+
+最终原件审计会重新读取来源授权；准备阶段之后撤销授权，也必须阻断激活。分发 Daemon 只允许默认入口启动，不得因打包而再次执行独立 Slim 启动入口。
+
+此验收通过仅证明 M3 代码闭环。真实用户数据库迁移、五来源完整场景、Windows 安装和 UI 手工验收仍按 #617 的 M7 单独记录。

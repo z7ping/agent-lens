@@ -871,8 +871,8 @@ export class SourceHistoryRunner {
         const maxSessions = input.historyWindow?.sessionLimit ?? 32
         const activeInstallation = runtimeProfile
           ? { ...installation,
-              configRoot: runtimeProfile.configRoot ?? installation.configRoot,
-              dataRoot: runtimeProfile.dataRoot ?? installation.dataRoot }
+              ...(runtimeProfile.configRoot !== undefined ? { configRoot: runtimeProfile.configRoot } : {}),
+              ...(runtimeProfile.dataRoot !== undefined ? { dataRoot: runtimeProfile.dataRoot } : {}) }
           : installation
         const scanned = await new NativeOnlySourceIndexer(catalog).scan({
           source,host,installation:activeInstallation,

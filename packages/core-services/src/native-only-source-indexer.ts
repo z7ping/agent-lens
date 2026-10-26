@@ -235,8 +235,8 @@ export async function indexNativeInstallation(
   // independent installations/profiles under the same product identity.
   const effectiveInstallation=input.runtimeProfile ? {
     ...installation,
-    configRoot:input.runtimeProfile.configRoot ?? installation.configRoot,
-    dataRoot:input.runtimeProfile.dataRoot ?? installation.dataRoot,
+    ...(input.runtimeProfile.configRoot !== undefined ? { configRoot: input.runtimeProfile.configRoot } : {}),
+    ...(input.runtimeProfile.dataRoot !== undefined ? { dataRoot: input.runtimeProfile.dataRoot } : {}),
   } : installation
   if(input.runtimeProfile && !storage.nativeSessionContexts) {
     throw new Error('Native profile indexing requires durable context association')

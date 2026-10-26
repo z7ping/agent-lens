@@ -164,7 +164,7 @@ test('certified slim project scope reaches native numerical projection, legacy s
   } as unknown as NativeSessionMetricsStore
   const denied=await nativeMetricContribution(metrics,sources,policy,{projectId:'project-a'})
   assert.deepEqual(denied,{state:'unsupported',reason:'native-metrics-filter-not-indexed'})
-  assert.deepEqual(scopes,[])
+  assert.equal(scopes.length,0)
   const result=await nativeMetricContribution(metrics,sources,policy,{
     projectId:'project-a',projectScopeReady:true,
   })

@@ -64,8 +64,8 @@ export class NativeOnlyAssetScanner {
     const reported=new Map<string,Set<AssetState>>()
     const activeInstallation=runtimeProfile?{
       ...installation,
-      dataRoot:runtimeProfile.dataRoot??installation.dataRoot,
-      configRoot:runtimeProfile.configRoot??installation.configRoot,
+      ...(runtimeProfile.dataRoot !== undefined ? { dataRoot: runtimeProfile.dataRoot } : {}),
+      ...(runtimeProfile.configRoot !== undefined ? { configRoot: runtimeProfile.configRoot } : {}),
     }:installation
     for await(const discovered of source.discoverAssets({
       host,installation:activeInstallation,

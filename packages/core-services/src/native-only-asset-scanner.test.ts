@@ -17,12 +17,12 @@ test('native-only asset scan reconciles current state without creating Evidence'
       return value
     },
   },{
-    async get(_scope,key){return checkpoints.get(key)??null},
-    async set(_scope,key,value){checkpoints.set(key,value)},
+    async get(_scope:string,key:string){return checkpoints.get(key)??null},
+    async set(_scope:string,key:string,value:unknown){checkpoints.set(key,value)},
   } as never,{
     isEnabled(){return true},
     isSourceEnabled(){return true},
-    sanitizeDiscoveredAsset(input){return input},
+    sanitizeDiscoveredAsset(input:Parameters<import('@agent-lens/core').CapturePolicyService['sanitizeDiscoveredAsset']>[0]){return input},
   } as never)
   const source={
     manifest:{sourceId:'pi',productId:'pi'},

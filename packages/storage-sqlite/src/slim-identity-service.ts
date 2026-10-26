@@ -103,11 +103,12 @@ export class SqliteSlimIdentityService implements Pick<IdentityService,
       const value=db.prepare('SELECT * FROM projects WHERE id=?')
         .get(id) as Record<string,unknown>|undefined
       const old=value?mapProject(value):undefined
+      const name=hint.name??old?.name
+      const repositoryIdentity=hint.repositoryIdentity??old?.repositoryIdentity
       const item:Project={
         id,
-        ...(hint.name??old?.name?{name:hint.name??old?.name}:{}),
-        ...(hint.repositoryIdentity??old?.repositoryIdentity
-          ?{repositoryIdentity:hint.repositoryIdentity??old?.repositoryIdentity}:{}),
+        ...(name?{name}:{}),
+        ...(repositoryIdentity?{repositoryIdentity}:{}),
         createdAt:old?.createdAt??now(),lastSeenAt:now(),
       }
       db.prepare(`INSERT INTO projects(
@@ -139,12 +140,12 @@ export class SqliteSlimIdentityService implements Pick<IdentityService,
       const value=db.prepare('SELECT * FROM workspaces WHERE id=?')
         .get(id) as Record<string,unknown>|undefined
       const old=value?mapWorkspace(value):undefined
+      const repositoryId=hint.gitRemote??old?.repositoryId
       const workspace:Workspace={
         id,hostId:hint.hostId,
         ...(project?.id??old?.projectId?{projectId:project?.id??old!.projectId}:{}),
         path,
-        ...(hint.gitRemote??old?.repositoryId
-          ?{repositoryId:hint.gitRemote??old?.repositoryId}:{}),
+        ...(repositoryId?{repositoryId}:{}),
         ...(old?.worktreeId?{worktreeId:old.worktreeId}:{}),
       }
       db.prepare(`INSERT INTO workspaces(

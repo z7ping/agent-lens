@@ -402,7 +402,10 @@ test('native reader uses persisted Slim profile roots across Worker, Hook and me
   }
   const source={
     manifest:{sourceId:'pi',productId:'pi',parserVersion:'v1'},
-    readNativeSessionPage:async(_query,ctx)=>{
+    readNativeSessionPage:async(
+      _query:Parameters<NonNullable<SourceDefinition['readNativeSessionPage']>>[0],
+      ctx:Parameters<NonNullable<SourceDefinition['readNativeSessionPage']>>[1],
+    )=>{
       resolvedRoots.push(ctx.installation.dataRoot??'')
       assert.equal(ctx.runtimeProfile?.id,'profile-1')
       return {state:'available' as const,records:[],

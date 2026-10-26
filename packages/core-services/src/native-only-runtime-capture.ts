@@ -111,10 +111,11 @@ export class NativeOnlyRuntimeCapture {
     if(!source.rawRecovery?.verify || !source.readNativeSessionPage){
       throw new Error('Native runtime capture requires verifiable Source history')
     }
+    const verify=source.rawRecovery.verify.bind(source.rawRecovery)
     const effectiveInstallation=runtimeProfile?{
       ...installation,
-      dataRoot:runtimeProfile.dataRoot??installation.dataRoot,
-      configRoot:runtimeProfile.configRoot??installation.configRoot,
+      ...(runtimeProfile.dataRoot !== undefined ? { dataRoot: runtimeProfile.dataRoot } : {}),
+      ...(runtimeProfile.configRoot !== undefined ? { configRoot: runtimeProfile.configRoot } : {}),
     }:installation
     const scope=JSON.stringify([
       'slim-native-capture-v1',source.manifest.sourceId,installation.id,
@@ -142,7 +143,7 @@ export class NativeOnlyRuntimeCapture {
       }
       let verification:Awaited<ReturnType<NonNullable<NonNullable<SourceDefinition['rawRecovery']>['verify']>>>
       try{
-        verification=await source.rawRecovery!.verify(record,context)
+        verification=await verify(record,context)
       }catch(error){
         if(signal.aborted)throw error
         counts.coverageGaps++

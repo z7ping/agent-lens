@@ -15,7 +15,7 @@ export interface MigrateOnceOptions {
 }
 export function parseMigrateOnceArgs(args:readonly string[],
   env:NodeJS.ProcessEnv=process.env,
-  uuid=()=>randomUUID(),
+  uuid:()=>string=()=>randomUUID(),
 ):MigrateOnceOptions{
   const options=new Map<string,string>()
   for(let i=0;i<args.length;i++){

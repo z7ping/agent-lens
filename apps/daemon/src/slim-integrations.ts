@@ -76,7 +76,7 @@ export function startSlimIntegrations(options:{
     authorization:{
       available:(productId:string):readonly ('live'|'hook'|'runtime')[]=>{
         const recognized=options.sources.list().some(source=>source.manifest.productId===productId)
-        return recognized&&['pi','codex','hermes'].includes(productId)?['live']:[],
+        return recognized&&['pi','codex','hermes'].includes(productId)?['live']:[]
       },
       async grant(productId:string,capabilities:readonly ('live'|'hook'|'runtime')[]){
         grants=await grantIntegrationCapabilities(authorizationPath,productId,capabilities)
