@@ -29,8 +29,8 @@ export function parseOfflineMetricArgs(args:readonly string[]):OfflineMetricsOpt
   if(!Number.isSafeInteger(maxSessions)||maxSessions<1||maxSessions>5000){
     throw new RangeError('Offline metric session budget must be 1-5000')
   }
-  if(!Number.isSafeInteger(maxPages)||maxPages<64||maxPages>16384){
-    throw new RangeError('Offline metric page budget must be 64-16384')
+  if(!Number.isSafeInteger(maxPages)||maxPages<1||maxPages>16384){
+    throw new RangeError('Offline metric page budget must be 1-16384')
   }
   return {stagingPath:resolve(stagingPath),maxSessions,maxPages}
 }
@@ -40,6 +40,7 @@ export interface OfflineMetricsReport {
   partial:number
   failed:number
   unfinished:number
+  budgetReached:boolean
   sourceResults:Array<{sourceId:string;scanned:number;complete:number;partial:number;failed:number}>
   /** Missing, stalled, uncertified Sources prevent M3 activation. */
   readyToSwitch:false
@@ -65,6 +66,7 @@ export async function rebuildAllSlimMetrics(args:readonly string[]):Promise<Offl
     if(!metrics.findRebuildCandidates)throw Error('Slim numerical rebuild candidate port missing')
     const report:OfflineMetricsReport={
       scanned:0,complete:0,partial:0,failed:0,unfinished:0,
+      budgetReached:false,
       sourceResults:[],readyToSwitch:false,
     }
     const signal=new AbortController().signal
@@ -123,6 +125,7 @@ export async function rebuildAllSlimMetrics(args:readonly string[]):Promise<Offl
       // authoritative current/partial/stale/missing SQL reconciliation.
       if(report.scanned>=options.maxSessions)break
     }
+    report.budgetReached=report.scanned>=options.maxSessions
     report.unfinished=report.failed+report.partial
     return report
   }finally{await runtime.shutdown()}

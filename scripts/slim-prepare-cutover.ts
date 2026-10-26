@@ -2,6 +2,7 @@ import { resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { stageSlimCutover } from '@agent-lens/storage-sqlite'
 import { runNativeReindexAll } from './slim-reindex-all'
+import { rebuildAllSlimMetrics } from './slim-rebuild-metrics-all'
 import { auditSlimCutoverGate } from './slim-cutover-gate'
 
 export interface SlimPrepareOptions {
@@ -50,6 +51,7 @@ export function parseSlimPrepareArgs(args:readonly string[]):SlimPrepareOptions 
 export interface SlimPrepareReport {
   copiedRows:Readonly<Record<string,number>>
   discovery:Awaited<ReturnType<typeof runNativeReindexAll>>
+  metrics:Awaited<ReturnType<typeof rebuildAllSlimMetrics>>
   gate:Awaited<ReturnType<typeof auditSlimCutoverGate>>
   blockedBy:readonly string[]
   readyToSwitch:false
@@ -69,6 +71,11 @@ export async function prepareSlimCutover(args:readonly string[]):Promise<SlimPre
     '--staging',input.stagingPath,'--all-installations',
     '--limit',String(input.maxSessions),
   ])
+  const metrics=await rebuildAllSlimMetrics([
+    '--staging',input.stagingPath,
+    '--max-sessions',String(input.maxSessions),
+    '--max-pages',String(input.maxPages),
+  ])
   const gate=await auditSlimCutoverGate([
     '--legacy',input.legacyPath,'--backup',input.backupPath,
     '--staging',input.stagingPath,'--max-sessions',String(input.maxSessions),
@@ -77,10 +84,12 @@ export async function prepareSlimCutover(args:readonly string[]):Promise<SlimPre
   const blockedBy=[...new Set([
     ...gate.blockedBy,
     ...(discovery.discoveryComplete?[]:['native-source-enumeration-incomplete']),
+    ...(metrics.failed||metrics.partial?['native-numerical-metrics-not-fully-certified']:[]),
+    ...(metrics.budgetReached?['native-numerical-metrics-budget-exhausted']:[]),
   ])]
   return {
     copiedRows:stage.copiedRows,
-    discovery,gate,blockedBy,
+    discovery,metrics,gate,blockedBy,
     readyToSwitch:false,
   }
 }
