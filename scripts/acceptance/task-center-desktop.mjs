@@ -1,6 +1,7 @@
 import { mkdir, rename, writeFile } from 'node:fs/promises'
 import { resolve } from 'node:path'
 import { app, BrowserWindow } from 'electron'
+import { prepareAcceptanceTaskCenter } from './native-acceptance.mjs'
 
 const baseUrl = (process.env.AGENT_LENS_ACCEPTANCE_URL || 'http://127.0.0.1:56789').replace(/\/$/, '')
 const path = process.env.AGENT_LENS_ACCEPTANCE_PATH || '/review'
@@ -126,11 +127,17 @@ async function persistReport() {
 async function waitForTaskCenter(win) {
   const deadline = Date.now() + 20_000
   while (Date.now() < deadline) {
+    await prepareAcceptanceTaskCenter(win)
     const ready = await withTimeout(win.webContents.executeJavaScript(`Boolean(document.querySelector('.task-center-page'))`), 2_000, '查询 .task-center-page').catch(() => false)
     if (ready) return
     await delay(200)
   }
-  fail('20 秒内没有出现 .task-center-page；请确认 AgentLens 已运行且验收 URL 指向任务中心')
+  const diagnostic = await win.webContents.executeJavaScript(`({
+    url: location.href, title: document.title,
+    text: document.body.innerText.slice(0, 2000),
+    scripts: [...document.scripts].map(script => script.src),
+  })`).catch(() => null)
+  fail('20 秒内没有出现 .task-center-page：' + JSON.stringify(diagnostic))
 }
 
 async function loadTaskCenter(win, label) {
@@ -152,11 +159,13 @@ async function waitForProjectedReviewDetail(win, label) {
   const deadline = Date.now() + 12_000
   let lastState = null
   while (Date.now() < deadline) {
+    await prepareAcceptanceTaskCenter(win)
     const state = await withTimeout(win.webContents.executeJavaScript(`(() => {
       const pane = document.querySelector('.review-reader-pane')
       const expected = location.pathname.startsWith('/review/') ? decodeURIComponent(location.pathname.slice('/review/'.length)) : ''
       const sessionMatches = !expected || pane?.getAttribute('data-review-session-id') === expected
-      if (!sessionMatches) return { detail: false, roundCount: 0, processExpanded: false, thinkingCount: 0, toolCount: 0 }
+      if (!sessionMatches) return { detail: false, roundCount: 0, processExpanded: false, thinkingCount: 0, toolCount: 0,
+        expected, actual: pane?.getAttribute('data-review-session-id'), text: document.body.innerText.slice(-1500) }
       // The completed Process is intentionally folded by default. Exercise the
       // real disclosure interaction instead of requiring hidden Tool DOM rows.
       // Live and Review now share TaskSessionProcess / TaskProcessGroup.
@@ -578,6 +587,8 @@ async function runSwitchStability(win) {
   // spuriously counting an extra Reader tree as leaked DOM/listeners.
   await waitForProjectedReviewDetail(win, '切换前基线')
   await primePortalEventDelegation(win)
+  // 首次正文高亮/懒加载与切换后使用同样的稳定窗口，再比较 GC 后保留量。
+  await delay(1_200)
   const beforePath = await withTimeout(win.webContents.executeJavaScript('location.pathname'), 2_000, '读取基线任务路径')
   const before = await collectDomCounters(win, '切换前')
   const listenerRootsBefore = await snapshotRootEventListeners(win)
@@ -590,8 +601,8 @@ async function runSwitchStability(win) {
   await delay(1_200)
   const afterSettled = await collectDomCounters(win, '切换后延迟稳定')
   const listenerRootsAfterSettled = await snapshotRootEventListeners(win)
-  const listenerGrowth = after.jsEventListeners - before.jsEventListeners
-  const nodeGrowth = after.nodes - before.nodes
+  const listenerGrowth = Math.max(after.jsEventListeners, afterSettled.jsEventListeners) - before.jsEventListeners
+  const nodeGrowth = afterSettled.nodes - before.nodes
   const maxNodeGrowth = Math.max(100, Math.ceil(before.nodes * 0.25))
   const errors = []
   if (switched.completed !== 100) errors.push(`仅完成 ${switched.completed}/100 次切换`)
@@ -696,6 +707,7 @@ try {
     win.webContents.on('render-process-gone', (_event, details) => { diagnostic.rendererGone = { reason: details.reason, exitCode: details.exitCode } })
     try {
       diagnostic.phase = 'loading'
+      await persistReport()
       await loadTaskCenter(win, `${viewport.width}×${viewport.height}`)
       diagnostic.phase = 'emulate-viewport'
       await applyViewport(win, viewport)

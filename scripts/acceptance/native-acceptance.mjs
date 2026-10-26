@@ -3,6 +3,18 @@ export const nativeCatalogPath = '/api/v1/native-sessions'
 export const nativeMetricsPath = `${nativeCatalogPath}/metrics/overview`
 export const nativeReviewPath = id => `${nativeCatalogPath}/${encodeURIComponent(id)}/review?turnLimit=4`
 
+// 隔离的新用户通过真实入口进入任务中心并选择样本；不安装或授权 Agent。
+export async function prepareAcceptanceTaskCenter(win) {
+  await win.webContents.executeJavaScript(`(() => {
+    const later = document.querySelector('.integration-onboarding-footer button')
+    if (later instanceof HTMLButtonElement && !later.disabled) later.click()
+    if (location.pathname === '/review') {
+      const first = document.querySelector('.task-center-rail button.session-item')
+      if (first instanceof HTMLButtonElement) first.click()
+    }
+  })()`)
+}
+
 export function nativeMetricSnapshot(body) {
   if (body?.state !== 'available' || !Array.isArray(body.items)) return null
   const totals = body.totals

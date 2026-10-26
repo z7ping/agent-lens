@@ -2,6 +2,7 @@ import type { LiveRuntimeRefDto, LaunchableProjectDto, NativeSessionSummaryDto }
 import type { ReviewFilters } from '../client/api'
 import type { TaskSessionListSummary } from './task-center'
 import { taskLiveRuntimeHref } from './task-live-runtime'
+import { nativeReviewTitle } from '../client/native-review-adapter'
 
 export interface TaskCenterSession {
   item: TaskSessionListSummary
@@ -81,6 +82,6 @@ export function nativeTaskCenterSummaries(
   }).map(entry=>({
     id:entry.id,productId:entry.sourceId,sourceIds:[entry.sourceId],
     startedAt:'',endedAt:entry.lastActivityAt,hasErrors:false,
-    ...(entry.title?{title:entry.title}:{}),
+    ...nativeReviewTitle(entry),
   }))
 }

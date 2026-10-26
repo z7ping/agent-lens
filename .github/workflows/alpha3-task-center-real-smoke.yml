@@ -99,7 +99,7 @@ jobs:
           # memory citation 可见边界、具体 Tool 行、Inspector 与 100 次任务切换。
           $fixture = Get-Content -Raw -Path 'packages/source-codex/src/__fixtures__/codex-sample.jsonl'
           $memoryLineA = '{"timestamp":"2026-07-02T05:51:33.000Z","type":"response_item","payload":{"type":"message","role":"assistant","phase":"final_answer","content":[{"type":"output_text","text":"最终可见回答\n<oai-mem-citation><citation_entries>mem-1</citation_entries><rollout_ids>rollout-1</rollout_ids></oai-mem-citation>"}]}}'
-          $fixtureA = $fixture.TrimEnd() + "`n" + $memoryLineA
+          $fixtureA = $fixture.TrimEnd() + "`n" + $memoryLineA + "`n"
           $sessionDirA = Join-Path $env:CODEX_HOME 'sessions/2026/07/02'
           $sessionDirB = Join-Path $env:CODEX_HOME 'sessions/2026/07/03'
           New-Item -ItemType Directory -Force -Path $sessionDirA, $sessionDirB | Out-Null
