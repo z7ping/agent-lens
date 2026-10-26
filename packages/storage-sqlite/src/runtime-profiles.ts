@@ -1,7 +1,6 @@
 import { createHash } from 'node:crypto'
 import type { RuntimeProfile, RuntimeProfileIdentityHint } from '@agent-lens/core'
 import { SqliteExecutor } from './executor'
-import { isSlimDatabase } from './slim-schema'
 import { mapRuntimeProfile } from './repository-row-mappers'
 
 type RuntimeProfileRow = Record<string, unknown>
@@ -95,41 +94,15 @@ export class SqliteRuntimeProfileRepository {
     runtimeProfileId: string,
   ): Promise<void> {
     await this.executor.run(() => {
-      if (isSlimDatabase(this.executor.db)) {
-        // The cutover schema has no logical_sessions/source_sessions tables.
-        // The native session association is deliberately metadata-only.
-        this.executor.db.prepare(`
-          INSERT INTO native_session_context(
-            source_id,installation_id,native_session_id,runtime_profile_id,updated_at
-          ) VALUES (?,?,?,?,?)
-          ON CONFLICT(source_id,installation_id,native_session_id) DO UPDATE SET
-            runtime_profile_id=COALESCE(native_session_context.runtime_profile_id,excluded.runtime_profile_id),
-            updated_at=excluded.updated_at
-        `).run(sourceId,installationId,nativeSessionId,runtimeProfileId,new Date().toISOString())
-        return
-      }
+      // One metadata-only association for original native Source sessions.
       this.executor.db.prepare(`
-        UPDATE source_sessions
-        SET runtime_profile_id = ?
-        WHERE source_id = ? AND installation_id = ? AND native_session_id = ?
-          AND runtime_profile_id IS NULL
-      `).run(runtimeProfileId, sourceId, installationId, nativeSessionId)
-      this.executor.db.prepare(`
-        UPDATE logical_sessions
-        SET runtime_profile_id = ?
-        WHERE id IN (
-          SELECT logical_session_id FROM source_sessions
-          WHERE source_id = ? AND installation_id = ? AND native_session_id = ?
-            AND runtime_profile_id = ?
-        )
-          AND runtime_profile_id IS NULL
-      `).run(
-        runtimeProfileId,
-        sourceId,
-        installationId,
-        nativeSessionId,
-        runtimeProfileId,
-      )
+        INSERT INTO native_session_context(
+          source_id,installation_id,native_session_id,runtime_profile_id,updated_at
+        ) VALUES (?,?,?,?,?)
+        ON CONFLICT(source_id,installation_id,native_session_id) DO UPDATE SET
+          runtime_profile_id=COALESCE(native_session_context.runtime_profile_id,excluded.runtime_profile_id),
+          updated_at=excluded.updated_at
+      `).run(sourceId,installationId,nativeSessionId,runtimeProfileId,new Date().toISOString())
     })
   }
 
