@@ -1,6 +1,6 @@
 import type { TaskLiveRuntimeLocation } from './task-live-runtime'
 import type { LiveTaskState } from './live-task-state'
-import { useCallback, useEffect } from 'react'
+import { useCallback, useEffect, useRef } from 'react'
 import { liveApi } from '../client/live'
 import { LIVE_TASK_SNAPSHOT_PAGE_LIMIT, LIVE_TASK_HISTORY_WINDOW_MAX_PAGES, historyPageBlock, aggregateHistoryPage, compactHistoryBlocks, refreshLatestHistoryBlock, captureLiveReaderAnchor, restoreLiveReaderAnchor, splitLiveProjectionItems, prependUniqueLiveProjectionItems, appendUniqueLiveProjectionItems } from './live-task-history-window'
 import { projectLiveInputHistory, projectLiveSnapshotEntries } from './live-task-projection'
@@ -38,6 +38,12 @@ export function useLiveTaskHistory({ current, session }: {
     snapshotBaseActiveCountRef,
     roundProjectorRef
   } = session
+  // Explicit boundary navigation supersedes any in-flight automatic page read.
+  const navigationEpochRef = useRef(0)
+  useEffect(() => {
+    navigationEpochRef.current += 1
+  }, [current?.runtimeSessionId])
+
   const markReaderUserIntent = useCallback((direction?: 'older' | 'newer') => {
     followControllerRef.current.markUserIntent()
     setHistoryPagingArmed(true)
@@ -58,7 +64,8 @@ export function useLiveTaskHistory({ current, session }: {
   }, [historyPagingArmed])
 
   const replaceHistoryWindow = useCallback(async (edge: 'earliest' | 'latest') => {
-    if (!current || historyLoading) return
+    if (!current) return
+    const epoch = ++navigationEpochRef.current
     const reader = readerRef.current
     setHistoryLoading(true)
     try {
@@ -68,6 +75,7 @@ export function useLiveTaskHistory({ current, session }: {
         undefined,
         { edge, limit: LIVE_TASK_SNAPSHOT_PAGE_LIMIT },
       )
+      if (epoch !== navigationEpochRef.current) return
       const projected = projectLiveSnapshotEntries(snapshot.entries)
       const nextProjection = splitLiveProjectionItems(projected, edge === 'latest' && snapshot.state.isStreaming)
       roundProjectorRef.current.reset()
@@ -95,13 +103,17 @@ export function useLiveTaskHistory({ current, session }: {
         lastReaderScrollTopRef.current = currentReader.scrollTop
       })
     } catch (reason) {
-      setSyncError(reason instanceof Error ? reason.message : String(reason))
+      if (epoch === navigationEpochRef.current) {
+        setSyncError(reason instanceof Error ? reason.message : String(reason))
+      }
     } finally {
-      setHistoryLoading(false)
-      setHistoryPagingArmed(false)
-      setHistoryPagingDirection(null)
+      if (epoch === navigationEpochRef.current) {
+        setHistoryLoading(false)
+        setHistoryPagingArmed(false)
+        setHistoryPagingDirection(null)
+      }
     }
-  }, [current, historyLoading])
+  }, [current])
 
   const jumpEarliest = useCallback(() => replaceHistoryWindow('earliest'), [replaceHistoryWindow])
   const jumpLatest = useCallback(() => replaceHistoryWindow('latest'), [replaceHistoryWindow])
@@ -118,6 +130,7 @@ export function useLiveTaskHistory({ current, session }: {
     const reader = readerRef.current
     const previousScrollHeight = reader?.scrollHeight ?? 0
     const previousScrollTop = reader?.scrollTop ?? 0
+    const epoch = navigationEpochRef.current
     setHistoryLoading(true)
     try {
       const snapshot = await liveApi.snapshot(
@@ -126,6 +139,7 @@ export function useLiveTaskHistory({ current, session }: {
         undefined,
         { before: historyPage.before, limit: LIVE_TASK_SNAPSHOT_PAGE_LIMIT },
       )
+      if (epoch !== navigationEpochRef.current) return
       const older = projectLiveSnapshotEntries(snapshot.entries)
       const savedAnchor = reader ? captureLiveReaderAnchor(reader) : null
       const baseBlocks = historyAtLatestRef.current
@@ -158,16 +172,21 @@ export function useLiveTaskHistory({ current, session }: {
         lastReaderScrollTopRef.current = currentReader.scrollTop
       })
     } catch (reason) {
-      setSyncError(reason instanceof Error ? reason.message : String(reason))
+      if (epoch === navigationEpochRef.current) {
+        setSyncError(reason instanceof Error ? reason.message : String(reason))
+      }
     } finally {
-      setHistoryLoading(false)
-      setHistoryPagingArmed(false)
-      setHistoryPagingDirection(null)
+      if (epoch === navigationEpochRef.current) {
+        setHistoryLoading(false)
+        setHistoryPagingArmed(false)
+        setHistoryPagingDirection(null)
+      }
     }
   }, [current, historyLoading, historyPage?.before, historyPage?.hasEarlier, historyPagingArmed, historyPagingDirection])
 
   const loadNewer = useCallback(async () => {
     if (!current || !historyPagingArmed || historyPagingDirection !== 'newer' || historyLoading || !historyPage?.hasLater || !historyPage.after) return
+    const epoch = navigationEpochRef.current
     setHistoryLoading(true)
     try {
       const snapshot = await liveApi.snapshot(
@@ -176,6 +195,7 @@ export function useLiveTaskHistory({ current, session }: {
         undefined,
         { after: historyPage.after, limit: LIVE_TASK_SNAPSHOT_PAGE_LIMIT },
       )
+      if (epoch !== navigationEpochRef.current) return
       const newer = projectLiveSnapshotEntries(snapshot.entries)
       const reachedLatest = snapshot.page?.hasLater !== true
       const newerProjection = splitLiveProjectionItems(newer, reachedLatest && snapshot.state.isStreaming)
@@ -212,11 +232,15 @@ export function useLiveTaskHistory({ current, session }: {
         })
       }
     } catch (reason) {
-      setSyncError(reason instanceof Error ? reason.message : String(reason))
+      if (epoch === navigationEpochRef.current) {
+        setSyncError(reason instanceof Error ? reason.message : String(reason))
+      }
     } finally {
-      setHistoryLoading(false)
-      setHistoryPagingArmed(false)
-      setHistoryPagingDirection(null)
+      if (epoch === navigationEpochRef.current) {
+        setHistoryLoading(false)
+        setHistoryPagingArmed(false)
+        setHistoryPagingDirection(null)
+      }
     }
   }, [current, historyLoading, historyPage?.after, historyPage?.hasLater, historyPagingArmed, historyPagingDirection])
 
