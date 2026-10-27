@@ -69,7 +69,7 @@ export function visibleTaskCenterSession(
 export function nativeTaskCenterSummaries(
   entries:readonly NativeSessionSummaryDto[],filters:ReviewFilters,nowMs:number,
 ):TaskSessionListSummary[]{
-  if(filters.status!=='all' || filters.sourceIds?.length===0)return []
+  if(filters.sourceIds?.length===0)return []
   const from=filters.range==='all'?Number.NEGATIVE_INFINITY
     :filters.range==='today'
       ?new Date(new Date(nowMs).setHours(0,0,0,0)).getTime()
