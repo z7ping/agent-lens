@@ -503,7 +503,9 @@ export function TaskCenterPage({ model, mode, sidebarHost }: { model: AgentLensC
 
   const nativeHistory=useMemo(()=>{
     const all=new Map(nativeSessions.map(item=>[item.id,item]))
-    for(const item of nativeBodySessions)all.set(item.id,item)
+    // Search excerpts are not authoritative for project/title provenance.
+    // Preserve the indexed Catalog record when the same session is returned.
+    for(const item of nativeBodySessions)if(!all.has(item.id))all.set(item.id,item)
     return nativeTaskCenterSummaries([...all.values()],review.filters,nowMs)
   },[nativeSessions,nativeBodySessions,review.filters,nowMs])
   const localSessions = useMemo(() => mergeTaskCenterSessions(
