@@ -59,6 +59,42 @@ test('native runtime capture verifies original and updates Catalog/metrics witho
   }finally{await rm(root,{recursive:true,force:true})}
 })
 
+test('Pi native capture accepts fractional file timestamps in bounded cursors',async()=>{
+  const checkpoints=new Map<string,unknown>()
+  const key='pi:history:v6-file-identity:abc'
+  const cursor={path:'/tmp/session.jsonl',offset:123,sequence:1,
+    size:234,mtimeMs:1780000000123.375,fileId:'1:2'}
+  const source={
+    manifest:{sourceId:'pi',productId:'pi'},
+    readNativeSessionPage:async()=>({state:'unsupported'}),
+    rawRecovery:{verify:async()=>({state:'verified'})},
+    async startCapture(ctx:Parameters<NonNullable<SourceDefinition['startCapture']>>[0]){
+      await ctx.checkpoint.set(key,cursor)
+      assert.deepEqual(await ctx.checkpoint.get(key),cursor)
+      await assert.rejects(ctx.checkpoint.set('invalid',{mtimeMs:Infinity}),/bounded cursor metadata/)
+      await assert.rejects(ctx.checkpoint.set('invalid',{content:'not-a-cursor'}),/bounded cursor metadata/)
+      return {dispose(){}}
+    },
+  } as unknown as SourceDefinition
+  const runner=new NativeOnlyRuntimeCapture({
+    nativeSessionCatalog:{async upsert(){}} as never,
+    checkpoints:{
+      async get(_scope:string,key:string){return checkpoints.get(key)??null},
+      async set(_scope:string,key:string,value:unknown){checkpoints.set(key,value)},
+      async clear(_scope:string,key:string){checkpoints.delete(key)},
+    } as never,
+  })
+  const handle=await runner.start({
+    source,
+    host:{id:'host',name:'local',platform:'linux',arch:'x64',createdAt:at,lastSeenAt:at},
+    installation:{id:'install',hostId:'host',productId:'pi',
+      firstSeenAt:at,lastSeenAt:at},
+    signal:new AbortController().signal,
+  })
+  assert.equal(checkpoints.size,1)
+  await handle.dispose()
+})
+
 test('Slim capture writes verified native Profile association before Catalog visibility',async()=>{
   const root=await mkdtemp(join(tmpdir(),'agentlens-profile-capture-'))
   const file=join(root,'native.jsonl')
