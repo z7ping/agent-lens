@@ -455,6 +455,7 @@ function normalizePublicRuntimeState(value: unknown): LiveRuntimeState {
     status,
     ...(nativeSessionId ? { nativeSessionId } : {}),
     ...(workspacePath ? { workspacePath } : {}),
+    ...(projectName ? { projectName } : {}),
     ...(contextUsage ? { contextUsage } : {}),
     ...(cacheMetrics ? { cacheMetrics } : {}),
     isStreaming: row.isStreaming,
