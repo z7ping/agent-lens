@@ -141,6 +141,8 @@ export interface LiveRuntimeStateDto {
   status: LiveRuntimeStatusDto
   nativeSessionId?: string | undefined
   workspacePath?: string | undefined
+  /** Source-attested workspace label, separate from the task title. */
+  projectName?: string | undefined
   isStreaming: boolean
   pendingMessageCount: number
   contextUsage?: LiveContextUsage | undefined
