@@ -4,6 +4,9 @@ const { app } = require('electron')
 
 const outputDir = path.resolve(process.env.AGENT_LENS_ACCEPTANCE_OUTPUT || '.agent-lens/acceptance/task-center')
 fs.mkdirSync(outputDir, { recursive: true })
+const userData = path.join(outputDir, 'electron-profile')
+fs.mkdirSync(userData, { recursive: true })
+app.setPath('userData', userData)
 fs.writeFileSync(path.join(outputDir, 'electron-bootstrap.txt'), `started ${new Date().toISOString()}\n`, 'utf8')
 
 // CI 使用隐藏 BrowserWindow，但验收的是正常前台 Desktop 交互。关闭后台节流与 Windows

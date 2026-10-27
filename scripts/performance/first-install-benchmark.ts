@@ -1,6 +1,6 @@
 import { spawn, type ChildProcess } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
-import { copyFile, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { copyFile, mkdir, mkdtemp, rm, writeFile, stat } from 'node:fs/promises'
 import { createServer } from 'node:net'
 import { tmpdir } from 'node:os'
 import { basename, dirname, join, resolve } from 'node:path'
@@ -20,6 +20,8 @@ const budgetMs = readPositiveInt('budget-ms', 3_000)
 const timeoutMs = readPositiveInt('timeout-ms', 30_000)
 const onboarding = process.argv.includes('--onboarding')
 const distribution = process.argv.includes('--dist')
+const acceptPerformance = process.argv.includes('--accept-performance')
+const verifyFullSession = process.argv.includes('--verify-full-session')
 const sourceFile = process.argv.find(argument => argument.startsWith('--source-file='))?.slice('--source-file='.length)
 let child: ChildProcess | undefined
 let output = ''
@@ -67,8 +69,8 @@ try {
       lines.push(JSON.stringify({
         timestamp: at,
         type: 'event_msg',
-        payload: record === 0
-          ? { type: 'user_message', message: `首次安装验证 ${index}` }
+        payload: record % 2 === 0
+          ? { type: 'user_message', message: `首次安装验证 ${index} 轮次 ${record / 2}` }
           : { type: 'agent_message', message: `回复 ${record}`, phase: 'final_answer' },
       }))
     }
@@ -96,12 +98,13 @@ try {
   if (onboarding) Reflect.deleteProperty(environment, 'AGENT_LENS_ENABLED_SOURCES')
   const startedAt = performance.now()
   child = spawn(process.execPath, [...(distribution ? [] : ['--import', 'tsx']), '--input-type=module', '-e', `
-    process.on('message', message => {
+    const { startDefaultDaemon } = await import(${JSON.stringify(distribution ? './dist/daemon.mjs' : './apps/daemon/src/main.ts')})
+    const running = await startDefaultDaemon()
+    process.on('message', async message => {
       if (message !== 'benchmark:shutdown') return
-      process.emit('SIGTERM')
+      await running.dispose()
       process.disconnect()
     })
-    await import(${JSON.stringify(distribution ? './dist/daemon.mjs' : './apps/daemon/src/main.ts')})
   `], { cwd: repositoryRoot, env: environment, stdio: ['ignore', 'pipe', 'pipe', 'ipc'], windowsHide: true })
   child.stdout?.on('data', chunk => { output = (output + String(chunk)).slice(-100_000) })
   child.stderr?.on('data', chunk => { output = (output + String(chunk)).slice(-100_000) })
@@ -116,7 +119,7 @@ try {
   while (performance.now() - startedAt < timeoutMs) {
     if (child.exitCode !== null) throw new Error(`隔离 Daemon 提前退出：${output}`)
     try {
-      const response = await fetch(`${base}/api/v1/review?limit=20`, { signal: AbortSignal.timeout(2_000) })
+      const response = await fetch(`${base}/api/v1/native-sessions?limit=20`, { signal: AbortSignal.timeout(2_000) })
       if (!response.ok) throw new Error(`列表返回 ${response.status}`)
       const list = await response.json() as { items: Array<{ id: string }> }
       httpReadyMs ??= performance.now() - startedAt
@@ -147,14 +150,14 @@ try {
         })
       }
       if (list.items.length) firstSessionVisibleMs ??= performance.now() - startedAt
-      if (onboarding || (list.items.length && firstSessionNotificationMs !== undefined)) {
+      if (onboarding || list.items.length) {
         if (!onboarding) {
-          const detailResponse = await fetch(`${base}/api/v1/review/${encodeURIComponent(list.items[0]!.id)}?direction=backward&limit=10&process=summary`, { signal: AbortSignal.timeout(5_000) })
+          const detailResponse = await fetch(`${base}/api/v1/native-sessions/${encodeURIComponent(list.items[0]!.id)}/review?turnLimit=4`, { signal: AbortSignal.timeout(5_000) })
           const detail = await detailResponse.json()
           const readable = sourceFile
-            ? Boolean(detail.preview && Array.isArray(detail.interactions) && detail.interactions.length > 0)
+            ? Boolean(detail.state === 'available' && Array.isArray(detail.interactions) && detail.interactions.length > 0)
             : JSON.stringify(detail).includes('首次安装验证')
-          if (!detailResponse.ok || !readable) {
+          if (!detailResponse.ok || detail.state !== 'available' || detail.boundaryIntegrity !== 'complete' || detail.pendingTail || !readable) {
             throw new Error('首个会话尚无可阅读的用户内容')
           }
           firstDetailReadableMs = performance.now() - startedAt
@@ -166,6 +169,7 @@ try {
     } catch { /* 数据库和首批会话尚在启动，继续观察。 */ }
     await new Promise(resolve => setTimeout(resolve, 25))
   }
+  // 首批索引可能早于 SSE 订阅；可用性以真实原生正文为准，通知延迟独立报告。
   const usableMs = onboarding ? httpReadyMs : firstDetailReadableMs
   if (!marks && httpReadyMs !== undefined) {
     const health = await (await fetch(`${base}/api/v1/health`, { signal: AbortSignal.timeout(2_000) })).json() as { storage?: { details?: { startupSessionPath?: unknown } } }
@@ -183,6 +187,43 @@ try {
   }, null, 2))
   if (usableMs === undefined) throw new Error(`首次可用超时：${output}`)
   if (usableMs > budgetMs) process.exitCode = 1
+  if (verifyFullSession) {
+    const { readNativeReview } = await import('../acceptance/native-acceptance.mjs')
+    const list = await (await fetch(`${base}/api/v1/native-sessions?limit=1`)).json()
+    const result = await readNativeReview(base, list.items[0].id, { minTurns: Math.ceil(observationsPerSession / 2) })
+    console.log(JSON.stringify({ fullSession: result }, null, 2))
+  }
+  if (acceptPerformance && !onboarding) {
+    // 启动索引有界为每 Scope 128 个；报告原件规模与实际索引规模，不能混淆。
+    let indexed = 0
+    const deadline = performance.now() + timeoutMs
+    while (performance.now() < deadline) {
+      const activity = await (await fetch(`${base}/api/v1/background-activity`)).json()
+      const catalog = await (await fetch(`${base}/api/v1/native-sessions?limit=100`)).json()
+      indexed = catalog.items?.length ?? 0
+      if (!activity.active?.length && indexed > 0) break
+      await new Promise(resolve => setTimeout(resolve, 50))
+    }
+    async function runAcceptance(script: string, args: string[]) {
+      const check = spawn(process.execPath, [script, ...args], {
+        cwd: repositoryRoot, env: { ...environment, AGENT_LENS_ACCEPT_BASE_URL: base },
+        stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true,
+      })
+      check.stdout!.pipe(process.stdout); check.stderr!.pipe(process.stderr)
+      const code = await new Promise<number | null>((resolve, reject) => {
+        check.once('error', reject); check.once('exit', resolve)
+      })
+      if (code !== 0) throw new Error(`隔离验收失败：${script} (${code})`)
+    }
+    await runAcceptance('scripts/acceptance/large-db-backfill-foreground.mjs', ['--duration-ms=3000'])
+    await runAcceptance('scripts/acceptance/large-db-performance.mjs', [`--min-sessions=${Math.min(indexed, 100)}`])
+  }
+  const size = async (path: string) => (await stat(path).catch(() => null))?.size ?? 0
+  console.log(JSON.stringify({ storageBytes: {
+    database: await size(join(root,'agent-lens.db')),
+    wal: await size(join(root,'agent-lens.db-wal')),
+    note: '新装 Slim 索引有界为每 Scope 128 个；不代表全部样本已索引或旧库压缩率',
+  } }, null, 2))
 } finally {
   eventsController.abort()
   await eventsTask

@@ -19,7 +19,7 @@ import {
   normalizeCurrentCodexRecord,
 } from './current-protocol'
 import { detectCodex } from './detect'
-import { codexHistoryRoots, ingestCodexHistory, listCodexHistoryFiles, readSessionMetadata } from './history'
+import { codexHistoryRoots, ingestCodexHistory, listCodexHistoryFiles, readSessionMetadata, readThreadNames, readSessionActivity } from './history'
 import { nativeIdForEntry, nativeTypeForEntry } from './format'
 import { codexRuntimeInternals, startCodexRuntimeCapture } from './runtime'
 import { normalizeCodexSessionAttribution } from './session-attribution'
@@ -187,12 +187,15 @@ export const codexSourceDefinition: SourceDefinition = {
   readArchivedNativeHooksPage: readCodexArchivedHookPage,
   async *discoverNativeSessions(ctx) {
     const paths = await listCodexHistoryFiles(ctx.installation, ctx.historyWindow)
+    const titles = await readThreadNames(ctx.runtimeProfile?.configRoot ?? ctx.installation.configRoot)
     for (const filePath of paths) {
       ctx.abortSignal.throwIfAborted()
       try {
         const before = await stat(filePath)
         if (!before.isFile()) continue
         const session = await readSessionMetadata(filePath)
+        const indexed = titles.get(session.nativeSessionId)
+        const activity = await readSessionActivity(filePath, indexed?.updatedAt ?? session.startedAt)
         const after = await stat(filePath)
         if (!after.isFile() || before.dev !== after.dev || before.ino !== after.ino
           || before.size !== after.size || before.mtimeMs !== after.mtimeMs) continue
@@ -205,8 +208,9 @@ export const codexSourceDefinition: SourceDefinition = {
           fileIdentity: `${after.dev}:${after.ino}`,
           fileSize: after.size,
           fileMtimeMs: after.mtimeMs,
-          lastActivityAt: new Date(after.mtimeMs).toISOString(),
-          ...(session.title ? { title: session.title } : {}),
+          // 原生索引更新时间优先；复制/恢复文件的 mtime 不是会话活动时间。
+          lastActivityAt: activity ?? new Date(after.mtimeMs).toISOString(),
+          ...(indexed?.title ? { title: indexed.title } : session.title ? { title: session.title } : {}),
           updatedAt: new Date().toISOString(),
         }
       } catch (error) {

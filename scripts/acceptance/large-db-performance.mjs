@@ -1,4 +1,5 @@
 import { performance } from 'node:perf_hooks'
+import { nativeCatalogPath, nativeMetricsPath, nativeReviewPath, nativeMetricSnapshot, readableNativeWindow, readNativeCatalog } from './native-acceptance.mjs'
 
 const DEFAULT_BASE_URL = 'http://127.0.0.1:56789'
 const DEFAULT_SAMPLES = 20
@@ -46,6 +47,7 @@ function delay(ms) {
 
 const options = {
   baseUrl: arg('base-url', process.env.AGENT_LENS_ACCEPT_BASE_URL ?? DEFAULT_BASE_URL).replace(/\/$/, ''),
+  minSessions: positiveInt('min-sessions', 100),
   samples: positiveInt('samples', DEFAULT_SAMPLES),
   warmup: nonNegativeInt('warmup', DEFAULT_WARMUP),
   timeoutMs: positiveInt('timeout-ms', DEFAULT_TIMEOUT_MS),
@@ -58,8 +60,8 @@ const options = {
 const probes = [
   { id: 'ready', label: '/ready', path: '/api/v1/ready', p95BudgetMs: 100, acceptedStatuses: new Set([200]) },
   { id: 'health', label: '/health', path: '/api/v1/health', p95BudgetMs: 500, acceptedStatuses: new Set([200, 503]) },
-  { id: 'piAvailability', label: 'Pi availability', path: '/api/v1/live/pi/availability', p95BudgetMs: 100, acceptedStatuses: new Set([200]) },
-  { id: 'taskCenter', label: 'Task Center summary first page', path: '/api/v1/review?limit=20', p95BudgetMs: 500, acceptedStatuses: new Set([200]) },
+  { id: 'liveCatalog', label: '授权 Live 能力目录', path: '/api/v1/live', p95BudgetMs: 500, acceptedStatuses: new Set([200]) },
+  { id: 'taskCenter', label: 'Task Center summary first page', path: `${nativeCatalogPath}?limit=20`, p95BudgetMs: 500, acceptedStatuses: new Set([200]) },
   { id: 'tools', label: 'Tools summary', path: '/api/v1/usage?limit=500', p95BudgetMs: 1_000, acceptedStatuses: new Set([200]) },
   { id: 'insights', label: 'Insights summary', path: '/api/v1/insights', p95BudgetMs: 1_000, acceptedStatuses: new Set([200]) },
   { id: 'agentsSummary', label: 'Agent summary', path: '/api/v1/agents/summary', p95BudgetMs: 500, acceptedStatuses: new Set([200]) },
@@ -90,7 +92,7 @@ async function request(path, acceptedStatuses, timeoutMs = options.timeoutMs) {
     const responseBytes = Buffer.byteLength(rawBody, 'utf8')
     let body = null
     try { body = rawBody ? JSON.parse(rawBody) : null } catch { /* body is diagnostic only */ }
-    return { ok: accepted, status: response.status, elapsedMs, responseBytes, body }
+    return { ok: accepted && (!path.includes('/review?') || readableNativeWindow(body)), status: response.status, elapsedMs, responseBytes, body }
   } catch (error) {
     return {
       ok: false,
@@ -203,21 +205,11 @@ async function runBurst(count, burstProbes) {
   }
 }
 
-function projectionStatus(usage) {
-  const value = usage?.meta?.projection
-  if (!value || typeof value !== 'object') return null
-  return {
-    state: value.state,
-    sourceObservationCount: Number(value.sourceObservationCount ?? 0),
-    projectedCount: Number(value.projectedCount ?? 0),
-    missingCount: Number(value.missingCount ?? 0),
-    coverageRatio: Number(value.coverageRatio ?? 0),
-  }
-}
-
 console.log('AgentLens large DB runtime acceptance')
 console.log(JSON.stringify({ options, budgets: Object.fromEntries(probes.map(probe => [probe.id, { p95Ms: probe.p95BudgetMs, maxFailureRate: 0 }])) }, null, 2))
 
+const catalog = await readNativeCatalog(options.baseUrl, { minSessions: options.minSessions })
+console.log(`原生目录分页校验：${catalog.length} 个唯一会话`)
 const measurements = []
 for (const probe of probes) {
   process.stdout.write(`measuring ${probe.label} ... `)
@@ -228,13 +220,13 @@ for (const probe of probes) {
 
 const taskCenterMeasurement = measurements.find(item => item.id === 'taskCenter')
 const agentSummaryMeasurement = measurements.find(item => item.id === 'agentsSummary')
-const firstReviewId = taskCenterMeasurement?.lastBody?.items?.[0]?.id
+const firstReviewId = catalog[0]?.id
 const firstAgentSourceId = agentSummaryMeasurement?.lastBody?.items?.[0]?.sourceId
 const dynamicProbes = [
   ...(typeof firstReviewId === 'string' && firstReviewId ? [{
     id: 'reviewDetail',
-    label: 'Review detail latest 10 interactions',
-    path: `/api/v1/review/${encodeURIComponent(firstReviewId)}?direction=backward&limit=10`,
+    label: '原生完整轮次窗口（最多四轮）',
+    path: nativeReviewPath(firstReviewId),
     p95BudgetMs: 1_000,
     acceptedStatuses: new Set([200]),
   }] : []),
@@ -273,7 +265,7 @@ for (const probe of dynamicProbes) {
 let storageDiagnostics = null
 if (options.storageDiagnosticsBurst > 0) {
   const diagnosticsRequest = request(
-    '/api/v1/storage/diagnostics',
+    nativeMetricsPath,
     new Set([200]),
     options.storageDiagnosticsTimeoutMs,
   )
@@ -282,7 +274,7 @@ if (options.storageDiagnosticsBurst > 0) {
     mixedForegroundProbes,
   )
   const result = await diagnosticsRequest
-  const details = result.body?.storage?.details
+  const details = result.body
   storageDiagnostics = {
     passed: Boolean(result.ok && concurrentForeground.passed),
     request: {
@@ -292,24 +284,7 @@ if (options.storageDiagnosticsBurst > 0) {
       ...(result.error ? { error: result.error } : {}),
     },
     concurrentForeground,
-    snapshot: details && typeof details === 'object' ? {
-      capacity: details.dataGrowth?.capacity ?? null,
-      storageBreakdown: details.storageBreakdown ? {
-        available: details.storageBreakdown.available,
-        basis: details.storageBreakdown.basis,
-        excludesFreelist: details.storageBreakdown.excludesFreelist,
-        categories: details.storageBreakdown.categories ?? null,
-        topObjects: Array.isArray(details.storageBreakdown.objects)
-          ? details.storageBreakdown.objects.slice(0, 15)
-          : [],
-      } : null,
-      largePayloads: details.largePayloads ?? null,
-      capturedActivity: details.capturedActivity ?? null,
-      replicationJournal: details.replicationJournal ?? null,
-      spaceRecovery: details.spaceRecovery ?? null,
-      runtimeFootprint: details.runtimeFootprint ?? null,
-      growthMetrics: details.growthMetrics ?? null,
-    } : null,
+    snapshot: nativeMetricSnapshot(details),
   }
   console.log(
     `storage diagnostics ${storageDiagnostics.passed ? 'PASS' : 'FAIL'} `
@@ -342,16 +317,16 @@ if (options.burst > 0) {
 if (storageDiagnostics || toolsBurst || burst) await delay(HEALTH_REFRESH_MS)
 const [freshHealthResult, freshUsageResult] = await Promise.all([
   request('/api/v1/health', new Set([200, 503])),
-  request('/api/v1/usage?limit=1', new Set([200])),
+  request(nativeMetricsPath, new Set([200])),
 ])
 const health = freshHealthResult.body
-const toolUsageProjection = projectionStatus(freshUsageResult.body)
+const toolUsageProjection = nativeMetricSnapshot(freshUsageResult.body)
 const projectionReady = Boolean(
   freshUsageResult.ok
   && toolUsageProjection
-  && toolUsageProjection.state === 'ready'
-  && toolUsageProjection.missingCount === 0
-  && toolUsageProjection.coverageRatio >= 1,
+  && toolUsageProjection.eligibleSessions >= options.minSessions
+  && toolUsageProjection.missingSessions === 0
+  && toolUsageProjection.staleSessions === 0,
 )
 
 const report = {
@@ -361,7 +336,9 @@ const report = {
   ...(storageDiagnostics ? { storageDiagnostics } : {}),
   ...(toolsBurst ? { toolsBurst } : {}),
   ...(burst ? { burst } : {}),
-  projectionReadiness: {
+  nativeCatalog: { sessions: catalog.length, unique: true },
+  nativeMetrics: {
+    complete: toolUsageProjection?.coverage === 'complete',
     passed: projectionReady,
     toolUsageFacts: toolUsageProjection,
   },
@@ -380,7 +357,7 @@ if (storageDiagnostics && !storageDiagnostics.passed) failed.push({ label: 'stor
 if (toolsBurst && !toolsBurst.passed) failed.push({ label: 'cold Tools burst' })
 if (burst && !burst.passed) failed.push({ label: 'cold mixed foreground burst' })
 if (!freshHealthResult.ok) failed.push({ label: 'fresh post-burst health' })
-if (!freshUsageResult.ok || !projectionReady) failed.push({ label: 'Tool Fact projection readiness' })
+if (!freshUsageResult.ok || !projectionReady) failed.push({ label: '原生数值快照生成（partial 不代表认证完整）' })
 if (failed.length) {
   console.error(`large DB acceptance failed: ${failed.map(item => item.label).join(', ')}`)
   process.exitCode = 1

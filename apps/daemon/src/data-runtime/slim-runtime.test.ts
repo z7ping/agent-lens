@@ -282,3 +282,32 @@ test('Slim Source asset discovery persists metadata only via allowlisted Worker 
     assert.deepEqual(writer.log.filter(x=>x.method==='writer'),[])
   }finally{await runtime.shutdown();await rm(directory,{recursive:true,force:true})}
 })
+
+
+test('Slim 共享同键在途读取，拒绝后可重试且写操作不合并',async()=>{
+  const directory=await mkdtemp(join(tmpdir(),'al-slim-flight-'))
+  const dbPath=join(directory,'slim.sqlite')
+  const db=await SqliteSlimStorage.createFresh(dbPath);await db.close()
+  const writer=args('writer')
+  let calls=0,fail=true
+  const reader={async start(){},async shutdown(){},async request(){
+    calls++
+    await new Promise(resolve=>setTimeout(resolve,10))
+    if(fail)throw new Error('probe failed')
+    return {items:[],hasMore:false}
+  }}
+  const runtime=new SlimDataRuntime({dbPath,writer:writer.port as never,reader:reader as never})
+  try{
+    await runtime.start()
+    const failures=await Promise.allSettled(Array.from({length:128},()=>runtime.sessions({limit:20})))
+    assert.equal(calls,1)
+    assert.ok(failures.every(value=>value.status==='rejected'))
+    fail=false
+    await Promise.all(Array.from({length:128},()=>runtime.sessions({limit:20})))
+    assert.equal(calls,2)
+    await Promise.all([runtime.sessions({limit:10}),runtime.sessions({limit:20})])
+    assert.equal(calls,4)
+    await Promise.all([runtime.nativePort().checkpoints.set('test','a',1),runtime.nativePort().checkpoints.set('test','a',1)])
+    assert.equal(writer.log.filter(item=>item.method==='writer').length,2)
+  }finally{await runtime.shutdown();await rm(directory,{recursive:true,force:true})}
+})

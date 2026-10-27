@@ -7,7 +7,7 @@ import { IntegrationPackageService } from '@agent-lens/integration-packages'
 import { basename, isAbsolute, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { DefaultCapturePolicyService, resolveCapturePolicyPluginState, writeCapturePolicyConfiguration } from '@agent-lens/capture-policy'
-import { authorizedIntegrationCapabilities, integrationAuthorizationPath, readIntegrationAuthorizationSync } from '@agent-lens/runtime-cordis'
+import { isDirectInvocation, authorizedIntegrationCapabilities, integrationAuthorizationPath, readIntegrationAuthorizationSync } from '@agent-lens/runtime-cordis'
 import type { BackupService, CapturePolicyService, SourceService, LiveService, LiveAttachmentService } from '@agent-lens/core'
 import { DefaultSourceService } from '@agent-lens/core-services'
 import { piSourceDefinition } from '@agent-lens/source-pi'
@@ -230,7 +230,7 @@ export async function resolveSlimDaemonDatabasePath(
   return configuredDbPath
 }
 
-if(process.argv[1]&&fileURLToPath(import.meta.url)===resolve(process.argv[1])
+if(process.argv[1]&&isDirectInvocation(import.meta.url,process.argv[1])
   &&['slim-main.ts','slim-main.js','slim-main.mjs'].includes(basename(process.argv[1]))){
   const dbPath=await resolveSlimDaemonDatabasePath(
     process.env.AGENT_LENS_DB_PATH,process.env.AGENT_LENS_ACTIVE_DB_POINTER)

@@ -610,9 +610,18 @@ export const TaskSurface = forwardRef<HTMLElement, TaskSurfaceProps>(function Ta
     window.addEventListener('resize', scheduleRailViewport)
     // 左侧工作栏的 Grid 列宽动画不会触发 window.resize。
     const resizeObserver = typeof ResizeObserver !== 'undefined'
-      ? new ResizeObserver(scheduleRailViewport)
+      ? new ResizeObserver(updateRailViewport)
       : null
     resizeObserver?.observe(root)
+    const layoutObserver = typeof MutationObserver !== 'undefined'
+      ? new MutationObserver(updateRailViewport)
+      : null
+    // 正文可能已到 max-width：工作栏展开仅移动它，并不改变正文自身尺寸。
+    // 同时观察现有布局祖先，Portal 才能跟随阅读轴位置；Live/Review 共用。
+    for (let ancestor = root.parentElement; ancestor; ancestor = ancestor.parentElement) {
+      resizeObserver?.observe(ancestor)
+      layoutObserver?.observe(ancestor, { attributes: true, attributeFilter: ['class', 'style'] })
+    }
     const floating = root.querySelector<HTMLElement>('.live-task-float-stack')
     if (floating) resizeObserver?.observe(floating)
     const queueObserver = floating && typeof MutationObserver !== 'undefined'
@@ -626,6 +635,7 @@ export const TaskSurface = forwardRef<HTMLElement, TaskSurfaceProps>(function Ta
       queueObserver?.observe(floating, { childList: true, subtree: true })
     }
     return () => {
+      layoutObserver?.disconnect()
       queueObserver?.disconnect()
       resizeObserver?.disconnect()
       root.removeEventListener('scroll', scheduleRailViewport, true)
@@ -634,7 +644,7 @@ export const TaskSurface = forwardRef<HTMLElement, TaskSurfaceProps>(function Ta
       frameRef.current = null
       railViewportRef.current = null
     }
-  }, [scheduleRailViewport])
+  }, [scheduleRailViewport, updateRailViewport])
 
   // fallback DOM 轮次扫描独立存在，不能再控制几何监听的生命周期。
   useEffect(() => {

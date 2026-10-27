@@ -7,6 +7,12 @@ import {
   type ReviewInteractionDto,
 } from '@agent-lens/protocol'
 
+/** 原生目录与详情沿用同一标题展示契约，不猜测或重写 Source 的名称。 */
+export function nativeReviewTitle(summary: Pick<NativeSessionSummaryDto, 'title'>) {
+  const title = summary.title?.trim()
+  return title ? { title, titleKind: 'explicit' as const } : {}
+}
+
 /** Rebuild statistics only from the bounded visible native Review nodes.
  * Original Source candidates can include lifecycle metadata that does not
  * produce a visible node; never promote these counts to full-session SQL totals.
@@ -62,13 +68,12 @@ export function nativeReviewDetail(
   const first = interactions[0]?.startedAt ?? summary.lastActivityAt
   const end = summary.lastActivityAt
   const duration = Date.parse(end) - Date.parse(first)
-  const nativeTitle = summary.title?.trim()
   return {
     id: summary.id,
     sourceIds: [summary.sourceId],
     productId: summary.sourceId,
     installationId: summary.installationId,
-    ...(nativeTitle ? { title: nativeTitle, titleKind: 'explicit' as const } : {}),
+    ...nativeReviewTitle(summary),
     startedAt: first,
     endedAt: end,
     durationMs: Number.isFinite(duration) ? Math.max(0, duration) : 0,

@@ -59,6 +59,7 @@ test('Native-only Catalog sessions share Task Center list without a second body 
   assert.equal(rows.length,1)
   assert.equal(rows[0]?.id,native.id)
   assert.equal(rows[0]?.title,native.title)
+  assert.equal(rows[0]?.titleKind,'explicit','沿用 Native Review 的原生标题展示契约')
   assert.equal(rows[0]?.startedAt,'','never invent source creation time')
   assert.equal(rows[0]?.endedAt,native.lastActivityAt)
   assert.equal(JSON.stringify(rows).includes('installationId'),false)

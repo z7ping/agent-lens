@@ -1,7 +1,6 @@
-import { realpathSync } from 'node:fs'
 import { spawn } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
-import { resolve } from 'node:path'
+import { isDirectInvocation } from '@agent-lens/runtime-cordis'
 import { maybePrintUpdateHint, runUpdateCommand } from './update'
 
 const VERSION = '1.0.0-alpha.7'
@@ -50,23 +49,6 @@ function updateArgs(argv: string[]): string[] | null {
   const index = argv.findIndex(arg => arg !== '--json')
   if (index < 0 || argv[index] !== 'update') return null
   return [...argv.slice(0, index), ...argv.slice(index + 1)]
-}
-
-function canonicalPath(path: string): string {
-  try {
-    return realpathSync.native(path)
-  } catch {
-    return resolve(path)
-  }
-}
-
-function isDirectInvocation(
-  moduleUrl: string,
-  invokedPath: string | undefined,
-  canonicalize: (path: string) => string = canonicalPath,
-): boolean {
-  if (!invokedPath) return false
-  return canonicalize(fileURLToPath(moduleUrl)) === canonicalize(resolve(invokedPath))
 }
 
 export async function main(argv = process.argv.slice(2)): Promise<number> {

@@ -25,7 +25,7 @@ test('ordinary request timeout does not recycle the shared Worker', async () => 
     // The promise has timed out, but the synchronous Worker work is still running.
     // Keep it counted as pending so the Reader pool cannot treat this Worker as idle.
     assert.equal(client.snapshot().pending, 1)
-    await new Promise(resolve => setTimeout(resolve, 150))
+    await waitFor(() => client.snapshot().pending === 0)
     assert.equal(client.snapshot().pending, 0)
     assert.equal(client.snapshot().lateReplies, 1)
     assert.equal(client.state(), 'ready')

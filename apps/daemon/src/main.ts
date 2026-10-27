@@ -1,5 +1,4 @@
-import { fileURLToPath } from 'node:url'
-import { resolve } from 'node:path'
+import { isDirectInvocation } from '@agent-lens/runtime-cordis'
 import { resolveDefaultSlimDb, defaultSlimDbPaths } from './default-slim-db.js'
 import { startSlimNativeDaemon } from './slim-main.js'
 
@@ -17,7 +16,7 @@ export async function startDefaultDaemon(env:NodeJS.ProcessEnv=process.env){
     ...(port===undefined?{}:{port}),
   })
 }
-if(process.argv[1]&&resolve(process.argv[1])===fileURLToPath(import.meta.url)){
+if(isDirectInvocation(import.meta.url,process.argv[1])){
   startDefaultDaemon().then(running=>{
     console.info('[AgentLens] native-only default Daemon:',running.http.port)
     let closing=false

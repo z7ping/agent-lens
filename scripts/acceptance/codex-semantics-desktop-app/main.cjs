@@ -4,6 +4,9 @@ const { app } = require('electron')
 
 const outputDir = path.resolve(process.env.AGENT_LENS_ACCEPTANCE_OUTPUT || '.agent-lens/acceptance/task-center')
 fs.mkdirSync(outputDir, { recursive: true })
+const userData = path.join(outputDir, 'codex-semantics-profile')
+fs.mkdirSync(userData, { recursive: true })
+app.setPath('userData', userData)
 fs.writeFileSync(path.join(outputDir, 'codex-semantics-bootstrap.txt'), `started ${new Date().toISOString()}\n`, 'utf8')
 
 app.commandLine.appendSwitch('disable-background-timer-throttling')

@@ -40,6 +40,7 @@ export class SlimDataRuntime {
   private readonly reader:SlimWorkerPort
   private started=false
   private nativeReaderWorker:NativeReaderWorkerClient|null=null
+  private readonly readsInFlight=new Map<string,Promise<unknown>>()
 
   constructor(private readonly options:SlimRuntimeClientOptions){
     if(!options.dbPath || options.dbPath===':memory:') {
@@ -78,7 +79,15 @@ export class SlimDataRuntime {
 
   private read<T>(path:string[],args:unknown[]=[]):Promise<T>{
     this.assertStarted()
-    return this.reader.request<T>('storage.call',{path,args})
+    // 相同只读查询共用在途 IPC，不保留跨请求缓存，也不扩大 Worker 队列。
+    // Task Center / Usage / Agents 的并发请求常会重复读取同一 Facets。
+    const key=JSON.stringify([path,args])
+    const existing=this.readsInFlight.get(key)
+    if(existing)return existing as Promise<T>
+    const pending=this.reader.request<T>('storage.call',{path,args})
+      .finally(()=>{this.readsInFlight.delete(key)})
+    this.readsInFlight.set(key,pending)
+    return pending
   }
   private write<T>(path:string[],args:unknown[]=[]):Promise<T>{
     this.assertStarted()
