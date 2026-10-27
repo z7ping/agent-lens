@@ -308,7 +308,7 @@ test('native Catalog indexes the first genuine user request but never injected c
   source.normalize=async record=>({
     evidenceCandidates:[],
     observations:[{
-      kind:record.nativeType==='system'?'context.injected':record.nativeType==='rename'?'session.lifecycle':'message.user',
+      kind:record.nativeType==='rename'?'session.lifecycle':'message.user',
       capturedAt:at,
       identityHints:{
         nativeSessionId:'human-title',
@@ -350,7 +350,7 @@ test('native Catalog falls back to first human request without storing messages'
     observations:[{
       kind:'message.user',capturedAt:at,
       identityHints:{nativeSessionId:'human-only'},
-      payload:{text:'恢复真实用户首条请求',provenance:{actualAuthor:'human-user',contentRole:'user-request'}},
+      payload:{text:'恢复真实用户首条请求'}, // Pi user role has implicit provenance
     }],
   })
   const saved:NativeSessionCatalogEntry[]=[]
