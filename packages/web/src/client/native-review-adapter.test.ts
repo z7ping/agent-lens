@@ -35,7 +35,7 @@ test('Source native title provenance is not promoted to explicit or generated',(
   assert.deepEqual(nativeReviewTitle({...summary,titleProvenance:'explicit'}),{
     title:'Native Pi task',titleKind:'explicit',
   })
-  assert.deepEqual(nativeReviewTitle({...summary,title:undefined}),{})
+  assert.deepEqual(nativeReviewTitle({title:''}),{})
 })
 
 test('native Review keeps project context when paging Source-owned windows',()=>{
