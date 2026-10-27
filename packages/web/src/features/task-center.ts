@@ -129,7 +129,11 @@ function userTaskTitle(item: TaskSessionListSummary): string | undefined {
   )
   // 项目名和目录路径只表达上下文，不能区分同一项目下的不同用户任务。
   // 没有真实用户请求时保留原生名称，不编造摘要，也不改写来源数据。
-  if (contextOnly && item.preview?.trim()) return item.preview
+  if (contextOnly) {
+    // A cwd is project context, not a distinct task title. Do not repeat it
+    // above the now-visible project label when no user prompt was indexed.
+    return item.preview?.trim() ? taskUserRequestText(item.preview) : undefined
+  }
   return title || item.preview
 }
 
