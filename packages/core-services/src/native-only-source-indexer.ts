@@ -1,5 +1,5 @@
 import { isAbsolute } from 'node:path'
-import { nativeSessionWorkspacePath } from './native-session-workspace'
+import { nativeSessionWorkspacePath, verifiedNativeWorkspacePath } from './native-session-workspace'
 import type { NativeSessionReaderStorage } from './native-session-reader'
 import type {
   AgentInstallation,
@@ -15,6 +15,81 @@ const DEFAULT_SESSION_BUDGET = 32
 // Large explicit migration scans may inspect 5000 identities; the default
 // interactive slice remains 32 to protect cold-start performance.
 const MAX_SESSION_BUDGET = 5000
+// Bounded Source-owned metadata inspection; no text/body snapshot is persisted.
+const NATIVE_METADATA_RECORD_LIMIT = 32
+
+interface NativeSessionMetadataHints {
+  title?: string
+  workspacePath?: string
+}
+
+function objectValue(value: unknown): Record<string, unknown> {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? value as Record<string, unknown> : {}
+}
+
+function boundedTitle(value: unknown): string | undefined {
+  if (typeof value !== 'string') return undefined
+  const title = value.replace(/\s+/g, ' ').trim().slice(0, 512).replace(/[\uD800-\uDBFF]$/u, '')
+  return title || undefined
+}
+
+/** Reuse Source normalizers to identify actual human requests, not injected
+ * Codex context or arbitrary text. This inspects only an initial bounded native
+ * window; it never emits Canonical events or stores a body copy.
+ */
+async function inspectNativeMetadata(
+  source: SourceDefinition,
+  entry: import('@agent-lens/core').NativeSessionCatalogEntry,
+  ctx: Parameters<NonNullable<SourceDefinition['discoverNativeSessions']>>[0],
+): Promise<NativeSessionMetadataHints> {
+  if (!source.readNativeSessionPage || !source.normalize) return {}
+  let page
+  try {
+    page = await source.readNativeSessionPage({
+      filePath: entry.filePath, nativeSessionId: entry.nativeSessionId,
+      limit: NATIVE_METADATA_RECORD_LIMIT,
+    }, ctx)
+  } catch {
+    return {}
+  }
+  if (page.state !== 'available' || page.nextCursor.fileIdentity !== entry.fileIdentity) return {}
+  let firstUser: string | undefined
+  let explicitTitle: string | undefined
+  let workspacePath: string | undefined
+  for (const record of page.records) {
+    ctx.abortSignal.throwIfAborted()
+    if (record.sourceId !== entry.sourceId || record.installationId !== entry.installationId
+      || record.sourceSessionNativeId !== entry.nativeSessionId
+      || record.locator.path !== entry.filePath) return {}
+    let normalized
+    try {
+      normalized = await source.normalize(record, {
+        host: ctx.host, installation: ctx.installation,
+        ...(ctx.runtimeProfile ? { runtimeProfile: ctx.runtimeProfile } : {}),
+      })
+    } catch {
+      continue
+    }
+    for (const fact of normalized.observations) {
+      workspacePath ??= verifiedNativeWorkspacePath(fact.identityHints.workspacePath)
+      if (fact.identityHints.sessionTitleKind === 'explicit' || fact.identityHints.sessionTitleKind === 'generated') {
+        explicitTitle = boundedTitle(fact.identityHints.sessionTitle) ?? explicitTitle
+      }
+      if (fact.kind !== 'message.user' || firstUser) continue
+      const payload = objectValue(fact.payload)
+      const provenance = objectValue(payload.provenance)
+      if (provenance.actualAuthor !== 'human-user'
+        || provenance.contentRole !== 'user-request') continue
+      firstUser = boundedTitle(payload.text)
+    }
+    if (explicitTitle && workspacePath) break
+  }
+  return {
+    ...((explicitTitle ?? firstUser) ? { title: explicitTitle ?? firstUser } : {}),
+    ...(workspacePath ? { workspacePath } : {}),
+  }
+}
 
 export type NativeCatalogFailure =
   | 'invalid-discovery'
@@ -51,7 +126,11 @@ export interface NativeCatalogScanInput {
   fullEnumeration?: boolean
   onProgress?: (report: NativeCatalogScanReport) => void | Promise<void>
   /** Optional metadata association, invoked before Catalog visibility. */
-  beforeCatalogUpsert?: (entry: import('@agent-lens/core').NativeSessionCatalogEntry, verifiedRecord: SourceRecord) => Promise<void>
+  beforeCatalogUpsert?: (
+    entry: import('@agent-lens/core').NativeSessionCatalogEntry,
+    verifiedRecord: SourceRecord,
+    hints: NativeSessionMetadataHints,
+  ) => Promise<void>
 }
 
 const readonlyCheckpoint: SourceCheckpointService = {
@@ -190,10 +269,14 @@ export class NativeOnlySourceIndexer {
         failure('source-read-error')
       }
       if (verifiedRecord) {
-        if (input.beforeCatalogUpsert) await input.beforeCatalogUpsert(entry, verifiedRecord)
+        const headerWorkspace = nativeSessionWorkspacePath(verifiedRecord)
+        const hints = !entry.title?.trim() || !headerWorkspace
+          ? await inspectNativeMetadata(source, entry, context)
+          : {}
+        if (input.beforeCatalogUpsert) await input.beforeCatalogUpsert(entry, verifiedRecord, hints)
         // Native titles (including Codex Desktop titles) can contain an entire
         // prompt. Bound the Catalog metadata without modifying the original.
-        const catalogEntry = { ...entry }
+        const catalogEntry = { ...entry, ...(!entry.title?.trim() && hints.title ? { title: hints.title } : {}) }
         if (catalogEntry.title !== undefined) {
           const bounded = catalogEntry.title.trim().slice(0, 512)
             .replace(/[\uD800-\uDBFF]$/u, '')
@@ -259,8 +342,9 @@ export async function indexNativeInstallation(
     ...(storage.nativeSessionContexts && (storage.identity || input.runtimeProfile)
       ? { beforeCatalogUpsert: async (
         entry: import('@agent-lens/core').NativeSessionCatalogEntry, record: SourceRecord,
+        hints: NativeSessionMetadataHints,
       ) => {
-        const path = nativeSessionWorkspacePath(record)
+        const path = nativeSessionWorkspacePath(record) ?? hints.workspacePath
         const workspace = path && storage.identity
           ? await storage.identity.resolveWorkspace({hostId:host.id,path})
           : null
