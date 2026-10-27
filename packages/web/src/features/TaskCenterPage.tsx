@@ -276,8 +276,7 @@ export function TaskCenterPage({ model, mode, sidebarHost }: { model: AgentLensC
   ])
   useEffect(() => {
     const filters=review.filters
-    const allowed=!filters.projectId && filters.status==='all'
-      && (filters.sourceIds===null || filters.sourceIds.length>0)
+    const allowed=filters.sourceIds===null || filters.sourceIds.length>0
     const changed=nativeRequestKeyRef.current!==nativeScopeKey
     nativeRequestKeyRef.current=nativeScopeKey
     if(!allowed){
@@ -294,6 +293,7 @@ export function TaskCenterPage({ model, mode, sidebarHost }: { model: AgentLensC
     void model.nativeSessions({
       ...(sourceId?{sourceId}:{}),
       search:filters.search.trim(),
+      ...(filters.projectId ? {projectId:filters.projectId}:{}),
       limit:100,signal:controller.signal,
     }).then(page=>{
       if(controller.signal.aborted)return
@@ -359,6 +359,7 @@ export function TaskCenterPage({ model, mode, sidebarHost }: { model: AgentLensC
         try{
           const page=await model.nativeSessions({
             ...(sourceId?{sourceId}:{}),
+            ...(filters.projectId ? {projectId:filters.projectId}:{}),
             search:filters.search.trim(),
             limit:100,cursor:nativeCursor,
           })
