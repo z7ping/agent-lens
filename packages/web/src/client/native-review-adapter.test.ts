@@ -3,7 +3,7 @@ import test from 'node:test'
 import type { AgentLensApi } from './api'
 import type { NativeReviewWindowDto, NativeSessionSummaryDto } from '@agent-lens/protocol'
 import { AgentLensClientModel } from './model'
-import { nativeReviewDetail, nativeReviewNextPage, nativeReviewObservedFileChanges, nativeVisibleWindowStatistics } from './native-review-adapter'
+import { nativeReviewTitle, nativeReviewDetail, nativeReviewNextPage, nativeReviewObservedFileChanges, nativeVisibleWindowStatistics } from './native-review-adapter'
 
 const id='native:1234567890abcdef1234567890abcdef'
 const at='2026-10-25T00:00:00Z'
@@ -23,6 +23,19 @@ const page=(ordinal:number,hasMore:boolean):NativeReviewWindowDto=>({
       payload:{text:'Prompt '+ordinal},evidence:[],observationIds:['native-observation-'+ordinal],
     }],
   }],
+})
+
+test('Source native title provenance is not promoted to explicit or generated',()=>{
+  assert.deepEqual(nativeReviewTitle({...summary,titleProvenance:'native'}),{
+    title:'Native Pi task',titleKind:'unverified',
+  })
+  assert.deepEqual(nativeReviewTitle({...summary,titleProvenance:'generated'}),{
+    title:'Native Pi task',titleKind:'generated',
+  })
+  assert.deepEqual(nativeReviewTitle({...summary,titleProvenance:'explicit'}),{
+    title:'Native Pi task',titleKind:'explicit',
+  })
+  assert.deepEqual(nativeReviewTitle({...summary,title:undefined}),{})
 })
 
 test('native adapter keeps the shared Review interactions and labels statistics as window-only',()=>{
