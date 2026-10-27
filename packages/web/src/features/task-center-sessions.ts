@@ -69,19 +69,27 @@ export function visibleTaskCenterSession(
 export function nativeTaskCenterSummaries(
   entries:readonly NativeSessionSummaryDto[],filters:ReviewFilters,nowMs:number,
 ):TaskSessionListSummary[]{
-  if(filters.projectId || filters.status!=='all' || filters.sourceIds?.length===0)return []
+  if(filters.status!=='all' || filters.sourceIds?.length===0)return []
   const from=filters.range==='all'?Number.NEGATIVE_INFINITY
     :filters.range==='today'
       ?new Date(new Date(nowMs).setHours(0,0,0,0)).getTime()
       :nowMs-(filters.range==='7d'?7:30)*86_400_000
   return entries.filter(entry=>{
     const when=Date.parse(entry.lastActivityAt)
+    const complete = entry.metricsState === 'complete' && entry.metrics !== undefined
     return entry.locationKind==='native'
+      && (!filters.projectId || entry.projectId === filters.projectId)
       && (filters.sourceIds===null || filters.sourceIds.includes(entry.sourceId))
+      && (filters.status==='all' || (complete && (filters.status==='with-errors'
+        ? entry.metrics!.errorCount > 0 : entry.metrics!.errorCount === 0)))
       && Number.isFinite(when) && when>=from
   }).map(entry=>({
     id:entry.id,productId:entry.sourceId,sourceIds:[entry.sourceId],
-    startedAt:'',endedAt:entry.lastActivityAt,hasErrors:false,
+    startedAt:'',endedAt:entry.lastActivityAt,
+    hasErrors:entry.metricsState==='complete' && (entry.metrics?.errorCount??0)>0,
+    ...(entry.projectId ? {projectId:entry.projectId}:{}),
+    ...(entry.projectName ? {projectName:entry.projectName}:{}),
+    ...(entry.workspacePath ? {workspacePath:entry.workspacePath}:{}),
     ...nativeReviewTitle(entry),
   }))
 }
