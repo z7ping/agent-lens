@@ -46,6 +46,16 @@ test('slim session list reads native titles/projects and never guesses missing s
       },
     })
     assert.deepEqual(later.items.map(x=>x.nativeSessionId),['two'])
+    const direct=await slim.nativeSessionList.query({
+      reviewSessionId:page.items[0]!.reviewSessionId,limit:1,
+    })
+    assert.equal(direct.items.length,1)
+    assert.equal(direct.items[0]?.title,'User saved title')
+    assert.equal(direct.items[0]?.projectId,project.id)
+    assert.equal(direct.items[0]?.titleProvenance,'explicit')
+    assert.deepEqual((await slim.nativeSessionList.query({
+      reviewSessionId:'native:missing',limit:1,
+    })).items,[])
     const scoped=await slim.nativeSessionList.query({projectId:project.id,limit:5})
     assert.deepEqual(scoped.items.map(x=>x.nativeSessionId),['one'])
     assert.equal(later.items[0]?.titleProvenance,'native')
