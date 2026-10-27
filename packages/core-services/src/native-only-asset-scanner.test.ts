@@ -6,6 +6,7 @@ import { NativeOnlyAssetScanner } from './native-only-asset-scanner'
 const at='2026-10-26T09:00:00Z'
 test('native-only asset scan reconciles current state without creating Evidence',async()=>{
   let discover=true
+  const seenCheckpoints:unknown[]=[]
   const stored:AssetStateObservation[]=[]
   const checkpoints=new Map<string,unknown>()
   const scanner=new NativeOnlyAssetScanner({
@@ -26,7 +27,10 @@ test('native-only asset scan reconciles current state without creating Evidence'
   } as never)
   const source={
     manifest:{sourceId:'pi',productId:'pi'},
-    async *discoverAssets(){
+    async *discoverAssets(ctx){
+      seenCheckpoints.push(await ctx.checkpoint.get('project-roots'))
+      await ctx.checkpoint.set('project-roots',['/workspaces/a'])
+      assert.deepEqual(await ctx.checkpoint.get('project-roots'),['/workspaces/a'])
       if(discover)yield{
         definition:{type:'skill',canonicalName:'review'},
         binding:{path:'/skills/review'},
@@ -51,4 +55,5 @@ test('native-only asset scan reconciles current state without creating Evidence'
   assert.equal(second.statesCleared,1)
   assert.equal(stored[1]?.value,false)
   assert.deepEqual(stored[1]?.evidenceRefs,[])
+  assert.deepEqual(seenCheckpoints,[null,null])
 })
