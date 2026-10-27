@@ -44,6 +44,11 @@ export function useLiveTaskHistory({ current, session }: {
     navigationEpochRef.current += 1
   }, [current?.runtimeSessionId])
 
+  const beginHistoryNavigation = useCallback(() => ++navigationEpochRef.current, [])
+  const isHistoryNavigationCurrent = useCallback(
+    (epoch: number) => navigationEpochRef.current === epoch, [],
+  )
+
   const markReaderUserIntent = useCallback((direction?: 'older' | 'newer') => {
     followControllerRef.current.markUserIntent()
     setHistoryPagingArmed(true)
@@ -65,7 +70,7 @@ export function useLiveTaskHistory({ current, session }: {
 
   const replaceHistoryWindow = useCallback(async (edge: 'earliest' | 'latest') => {
     if (!current) return
-    const epoch = ++navigationEpochRef.current
+    const epoch = beginHistoryNavigation()
     const reader = readerRef.current
     setHistoryLoading(true)
     try {
@@ -113,7 +118,7 @@ export function useLiveTaskHistory({ current, session }: {
         setHistoryPagingDirection(null)
       }
     }
-  }, [current])
+  }, [current, beginHistoryNavigation])
 
   const jumpEarliest = useCallback(() => replaceHistoryWindow('earliest'), [replaceHistoryWindow])
   const jumpLatest = useCallback(() => replaceHistoryWindow('latest'), [replaceHistoryWindow])
@@ -267,5 +272,8 @@ export function useLiveTaskHistory({ current, session }: {
   }, [historyLoading, historyPage?.after, historyPage?.hasLater, historyPagingArmed, historyPagingDirection, loadNewer])
 
 
-  return { markReaderUserIntent, onReaderScroll, jumpEarliest, jumpLatest }
+  return {
+    markReaderUserIntent, onReaderScroll, jumpEarliest, jumpLatest,
+    beginHistoryNavigation, isHistoryNavigationCurrent,
+  }
 }
