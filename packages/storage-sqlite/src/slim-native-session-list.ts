@@ -71,6 +71,7 @@ export class SqliteSlimNativeSessionList implements NativeSessionListReader {
     const values:Array<string|number>=[]
     if(input.sourceId){clauses.push('c.source_id=?');values.push(input.sourceId)}
     if(input.installationId){clauses.push('c.installation_id=?');values.push(input.installationId)}
+    if(input.reviewSessionId){clauses.push('c.review_session_id=?');values.push(input.reviewSessionId)}
     if(input.projectId){
       clauses.push('COALESCE(ctx.project_id,ws.project_id)=?')
       values.push(input.projectId)
