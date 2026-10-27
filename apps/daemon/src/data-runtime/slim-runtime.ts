@@ -1,6 +1,7 @@
 import type {
   AgentInstallation, Host, RuntimeProfile, SourceDefinition,
   HostIdentityHint, InstallationIdentityHint, RuntimeProfileIdentityHint,
+  WorkspaceIdentityHint, Workspace,
   CapturePolicyService, SourceService,
   NativeSessionCatalogEntry,
   NativeSessionCatalogStore,
@@ -159,6 +160,9 @@ export class SlimDataRuntime {
   }{
     const self=this
     return {
+      identity:{resolveWorkspace(hint){
+        return self.write<Workspace|null>(['identity','resolveWorkspace'],[hint])
+      }},
       nativeSessionCatalog:{
         get(input){return self.read<NativeSessionCatalogEntry|null>(['nativeSessionCatalog','get'],[input])},
         getByReviewSessionId(id){return self.read<NativeSessionCatalogEntry|null>(['nativeSessionCatalog','getByReviewSessionId'],[id])},
@@ -214,8 +218,9 @@ export class SlimDataRuntime {
       sourceId:string;installationId:string;nativeSessionId:string
     }):Promise<{runtimeProfileId?:string}|null>;upsert(input:{
       sourceId:string;installationId:string;nativeSessionId:string;
-      runtimeProfileId?:string
+      runtimeProfileId?:string;workspaceId?:string;projectId?:string
     }):Promise<void>}
+    identity:{resolveWorkspace(hint:WorkspaceIdentityHint):Promise<Workspace|null>}
     nativeSessionMetrics:{invalidate(input:{
       sourceId:string;installationId:string;nativeSessionId:string
     }):Promise<void>}
@@ -361,6 +366,7 @@ export class SlimDataRuntime {
     return new NativeOnlyRuntimeCapture({
       nativeSessionCatalog:port.nativeSessionCatalog,
       nativeSessionContexts:port.nativeSessionContexts,
+      identity:port.identity,
       nativeSessionMetrics:port.nativeSessionMetrics,
       checkpoints:port.checkpoints,
     }).start({
