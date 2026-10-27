@@ -290,3 +290,74 @@ test('profile-owned native roots and metadata stay attached to the verified sess
   assert.equal(saved[0]?.runtimeProfileId,'profile')
   assert.equal(saved[1]?.nativeSessionId,'s')
 })
+
+test('native Catalog indexes the first genuine user request but never injected content',async()=>{
+  const entry=session('human-title')
+  const source=makeSource([entry])
+  const original=source.readNativeSessionPage!
+  source.readNativeSessionPage=async (query,ctx)=>{
+    const page=await original(query,ctx)
+    if(page.state!=='available'||query.limit===1)return page
+    const record=page.records[0]!
+    return {...page,records:[
+      {...record,id:'system',nativeType:'system'},
+      {...record,id:'user',nativeType:'user'},
+      {...record,id:'rename',nativeType:'rename'},
+    ]}
+  }
+  source.normalize=async record=>({
+    evidenceCandidates:[],
+    observations:[{
+      kind:record.nativeType==='system'?'context.injected':record.nativeType==='rename'?'session.lifecycle':'message.user',
+      capturedAt:at,
+      identityHints:{
+        nativeSessionId:'human-title',
+        workspacePath:resolve('verified-workspace'),
+        ...(record.nativeType==='rename'?{sessionTitle:'明确命名',sessionTitleKind:'explicit' as const}:{}),
+      },
+      payload:record.nativeType==='system'
+        ?{text:'系统注入的标题',provenance:{actualAuthor:'system',contentRole:'system-context'}}
+        :record.nativeType==='user'
+          ?{text:'第一条真实用户请求',provenance:{actualAuthor:'human-user',contentRole:'user-request'}}
+          :{},
+    }],
+  })
+  const saved:NativeSessionCatalogEntry[]=[]
+  const contexts:unknown[]=[]
+  await new NativeOnlySourceIndexer({async upsert(value){saved.push(value)}}).scan({
+    source,host,installation,signal:new AbortController().signal,
+    beforeCatalogUpsert:async (_entry,_record,hints)=>{contexts.push(hints)},
+  })
+  assert.equal(saved[0]?.title,'明确命名','explicit source title outranks first human request')
+  assert.deepEqual(contexts,[{
+    title:'明确命名',workspacePath:resolve('verified-workspace'),
+  }])
+})
+
+test('native Catalog falls back to first human request without storing messages',async()=>{
+  const entry=session('human-only')
+  const source=makeSource([entry])
+  const original=source.readNativeSessionPage!
+  source.readNativeSessionPage=async (query,ctx)=>{
+    const page=await original(query,ctx)
+    if(page.state!=='available'||query.limit===1)return page
+    return {...page,records:page.records.map(record=>({
+      ...record,nativeType:'user',
+    }))}
+  }
+  source.normalize=async ()=>({
+    evidenceCandidates:[],
+    observations:[{
+      kind:'message.user',capturedAt:at,
+      identityHints:{nativeSessionId:'human-only'},
+      payload:{text:'恢复真实用户首条请求',provenance:{actualAuthor:'human-user',contentRole:'user-request'}},
+    }],
+  })
+  const saved:NativeSessionCatalogEntry[]=[]
+  await new NativeOnlySourceIndexer({async upsert(value){saved.push(value)}}).scan({
+    source,host,installation,signal:new AbortController().signal,
+  })
+  assert.equal(saved[0]?.title,'恢复真实用户首条请求')
+  assert.equal(JSON.stringify(saved).includes('provenance'),false)
+  assert.equal(JSON.stringify(saved).includes('observations'),false)
+})
