@@ -229,3 +229,19 @@ test('会话时间严格区分最后观测与首次观测，无效字段不冒�
   assert.deepEqual(sessionTimeFact(start, 'invalid-date'), { at: start, source: 'session-start' })
   assert.equal(sessionTimeFact('', 'invalid-date'), undefined)
 })
+
+test('Native Catalog attested first-user title is visible without restoring Legacy Summary',()=>{
+  assert.deepEqual(historyTaskPresentation({
+    ...session({sourceIds:['pi'],productId:'pi',title:'来自原生的首条请求',
+      titleKind:'unverified'}),nativeCatalogTitle:true,
+  },'Pi 任务'),{title:'来自原生的首条请求'})
+  assert.deepEqual(historyTaskPresentation({
+    ...session({sourceIds:['codex'],productId:'codex',title:'真实 Codex 用户请求',
+      titleKind:'unverified'}),nativeCatalogTitle:true,
+  },'Codex 任务'),{title:'真实 Codex 用户请求'})
+  // Legacy unverified Codex titles still cannot displace a genuine request.
+  assert.deepEqual(historyTaskPresentation(session({
+    sourceIds:['codex'],productId:'codex',title:'注入文本',titleKind:'unverified',
+    preview:'用户真实任务',
+  }),'Codex 任务'),{title:'用户真实任务'})
+})
