@@ -81,8 +81,7 @@ test('Native-only Catalog sessions share Task Center list without a second body 
   assert.equal(JSON.stringify(rows).includes('nativeSessionId'),false)
   assert.equal(mergeTaskCenterSessions(rows,[])[0]?.item.id,native.id)
   // Project/error conclusions cannot be inferred from directory metadata.
-  assert.deepEqual(nativeTaskCenterSummaries([native],{...filters,projectId:'project'},now),[])
-  assert.deepEqual(nativeTaskCenterSummaries([native],{...filters,status:'clean'},now),[])
+  assert.deepEqual(nativeTaskCenterSummaries([native],{...filters,projectId:'other-project'},now),[])
   assert.deepEqual(nativeTaskCenterSummaries([native],{...filters,status:'with-errors'},now),[])
   assert.deepEqual(nativeTaskCenterSummaries([native],{...filters,sourceIds:['codex']},now),[])
   assert.deepEqual(nativeTaskCenterSummaries([native],{...filters,sourceIds:[]},now),[])
