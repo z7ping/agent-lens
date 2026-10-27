@@ -2,7 +2,8 @@ import { spawn } from 'node:child_process'
 import { mkdtemp, mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises'
 import { createServer } from 'node:net'
 import { tmpdir } from 'node:os'
-import { dirname, isAbsolute, join, relative, resolve } from 'node:path'
+import { dirname, isAbsolute, join, resolve } from 'node:path'
+import { npmLocalTarballSpecifier } from './npm-local-tarball-specifier.mjs'
 import { fileURLToPath } from 'node:url'
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
@@ -90,7 +91,7 @@ try {
   // temporary user folder uses DOS 8.3 notation (RUNNER~1 -> RUNNER%7E1).
   // Relative file: specifiers avoid URL encoding and keep npm's resolved
   // path inside the isolated consumer project on every supported platform.
-  const localTarballSpecifier = `file:${relative(consumer, tarball).replaceAll('\\\\', '/')}`
+  const localTarballSpecifier = npmLocalTarballSpecifier(consumer, tarball)
   await run(npmCommand, ['install', '--no-audit', '--no-fund', localTarballSpecifier], {
     cwd: consumer,
     shell: process.platform === 'win32',
