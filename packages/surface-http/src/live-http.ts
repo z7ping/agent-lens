@@ -445,6 +445,8 @@ function normalizePublicRuntimeState(value: unknown): LiveRuntimeState {
   const workspacePath = typeof row.workspacePath === 'string' && row.workspacePath.trim()
     ? row.workspacePath.trim().slice(0, 4096)
     : undefined
+  const projectName = typeof row.projectName === 'string' && row.projectName.trim()
+    ? row.projectName.trim().slice(0, 240) : undefined
   const contextUsage = normalizeLiveContextUsage(row.contextUsage)
   const cacheMetrics = parseLiveCacheMetricsDto(row.cacheMetrics)
   return {
