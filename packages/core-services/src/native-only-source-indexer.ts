@@ -1,11 +1,12 @@
 import { isAbsolute } from 'node:path'
+import { nativeSessionWorkspacePath } from './native-session-workspace'
 import type { NativeSessionReaderStorage } from './native-session-reader'
 import type {
   AgentInstallation,
   Host,
   NativeSessionCatalogStore,
   RuntimeProfile,
-  SourceCheckpointService,
+  SourceRecord, SourceCheckpointService, Workspace, WorkspaceIdentityHint,
   SourceDefinition,
   SourceHistoryWindow,
 } from '@agent-lens/core'
@@ -50,7 +51,7 @@ export interface NativeCatalogScanInput {
   fullEnumeration?: boolean
   onProgress?: (report: NativeCatalogScanReport) => void | Promise<void>
   /** Optional metadata association, invoked before Catalog visibility. */
-  beforeCatalogUpsert?: (entry: import('@agent-lens/core').NativeSessionCatalogEntry) => Promise<void>
+  beforeCatalogUpsert?: (entry: import('@agent-lens/core').NativeSessionCatalogEntry, verifiedRecord: SourceRecord) => Promise<void>
 }
 
 const readonlyCheckpoint: SourceCheckpointService = {
@@ -144,7 +145,7 @@ export class NativeOnlySourceIndexer {
         failure('invalid-discovery')
         continue
       }
-      let verified = false
+      let verifiedRecord: SourceRecord | undefined
       try {
         // The first Source-owned record and its revision must match discovery
         // BEFORE any metadata becomes eligible for Review/Usage/Insights.
@@ -182,14 +183,14 @@ export class NativeOnlySourceIndexer {
           failure('recovery-unverified')
           continue
         }
-        verified = true
+        verifiedRecord = first
       } catch (error) {
         if (signal.aborted) throw error
         // Original file churn is reported without leaking sensitive content.
         failure('source-read-error')
       }
-      if (verified) {
-        if (input.beforeCatalogUpsert) await input.beforeCatalogUpsert(entry)
+      if (verifiedRecord) {
+        if (input.beforeCatalogUpsert) await input.beforeCatalogUpsert(entry, verifiedRecord)
         // Native titles (including Codex Desktop titles) can contain an entire
         // prompt. Bound the Catalog metadata without modifying the original.
         const catalogEntry = { ...entry }
@@ -223,9 +224,10 @@ export async function indexNativeInstallation(
     nativeSessionContexts?: {
       upsert(input: {
         sourceId: string; installationId: string; nativeSessionId: string;
-        runtimeProfileId?: string
+        runtimeProfileId?: string; projectId?: string; workspaceId?: string
       }): Promise<void>
     }
+    identity?: { resolveWorkspace(hint: WorkspaceIdentityHint): Promise<Workspace | null> }
   },
   input: Omit<NativeCatalogScanInput, 'host' | 'installation'> & {
     installationId: string
@@ -254,11 +256,21 @@ export async function indexNativeInstallation(
     source: input.source,
     host,
     installation: effectiveInstallation,
-    ...(input.runtimeProfile && storage.nativeSessionContexts
-      ? { beforeCatalogUpsert: async (entry: import('@agent-lens/core').NativeSessionCatalogEntry) => {
+    ...(storage.nativeSessionContexts && (storage.identity || input.runtimeProfile)
+      ? { beforeCatalogUpsert: async (
+        entry: import('@agent-lens/core').NativeSessionCatalogEntry, record: SourceRecord,
+      ) => {
+        const path = nativeSessionWorkspacePath(record)
+        const workspace = path && storage.identity
+          ? await storage.identity.resolveWorkspace({hostId:host.id,path})
+          : null
+        if (!workspace && !input.runtimeProfile) return
         await storage.nativeSessionContexts!.upsert({
           sourceId:entry.sourceId,installationId:entry.installationId,
-          nativeSessionId:entry.nativeSessionId,runtimeProfileId:input.runtimeProfile!.id,
+          nativeSessionId:entry.nativeSessionId,
+          ...(input.runtimeProfile ? {runtimeProfileId:input.runtimeProfile.id}:{}),
+          ...(workspace ? {workspaceId:workspace.id,
+            ...(workspace.projectId?{projectId:workspace.projectId}:{})}:{}),
         })
       } } : {}),
     ...(input.runtimeProfile ? { runtimeProfile: input.runtimeProfile } : {}),
