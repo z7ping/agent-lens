@@ -3,7 +3,7 @@ import test from 'node:test'
 import type { AgentLensApi } from './api'
 import type { NativeReviewWindowDto, NativeSessionSummaryDto } from '@agent-lens/protocol'
 import { AgentLensClientModel } from './model'
-import { nativeReviewDetail, nativeReviewNextPage, nativeReviewObservedFileChanges, nativeVisibleWindowStatistics } from './native-review-adapter'
+import { nativeReviewTitle, nativeReviewDetail, nativeReviewNextPage, nativeReviewObservedFileChanges, nativeVisibleWindowStatistics } from './native-review-adapter'
 
 const id='native:1234567890abcdef1234567890abcdef'
 const at='2026-10-25T00:00:00Z'
@@ -23,6 +23,34 @@ const page=(ordinal:number,hasMore:boolean):NativeReviewWindowDto=>({
       payload:{text:'Prompt '+ordinal},evidence:[],observationIds:['native-observation-'+ordinal],
     }],
   }],
+})
+
+test('Source native title provenance is not promoted to explicit or generated',()=>{
+  assert.deepEqual(nativeReviewTitle({...summary,titleProvenance:'native'}),{
+    title:'Native Pi task',titleKind:'unverified',
+  })
+  assert.deepEqual(nativeReviewTitle({...summary,titleProvenance:'generated'}),{
+    title:'Native Pi task',titleKind:'generated',
+  })
+  assert.deepEqual(nativeReviewTitle({...summary,titleProvenance:'explicit'}),{
+    title:'Native Pi task',titleKind:'explicit',
+  })
+  assert.deepEqual(nativeReviewTitle({title:''}),{})
+})
+
+test('native Review keeps project context when paging Source-owned windows',()=>{
+  const context={...summary,projectId:'project-1',projectName:'Slowlight',
+    workspacePath:'E:\\work\\Slowlight',titleProvenance:'native' as const}
+  const first=nativeReviewDetail(context,page(1,true))
+  assert.equal(first.projectId,'project-1')
+  assert.equal(first.projectName,'Slowlight')
+  assert.equal(first.workspacePath,'E:\\work\\Slowlight')
+  assert.equal(first.titleKind,'unverified')
+  const next=nativeReviewNextPage(first,page(2,false))
+  assert.equal(next.projectId,first.projectId)
+  assert.equal(next.projectName,first.projectName)
+  assert.equal(next.workspacePath,first.workspacePath)
+  assert.equal(next.titleKind,first.titleKind)
 })
 
 test('native adapter keeps the shared Review interactions and labels statistics as window-only',()=>{

@@ -35,7 +35,7 @@ export class SqliteSlimNativeSessionList implements NativeSessionListReader {
     if(!Number.isSafeInteger(input.limit)||input.limit<1||input.limit>200){
       throw new RangeError('Native session list limit must be 1-200')
     }
-    for(const key of ['sourceId','installationId','projectId'] as const){
+    for(const key of ['sourceId','installationId','projectId','reviewSessionId'] as const){
       if(input[key]!==undefined && (!input[key]!.trim() || input[key]!.length>512)){
         throw new TypeError('Invalid native session list '+key)
       }
@@ -71,6 +71,7 @@ export class SqliteSlimNativeSessionList implements NativeSessionListReader {
     const values:Array<string|number>=[]
     if(input.sourceId){clauses.push('c.source_id=?');values.push(input.sourceId)}
     if(input.installationId){clauses.push('c.installation_id=?');values.push(input.installationId)}
+    if(input.reviewSessionId){clauses.push('c.review_session_id=?');values.push(input.reviewSessionId)}
     if(input.projectId){
       clauses.push('COALESCE(ctx.project_id,ws.project_id)=?')
       values.push(input.projectId)

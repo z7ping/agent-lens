@@ -79,6 +79,14 @@ test('Codex verified generated and explicit native titles outrank the first user
   }
 })
 
+test('项目路径只能作为上下文，不再重复冒充任务标题',()=>{
+  assert.deepEqual(historyTaskPresentation(session({
+    title:'E:\\decard\\projects\\auth-center-web',
+    workspacePath:'E:\\decard\\projects\\auth-center-web',
+    projectName:'auth-center-web',sourceIds:['pi'],productId:'pi',
+  }), 'Pi 任务'),{title:'Pi 任务'})
+})
+
 test('Codex unverified native title never displaces a real user message', () => {
   assert.deepEqual(historyTaskPresentation(session({
     sourceIds: ['codex'], productId: 'codex', titleKind: 'unverified',

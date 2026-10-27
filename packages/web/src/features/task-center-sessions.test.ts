@@ -23,6 +23,16 @@ test('新建尚未入历史的空闲会话保留可返回的统一列表入口',
   assert.equal(taskLiveRuntimeHref(rows[0]!.runtime!), '/review/live/runtime-provider/runtime-1')
 })
 
+test('实时 Pi 提供的状态项目名补齐未关联历史行',()=>{
+  const linked:LiveRuntimeRefDto={...runtime,historySessionId:history.id,
+    projectName:undefined,
+    state:{...runtime.state,projectName:'Slowlight'},
+  }
+  const rows=mergeTaskCenterSessions([{...history,projectName:undefined,workspacePath:undefined}], [linked])
+  assert.equal(rows[0]?.item.projectName,'Slowlight')
+  assert.equal(rows[0]?.item.workspacePath,'/work/Slowlight')
+})
+
 test('历史收录后按服务端身份合为一条，同名的其他会话保持独立', () => {
   const rows = mergeTaskCenterSessions([history, { ...history, id: 'same-title-other' }], [{ ...runtime, historySessionId: history.id }])
   assert.equal(rows.length, 2)
@@ -52,6 +62,12 @@ test('Native-only Catalog sessions share Task Center list without a second body 
     sourceId:'pi',installationId:'pi-local',nativeSessionId:'native-1',
     locationKind:'native' as const,
     lastActivityAt:'2026-10-25T14:00:00Z',title:'Original Source title',
+    titleProvenance:'native' as const,projectId:'project-1',
+    projectName:'AgentLens',workspacePath:'/work/AgentLens',
+    metricsState:'complete' as const,metrics:{
+      interactionCount:2,toolCallCount:0,toolResultCount:0,
+      toolErrorCount:0,errorCount:0,inputTokens:null,outputTokens:null,
+    },
   }
   const filters={sourceIds:null,projectId:'',status:'all' as const,
     range:'all' as const,search:''}
@@ -59,15 +75,23 @@ test('Native-only Catalog sessions share Task Center list without a second body 
   assert.equal(rows.length,1)
   assert.equal(rows[0]?.id,native.id)
   assert.equal(rows[0]?.title,native.title)
-  assert.equal(rows[0]?.titleKind,'explicit','沿用 Native Review 的原生标题展示契约')
+  assert.equal(rows[0]?.titleKind,'unverified','原生索引标题不能伪装成明确命名')
+  assert.equal(rows[0]?.projectId,'project-1')
+  assert.equal(rows[0]?.projectName,'AgentLens')
+  assert.equal(rows[0]?.workspacePath,'/work/AgentLens')
+  assert.equal(nativeTaskCenterSummaries([native],{...filters,projectId:'project-1'},now).length,1)
+  assert.equal(nativeTaskCenterSummaries([native],{...filters,status:'clean'},now).length,1)
+  assert.equal(nativeTaskCenterSummaries([{...native,
+    metrics:{...native.metrics,errorCount:1}}],{...filters,status:'with-errors'},now)[0]?.hasErrors,true)
+  assert.deepEqual(nativeTaskCenterSummaries([{...native,metricsState:'partial' as const}],{...filters,status:'clean'},now),[])
+  assert.equal(nativeTaskCenterSummaries([{...native,titleProvenance:'generated' as const}],filters,now)[0]?.titleKind,'generated')
   assert.equal(rows[0]?.startedAt,'','never invent source creation time')
   assert.equal(rows[0]?.endedAt,native.lastActivityAt)
   assert.equal(JSON.stringify(rows).includes('installationId'),false)
   assert.equal(JSON.stringify(rows).includes('nativeSessionId'),false)
   assert.equal(mergeTaskCenterSessions(rows,[])[0]?.item.id,native.id)
   // Project/error conclusions cannot be inferred from directory metadata.
-  assert.deepEqual(nativeTaskCenterSummaries([native],{...filters,projectId:'project'},now),[])
-  assert.deepEqual(nativeTaskCenterSummaries([native],{...filters,status:'clean'},now),[])
+  assert.deepEqual(nativeTaskCenterSummaries([native],{...filters,projectId:'other-project'},now),[])
   assert.deepEqual(nativeTaskCenterSummaries([native],{...filters,status:'with-errors'},now),[])
   assert.deepEqual(nativeTaskCenterSummaries([native],{...filters,sourceIds:['codex']},now),[])
   assert.deepEqual(nativeTaskCenterSummaries([native],{...filters,sourceIds:[]},now),[])

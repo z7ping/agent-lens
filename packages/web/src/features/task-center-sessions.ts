@@ -25,11 +25,19 @@ export function mergeTaskCenterSessions(
       : value.state.isStreaming ? 3 : value.state.status === 'ready' ? 2 : 1
     if (previous?.runtime && priority(previous.runtime) >= priority(runtime)) continue
     const startedAt = runtime.startedAt ?? ''
-    const item: TaskSessionListSummary = previous?.item ?? {
+    const projectName = runtime.projectName ?? runtime.state.projectName
+    const workspacePath = runtime.state.workspacePath
+    const item: TaskSessionListSummary = previous?.item ? {
+      ...previous.item,
+      // The runtime may know an exact cwd that the older Catalog row lacked.
+      ...(!previous.item.projectId && runtime.projectId ? { projectId: runtime.projectId } : {}),
+      ...(!previous.item.projectName && projectName ? { projectName } : {}),
+      ...(!previous.item.workspacePath && workspacePath ? { workspacePath } : {}),
+    } : {
       id, productId: runtime.productId, sourceIds: runtime.sourceIds?.length ? runtime.sourceIds : [runtime.productId],
       ...(runtime.projectId ? { projectId: runtime.projectId } : {}),
-      ...(runtime.projectName ? { projectName: runtime.projectName } : {}),
-      ...(runtime.state.workspacePath ? { workspacePath: runtime.state.workspacePath } : {}),
+      ...(projectName ? { projectName } : {}),
+      ...(workspacePath ? { workspacePath } : {}),
       ...(runtime.state.title ? { title: runtime.state.title } : {}),
       startedAt, endedAt: runtime.lastActivityAt ?? startedAt,
       hasErrors: runtime.state.status === 'failed',
@@ -69,19 +77,27 @@ export function visibleTaskCenterSession(
 export function nativeTaskCenterSummaries(
   entries:readonly NativeSessionSummaryDto[],filters:ReviewFilters,nowMs:number,
 ):TaskSessionListSummary[]{
-  if(filters.projectId || filters.status!=='all' || filters.sourceIds?.length===0)return []
+  if(filters.sourceIds?.length===0)return []
   const from=filters.range==='all'?Number.NEGATIVE_INFINITY
     :filters.range==='today'
       ?new Date(new Date(nowMs).setHours(0,0,0,0)).getTime()
       :nowMs-(filters.range==='7d'?7:30)*86_400_000
   return entries.filter(entry=>{
     const when=Date.parse(entry.lastActivityAt)
+    const complete = entry.metricsState === 'complete' && entry.metrics !== undefined
     return entry.locationKind==='native'
+      && (!filters.projectId || entry.projectId === filters.projectId)
       && (filters.sourceIds===null || filters.sourceIds.includes(entry.sourceId))
+      && (filters.status==='all' || (complete && (filters.status==='with-errors'
+        ? entry.metrics!.errorCount > 0 : entry.metrics!.errorCount === 0)))
       && Number.isFinite(when) && when>=from
   }).map(entry=>({
     id:entry.id,productId:entry.sourceId,sourceIds:[entry.sourceId],
-    startedAt:'',endedAt:entry.lastActivityAt,hasErrors:false,
+    startedAt:'',endedAt:entry.lastActivityAt,
+    hasErrors:entry.metricsState==='complete' && (entry.metrics?.errorCount??0)>0,
+    ...(entry.projectId ? {projectId:entry.projectId}:{}),
+    ...(entry.projectName ? {projectName:entry.projectName}:{}),
+    ...(entry.workspacePath ? {workspacePath:entry.workspacePath}:{}),
     ...nativeReviewTitle(entry),
   }))
 }

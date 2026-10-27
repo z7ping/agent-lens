@@ -8,9 +8,16 @@ import {
 } from '@agent-lens/protocol'
 
 /** 原生目录与详情沿用同一标题展示契约，不猜测或重写 Source 的名称。 */
-export function nativeReviewTitle(summary: Pick<NativeSessionSummaryDto, 'title'>) {
+export function nativeReviewTitle(summary: Pick<NativeSessionSummaryDto, 'title' | 'titleProvenance'>) {
   const title = summary.title?.trim()
-  return title ? { title, titleKind: 'explicit' as const } : {}
+  return title ? {
+    title,
+    titleKind: summary.titleProvenance === 'explicit'
+      ? 'explicit' as const
+      : summary.titleProvenance === 'generated'
+        ? 'generated' as const
+        : 'unverified' as const,
+  } : {}
 }
 
 /** Rebuild statistics only from the bounded visible native Review nodes.
@@ -74,6 +81,9 @@ export function nativeReviewDetail(
     productId: summary.sourceId,
     installationId: summary.installationId,
     ...nativeReviewTitle(summary),
+    ...(summary.projectId?{projectId:summary.projectId}:{}),
+    ...(summary.projectName?{projectName:summary.projectName}:{}),
+    ...(summary.workspacePath?{workspacePath:summary.workspacePath}:{}),
     startedAt: first,
     endedAt: end,
     durationMs: Number.isFinite(duration) ? Math.max(0, duration) : 0,
@@ -113,6 +123,11 @@ export function nativeReviewNextPage(
     locationKind: 'native',
     lastActivityAt: current.endedAt,
     ...(current.title ? { title: current.title } : {}),
+    ...(current.titleKind ? { titleProvenance: current.titleKind==='unverified'
+      ? 'native' as const : current.titleKind } : {}),
+    ...(current.projectId?{projectId:current.projectId}:{}),
+    ...(current.projectName?{projectName:current.projectName}:{}),
+    ...(current.workspacePath?{workspacePath:current.workspacePath}:{}),
   }, window)
 }
 

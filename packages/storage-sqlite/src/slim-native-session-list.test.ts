@@ -14,6 +14,8 @@ test('slim session list reads native titles/projects and never guesses missing s
     })
     const project=await slim.identity.resolveProject({name:'P1'})
     assert.ok(project)
+    const workspace=await slim.identity.resolveWorkspace({hostId:host.id,path:resolve('work')})
+    assert.ok(workspace)
     for (const [id,date] of [['one','2026-10-26T02:00:00Z'],
       ['two','2026-10-26T01:00:00Z']] as const) {
       await slim.nativeSessionCatalog.upsert({
@@ -25,7 +27,8 @@ test('slim session list reads native titles/projects and never guesses missing s
     }
     await slim.nativeSessionContexts.upsert({
       sourceId:'pi',installationId:install.id,nativeSessionId:'one',
-      projectId:project.id,titleOverride:'User saved title',titleKind:'explicit',
+      projectId:project.id,workspaceId:workspace.id,
+      titleOverride:'User saved title',titleKind:'explicit',
     })
     const page=await slim.nativeSessionList.query({sourceId:'pi',limit:1})
     assert.equal(page.hasMore,true)
@@ -35,6 +38,7 @@ test('slim session list reads native titles/projects and never guesses missing s
     assert.equal(page.items[0]?.metricsState,'missing')
     assert.equal(page.items[0]?.metrics,undefined)
     assert.equal(page.items[0]?.projectId,project.id)
+    assert.equal(page.items[0]?.workspacePath,workspace.path)
     assert.equal(JSON.stringify(page).includes('private-native'),false)
     const later=await slim.nativeSessionList.query({
       sourceId:'pi',limit:5,
@@ -46,6 +50,17 @@ test('slim session list reads native titles/projects and never guesses missing s
       },
     })
     assert.deepEqual(later.items.map(x=>x.nativeSessionId),['two'])
+    const direct=await slim.nativeSessionList.query({
+      reviewSessionId:page.items[0]!.reviewSessionId,limit:1,
+    })
+    assert.equal(direct.items.length,1)
+    assert.equal(direct.items[0]?.title,'User saved title')
+    assert.equal(direct.items[0]?.projectId,project.id)
+    assert.equal(direct.items[0]?.workspacePath,workspace.path)
+    assert.equal(direct.items[0]?.titleProvenance,'explicit')
+    assert.deepEqual((await slim.nativeSessionList.query({
+      reviewSessionId:'native:missing',limit:1,
+    })).items,[])
     const scoped=await slim.nativeSessionList.query({projectId:project.id,limit:5})
     assert.deepEqual(scoped.items.map(x=>x.nativeSessionId),['one'])
     assert.equal(later.items[0]?.titleProvenance,'native')
