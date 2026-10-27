@@ -19,7 +19,7 @@ import {
   ingestPiHistory,
   listJsonlFiles,
   readPiSessionMetadata,
-  readPiSessionLastActivity,
+  readPiSessionTailMetadata,
   piSessionInternals,
   startPiRuntimeCapture,
 } from './session'
@@ -143,6 +143,7 @@ export const piSourceDefinition: SourceDefinition = {
         const after = await stat(filePath)
         if (!after.isFile() || before.dev !== after.dev || before.ino !== after.ino
           || before.size !== after.size || before.mtimeMs !== after.mtimeMs) continue
+        const tail = await readPiSessionTailMetadata(filePath)
         yield {
           sourceId: PI_SOURCE_ID,
           installationId: ctx.installation.id,
@@ -152,7 +153,8 @@ export const piSourceDefinition: SourceDefinition = {
           fileIdentity: `${after.dev}:${after.ino}`,
           fileSize: after.size,
           fileMtimeMs: after.mtimeMs,
-          lastActivityAt: await readPiSessionLastActivity(filePath) ?? new Date(after.mtimeMs).toISOString(),
+          lastActivityAt: tail.lastActivityAt ?? new Date(after.mtimeMs).toISOString(),
+          ...(tail.title ? { title: tail.title } : {}),
           updatedAt: new Date().toISOString(),
         }
       } catch (error) {
