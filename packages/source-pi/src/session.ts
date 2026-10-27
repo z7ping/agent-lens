@@ -295,12 +295,15 @@ async function readSessionHeader(filePath: string): Promise<Record<string, unkno
 /** Original Pi event timestamps outrank file mtime (which changes on copy/restore).
  * Read only the last 64 KiB; incomplete JSONL tails never become activity facts.
  */
-export async function readPiSessionLastActivity(filePath: string): Promise<string | undefined> {
+export async function readPiSessionTailMetadata(filePath: string): Promise<{
+  lastActivityAt?: string
+  title?: string
+}> {
   const handle = await open(filePath, 'r')
   try {
     const size = (await handle.stat()).size
     const count = Math.min(size, 64 * 1024)
-    if (!count) return undefined
+    if (!count) return {}
     const offset = size - count
     const buffer = Buffer.alloc(count)
     const { bytesRead } = await handle.read(buffer, 0, count, offset)
@@ -311,20 +314,36 @@ export async function readPiSessionLastActivity(filePath: string): Promise<strin
       // The final JSONL row can still be complete even without a newline.
       try { JSON.parse(lines.at(-1) ?? '') } catch { lines.pop() }
     }
+    let lastActivityAt: string | undefined
+    let title: string | undefined
     for (let i = lines.length - 1; i >= 0; i--) {
       try {
         const value = JSON.parse(lines[i] ?? '')
         if (!value || typeof value !== 'object' || Array.isArray(value)) continue
-        const timestamp = (value as Record<string, unknown>).timestamp
-        if (typeof timestamp === 'string' && Number.isFinite(Date.parse(timestamp))) {
-          return new Date(timestamp).toISOString()
+        const record = value as Record<string, unknown>
+        const timestamp = record.timestamp
+        if (!lastActivityAt && typeof timestamp === 'string'
+          && Number.isFinite(Date.parse(timestamp))) {
+          lastActivityAt = new Date(timestamp).toISOString()
         }
+        if (!title && record.type === 'session_info' && typeof record.name === 'string') {
+          const candidate = record.name.replace(/\s+/g, ' ').trim()
+          if (candidate) title = candidate.slice(0, 512).replace(/[\uD800-\uDBFF]$/u, '')
+        }
+        if (lastActivityAt && title) break
       } catch { /* Malformed/truncated native rows are not timestamps. */ }
     }
-    return undefined
+    return {
+      ...(lastActivityAt ? { lastActivityAt } : {}),
+      ...(title ? { title } : {}),
+    }
   } finally {
     await handle.close()
   }
+}
+
+export async function readPiSessionLastActivity(filePath: string): Promise<string | undefined> {
+  return (await readPiSessionTailMetadata(filePath)).lastActivityAt
 }
 
 export async function readPiSessionMetadata(filePath: string): Promise<PiSessionMetadata> {
