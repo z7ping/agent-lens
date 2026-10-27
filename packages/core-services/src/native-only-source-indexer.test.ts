@@ -72,6 +72,25 @@ test('independent native indexer indexes verifiable original files even with inc
   assert.deepEqual(persisted.map(entry=>entry.nativeSessionId),['a','b'])
 })
 
+test('native indexer bounds oversized native titles without altering Source metadata',async()=>{
+  const entries=[
+    {...session('ascii'),title:'A'.repeat(700)},
+    {...session('unicode'),title:'A'.repeat(511)+'😀'.repeat(10)},
+    {...session('empty'),title:'  '},
+  ]
+  const persisted:NativeSessionCatalogEntry[]=[]
+  const indexer=new NativeOnlySourceIndexer({async upsert(entry){persisted.push(entry)}})
+  const result=await indexer.scan({
+    source:makeSource(entries),host,installation,
+    signal:new AbortController().signal,maxSessions:4,
+  })
+  assert.equal(result.indexed,3)
+  assert.equal(persisted[0]?.title,'A'.repeat(512))
+  assert.equal(persisted[1]?.title,'A'.repeat(511),'do not split an emoji surrogate pair')
+  assert.equal(persisted[2]?.title,undefined)
+  assert.equal(entries[0]?.title.length,700,'Source-owned title remains unmodified')
+})
+
 test('native indexer rejects cross-session evidence and never writes a duplicate record',async()=>{
   let writes=0
   const indexer=new NativeOnlySourceIndexer({async upsert(){writes++}})

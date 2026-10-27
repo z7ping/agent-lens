@@ -10,12 +10,6 @@ const PRESENCE=new Set<AssetState>(['installed','configured','enabled','discover
 const ABSENCE_FALSE=new Set<AssetState>(['installed','configured'])
 interface Snapshot {bindings:Record<string,AssetState[]>;completedAt:string}
 
-const readOnlyCheckpoint:SourceCheckpointService={
-  async get(){return null},
-  async set(){throw new Error('Slim asset source discovery cannot persist arbitrary checkpoints')},
-  async clear(){throw new Error('Slim asset source discovery cannot clear checkpoints')},
-}
-
 export interface SlimAssetScanReport {
   sourceId:string
   installationId:string
@@ -67,10 +61,20 @@ export class NativeOnlyAssetScanner {
       ...(runtimeProfile.dataRoot !== undefined ? { dataRoot: runtimeProfile.dataRoot } : {}),
       ...(runtimeProfile.configRoot !== undefined ? { configRoot: runtimeProfile.configRoot } : {}),
     }:installation
+    // Source adapters may memoize discovery facts (e.g. Pi project roots)
+    // during this scan, but must not persist their arbitrary checkpoints.
+    const temporary=new Map<string,unknown>()
+    const scanCheckpoint:SourceCheckpointService={
+      async get<T>(key:string):Promise<T|null>{
+        return (temporary.get(key) as T|undefined)??null
+      },
+      async set<T>(key:string,value:T):Promise<void>{temporary.set(key,value)},
+      async clear(key:string):Promise<void>{temporary.delete(key)},
+    }
     for await(const discovered of source.discoverAssets({
       host,installation:activeInstallation,
       ...(runtimeProfile?{runtimeProfile}:{}),
-      abortSignal:signal,checkpoint:readOnlyCheckpoint,
+      abortSignal:signal,checkpoint:scanCheckpoint,
     })){
       signal.throwIfAborted()
       if(report.assetsDiscovered>=LIMIT){

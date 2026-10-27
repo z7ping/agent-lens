@@ -36,8 +36,10 @@ const forbidden=/^(payload|body|prompt|message|messages|text|output|input|argume
 
 function checkCursor(value:unknown,depth=0):boolean {
   if(depth>3)return false
-  if(value===null || typeof value==='boolean'
-    || (typeof value==='number' && Number.isSafeInteger(value)))return true
+  if(value===null || typeof value==='boolean')return true
+  // File mtimeMs is a finite fractional timestamp on many filesystems.
+  if(typeof value==='number')return Number.isFinite(value)
+    && Math.abs(value)<=Number.MAX_SAFE_INTEGER
   if(typeof value==='string')return value.length<=512
   if(Array.isArray(value))return value.length<=32&&value.every(item=>checkCursor(item,depth+1))
   if(!value||typeof value!=='object')return false
