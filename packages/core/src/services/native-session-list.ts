@@ -8,6 +8,8 @@ export interface NativeSessionListQuery {
   sourceId?: string
   installationId?: string
   projectId?: string
+  /** Narrow SQL point lookup for one native Review deep link. */
+  reviewSessionId?: string
   search?: string
   before?: {
     lastActivityAt: string
