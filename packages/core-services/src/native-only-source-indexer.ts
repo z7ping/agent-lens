@@ -190,8 +190,17 @@ export class NativeOnlySourceIndexer {
       }
       if (verified) {
         if (input.beforeCatalogUpsert) await input.beforeCatalogUpsert(entry)
+        // Native titles (including Codex Desktop titles) can contain an entire
+        // prompt. Bound the Catalog metadata without modifying the original.
+        const catalogEntry = { ...entry }
+        if (catalogEntry.title !== undefined) {
+          const bounded = catalogEntry.title.trim().slice(0, 512)
+            .replace(/[\uD800-\uDBFF]$/u, '')
+          if (bounded) catalogEntry.title = bounded
+          else delete catalogEntry.title
+        }
         // SQL write failure must abort, never silently report a skipped session.
-        await this.catalog.upsert(entry)
+        await this.catalog.upsert(catalogEntry)
         report.indexed++
       }
       if (input.onProgress) await input.onProgress({ ...report, failures: { ...report.failures } })
