@@ -156,6 +156,7 @@ export async function handleNativeSessionCatalogRequest(
         titleProvenance:item.titleProvenance,
         ...(item.projectId?{projectId:item.projectId}:{}),
         ...(item.projectName?{projectName:item.projectName}:{}),
+        ...(item.workspacePath?{workspacePath:item.workspacePath}:{}),
         metricsState:item.metricsState,
         ...(item.metrics?{metrics:item.metrics}:{}),
       }))
