@@ -85,7 +85,7 @@ async function inspectNativeMetadata(
         || (provenance.contentRole ?? 'user-request') !== 'user-request') continue
       firstUser = boundedTitle(payload.text)
     }
-    if (explicitTitle && workspacePath) break
+    if (explicitTitle || (firstUser && workspacePath)) break
   }
   return {
     ...((explicitTitle ?? firstUser) ? { title: explicitTitle ?? firstUser } : {}),
@@ -272,7 +272,7 @@ export class NativeOnlySourceIndexer {
       }
       if (verifiedRecord) {
         const headerWorkspace = nativeSessionWorkspacePath(verifiedRecord)
-        const hints = !entry.title?.trim() || !headerWorkspace
+        const hints: NativeSessionMetadataHints = !entry.title?.trim() || !headerWorkspace
           ? await inspectNativeMetadata(source, entry, context)
           : {}
         if (input.beforeCatalogUpsert) await input.beforeCatalogUpsert(entry, verifiedRecord, hints)
