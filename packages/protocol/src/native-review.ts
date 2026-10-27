@@ -10,9 +10,12 @@ export interface NativeSessionSummaryDto {
   locationKind: 'native' | 'archive'
   lastActivityAt: string
   title?: string
-  /** Optional Slim-only indexed association, never inferred from original title. */
+  /** Source-native labels are not proof of an explicit or AI-generated title. */
+  titleProvenance?: 'native' | 'explicit' | 'generated' | 'unknown'
+  /** Slim-only indexed association; workspace path comes from verified Source metadata. */
   projectId?: string
   projectName?: string
+  workspacePath?: string
   /** Only a certified "complete" status may justify a clean-session verdict. */
   metricsState?: 'missing' | 'stale' | 'partial' | 'complete'
   metrics?: {
