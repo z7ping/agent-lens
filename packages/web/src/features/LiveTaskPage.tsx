@@ -345,7 +345,7 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
       ? historyIndex?.items.find(item => item.cursor === firstLoadedCursor)?.ordinal
       : undefined
     const firstGlobalOrdinal = historyPage?.rounds?.firstOrdinal ?? indexedFirstOrdinal
-    const loaded = segments.map(round => {
+    const loaded: TaskTurnRailData[] = segments.map(round => {
       const localOrdinal = round.model.ordinal
       const ordinal = firstGlobalOrdinal && localOrdinal
         ? firstGlobalOrdinal + localOrdinal - 1
@@ -368,7 +368,7 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
     })
     // Show global navigation as soon as native index metadata arrives. Unloaded
     // rounds are lightweight entries, not a request to hydrate their bodies.
-    const byOrdinal = new Map(loaded
+    const byOrdinal = new Map<number, TaskTurnRailData>(loaded
       .filter(item => item.ordinal)
       .map(item => [item.ordinal!, item] as const))
     for (const indexed of historyIndex?.items ?? []) {
