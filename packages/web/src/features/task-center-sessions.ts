@@ -99,5 +99,6 @@ export function nativeTaskCenterSummaries(
     ...(entry.projectName ? {projectName:entry.projectName}:{}),
     ...(entry.workspacePath ? {workspacePath:entry.workspacePath}:{}),
     ...nativeReviewTitle(entry),
+    ...(entry.title && entry.titleProvenance === 'native' ? { nativeCatalogTitle: true as const } : {}),
   }))
 }

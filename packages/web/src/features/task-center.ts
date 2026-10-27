@@ -6,7 +6,10 @@ import { taskUserRequestText } from './task-detail-model'
 export type TaskSessionListSummary = Pick<ReviewSessionSummaryDto,
   'id' | 'productId' | 'sourceIds' | 'projectId' | 'projectName' | 'workspacePath' |
   'title' | 'titleKind' | 'preview' | 'startedAt' | 'endedAt' | 'hasErrors' |
-  'sessionActivity' | 'activitySourceLabel'>
+  'sessionActivity' | 'activitySourceLabel'> & {
+  /** Native Catalog title derived from verified Source metadata/user request. */
+  nativeCatalogTitle?: true
+}
 
 /** All-project history filter: sort using the complete facet activity, never only the paginated visible sessions. */
 export function sortProjectFacetsByActivity(projects: readonly ProjectFacetDto[]): ProjectFacetDto[] {
@@ -110,8 +113,8 @@ function userTaskTitle(item: TaskSessionListSummary): string | undefined {
   // Legacy Codex index labels are unverified: they might originate from
   // injected context rather than user rename or an agent-generated summary.
   // Only source-attested titles outrank the canonical first human request.
-  const trustedTitle = item.titleKind !== 'unverified'
-    && (!item.sourceIds.includes('codex') || item.titleKind === 'generated' || item.titleKind === 'explicit')
+  const trustedTitle = item.nativeCatalogTitle === true || (item.titleKind !== 'unverified'
+    && (!item.sourceIds.includes('codex') || item.titleKind === 'generated' || item.titleKind === 'explicit'))
   if (!trustedTitle) return item.preview?.trim() ? taskUserRequestText(item.preview) : undefined
   const title = cleanSessionTitle(item.title, '')
   const visibleTitle = sessionListTitle(title, '', item.sourceIds)

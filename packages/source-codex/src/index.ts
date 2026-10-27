@@ -210,7 +210,9 @@ export const codexSourceDefinition: SourceDefinition = {
           fileMtimeMs: after.mtimeMs,
           // 原生索引更新时间优先；复制/恢复文件的 mtime 不是会话活动时间。
           lastActivityAt: activity ?? new Date(after.mtimeMs).toISOString(),
-          ...(indexed?.title ? { title: indexed.title } : session.title ? { title: session.title } : {}),
+          // Desktop SQLite titles are attested. The legacy JSON index can contain
+          // injected context and must yield to the first verified user request.
+          ...(indexed?.source === 'sqlite' && indexed.title ? { title: indexed.title } : {}),
           updatedAt: new Date().toISOString(),
         }
       } catch (error) {

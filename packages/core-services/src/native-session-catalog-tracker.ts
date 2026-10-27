@@ -111,8 +111,7 @@ export class NativeSessionCatalogTracker {
       fileMtimeMs: revision.fileMtimeMs,
       // SQLite can be in WAL mode: the main DB mtime need not advance on
       // a new session message. Prefer the native event clock when valid.
-      lastActivityAt: originalDatabase && record.occurredAt
-        && Number.isFinite(Date.parse(record.occurredAt))
+      lastActivityAt: record.occurredAt && Number.isFinite(Date.parse(record.occurredAt))
         ? new Date(record.occurredAt).toISOString()
         : new Date(file.mtimeMs).toISOString(),
       ...(title ? { title } : {}),
