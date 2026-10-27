@@ -38,6 +38,21 @@ test('Source native title provenance is not promoted to explicit or generated',(
   assert.deepEqual(nativeReviewTitle({...summary,title:undefined}),{})
 })
 
+test('native Review keeps project context when paging Source-owned windows',()=>{
+  const context={...summary,projectId:'project-1',projectName:'Slowlight',
+    workspacePath:'E:\\work\\Slowlight',titleProvenance:'native' as const}
+  const first=nativeReviewDetail(context,page(1,true))
+  assert.equal(first.projectId,'project-1')
+  assert.equal(first.projectName,'Slowlight')
+  assert.equal(first.workspacePath,'E:\\work\\Slowlight')
+  assert.equal(first.titleKind,'unverified')
+  const next=nativeReviewNextPage(first,page(2,false))
+  assert.equal(next.projectId,first.projectId)
+  assert.equal(next.projectName,first.projectName)
+  assert.equal(next.workspacePath,first.workspacePath)
+  assert.equal(next.titleKind,first.titleKind)
+})
+
 test('native adapter keeps the shared Review interactions and labels statistics as window-only',()=>{
   const first=nativeReviewDetail(summary,page(1,true))
   assert.equal(first.id,id)
