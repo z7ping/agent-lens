@@ -19,6 +19,7 @@ import {
   ingestPiHistory,
   listJsonlFiles,
   readPiSessionMetadata,
+  readPiSessionLastActivity,
   piSessionInternals,
   startPiRuntimeCapture,
 } from './session'
@@ -151,7 +152,7 @@ export const piSourceDefinition: SourceDefinition = {
           fileIdentity: `${after.dev}:${after.ino}`,
           fileSize: after.size,
           fileMtimeMs: after.mtimeMs,
-          lastActivityAt: new Date(after.mtimeMs).toISOString(),
+          lastActivityAt: await readPiSessionLastActivity(filePath) ?? new Date(after.mtimeMs).toISOString(),
           updatedAt: new Date().toISOString(),
         }
       } catch (error) {
