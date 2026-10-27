@@ -25,11 +25,19 @@ export function mergeTaskCenterSessions(
       : value.state.isStreaming ? 3 : value.state.status === 'ready' ? 2 : 1
     if (previous?.runtime && priority(previous.runtime) >= priority(runtime)) continue
     const startedAt = runtime.startedAt ?? ''
-    const item: TaskSessionListSummary = previous?.item ?? {
+    const projectName = runtime.projectName ?? runtime.state.projectName
+    const workspacePath = runtime.state.workspacePath
+    const item: TaskSessionListSummary = previous?.item ? {
+      ...previous.item,
+      // The runtime may know an exact cwd that the older Catalog row lacked.
+      ...(!previous.item.projectId && runtime.projectId ? { projectId: runtime.projectId } : {}),
+      ...(!previous.item.projectName && projectName ? { projectName } : {}),
+      ...(!previous.item.workspacePath && workspacePath ? { workspacePath } : {}),
+    } : {
       id, productId: runtime.productId, sourceIds: runtime.sourceIds?.length ? runtime.sourceIds : [runtime.productId],
       ...(runtime.projectId ? { projectId: runtime.projectId } : {}),
-      ...(runtime.projectName ? { projectName: runtime.projectName } : {}),
-      ...(runtime.state.workspacePath ? { workspacePath: runtime.state.workspacePath } : {}),
+      ...(projectName ? { projectName } : {}),
+      ...(workspacePath ? { workspacePath } : {}),
       ...(runtime.state.title ? { title: runtime.state.title } : {}),
       startedAt, endedAt: runtime.lastActivityAt ?? startedAt,
       hasErrors: runtime.state.status === 'failed',
