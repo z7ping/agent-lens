@@ -77,6 +77,24 @@ test('Live 历史导航使用直接边界窗口与滚轮双向分页', () => {
 })
 
 
+test('Live 首屏最新优先、索引独立加载，上下按钮可打断自动分页', () => {
+  const boot = readFileSync(new URL('./use-live-task-runtime.ts', import.meta.url), 'utf8')
+  const history = readFileSync(new URL('./use-live-task-history.ts', import.meta.url), 'utf8')
+  const page = readFileSync(new URL('./LiveTaskPage.tsx', import.meta.url), 'utf8')
+  assert.match(boot, /edge: 'latest', limit: LIVE_TASK_SNAPSHOT_PAGE_LIMIT/)
+  assert.match(boot, /void metadataRequest\.then\(async matched =>/)
+  assert.match(boot, /setHistoryIndex\(index\)/)
+  assert.match(boot, /setHistoryIndex\(latest\)/)
+  assert.doesNotMatch(boot, /historyIndexValue/)
+  assert.match(history, /const epoch = beginHistoryNavigation\(\)/)
+  assert.match(history, /if \(epoch !== navigationEpochRef\.current\) return/)
+  assert.match(page, /beginHistoryNavigation\(\)/)
+  assert.match(page, /isHistoryNavigationCurrent\(navigationEpoch\)/)
+  assert.doesNotMatch(page, /startDisabled: historyLoading/)
+  assert.doesNotMatch(page, /endDisabled: historyLoading/)
+  assert.match(taskSurface, /pendingTurnRailTargetRef\.current = null/)
+})
+
 test('Live 正文内存窗口最多保留五个 Snapshot 页块', () => {
   assert.match(liveHistoryWindow, /LIVE_TASK_HISTORY_WINDOW_MAX_PAGES\s*=\s*5/)
   assert.match(liveHistoryWindow, /export function compactHistoryBlocks/)
@@ -85,7 +103,10 @@ test('Live 正文内存窗口最多保留五个 Snapshot 页块', () => {
 })
 
 test('轮次导轨保留全量语义与有界按 ordinal 定位，但视觉恢复旧版流式布局', () => {
-  assert.match(liveTask, /historyIndexAnchorCursorRef\.current[\s\S]{0,260}\? \{ cursor: historyIndexAnchorCursorRef\.current \}[\s\S]{0,120}: \{ limit: 0 \}/)
+  assert.match(liveTask, /current\.runtimeSessionId, \{ limit: 0 \}/)
+  assert.match(liveTask, /fromOrdinal: Math\.max\(1, index\.total - 31\), limit: 32/)
+  assert.match(liveTask, /loaded: false/)
+  assert.match(liveTask, /historyIndex\?\.items/)
   assert.match(liveTask, /fromOrdinal: targetOrdinal, limit: 1/)
   assert.match(liveTask, /around: cursor, limit: LIVE_TASK_SNAPSHOT_PAGE_LIMIT/)
   assert.match(liveTask, /turnRailTotal=\{turnRailTotal\}/)

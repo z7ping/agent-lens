@@ -194,11 +194,11 @@ export function useLiveTaskRuntime({
     )
 
     const startingTranscriptRevision = liveTurnRevisionRef.current
-    void liveApi.snapshot(
+    const snapshotRequest = liveApi.snapshot(
       current.liveId,
       current.runtimeSessionId,
       undefined,
-      { limit: LIVE_TASK_SNAPSHOT_PAGE_LIMIT },
+      { edge: 'latest', limit: LIVE_TASK_SNAPSHOT_PAGE_LIMIT },
     ).then(
       snapshot => {
         if (cancelled) return
@@ -224,6 +224,36 @@ export function useLiveTaskRuntime({
         if (!cancelled) setSyncError(snapshotError instanceof Error ? snapshotError.message : String(snapshotError))
       },
     )
+
+
+    // The rail's global count must not wait for model/queue/command discovery.
+    // Fetch only bounded index metadata; native transcript bodies stay paged.
+    void metadataRequest.then(async matched => {
+      if (!matched.capabilities.includes('history-index')) return
+      const readIndex = async () => {
+        const index = await liveApi.historyIndex(
+          current.liveId, current.runtimeSessionId, { limit: 0 },
+        )
+        if (cancelled) return
+        setHistoryIndex(index)
+        if (!index.total) return
+        // Resolve the most recent indexed rounds first. Older ones remain
+        // navigable by ordinal without eagerly loading any historic body.
+        const latest = await liveApi.historyIndex(
+          current.liveId, current.runtimeSessionId,
+          { fromOrdinal: Math.max(1, index.total - 31), limit: 32 },
+        ).catch(() => null)
+        if (!cancelled && latest) setHistoryIndex(latest)
+      }
+      try {
+        await readIndex()
+      } catch {
+        // Metadata may arrive before the native Runtime has hydrated. Retry
+        // once after the initial snapshot, without blocking the latest body.
+        await snapshotRequest
+        if (!cancelled) await readIndex().catch(() => undefined)
+      }
+    }).catch(() => undefined)
 
     void Promise.all([stateRequest, metadataRequest]).then(async ([, matched]) => {
       if (cancelled) return
@@ -253,27 +283,17 @@ export function useLiveTaskRuntime({
       if (queueState && queueRevisionRef.current === queueRevision) setQueue(queueState)
 
       // Opportunistic reads never hold the first transcript or primary controls.
-      const [messageActionOptions, runtimeDisclosureOptions, commandOptions, historyIndexValue] = await Promise.all([
+      const [messageActionOptions, runtimeDisclosureOptions, commandOptions] = await Promise.all([
         liveApi.messageActions(current.liveId, current.runtimeSessionId).catch(() => []),
         liveApi.runtimeDisclosures(current.liveId, current.runtimeSessionId).catch(() => []),
         matched.capabilities.includes('command-discovery')
           ? liveApi.commands(current.liveId, current.runtimeSessionId).catch(() => [])
           : Promise.resolve([]),
-        matched.capabilities.includes('history-index')
-          ? liveApi.historyIndex(
-              current.liveId,
-              current.runtimeSessionId,
-              historyIndexAnchorCursorRef.current
-                ? { cursor: historyIndexAnchorCursorRef.current }
-                : { limit: 0 },
-            ).catch(() => null)
-          : Promise.resolve(null),
       ])
       if (cancelled) return
       setMessageActions(messageActionOptions)
       setRuntimeDisclosures(runtimeDisclosureOptions)
       setCommands(commandOptions)
-      setHistoryIndex(historyIndexValue)
     }).catch(reason => {
       if (!cancelled) setError(reason instanceof Error ? reason.message : String(reason))
     })

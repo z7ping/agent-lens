@@ -768,7 +768,10 @@ export const TaskSurface = forwardRef<HTMLElement, TaskSurfaceProps>(function Ta
             title={t('surface.jumpStart')}
             aria-label={t('surface.jumpStart')}
             disabled={resolvedBoundaryNavigation.startDisabled}
-            onClick={() => void resolvedBoundaryNavigation.onStart()}
+            onClick={() => {
+              pendingTurnRailTargetRef.current = null
+              void resolvedBoundaryNavigation.onStart()
+            }}
           >
             <UiIcon name="arrow-big-up" size={20} strokeWidth={2}/>
           </IconButton>
@@ -777,7 +780,10 @@ export const TaskSurface = forwardRef<HTMLElement, TaskSurfaceProps>(function Ta
             title={t('surface.jumpLatest')}
             aria-label={t('surface.jumpLatest')}
             disabled={resolvedBoundaryNavigation.endDisabled}
-            onClick={() => void resolvedBoundaryNavigation.onEnd()}
+            onClick={() => {
+              pendingTurnRailTargetRef.current = null
+              void resolvedBoundaryNavigation.onEnd()
+            }}
           >
             <UiIcon name="arrow-big-down" size={20} strokeWidth={2}/>
           </IconButton>
@@ -801,7 +807,10 @@ export const TaskSurface = forwardRef<HTMLElement, TaskSurfaceProps>(function Ta
             title={t('surface.jumpEarliest')}
             aria-label={t('surface.jumpEarliest')}
             disabled={resolvedBoundaryNavigation.startDisabled}
-            onClick={() => void resolvedBoundaryNavigation.onStart()}
+            onClick={() => {
+              pendingTurnRailTargetRef.current = null
+              void resolvedBoundaryNavigation.onStart()
+            }}
           >
             <UiIcon name="arrow-big-up" size={20} strokeWidth={2}/>
           </IconButton>
@@ -820,7 +829,10 @@ export const TaskSurface = forwardRef<HTMLElement, TaskSurfaceProps>(function Ta
             title={t('surface.jumpLatest')}
             aria-label={t('surface.jumpLatest')}
             disabled={resolvedBoundaryNavigation.endDisabled}
-            onClick={() => void resolvedBoundaryNavigation.onEnd()}
+            onClick={() => {
+              pendingTurnRailTargetRef.current = null
+              void resolvedBoundaryNavigation.onEnd()
+            }}
           >
             <UiIcon name="arrow-big-down" size={20} strokeWidth={2}/>
           </IconButton>

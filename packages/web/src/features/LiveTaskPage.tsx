@@ -164,7 +164,10 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
     setReconnectEpoch(value => value + 1)
   }, [connectionBusy])
 
-  const { markReaderUserIntent, onReaderScroll, jumpEarliest, jumpLatest } = useLiveTaskHistory({ current, session })
+  const {
+    markReaderUserIntent, onReaderScroll, jumpEarliest, jumpLatest,
+    beginHistoryNavigation, isHistoryNavigationCurrent,
+  } = useLiveTaskHistory({ current, session })
 
   // Explicit submission resumes follow, while subsequent manual upward scrolling still detaches it.
   const onSendAccepted = useCallback(() => {
@@ -226,9 +229,10 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
   }, [canInterrupt, interrupt])
 
   const jumpToIndexedRound = useCallback(async (item: TaskTurnRailData) => {
-    if (!current || historyLoading) return
+    if (!current) return
     const targetOrdinal = item.ordinal
     if (!item.cursor && !targetOrdinal) return
+    const navigationEpoch = beginHistoryNavigation()
     setHistoryLoading(true)
     try {
       const cursor = item.cursor ?? (
@@ -238,6 +242,7 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
           { fromOrdinal: targetOrdinal, limit: 1 },
         )
       ).items[0]?.cursor
+      if (!isHistoryNavigationCurrent(navigationEpoch)) return
       if (!cursor) throw new Error(`Live round ${targetOrdinal ?? ''} was not found`)
       const snapshot = await liveApi.snapshot(
         current.liveId,
@@ -245,6 +250,7 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
         undefined,
         { around: cursor, limit: LIVE_TASK_SNAPSHOT_PAGE_LIMIT },
       )
+      if (!isHistoryNavigationCurrent(navigationEpoch)) return
       const projected = projectLiveSnapshotEntries(snapshot.entries)
       const atLatest = snapshot.page?.hasLater !== true
       const nextProjection = splitLiveProjectionItems(projected, atLatest && snapshot.state.isStreaming)
@@ -260,13 +266,17 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
       followControllerRef.current.markUserIntent()
       setSyncError('')
     } catch (reason) {
-      setSyncError(reason instanceof Error ? reason.message : String(reason))
+      if (isHistoryNavigationCurrent(navigationEpoch)) {
+        setSyncError(reason instanceof Error ? reason.message : String(reason))
+      }
     } finally {
-      setHistoryLoading(false)
-      setHistoryPagingArmed(false)
-      setHistoryPagingDirection(null)
+      if (isHistoryNavigationCurrent(navigationEpoch)) {
+        setHistoryLoading(false)
+        setHistoryPagingArmed(false)
+        setHistoryPagingDirection(null)
+      }
     }
-  }, [current, historyLoading])
+  }, [current, beginHistoryNavigation, isHistoryNavigationCurrent])
 
   useEffect(() => {
     if (!state?.isStreaming) return
@@ -335,7 +345,7 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
       ? historyIndex?.items.find(item => item.cursor === firstLoadedCursor)?.ordinal
       : undefined
     const firstGlobalOrdinal = historyPage?.rounds?.firstOrdinal ?? indexedFirstOrdinal
-    return segments.map(round => {
+    const loaded: TaskTurnRailData[] = segments.map(round => {
       const localOrdinal = round.model.ordinal
       const ordinal = firstGlobalOrdinal && localOrdinal
         ? firstGlobalOrdinal + localOrdinal - 1
@@ -356,6 +366,27 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
         loaded: true,
       } satisfies TaskTurnRailData
     })
+    // Show global navigation as soon as native index metadata arrives. Unloaded
+    // rounds are lightweight entries, not a request to hydrate their bodies.
+    const byOrdinal = new Map<number, TaskTurnRailData>(loaded
+      .filter(item => item.ordinal)
+      .map(item => [item.ordinal!, item] as const))
+    for (const indexed of historyIndex?.items ?? []) {
+      if (byOrdinal.has(indexed.ordinal)) continue
+      byOrdinal.set(indexed.ordinal, {
+        id: `indexed-round:${indexed.ordinal}`,
+        cursor: indexed.cursor,
+        ordinal: indexed.ordinal,
+        label: t('surface.roundOrdinal', { count: indexed.ordinal }),
+        preview: indexed.preview ?? '',
+        error: (indexed.summary?.process.errorCount ?? 0) > 0,
+        state: 'settled',
+        loaded: false,
+      })
+    }
+    return [...byOrdinal.values(), ...loaded.filter(item => !item.ordinal)]
+      .sort((a, b) => (a.ordinal ?? Number.MAX_SAFE_INTEGER)
+        - (b.ordinal ?? Number.MAX_SAFE_INTEGER))
   }, [historyIndex?.items, historyPage?.rounds?.firstOrdinal, roundSegments, t])
   const loadedRoundMax = turnRailItems.reduce((max, item) => Math.max(max, item.ordinal ?? 0), 0)
   const turnRailTotal = Math.max(
@@ -528,8 +559,6 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
       mode="live"
       className="live-task-workspace"
       boundaryNavigation={{
-        startDisabled: historyLoading,
-        endDisabled: historyLoading,
         onStart: jumpEarliest,
         onEnd: jumpLatest,
       }}
