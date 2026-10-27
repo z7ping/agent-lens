@@ -23,6 +23,16 @@ test('新建尚未入历史的空闲会话保留可返回的统一列表入口',
   assert.equal(taskLiveRuntimeHref(rows[0]!.runtime!), '/review/live/runtime-provider/runtime-1')
 })
 
+test('实时 Pi 提供的状态项目名补齐未关联历史行',()=>{
+  const linked:LiveRuntimeRefDto={...runtime,historySessionId:history.id,
+    projectName:undefined,
+    state:{...runtime.state,projectName:'Slowlight'},
+  }
+  const rows=mergeTaskCenterSessions([{...history,projectName:undefined,workspacePath:undefined}], [linked])
+  assert.equal(rows[0]?.item.projectName,'Slowlight')
+  assert.equal(rows[0]?.item.workspacePath,'/work/Slowlight')
+})
+
 test('历史收录后按服务端身份合为一条，同名的其他会话保持独立', () => {
   const rows = mergeTaskCenterSessions([history, { ...history, id: 'same-title-other' }], [{ ...runtime, historySessionId: history.id }])
   assert.equal(rows.length, 2)
