@@ -191,6 +191,68 @@ test('slim identity port indexes source sessions without Legacy RepositorySet',a
   }),/installation is not indexed/)
 })
 
+test('verified native session cwd creates a Slim launchable workspace and context',async()=>{
+  const cwd=resolve('real-native-project')
+  const entries=[session('with-cwd')]
+  const source=makeSource(entries)
+  const read=source.readNativeSessionPage!
+  source.readNativeSessionPage=async function(query,ctx){
+    const page=await read(query,ctx)
+    if(page.state!=='available')return page
+    return {...page,records:page.records.map(record=>({
+      ...record,payload:{entry:{type:'session'},session:{cwd}},
+    }))}
+  }
+  const workspaces:unknown[]=[]
+  const contexts:unknown[]=[]
+  const storage={
+    nativeSessionCatalog:{async upsert(){}},
+    identity:{async resolveWorkspace(hint:{hostId:string;path:string}){
+      workspaces.push(hint)
+      return {id:'workspace-1',hostId:hint.hostId,path:hint.path,
+        projectId:'project-1'}
+    }},
+    nativeSessionContexts:{async upsert(input:unknown){contexts.push(input)}},
+    repositories:{
+      installations:{async get(){return installation}},
+      hosts:{async get(){return host}},
+    },
+  }
+  const report=await indexNativeInstallation(storage as never,{
+    source,installationId:'install',signal:new AbortController().signal,
+  })
+  assert.equal(report.indexed,1)
+  assert.deepEqual(workspaces,[{hostId:host.id,path:cwd}])
+  assert.deepEqual(contexts,[{sourceId:'pi',installationId:'install',
+    nativeSessionId:'with-cwd',workspaceId:'workspace-1',projectId:'project-1'}])
+})
+
+test('native indexer does not invent projects from relative paths or message text',async()=>{
+  const source=makeSource([session('without-cwd')])
+  const read=source.readNativeSessionPage!
+  source.readNativeSessionPage=async function(query,ctx){
+    const page=await read(query,ctx)
+    if(page.state!=='available')return page
+    return {...page,records:page.records.map(record=>({
+      ...record,payload:{entry:{cwd:resolve('fake-from-body'),text:'private'},
+        session:{cwd:'./relative-path'}},
+    }))}
+  }
+  let workspaceWrites=0,contextWrites=0
+  const result=await indexNativeInstallation({
+    nativeSessionCatalog:{async upsert(){}},
+    identity:{async resolveWorkspace(){workspaceWrites++;return null}},
+    nativeSessionContexts:{async upsert(){contextWrites++}},
+    repositories:{
+      installations:{async get(){return installation}},
+      hosts:{async get(){return host}},
+    },
+  } as never,{source,installationId:'install',signal:new AbortController().signal})
+  assert.equal(result.indexed,1)
+  assert.equal(workspaceWrites,0)
+  assert.equal(contextWrites,0)
+})
+
 test('profile-owned native roots and metadata stay attached to the verified session',async()=>{
   const saved:Array<{sourceId:string;nativeSessionId:string;runtimeProfileId?:string}>=[]
   const profile={

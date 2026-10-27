@@ -145,6 +145,60 @@ test('Slim capture writes verified native Profile association before Catalog vis
   }finally{await rm(root,{recursive:true,force:true})}
 })
 
+test('verified native tail records attach workspace once per session',async()=>{
+  const root=await mkdtemp(join(tmpdir(),'agentlens-workspace-capture-'))
+  const file=join(root,'native.jsonl')
+  await writeFile(file,'{"type":"session"}\n')
+  const workspaces:string[]=[]
+  const contexts:unknown[]=[]
+  try{
+    const record:SourceRecord={
+      id:'native-one',sourceId:'pi',installationId:'install',
+      sourceSessionNativeId:'native-1',nativeType:'history/session',
+      capturedAt:at,parserVersion:'1',
+      locator:{kind:'file',path:file,offset:0},
+      fingerprint:'verified-session',
+      payload:{entry:{type:'session'},session:{cwd:root}},
+    }
+    const source={
+      manifest:{sourceId:'pi',productId:'pi'},
+      readNativeSessionPage:async()=>({state:'unsupported'}),
+      rawRecovery:{
+        describe:()=>({canReread:true}),
+        verify:async()=>({state:'verified'}),
+      },
+      async startCapture(_ctx:Parameters<NonNullable<SourceDefinition['startCapture']>>[0],
+        emitter:Parameters<NonNullable<SourceDefinition['startCapture']>>[1]){
+        await emitter.emit(record)
+        await emitter.emit({...record,id:'native-two'})
+        return {dispose(){}}
+      },
+    } as unknown as SourceDefinition
+    const runner=new NativeOnlyRuntimeCapture({
+      nativeSessionCatalog:{async upsert(){}} as never,
+      identity:{async resolveWorkspace(input){
+        workspaces.push(input.path)
+        return {id:'ws-1',hostId:'host',path:root,projectId:'prj-1'}
+      }},
+      nativeSessionContexts:{async upsert(input){contexts.push(input)}},
+      checkpoints:{async get(){return null},async set(){},async clear(){}},
+    })
+    const handle=await runner.start({
+      source,
+      host:{id:'host',name:'local',platform:'linux',arch:'x64',createdAt:at,lastSeenAt:at},
+      installation:{id:'install',hostId:'host',productId:'pi',
+        dataRoot:root,firstSeenAt:at,lastSeenAt:at},
+      signal:new AbortController().signal,
+    })
+    assert.deepEqual(workspaces,[root])
+    assert.deepEqual(contexts,[{
+      sourceId:'pi',installationId:'install',nativeSessionId:'native-1',
+      workspaceId:'ws-1',projectId:'prj-1',
+    }])
+    await handle.dispose()
+  }finally{await rm(root,{recursive:true,force:true})}
+})
+
 test('uncertified runtime-only Hook increments gap instead of writing Evidence or claiming coverage',async()=>{
   const upserts:unknown[]=[]
   const source={
