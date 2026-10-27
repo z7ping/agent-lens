@@ -69,3 +69,20 @@ test('Pi native activity comes from event timestamp, not copied file mtime',asyn
     assert.equal(await readPiSessionLastActivity(file),'2026-10-20T03:00:00.000Z')
   }finally{await rm(root,{recursive:true,force:true})}
 })
+
+test('Pi native session_info rename outranks a generic first-user title',async()=>{
+  const root=await mkdtemp(join(tmpdir(),'agent-lens-pi-native-title-'))
+  const file=join(root,'session.jsonl')
+  try {
+    await writeFile(file,[
+      JSON.stringify({type:'session',id:'s',timestamp:'2026-10-20T01:00:00.000Z'}),
+      JSON.stringify({type:'session_info',name:'我自己命名的会话',timestamp:'2026-10-20T02:00:00.000Z'}),
+      JSON.stringify({type:'message',timestamp:'2026-10-20T03:00:00.000Z',message:{role:'user',content:[{type:'text',text:'hi'}]}}),
+      '',
+    ].join('\n'),'utf8')
+    const {readPiSessionTailMetadata}=await import('./session')
+    assert.deepEqual(await readPiSessionTailMetadata(file),{
+      lastActivityAt:'2026-10-20T03:00:00.000Z',title:'我自己命名的会话',
+    })
+  }finally{await rm(root,{recursive:true,force:true})}
+})
