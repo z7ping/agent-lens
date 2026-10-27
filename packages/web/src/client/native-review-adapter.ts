@@ -10,7 +10,14 @@ import {
 /** 原生目录与详情沿用同一标题展示契约，不猜测或重写 Source 的名称。 */
 export function nativeReviewTitle(summary: Pick<NativeSessionSummaryDto, 'title'>) {
   const title = summary.title?.trim()
-  return title ? { title, titleKind: 'explicit' as const } : {}
+  return title ? {
+    title,
+    titleKind: summary.titleProvenance === 'explicit'
+      ? 'explicit' as const
+      : summary.titleProvenance === 'generated'
+        ? 'generated' as const
+        : 'unverified' as const,
+  } : {}
 }
 
 /** Rebuild statistics only from the bounded visible native Review nodes.
