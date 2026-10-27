@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto'
 import {
   access,
   opendir,
+  open,
   readFile,
   stat,
 } from 'node:fs/promises'
@@ -288,6 +289,41 @@ async function readSessionHeader(filePath: string): Promise<Record<string, unkno
   } catch (error) {
     if (isMissingPathError(error)) return null
     throw error
+  }
+}
+
+/** Original Pi event timestamps outrank file mtime (which changes on copy/restore).
+ * Read only the last 64 KiB; incomplete JSONL tails never become activity facts.
+ */
+export async function readPiSessionLastActivity(filePath: string): Promise<string | undefined> {
+  const handle = await open(filePath, 'r')
+  try {
+    const size = (await handle.stat()).size
+    const count = Math.min(size, 64 * 1024)
+    if (!count) return undefined
+    const offset = size - count
+    const buffer = Buffer.alloc(count)
+    const { bytesRead } = await handle.read(buffer, 0, count, offset)
+    const text = buffer.subarray(0, bytesRead).toString('utf8')
+    const lines = text.split(/\r?\n/)
+    if (offset > 0) lines.shift() // An unaligned first row is incomplete.
+    if (!text.endsWith('\n')) {
+      // The final JSONL row can still be complete even without a newline.
+      try { JSON.parse(lines.at(-1) ?? '') } catch { lines.pop() }
+    }
+    for (let i = lines.length - 1; i >= 0; i--) {
+      try {
+        const value = JSON.parse(lines[i] ?? '')
+        if (!value || typeof value !== 'object' || Array.isArray(value)) continue
+        const timestamp = (value as Record<string, unknown>).timestamp
+        if (typeof timestamp === 'string' && Number.isFinite(Date.parse(timestamp))) {
+          return new Date(timestamp).toISOString()
+        }
+      } catch { /* Malformed/truncated native rows are not timestamps. */ }
+    }
+    return undefined
+  } finally {
+    await handle.close()
   }
 }
 
