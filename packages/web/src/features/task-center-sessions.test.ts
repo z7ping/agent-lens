@@ -52,6 +52,12 @@ test('Native-only Catalog sessions share Task Center list without a second body 
     sourceId:'pi',installationId:'pi-local',nativeSessionId:'native-1',
     locationKind:'native' as const,
     lastActivityAt:'2026-10-25T14:00:00Z',title:'Original Source title',
+    titleProvenance:'native' as const,projectId:'project-1',
+    projectName:'AgentLens',workspacePath:'/work/AgentLens',
+    metricsState:'complete' as const,metrics:{
+      interactionCount:2,toolCallCount:0,toolResultCount:0,
+      toolErrorCount:0,errorCount:0,inputTokens:null,outputTokens:null,
+    },
   }
   const filters={sourceIds:null,projectId:'',status:'all' as const,
     range:'all' as const,search:''}
