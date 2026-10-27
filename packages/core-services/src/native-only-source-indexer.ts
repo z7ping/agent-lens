@@ -79,8 +79,10 @@ async function inspectNativeMetadata(
       if (fact.kind !== 'message.user' || firstUser) continue
       const payload = objectValue(fact.payload)
       const provenance = objectValue(payload.provenance)
-      if (provenance.actualAuthor !== 'human-user'
-        || provenance.contentRole !== 'user-request') continue
+      // The Pi normalizer expresses message.user via its authoritative native
+      // role without a redundant provenance field (matching legacy Review).
+      if ((provenance.actualAuthor ?? 'human-user') !== 'human-user'
+        || (provenance.contentRole ?? 'user-request') !== 'user-request') continue
       firstUser = boundedTitle(payload.text)
     }
     if (explicitTitle && workspacePath) break
