@@ -86,6 +86,17 @@ export async function handleNativeSessionCatalogRequest(
       writeJson(response, 404, { error: 'not_found' })
       return true
     }
+    // The direct route must use the same Slim context/title join as the
+    // indexed task list; otherwise a deep link loses its project identity.
+    const indexed = nativeList && entry.locationKind === 'native'
+      ? (await nativeList.query({reviewSessionId:sessionId,limit:1})).items[0]
+      : undefined
+    const match = indexed
+      && indexed.reviewSessionId === sessionId
+      && indexed.sourceId === entry.sourceId
+      && indexed.installationId === entry.installationId
+      && indexed.nativeSessionId === entry.nativeSessionId
+      ? indexed : undefined
     writeJson(response, 200, {
       id: sessionId,
       sourceId: entry.sourceId,
@@ -93,7 +104,13 @@ export async function handleNativeSessionCatalogRequest(
       nativeSessionId: entry.nativeSessionId,
       locationKind: entry.locationKind,
       lastActivityAt: entry.lastActivityAt,
-      ...(entry.title ? { title: entry.title } : {}),
+      ...((match?.title ?? entry.title) ? {title:match?.title??entry.title}:{}),
+      ...(match ? {
+        titleProvenance:match.titleProvenance,
+        ...(match.projectId?{projectId:match.projectId}:{}),
+        ...(match.projectName?{projectName:match.projectName}:{}),
+        ...(match.workspacePath?{workspacePath:match.workspacePath}:{}),
+      }:{}),
     })
     return true
   }
