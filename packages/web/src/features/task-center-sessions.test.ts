@@ -76,6 +76,7 @@ test('Native-only Catalog sessions share Task Center list without a second body 
   assert.equal(rows[0]?.id,native.id)
   assert.equal(rows[0]?.title,native.title)
   assert.equal(rows[0]?.titleKind,'unverified','原生索引标题不能伪装成明确命名')
+  assert.equal(rows[0]?.nativeCatalogTitle,true,'verified Source catalog titles are usable in the rail')
   assert.equal(rows[0]?.projectId,'project-1')
   assert.equal(rows[0]?.projectName,'AgentLens')
   assert.equal(rows[0]?.workspacePath,'/work/AgentLens')
