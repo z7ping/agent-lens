@@ -1,9 +1,10 @@
 import type {
   AgentInstallation, CheckpointRepository, Host, NativeSessionCatalogStore,
   NativeSessionMetricsStore, RuntimeProfile, SourceCheckpointService,
-  SourceDefinition, SourceRecord,
+  SourceDefinition, SourceRecord, Workspace, WorkspaceIdentityHint,
 } from '@agent-lens/core'
 import { NativeSessionCatalogTracker } from './native-session-catalog-tracker'
+import { nativeSessionWorkspacePath } from './native-session-workspace'
 
 export interface NativeCaptureCounters {
   received:number
@@ -25,8 +26,10 @@ interface NativeCapturePort {
   nativeSessionCatalog:Pick<NativeSessionCatalogStore,'upsert'>
   /** Durable provenance for sessions observed within a scoped native profile. */
   nativeSessionContexts?:{upsert(input:{
-    sourceId:string;installationId:string;nativeSessionId:string;runtimeProfileId:string
+    sourceId:string;installationId:string;nativeSessionId:string
+    runtimeProfileId?:string;workspaceId?:string;projectId?:string
   }):Promise<void>}
+  identity?:{resolveWorkspace(hint:WorkspaceIdentityHint):Promise<Workspace|null>}
   nativeSessionMetrics?:Pick<NativeSessionMetricsStore,'invalidate'>
   checkpoints:Pick<CheckpointRepository,'get'|'set'|'clear'>
 }
@@ -130,6 +133,7 @@ export class NativeOnlyRuntimeCapture {
       abortSignal:signal,checkpoint,
     }
     const tracker=new NativeSessionCatalogTracker(this.port.nativeSessionCatalog)
+    const associated=new Set<string>()
     let closed=false
     let tail:Promise<void>=Promise.resolve()
     const handleRecord=async(record:SourceRecord):Promise<void>=>{
@@ -156,15 +160,27 @@ export class NativeOnlyRuntimeCapture {
         return
       }
       counts.sourceVerified++
-      // Write trusted profile identity before Catalog visibility. A collision
-      // is a hard failure, never silently reassign a source-native session to
-      // another profile or fall back to a duplicate Legacy transcript.
-      if(runtimeProfile){
-        await this.port.nativeSessionContexts!.upsert({
-          sourceId:record.sourceId,installationId:record.installationId,
-          nativeSessionId:record.sourceSessionNativeId,
-          runtimeProfileId:runtimeProfile.id,
-        })
+      // Project attribution is metadata derived from the already verified
+      // native Source session, not a second copy of the transcript.
+      const cwd=nativeSessionWorkspacePath(record)
+      const associationKey=JSON.stringify([record.sourceSessionNativeId,cwd??'',
+        runtimeProfile?.id??''])
+      if(this.port.nativeSessionContexts&&!associated.has(associationKey)){
+        const workspace=cwd&&this.port.identity
+          ?await this.port.identity.resolveWorkspace({hostId:host.id,path:cwd})
+          :null
+        // Preserve Profile provenance even when the Source lacks a cwd.
+        if(workspace||runtimeProfile){
+          await this.port.nativeSessionContexts.upsert({
+            sourceId:record.sourceId,installationId:record.installationId,
+            nativeSessionId:record.sourceSessionNativeId,
+            ...(runtimeProfile?{runtimeProfileId:runtimeProfile.id}:{}),
+            ...(workspace?{workspaceId:workspace.id,
+              ...(workspace.projectId?{projectId:workspace.projectId}:{})}:{}),
+          })
+          if(associated.size>=1024)associated.clear()
+          associated.add(associationKey)
+        }
       }
       // Tracker never consults the v38 write-claim table on this path.
       const changed=await tracker.observe(source,record)
