@@ -221,6 +221,9 @@ async function readCompleteNativeTurn(
         return finish(cursor, true, false)
       }
       const groupIds = current.observationRecordIds.slice(index, last)
+      const groupRecordIds = new Set(groupIds)
+      const groupEvidence = current.evidenceCandidates.filter(candidate =>
+        candidate.sourceRecordId !== undefined && groupRecordIds.has(candidate.sourceRecordId))
       let groupBytes: number
       try {
         groupBytes = Buffer.byteLength(JSON.stringify(group), 'utf8')
@@ -230,9 +233,12 @@ async function readCompleteNativeTurn(
       if (groupBytes > MAX_REVIEW_INPUT_BYTES || group.length > MAX_REVIEW_OBSERVATIONS) {
         return { state: 'unsupported', reason: 'native-review-record-exceeds-budget' }
       }
+      if (groupEvidence.length > 512) {
+        return {state:'unsupported',reason:'native-review-evidence-budget'}
+      }
       if (observations.length > 0 && (bytes + groupBytes > MAX_REVIEW_INPUT_BYTES
         || observations.length + group.length > MAX_REVIEW_OBSERVATIONS
-        || evidenceCandidates.length + current.evidenceCandidates.length > 512)) {
+        || evidenceCandidates.length + groupEvidence.length > 512)) {
         // Use the exact next record start, not the end of the oversized page.
         // The next request can continue this turn without repeating old records.
         return finish(cursor, true, true)
@@ -242,6 +248,7 @@ async function readCompleteNativeTurn(
         sawUser = true
       }
       observations.push(...group)
+      evidenceCandidates.push(...groupEvidence)
       observationRecordIds.push(...groupIds)
       observationCursors.push(...group.map(() => encodeNativeSessionCursor(cursor)))
       bytes += groupBytes
@@ -253,11 +260,6 @@ async function readCompleteNativeTurn(
       lastRecordStart = cursor
       index = last
     }
-    // Source evidence is filtered against included records in the projection.
-    // Duplicate candidates from previous pages are not persisted or exposed.
-    evidenceCandidates.push(...current.evidenceCandidates.filter(candidate =>
-      candidate.sourceRecordId !== undefined
-      && observationRecordIds.includes(candidate.sourceRecordId)))
     pages++
     if (current.pendingTail) return finish(current.nextCursor, false, true)
     if (!current.hasMore) {
