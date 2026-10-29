@@ -25,6 +25,8 @@ function mergeReviewDetail(current: ReviewSessionDetailDto, next: ReviewSessionD
     ...(current.statisticsCompleteness === 'window'
       ? nativeVisibleWindowStatistics(windowed) : {}),
     ...(next.nativeHookEventsTruncated ? {nativeHookEventsTruncated:true} : {}),
+    ...(current.statisticsCompleteness === 'window'
+      ? {nativeTurnIncomplete: next.nativeTurnIncomplete === true} : {}),
     interactions: windowed,
     page: next.page,
   }
