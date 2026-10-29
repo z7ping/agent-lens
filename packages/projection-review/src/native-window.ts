@@ -6,7 +6,7 @@ import {
   type TimelineItemDto,
   type TimelineEvidenceDto,
 } from '@agent-lens/protocol'
-import { buildInteractions } from './nodes'
+import { buildInteractionGroups, buildInteractions } from './nodes'
 import { observedTaskFileChanges, summarizeObservedTaskFileChanges } from '@agent-lens/projection-session'
 
 export interface NativeReviewProjectionInput {
@@ -29,6 +29,8 @@ export interface NativeReviewProjectionInput {
   /** Provided only for complete user-turn window pagination. */
   startingOrdinal?: number
   completeBoundaries?: boolean
+  /** Stable source-owned first-user record offset. Fragments share one semantic turn. */
+  singleUserTurnOffset?: number
 }
 
 function stableId(parts: readonly (string | number)[]): string {
@@ -185,10 +187,15 @@ export function projectNativeReviewWindow(input: NativeReviewProjectionInput): N
     ...(input.completeBoundaries ? { pagingUnit: 'interaction' as const } : {}),
     ...(files.length ? { observedFileChanges: files } : {}),
     ...(changedFiles.length > files.length ? { fileChangesTruncated: true } : {}),
-    interactions: buildInteractions(items, input.startingOrdinal ?? 1).map(interaction => ({
+    interactions: (input.singleUserTurnOffset === undefined
+      ? buildInteractions(items, input.startingOrdinal ?? 1)
+      : items.length ? buildInteractionGroups([items], input.startingOrdinal ?? 1) : []
+    ).map(interaction => ({
       ...interaction,
       // Stable even if an interaction's global ordinal changes.
-      id: `native-review:${stableId([sessionId, interaction.nodes[0]?.id ?? interaction.startedAt])}`,
+      id: `native-review:${stableId([sessionId, input.singleUserTurnOffset === undefined
+        ? interaction.nodes[0]?.id ?? interaction.startedAt : `user-offset:${input.singleUserTurnOffset}`])}`,
+      ...(input.singleUserTurnOffset === undefined ? {} : {trigger:'user' as const}),
       nodes: interaction.nodes.map(node => {
         const cursor = node.type === 'message' && node.attachments?.length
           ? attachmentCursors.get(node.id) : undefined
