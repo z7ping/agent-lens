@@ -129,12 +129,26 @@ export class SqliteSlimIdentityService implements Pick<IdentityService,
   async resolveWorkspace(hint:WorkspaceIdentityHint):Promise<Workspace|null> {
     const path=hint.path??hint.repositoryRoot
     if(!path)return null
-    const project=hint.repositoryRoot||hint.gitRemote
+    const id=stableId('workspace',[hint.hostId,normalizedPath(path)])
+    const explicitRepository=Boolean(hint.repositoryRoot||hint.gitRemote)
+    // A verified native cwd is a real local workspace even without Git.
+    // Preserve any existing repository-backed project ID, otherwise create a
+    // path-scoped LOCAL project (never pretend a Git remote was discovered).
+    const known=await this.executor.run(()=>this.executor.db.prepare(
+      'SELECT project_id FROM workspaces WHERE id=?',
+    ).get(id) as {project_id:string|null}|undefined)
+    const project=explicitRepository
       ?await this.resolveProject({
         ...(hint.repositoryRoot?{name:hint.repositoryRoot.split(/[\\/]/).filter(Boolean).at(-1)}:{}),
         repositoryIdentity:hint.gitRemote??hint.repositoryRoot!,
-      }):null
-    const id=stableId('workspace',[hint.hostId,normalizedPath(path)])
+      })
+      :!known?.project_id && (path.startsWith('/') || /^[a-zA-Z]:[\\/]/.test(path)
+        || path.startsWith('\\\\'))
+        ?await this.resolveProject({
+          name:path.split(/[\\/]/).filter(Boolean).at(-1)??path,
+          repositoryIdentity:'local-workspace:'+hint.hostId+':'+normalizedPath(path),
+        })
+        :null
     return this.executor.run(()=>{
       const db=this.executor.db
       const value=db.prepare('SELECT * FROM workspaces WHERE id=?')
