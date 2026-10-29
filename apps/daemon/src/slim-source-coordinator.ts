@@ -253,6 +253,17 @@ export class SlimSourceCoordinator {
         }
       }
     }
+    // The old migration can contain valid workspaces without a populated
+    // launchable index. Refresh once after Source-native attribution, including
+    // an explicit rescan, without touching original Agent files or old tables.
+    try{
+      if(!this.abort.signal.aborted)await this.runtime.rebuildLaunchableProjects()
+    }catch(error){
+      this.progress.failedScopes++
+      report?.failures.push({sourceId:sourceId??'native',stage:'detect',
+        message:error instanceof Error?error.message:String(error)})
+      console.warn('[AgentLens] Slim launchable project index refresh failed',error)
+    }
     if(this.progress.deferredScopes){
       console.warn('[AgentLens] native-only scopes deferred by bounded startup budget',{
         deferred:this.progress.deferredScopes,maxScopes:MAX_STARTUP_SCOPES,
