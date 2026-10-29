@@ -142,57 +142,49 @@ async function readCompleteNativeTurn(
   const observationCursors: string[] = []
   const evidenceCandidates: EvidenceCandidate[] = []
   const pendingTools = new Set<string>()
-  let unidentifiableToolCall = false
-  let unpairedToolResult = false
   let current = initial
   let pages = 0
   let bytes = 0
   let previousOffset = query.cursor?.offset ?? 0
-  let sawUser = false
+  // An incomplete turn continues at an exact Source-owned record cursor.
+  // It is still ONE logical turn even if the next fragment has no user message.
+  let turnStart = query.cursor && 'turnStart' in query.cursor
+    ? (query.cursor as EncodedNativeCursor).turnStart : undefined
+  let sawUser = turnStart !== undefined
   let lastRecordStart: SourceNativeSessionCursor | undefined
 
-  const finish = (nextCursor: SourceNativeSessionCursor, hasMore: boolean): NativeTurnReadResult => {
-    // A source page can end while a model tool is still running; this is NOT a
-    // completed user turn, even when the file has no further full records yet.
-    // The next SOURCE-OWNED user record explicitly closes the preceding
-    // turn. Anonymous calls/results can remain unknown/unpaired but must not
-    // hide the finished conversation. EOF alone is NOT such a boundary.
-    if (unidentifiableToolCall && !hasMore) {
-      return { state: 'unsupported', reason: 'native-review-turn-tool-id-missing' }
-    }
-    if (unpairedToolResult && !hasMore) {
-      return { state: 'unsupported', reason: 'native-review-turn-orphan-tool-result' }
-    }
-    if (pendingTools.size > 0) {
-      return { state: 'unsupported', reason: 'native-review-turn-tool-pending' }
-    }
-    // Metadata-only native sessions and leading background records are not
-    // permission to fabricate a finished user turn or advance its ordinal.
-    if (!sawUser) {
+  const finish = (
+    nextCursor: SourceNativeSessionCursor, hasMore: boolean,
+    partial: boolean,
+  ): NativeTurnReadResult => {
+    if (!sawUser || turnStart === undefined || observations.length === 0) {
       return { state: 'unsupported', reason: 'native-review-no-user-turn' }
     }
     const base = projectNativeReviewWindow({
-      sourceId: query.sourceId,
-      installationId: query.installationId,
+      sourceId: query.sourceId, installationId: query.installationId,
       nativeSessionId: query.nativeSessionId,
       observations, observationRecordIds, observationCursors,
       evidenceCandidates: evidenceCandidates.filter(candidate =>
         candidate.sourceRecordId !== undefined
         && observationRecordIds.includes(candidate.sourceRecordId)),
-      hasMore, pendingTail: false,
+      hasMore, pendingTail: partial && !hasMore,
       hasPrevious: query.cursor !== undefined,
       nextCursor: '',
       startingOrdinal,
-      completeBoundaries: true,
+      completeBoundaries: !partial,
+      singleUserTurnOffset: turnStart,
     })
     return {
       state: 'available',
       dto: {
         ...base,
+        // A fragment is explicitly incomplete, never a proven finished turn.
+        turnFragment: partial ? 'partial' : 'complete',
         nextCursor: encodeNativeSessionCursor({
           ...nextCursor,
           mode: 'review-turns',
-          turnOrdinal: startingOrdinal + base.interactions.length,
+          turnOrdinal: partial ? startingOrdinal : startingOrdinal + 1,
+          ...(partial ? {turnStart} : {}),
         }),
       },
     }
@@ -200,80 +192,83 @@ async function readCompleteNativeTurn(
 
   while (pages < MAX_REVIEW_PAGES) {
     query.signal.throwIfAborted()
-    // Other Source adapters have not proved rewind-point support. Fail closed
-    // rather than fabricate an "exact" turn boundary.
     if (!current.observationCursors
       || current.observationCursors.length !== current.observations.length
       || current.observationRecordIds.length !== current.observations.length) {
       return { state: 'unsupported', reason: 'native-review-record-boundaries-unavailable' }
     }
-    let pageBytes: number
-    try {
-      pageBytes = Buffer.byteLength(JSON.stringify(current.observations), 'utf8')
-    } catch {
-      return { state: 'unsupported', reason: 'native-review-input-not-serializable' }
-    }
-    if (bytes + pageBytes > MAX_REVIEW_INPUT_BYTES
-      || observations.length + current.observations.length > MAX_REVIEW_OBSERVATIONS) {
-      return { state: 'unsupported', reason: 'native-review-turn-exceeds-budget' }
-    }
-    bytes += pageBytes
-    if (evidenceCandidates.length + current.evidenceCandidates.length > 512) {
-      return {state:'unsupported',reason:'native-review-evidence-budget'}
-    }
-    evidenceCandidates.push(...current.evidenceCandidates)
-    for (let index = 0; index < current.observations.length; index++) {
-      const observation = current.observations[index]!
-      const recordCursor = current.observationCursors[index]!
-      if (recordCursor.fileIdentity !== current.nextCursor.fileIdentity
-        || !Number.isSafeInteger(recordCursor.offset)
-        || recordCursor.offset < previousOffset
-        || recordCursor.offset >= current.nextCursor.offset
-        || !Number.isSafeInteger(recordCursor.sequence) || recordCursor.sequence < 0
-        || (lastRecordStart && recordCursor.offset < lastRecordStart.offset)) {
+    // Group by verified physical SourceRecord, never split observations from
+    // the same record (which would invalidate their record-local identities).
+    for (let index = 0; index < current.observations.length;) {
+      const cursor = current.observationCursors[index]!
+      if (cursor.fileIdentity !== current.nextCursor.fileIdentity
+        || !Number.isSafeInteger(cursor.offset) || cursor.offset < previousOffset
+        || cursor.offset >= current.nextCursor.offset
+        || !Number.isSafeInteger(cursor.sequence) || cursor.sequence < 0
+        || (lastRecordStart && cursor.offset < lastRecordStart.offset)) {
         return { state: 'drifted', reason: 'native-review-record-boundary-drifted' }
       }
+      let last = index + 1
+      while (last < current.observations.length
+        && current.observationCursors[last]!.offset === cursor.offset) last++
+      const group = current.observations.slice(index, last)
       if (query.cursor && observations.length === 0 && index === 0
-        && (observation.kind !== 'message.user' || recordCursor.offset !== query.cursor.offset)) {
+        && turnStart === undefined
+        && (group[0]?.kind !== 'message.user' || cursor.offset !== query.cursor.offset)) {
         return { state: 'unsupported', reason: 'native-review-cursor-not-turn-boundary' }
       }
-      const isNewRecord = !lastRecordStart || recordCursor.offset !== lastRecordStart.offset
-      if (sawUser && observation.kind === 'message.user' && isNewRecord) {
-        // An unresolved tool could return after this user message. The
-        // existing per-interaction tool grouping cannot safely pair it.
-        if (pendingTools.size > 0) {
-          return { state: 'unsupported', reason: 'native-review-cross-turn-tool-pending' }
-        }
-        return finish(recordCursor, true)
+      if (sawUser && group.some(item => item.kind === 'message.user')) {
+        return finish(cursor, true, false)
       }
-      observations.push(observation)
-      observationRecordIds.push(current.observationRecordIds[index]!)
-      observationCursors.push(encodeNativeSessionCursor(recordCursor))
-      if (observation.kind === 'message.user') sawUser = true
-      const callId = toolCallId(observation)
-      if (observation.kind === 'tool.call') {
-        if (callId) pendingTools.add(callId)
-        else unidentifiableToolCall = true
+      const groupIds = current.observationRecordIds.slice(index, last)
+      let groupBytes: number
+      try {
+        groupBytes = Buffer.byteLength(JSON.stringify(group), 'utf8')
+      } catch {
+        return { state: 'unsupported', reason: 'native-review-input-not-serializable' }
       }
-      if (observation.kind === 'tool.result') {
-        // Retain source-visible orphan results as standalone Review events;
-        // NEVER invent a tool call ID, success status or cross-turn pairing.
-        // An explicit later user record can close the turn safely, but EOF
-        // cannot prove the anonymous tool chain has settled.
-        if (!callId || !pendingTools.has(callId)) unpairedToolResult = true
-        else pendingTools.delete(callId)
+      if (groupBytes > MAX_REVIEW_INPUT_BYTES || group.length > MAX_REVIEW_OBSERVATIONS) {
+        return { state: 'unsupported', reason: 'native-review-record-exceeds-budget' }
       }
-      lastRecordStart = recordCursor
+      if (observations.length > 0 && (bytes + groupBytes > MAX_REVIEW_INPUT_BYTES
+        || observations.length + group.length > MAX_REVIEW_OBSERVATIONS
+        || evidenceCandidates.length + current.evidenceCandidates.length > 512)) {
+        // Use the exact next record start, not the end of the oversized page.
+        // The next request can continue this turn without repeating old records.
+        return finish(cursor, true, true)
+      }
+      if (group.some(item => item.kind === 'message.user') && turnStart === undefined) {
+        turnStart = cursor.offset
+        sawUser = true
+      }
+      observations.push(...group)
+      observationRecordIds.push(...groupIds)
+      observationCursors.push(...group.map(() => encodeNativeSessionCursor(cursor)))
+      bytes += groupBytes
+      for (const item of group) {
+        const callId = toolCallId(item)
+        if (item.kind === 'tool.call' && callId) pendingTools.add(callId)
+        if (item.kind === 'tool.result' && callId) pendingTools.delete(callId)
+      }
+      lastRecordStart = cursor
+      index = last
     }
+    // Source evidence is filtered against included records in the projection.
+    // Duplicate candidates from previous pages are not persisted or exposed.
+    evidenceCandidates.push(...current.evidenceCandidates.filter(candidate =>
+      candidate.sourceRecordId !== undefined
+      && observationRecordIds.includes(candidate.sourceRecordId)))
     pages++
-    if (current.pendingTail) {
-      return { state: 'unsupported', reason: 'native-review-turn-pending-tail' }
+    if (current.pendingTail) return finish(current.nextCursor, false, true)
+    if (!current.hasMore) {
+      // EOF is not proof that a running tool settled. A continued fragment
+      // may also have an unresolved call in an earlier fragment.
+      return finish(current.nextCursor, false,
+        pendingTools.size > 0 || (query.cursor && 'turnStart' in query.cursor))
     }
-    if (!current.hasMore) return finish(current.nextCursor, false)
-    if (pages >= MAX_REVIEW_PAGES
-      || observations.length >= MAX_REVIEW_OBSERVATIONS
+    if (pages >= MAX_REVIEW_PAGES || observations.length >= MAX_REVIEW_OBSERVATIONS
       || bytes >= MAX_REVIEW_INPUT_BYTES) {
-      return { state: 'unsupported', reason: 'native-review-turn-exceeds-budget' }
+      return finish(current.nextCursor, true, true)
     }
     if (current.nextCursor.offset <= previousOffset) {
       return { state: 'unsupported', reason: 'native-review-cursor-not-advancing' }
@@ -286,7 +281,7 @@ async function readCompleteNativeTurn(
     }
     current = next
   }
-  return { state: 'unsupported', reason: 'native-review-turn-exceeds-budget' }
+  return { state: 'unsupported', reason: 'native-review-no-user-turn' }
 }
 
 /**
@@ -347,10 +342,12 @@ async function readCompleteNativeTurns(
             ? { fileChangesTruncated: true } : {}),
           hasMore: value.hasMore,
           nextCursor: value.nextCursor,
-          boundaryIntegrity: 'complete',
+          boundaryIntegrity: value.boundaryIntegrity,
+          turnFragment: value.turnFragment,
         }
       : value
-    if (!value.hasMore) break
+    // A partial turn is NOT a boundary for the next ordinal.
+    if (!value.hasMore || value.turnFragment === 'partial') break
     if (turn === turnLimit - 1) break
     const cursor = decodeCursor(value.nextCursor)
     if (!cursor || cursor.mode !== 'review-turns'
@@ -384,6 +381,8 @@ function identifier(params: URLSearchParams, key: string): string {
 type EncodedNativeCursor = SourceNativeSessionCursor & {
   mode?: 'review-turns'
   turnOrdinal?: number
+  /** Anchor for a continued single-turn fragment; absent for exact next-turn cursors. */
+  turnStart?: number
 }
 
 function decodeCursor(value: string | null): EncodedNativeCursor | undefined {
@@ -405,7 +404,11 @@ function decodeCursor(value: string | null): EncodedNativeCursor | undefined {
         && (typeof cursor.boundaryHash !== 'string'
           || !/^[0-9a-f]{64}$/.test(cursor.boundaryHash)))
       || !(Object.keys(cursor).length === (cursor.boundaryHash === undefined ? 3 : 4)
-        || (Object.keys(cursor).length === (cursor.boundaryHash === undefined ? 5 : 6)
+        || ((Object.keys(cursor).length === (cursor.boundaryHash === undefined ? 5 : 6)
+          || (Object.keys(cursor).length === (cursor.boundaryHash === undefined ? 6 : 7)
+            && Number.isSafeInteger(cursor.turnStart)
+            && (cursor.turnStart as number) >= 0
+            && (cursor.turnStart as number) < (cursor.offset as number)))
           && cursor.mode === 'review-turns'
           && Number.isSafeInteger(cursor.turnOrdinal)
           && (cursor.turnOrdinal as number) >= 1))) {
@@ -417,7 +420,8 @@ function decodeCursor(value: string | null): EncodedNativeCursor | undefined {
       fileIdentity: cursor.fileIdentity,
       ...(cursor.boundaryHash ? {boundaryHash:cursor.boundaryHash} : {}),
       ...(cursor.mode === 'review-turns'
-        ? { mode: 'review-turns' as const, turnOrdinal: cursor.turnOrdinal as number }
+        ? { mode: 'review-turns' as const, turnOrdinal: cursor.turnOrdinal as number,
+            ...(cursor.turnStart === undefined ? {} : {turnStart:cursor.turnStart as number}) }
         : {}),
     }
   } catch {
