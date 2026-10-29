@@ -220,6 +220,7 @@ export function TaskCenterPage({ model, mode, sidebarHost }: { model: AgentLensC
   const runtimes = useTaskCenterRuntimes()
   const facets = useClientSnapshotField(model, 'facets')
   const health = useClientSnapshotField(model, 'health')
+  const agentsRescanResult = useClientSnapshotField(model, 'agentsRescanResult')
   const slimNative = health?.storage.details?.schemaKind === 'slim-native-session-v1'
   const location = useLocation()
   const navigate = useNavigate()
@@ -491,6 +492,15 @@ export function TaskCenterPage({ model, mode, sidebarHost }: { model: AgentLensC
     const timer=window.setInterval(()=>{void check()},3000)
     return ()=>{disposed=true;window.clearInterval(timer)}
   },[mode,slimNative,projectSearch,launchableProjects.length,model])
+
+  // Manual Agent re-scan may discover new workspaces without remounting
+  // Task Center. Refetch the project dropdown from the refreshed Slim index.
+  useEffect(()=>{
+    if(mode!=='new' || !slimNative || !agentsRescanResult?.completedAt)return
+    invalidateLaunchableProjectCache()
+    setProjectDiscoveryRevision(value=>value+1)
+    void model.refreshReview().catch(()=>undefined)
+  },[mode,slimNative,agentsRescanResult?.completedAt,model])
 
   const loadMoreProjects = useCallback(async () => {
     const cursor = launchablePage?.nextCursor
