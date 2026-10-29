@@ -171,6 +171,11 @@ export class NativeReviewTurnIndex {
       }
       // Invalidation is explicit; old block data is ignored beyond knownTurns.
       await this.checkpoints.set(SCOPE,stateKey(id),state)
+    } else if (entry.fileSize > state.fileSize) {
+      // A growing original source invalidates the prior EOF claim immediately.
+      // Keep its verified prefix and resume indexing from its last cursor.
+      state={...state,complete:false,fileSize:entry.fileSize,fileMtimeMs:entry.fileMtimeMs}
+      await this.checkpoints.set(SCOPE,stateKey(id),state)
     }
     if (options.scan && (!state.complete || entry.fileSize > (state.nextCursor?.offset ?? 0))) {
       const existing = this.scans.get(id)
