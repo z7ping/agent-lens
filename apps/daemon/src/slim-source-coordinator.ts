@@ -36,7 +36,8 @@ export class SlimSourceCoordinator {
   constructor(
     private readonly runtime:Pick<SlimDataRuntime,
       'facets'|'profiles'|'reindexInstallation'|'captureInstallation'
-      |'resolveHost'|'resolveInstallation'|'resolveProfile'|'scanInstallationAssets'>,
+      |'resolveHost'|'resolveInstallation'|'resolveProfile'|'scanInstallationAssets'
+      |'rebuildLaunchableProjects'>,
     private readonly sources:SourceService,
     private readonly policy:Pick<CapturePolicyService,'isSourceEnabled'>,
     private readonly assetPolicy?:CapturePolicyService,
