@@ -719,14 +719,17 @@ export async function handleNativeSessionWindowRequest(
         // label the shared Review as incomplete rather than silently hiding
         // the entire Hook-only lane when the worker/source is unavailable.
         const hasHookLane=byId && ['codex','claude-code','hermes'].includes(sourceId)
-        if (hasHookLane && !reader.readArchivedHooks) {
+        const canOverlayHooks=dto.boundaryIntegrity==='complete' && dto.pagingUnit==='interaction'
+        if (hasHookLane && (!reader.readArchivedHooks || !canOverlayHooks)) {
           dto={...dto,hookFactsPartial:true,hookEventsTruncated:true}
         }
         // Only the Catalog-authenticated native Review deep-link may overlay
         // source-owned Hook facts. Raw Source identity windows stay unchanged.
         // Never merge Hook tool calls/results or prompts without strong
         // correlation; those remain on the standalone Hook evidence lane.
-        if (hasHookLane && reader.readArchivedHooks) {
+        // 分片是合法的原生阅读窗口，但尚不足以证明 Hook 的轮次归属。
+        // 保留原生内容和续读游标，待完整边界可用后再合并 Hook。
+        if (hasHookLane && reader.readArchivedHooks && canOverlayHooks) {
           const hooks: ObservationCandidate[] = []
           const recordIds: string[] = []
           let hookBytes = 0

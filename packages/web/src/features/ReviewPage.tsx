@@ -20,6 +20,7 @@ import { AgentLensApi } from '../client/api'
 import type { AgentLensClientModel } from '../client/model'
 import type { ReviewInteractionDto } from '@agent-lens/protocol'
 import { useReviewSession } from './use-review-session'
+import { projectSelectOption } from './project-presentation'
 
 export function ReviewPage({ model, embedded = false, latestRequest = 0 }: { model: AgentLensClientModel; embedded?: boolean; latestRequest?: number }) {
   const {
@@ -172,7 +173,7 @@ export function ReviewPage({ model, embedded = false, latestRequest = 0 }: { mod
       <span className="toolbar-divider" />
       <SelectMenu value={review.filters.projectId} onChange={projectId => model.setReviewFilters({ projectId })} ariaLabel={t('local.filters.projectAria')} placeholder={t('local.filters.allProjects')} searchable searchPlaceholder={t('local.filters.searchProject')} options={[
         { value: '', label: t('local.filters.allProjects') },
-        ...projects.map(project => ({ value: project.id, label: project.name ?? project.repositoryIdentity ?? project.id, description: project.repositoryIdentity ?? undefined })),
+        ...projects.map(projectSelectOption),
       ]}/>
       <SelectMenu value={review.filters.range} onChange={range => model.setReviewFilters({ range: range as typeof review.filters.range })} ariaLabel={t('local.filters.timeAria')} options={[
         { value: 'today', label: t('local.filters.today') }, { value: '7d', label: t('local.filters.sevenDays') }, { value: '30d', label: t('local.filters.thirtyDays') }, { value: 'all', label: t('local.filters.allTime') },

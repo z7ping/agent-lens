@@ -12,6 +12,7 @@ import { EmptyStatePanel, ErrorStateBanner, WorkspaceSkeleton } from '../compone
 import { ToolKindIcon, toolVisualKind } from '../components/ToolKindIcon'
 import { SidebarFilterDisclosure } from '../components/SidebarFilterDisclosure'
 import { Button, Drawer, IconButton, SelectMenu, UiIcon } from '../components/ui'
+import { projectSelectOption } from './project-presentation'
 
 const toolDetailApi = new AgentLensApi()
 
@@ -223,7 +224,7 @@ export function ToolsPage({ model, toolbarHost }: { model: AgentLensClientModel;
   }
   const projectFilterOptions = [
     { value: '', label: t('filters.allProjects') },
-    ...projects.map(project => ({ value: project.id, label: project.name ?? project.repositoryIdentity ?? project.id, description: project.repositoryIdentity ?? undefined })),
+    ...projects.map(projectSelectOption),
   ]
   const toolbarFilters = <div className="workspace-view-controls" aria-label={t('filters.aria')}>
     <div className="workspace-view-filter">

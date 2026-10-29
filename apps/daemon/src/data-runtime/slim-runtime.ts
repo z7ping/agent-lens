@@ -162,9 +162,6 @@ export class SlimDataRuntime {
   }{
     const self=this
     return {
-      identity:{resolveWorkspace(hint){
-        return self.write<Workspace|null>(['identity','resolveWorkspace'],[hint])
-      }},
       nativeSessionCatalog:{
         get(input){return self.read<NativeSessionCatalogEntry|null>(['nativeSessionCatalog','get'],[input])},
         getByReviewSessionId(id){return self.read<NativeSessionCatalogEntry|null>(['nativeSessionCatalog','getByReviewSessionId'],[id])},
@@ -238,6 +235,9 @@ export class SlimDataRuntime {
   } {
     const self=this
     return {
+      identity:{resolveWorkspace(hint){
+        return self.write<Workspace|null>(['identity','resolveWorkspace'],[hint])
+      }},
       nativeSessionCatalog:{
         upsert(entry:NativeSessionCatalogEntry){
           return self.write<void>(['nativeSessionCatalog','upsert'],[entry])

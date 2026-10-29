@@ -21,6 +21,7 @@ import { taskLiveRuntimeHref, taskLiveRuntimeStatus } from './task-live-runtime'
 import { mergeTaskCenterSessions, nativeTaskCenterSummaries, visibleTaskCenterSession } from './task-center-sessions'
 import { useTaskCenterRuntimes } from './use-task-center-runtimes'
 import { TaskNotificationBell, TaskNotificationBanner } from './TaskNotificationCenter'
+import { projectDisplayLabel, projectSelectOption } from './project-presentation'
 
 export type TaskCenterMode = 'history' | 'live' | 'new' | 'hub'
 
@@ -600,7 +601,7 @@ export function TaskCenterPage({ model, mode, sidebarHost }: { model: AgentLensC
   const historyCount = localSessions.length + visibleHub.length
   const projectFilterOptions = useMemo(() => [
     { value: '', label: t('center.history.allProjects') },
-    ...sortProjectFacetsByActivity(projects).map(project => ({ value: project.id, label: project.name ?? project.repositoryIdentity ?? project.id, description: project.repositoryIdentity ?? undefined })),
+    ...sortProjectFacetsByActivity(projects).map(projectSelectOption),
   ], [projects, t])
 
   const selectedAgentIds = review.filters.sourceIds ?? []
@@ -623,7 +624,7 @@ export function TaskCenterPage({ model, mode, sidebarHost }: { model: AgentLensC
     model.setReviewFilters({ sourceIds: next })
   }
 
-  const projectFilterLabel = (selectedProject?.name ?? selectedProject?.repositoryIdentity ?? review.filters.projectId)
+  const projectFilterLabel = (selectedProject ? projectDisplayLabel(selectedProject) : review.filters.projectId)
     .split(/[\\/]/).filter(Boolean).at(-1) ?? review.filters.projectId
 
   const taskRail = <aside className="task-center-rail" aria-label={t('center.history.railAria')}>
@@ -741,7 +742,7 @@ export function TaskCenterPage({ model, mode, sidebarHost }: { model: AgentLensC
           {agentLabel(sourceId, agents.find(agent => agent.sourceId === sourceId)?.displayName)}
           <UiIcon name="close" size={12}/>
         </Button>)}
-        {review.filters.projectId && <Button size="small" className="task-center-filter-chip" title={selectedProject?.name ?? selectedProject?.repositoryIdentity ?? review.filters.projectId} onClick={() => model.setReviewFilters({ projectId: '' })}>
+        {review.filters.projectId && <Button size="small" className="task-center-filter-chip" title={selectedProject ? projectDisplayLabel(selectedProject) : review.filters.projectId} onClick={() => model.setReviewFilters({ projectId: '' })}>
           <span className="task-center-filter-text">{projectFilterLabel}</span>
           <UiIcon name="close" size={12}/>
         </Button>}

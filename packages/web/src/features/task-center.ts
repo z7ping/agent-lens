@@ -1,6 +1,7 @@
 import type { LaunchableProjectDto, ProjectFacetDto, ReviewSessionSummaryDto } from '@agent-lens/protocol'
 import { translateProduct } from '../i18n/runtime'
 import { taskUserRequestText } from './task-detail-model'
+import { projectDisplayIdentity, projectDisplayLabel } from './project-presentation'
 
 /** 列表只消费展示元数据；Live 入口不伪造历史计数或正文。 */
 export type TaskSessionListSummary = Pick<ReviewSessionSummaryDto,
@@ -19,8 +20,7 @@ export function sortProjectFacetsByActivity(projects: readonly ProjectFacetDto[]
     }
     if (left.lastActivityAt && !right.lastActivityAt) return -1
     if (!left.lastActivityAt && right.lastActivityAt) return 1
-    const labelOrder = (left.name ?? left.repositoryIdentity ?? left.id)
-      .localeCompare(right.name ?? right.repositoryIdentity ?? right.id)
+    const labelOrder = projectDisplayLabel(left).localeCompare(projectDisplayLabel(right))
     return labelOrder || left.id.localeCompare(right.id)
   })
 }
@@ -61,7 +61,7 @@ export function launchableTaskProjectOptions(items: readonly LaunchableProjectDt
     key: item.key,
     ...(item.projectId ? { projectId: item.projectId } : {}),
     label: item.projectName?.trim()
-      || item.repositoryIdentity?.trim()
+      || projectDisplayIdentity(item.repositoryIdentity)?.trim()
       || basename(item.workspacePath)
       || translateProduct('task:center.presentation.unnamedProject'),
     cwd: item.workspacePath,

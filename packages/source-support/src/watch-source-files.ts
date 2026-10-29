@@ -1,4 +1,5 @@
 import { watch, type FSWatcher } from 'chokidar'
+import { resolve } from 'node:path'
 
 const POLLING_INTERVAL_MS = 1_000
 
@@ -63,11 +64,19 @@ export async function watchSourceFiles(
     pending.set(filePath, { timer, event })
   }
 
+  const watchRoots = new Set(
+    (typeof options.paths === 'string' ? [options.paths] : options.paths).map(path => resolve(path)),
+  )
   watcher = watch(options.paths as string | string[], {
     ignoreInitial: true,
     persistent: true,
     atomic: true,
-    ...(options.recursive === false ? { depth: 0 } : {}),
+    ...(options.recursive === false ? {
+      depth: 0,
+      // Chokidar 在检查 depth 之前会 realpath 子目录；必须先排除，
+      // 避免无关目录的权限错误使整个数据库监听初始化失败。
+      ignored: (path, stats) => stats?.isDirectory() === true && !watchRoots.has(resolve(path)),
+    } : {}),
     // Windows native directory notifications can drop a newly created file immediately
     // after the initial scan. Chokidar's polling backend provides the same event contract
     // without relying on that lossy notification boundary.

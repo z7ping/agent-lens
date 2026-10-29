@@ -115,6 +115,7 @@ test('slim Daemon bridge routes reader/catalog/context/metrics/checkpoints to is
       locationKind:'native',filePath:'/source/s.jsonl',fileIdentity:'id',
       fileSize:100,fileMtimeMs:2,lastActivityAt:'2026-10-26',updatedAt:'2026-10-26',
     })
+    await runtime.nativePort().identity.resolveWorkspace({hostId:'h',path:'/workspace'})
     await runtime.nativePort().nativeSessionContexts.upsert({
       sourceId:'pi',installationId:'i',nativeSessionId:'s',
     })
@@ -133,6 +134,7 @@ test('slim Daemon bridge routes reader/catalog/context/metrics/checkpoints to is
     ])
     assert.deepEqual(writes,[
       ['nativeSessionCatalog','upsert'],
+      ['identity','resolveWorkspace'],
       ['nativeSessionContexts','upsert'],
       ['nativeSessionMetrics','invalidate'],
       ['checkpoints','set'],
