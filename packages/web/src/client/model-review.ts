@@ -361,7 +361,7 @@ export abstract class AgentLensReviewModel extends AgentLensIntegrationModel {
   async jumpToLatestReviewDetail(): Promise<void> {
     const current = this.snapshot.review
     if (current.detail?.statisticsCompleteness === 'window') {
-      if (!current.selectedId) return
+      if (!current.selectedId || typeof this.api.nativeReviewTurnIndex !== 'function') return
       const index=await this.api.nativeReviewTurnIndex(current.selectedId,{tail:3})
       if (index.state!=='available' || index.coverage!=='complete' || !index.items.length) return
       await this.selectNativeReviewSession(current.selectedId,{cursor:index.items[0]!.cursor,turnLimit:3})
@@ -397,7 +397,7 @@ export abstract class AgentLensReviewModel extends AgentLensIntegrationModel {
   async showReviewFromStart(): Promise<void> {
     const current = this.snapshot.review
     if (current.detail?.statisticsCompleteness === 'window') {
-      await this.selectNativeReviewSession(current.detail.id)
+      await this.selectNativeReviewSession(current.detail.id,{preferStart:true})
       return
     }
     if (!current.selectedId) return
@@ -430,7 +430,8 @@ export abstract class AgentLensReviewModel extends AgentLensIntegrationModel {
   async jumpToReviewInteraction(ordinal: number): Promise<void> {
     const current = this.snapshot.review
     if (current.detail?.statisticsCompleteness === 'window') {
-      if (!current.selectedId || ordinal < 1) return
+      if (!current.selectedId || ordinal < 1
+        || typeof this.api.nativeReviewTurnIndex !== 'function') return
       if (current.detail.interactions.some(item=>item.ordinal===ordinal)) return
       const index=await this.api.nativeReviewTurnIndex(current.selectedId,{ordinal})
       const cursor=index.state==='available'?index.items[0]?.cursor:undefined
@@ -735,7 +736,7 @@ export abstract class AgentLensReviewModel extends AgentLensIntegrationModel {
   }
 
   protected async selectNativeReviewSession(id: string, options: {
-    cursor?: string; turnLimit?: number
+    cursor?: string; turnLimit?: number; preferStart?: boolean
   } = {}): Promise<void> {
     this.reviewSelectionAbort?.abort()
     const controller = new AbortController()
@@ -757,7 +758,7 @@ export abstract class AgentLensReviewModel extends AgentLensIntegrationModel {
       // the bounded first-page fallback while the index fills separately.
       const [summary, index] = await Promise.all([
         this.api.nativeSession(id, controller.signal),
-        options.cursor || typeof this.api.nativeReviewTurnIndex !== 'function'
+        options.cursor || options.preferStart || typeof this.api.nativeReviewTurnIndex !== 'function'
           ? Promise.resolve(null)
           : this.api.nativeReviewTurnIndex(id,{tail:3,signal:controller.signal}).catch(()=>null),
       ])
