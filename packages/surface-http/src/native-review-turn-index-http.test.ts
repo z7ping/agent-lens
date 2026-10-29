@@ -76,6 +76,12 @@ test('native sparse turn index is bounded, restart-resumable and invalidates rep
   records.push({kind:'message.user',occurredAt:at,capturedAt:at,payload:{text:'new'}} as ObservationCandidate)
   fileSize=records.length
   mtime++
+  const changed=await index().query(id,{tail:1})
+  assert.equal(changed.state,'available')
+  if(changed.state==='available'){
+    assert.equal(changed.coverage,'partial')
+    assert.equal(changed.totalTurns,undefined,'append must revoke stale complete coverage')
+  }
   const appended=await index().query(id,{scan:true,tail:1})
   assert.equal(appended.state,'available')
   if(appended.state==='available'){
