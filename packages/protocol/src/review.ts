@@ -323,6 +323,8 @@ export interface ReviewSessionDetailDto extends ReviewSessionSummaryDto {
   statisticsCompleteness?: 'window'
   /** Hook-only facts can be absent when the source archive is disabled or a bounded page is incomplete. */
   nativeHookEventsTruncated?: boolean
+  /** The most recently loaded native turn has more content or an unproven EOF. */
+  nativeTurnIncomplete?: boolean
   interactions: ReviewInteractionDto[]
   interactionIndex?: ReviewInteractionIndexDto[]
   page: ReviewDetailPageDto
