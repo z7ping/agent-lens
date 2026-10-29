@@ -184,7 +184,8 @@ export function projectNativeReviewWindow(input: NativeReviewProjectionInput): N
     installationId: input.installationId,
     nativeSessionId: input.nativeSessionId,
     sessionId,
-    ...(input.completeBoundaries ? { pagingUnit: 'interaction' as const } : {}),
+    ...(input.completeBoundaries || input.singleUserTurnOffset !== undefined
+      ? { pagingUnit: 'interaction' as const } : {}),
     ...(files.length ? { observedFileChanges: files } : {}),
     ...(changedFiles.length > files.length ? { fileChangesTruncated: true } : {}),
     interactions: (input.singleUserTurnOffset === undefined
