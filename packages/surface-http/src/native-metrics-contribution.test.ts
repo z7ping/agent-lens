@@ -195,3 +195,30 @@ test('Native exact tool detail queries indexed totals without Legacy event rows'
     toolName:' '.repeat(3),includeTools:true,
   }),{state:'unsupported',reason:'native-metrics-invalid-tool-name'})
 })
+
+test('partial native observations stay separate from certified totals and never leak payloads',async()=>{
+  const metrics={
+    overview:async()=>({
+      ...overview('pi',1),partialSessions:1,missingSessions:0,
+      observed:{
+        interactionCount:8,toolCallCount:6,errorCount:2,
+        tools:[{nativeToolName:'shell',callCount:6,resultCount:5,
+          errorCount:2,totalDurationMs:123,sessionCount:1}],
+        toolsTruncated:false,
+      },
+    }),
+  } as unknown as NativeSessionMetricsStore
+  const result=await nativeMetricContribution(metrics,sources,policy,{includeTools:true})
+  if(result.state!=='available')assert.fail('Expected available result')
+  assert.equal(result.readySessions,1)
+  assert.equal(result.partialSessions,1)
+  assert.equal(result.toolCallCount,2)
+  assert.equal(result.coverage,'partial')
+  assert.equal(result.observed?.toolCallCount,6)
+  assert.equal(result.observed?.interactionCount,8)
+  assert.deepEqual(result.observed?.tools,[{
+    sourceId:'pi',nativeToolName:'shell',callCount:6,
+    resultCount:5,errorCount:2,sessionCount:1,
+  }])
+  assert.equal(JSON.stringify(result).includes('totalDurationMs'),false)
+})
