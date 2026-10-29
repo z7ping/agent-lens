@@ -367,6 +367,7 @@ export const chineseReviewMessages: LocaleMessagesDto = {
         newRecords: '有新记录',
         querying: '正在查询完整会话…',
         nativeWindow: '原生会话 · 仅展示已加载轮次',
+        nativeTurnPartial: '当前轮次未读完 · 向下滚动继续加载',
         checkNativeTail: '检查新轮次',
         nativeHookPartial: 'Hook 事件仅部分合入当前轮次',
         nativeHookEvidence: '独立 Hook 证据',
