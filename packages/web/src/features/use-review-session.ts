@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import type { HubReviewSessionSummaryDto, LiveMessageDto, NativeSessionSummaryDto, ReviewNodeDto } from '@agent-lens/protocol'
+import type { HubReviewSessionSummaryDto, LiveMessageDto, NativeSessionSummaryDto, ReviewNodeDto, NativeReviewTurnIndexResponseDto } from '@agent-lens/protocol'
 import { fetchHubReviewSessions } from '../client/hub-review'
 import { liveApi, LiveRequestError, type LiveProductMetadata } from '../client/live'
 import { settleReaderAtLatest } from './session-reader-positioning'
@@ -42,6 +42,7 @@ export function useReviewSession(model: AgentLensClientModel, embedded: boolean)
   const [nativeBodyPartial, setNativeBodyPartial] = useState(false)
   const [nativeBodyLoading, setNativeBodyLoading] = useState(false)
   const [nativeBodyError, setNativeBodyError] = useState('')
+  const [nativeTurnIndex, setNativeTurnIndex] = useState<NativeReviewTurnIndexResponseDto|null>(null)
   const nativeRequestKeyRef = useRef('')
   const [liveProducts, setLiveProducts] = useState<LiveProductMetadata[]>([])
   const [historyInteractionPending, setHistoryInteractionPending] = useState<'' | 'resume' | 'fork-at'>('')
@@ -68,6 +69,32 @@ export function useReviewSession(model: AgentLensClientModel, embedded: boolean)
       ? undefined : projectReviewLiveInteraction(detail, liveProducts),
     [detail?.id, detail?.productId, detail?.statisticsCompleteness, liveProducts],
   )
+  // Index progress is independent of text loading. One request scans only
+  // bounded native Source pages; only a proven EOF exposes totalRounds.
+  useEffect(() => {
+    const id=detail?.statisticsCompleteness==='window'?detail.id:undefined
+    setNativeTurnIndex(null)
+    if(!id)return
+    const controller=new AbortController()
+    let timer:ReturnType<typeof setTimeout>|undefined
+    const update=async()=>{
+      try{
+        const result=await model.nativeReviewTurnIndex(id,{
+          scan:true,tail:5,signal:controller.signal,
+        })
+        if(controller.signal.aborted)return
+        setNativeTurnIndex(result)
+        if(result.state==='available' && result.coverage==='partial'){
+          timer=setTimeout(()=>{void update()},250)
+        }
+      }catch {
+        // A failed index must not disable the already readable native Review.
+      }
+    }
+    void update()
+    return ()=>{controller.abort();if(timer!==undefined)clearTimeout(timer)}
+  },[detail?.id,detail?.statisticsCompleteness,model])
+
   const visibleHubSessions = useMemo(() => hubSessions.filter(item => hubSessionVisibility(item, review)), [hubSessions, review.filters, t])
   // Catalog-only sessions are a separate metadata stream, deduplicated in
   // SQLite BEFORE LIMIT. Never invent Review totals, error flags or project
@@ -585,6 +612,17 @@ export function useReviewSession(model: AgentLensClientModel, embedded: boolean)
     }
   }
 
+  const onTurnRailSelect = async (item:{ordinal?:number}) => {
+    if(!detail?.id || !item.ordinal || roundFilterLoading)return
+    const selectedId=detail.id
+    await model.jumpToReviewInteraction(item.ordinal)
+    const latest=model.getSnapshot().review
+    if(latest.selectedId===selectedId
+      && latest.detail?.interactions.some(turn=>turn.ordinal===item.ordinal)){
+      scrollTop()
+    }
+  }
+
   const showFromStart = async () => {
     if (!detail || roundFilterLoading) return
     const selectedId = detail.id
@@ -827,6 +865,8 @@ export function useReviewSession(model: AgentLensClientModel, embedded: boolean)
     taskDetailModel,
     annotatedInteractions,
     turnRailItems,
+    nativeTurnIndex,
+    onTurnRailSelect,
     pageIncomplete,
     isBackward,
     isFiltered,
