@@ -266,7 +266,7 @@ async function readCompleteNativeTurn(
       // EOF is not proof that a running tool settled. A continued fragment
       // may also have an unresolved call in an earlier fragment.
       return finish(current.nextCursor, false,
-        pendingTools.size > 0 || (query.cursor && 'turnStart' in query.cursor))
+        pendingTools.size > 0 || Boolean(query.cursor && 'turnStart' in query.cursor))
     }
     if (pages >= MAX_REVIEW_PAGES || observations.length >= MAX_REVIEW_OBSERVATIONS
       || bytes >= MAX_REVIEW_INPUT_BYTES) {
