@@ -12,6 +12,8 @@ import {
   type RunningHttpSurface,
 } from './server-contract'
 import { handleNativeSessionCatalogRequest } from './native-session-catalog-http'
+import { NativeReviewTurnIndex, handleNativeReviewTurnIndexRequest,
+  type NativeTurnIndexCheckpointStore } from './native-review-turn-index-http'
 import {
   handleNativeSessionWindowRequest, handleNativeSessionAttachmentRequest,
   handleNativeSessionHookRequest, type NativeSessionWindowReader,
@@ -63,6 +65,7 @@ export interface NativeOnlyHttpStorage {
   assetInventory:Pick<AssetInventoryReader,'listByInstallation'>
   launchableProjects: LaunchableProjectReader
   nativeSessionMetrics: NativeSessionMetricsStore
+  checkpoints?: NativeTurnIndexCheckpointStore
   health(): Promise<StorageHealth>
 }
 
@@ -113,6 +116,10 @@ export async function startNativeOnlyHttpSurface(
   if(options.staticDir)mounts.set('native-web',{
     id:'native-web',directory:options.staticDir,spaFallback:true,
   })
+  const turnIndex=storage.checkpoints
+    ? new NativeReviewTurnIndex(options.reader,storage.nativeSessionCatalog,
+      storage.checkpoints,options.sources,options.capturePolicy)
+    : undefined
   const refresh=new NativeMetricsAutoRefresh(
     storage.nativeSessionCatalog,storage.nativeSessionMetrics,
     options.reader,options.sources,options.capturePolicy,
@@ -154,6 +161,8 @@ export async function startNativeOnlyHttpSurface(
       if(await handleNativeSessionBodySearchRequest(
         request,response,url,storage.nativeSessionCatalog,
         options.reader,options.capturePolicy))return
+      if(await handleNativeReviewTurnIndexRequest(
+        request,response,url,turnIndex))return
       if(await handleNativeSessionCatalogRequest(
         request,response,url,storage.nativeSessionCatalog,
         options.capturePolicy,storage.nativeSessionList,options.sources))return

@@ -173,3 +173,24 @@ export interface NativeReviewWindowDto {
    */
   boundaryIntegrity: 'complete' | 'partial'
 }
+
+/** Sparse, source-validated native turn index. No message, tool or evidence text. */
+export interface NativeReviewTurnLocatorDto {
+  ordinal: number
+  /** Opaque, Source-owned record-boundary cursor accepted by native Review. */
+  cursor: string
+  at?: string
+}
+
+export type NativeReviewTurnIndexResponseDto =
+  | {
+      state: 'available'
+      coverage: 'partial' | 'complete'
+      knownTurns: number
+      /** Exact only after scanning the native source to a verified EOF. */
+      totalTurns?: number
+      scannedOffset: number
+      items: NativeReviewTurnLocatorDto[]
+      hasMore: boolean
+    }
+  | { state: 'unavailable' | 'unsupported' | 'drifted'; reason: string }

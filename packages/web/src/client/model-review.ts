@@ -360,8 +360,13 @@ export abstract class AgentLensReviewModel extends AgentLensIntegrationModel {
 
   async jumpToLatestReviewDetail(): Promise<void> {
     const current = this.snapshot.review
-    // A native-only Source has not yet supplied an exact last-turn bookmark.
-    if (current.detail?.statisticsCompleteness === 'window') return
+    if (current.detail?.statisticsCompleteness === 'window') {
+      if (!current.selectedId || typeof this.api.nativeReviewTurnIndex !== 'function') return
+      const index=await this.api.nativeReviewTurnIndex(current.selectedId,{tail:3})
+      if (index.state!=='available' || index.coverage!=='complete' || !index.items.length) return
+      await this.selectNativeReviewSession(current.selectedId,{cursor:index.items[0]!.cursor,turnLimit:3})
+      return
+    }
     if (!current.selectedId) return
     const selectedId = current.selectedId
     const generation = ++this.detailGeneration
@@ -392,7 +397,7 @@ export abstract class AgentLensReviewModel extends AgentLensIntegrationModel {
   async showReviewFromStart(): Promise<void> {
     const current = this.snapshot.review
     if (current.detail?.statisticsCompleteness === 'window') {
-      await this.selectNativeReviewSession(current.detail.id)
+      await this.selectNativeReviewSession(current.detail.id,{preferStart:true})
       return
     }
     if (!current.selectedId) return
@@ -424,7 +429,16 @@ export abstract class AgentLensReviewModel extends AgentLensIntegrationModel {
 
   async jumpToReviewInteraction(ordinal: number): Promise<void> {
     const current = this.snapshot.review
-    if (current.detail?.statisticsCompleteness === 'window') return
+    if (current.detail?.statisticsCompleteness === 'window') {
+      if (!current.selectedId || ordinal < 1
+        || typeof this.api.nativeReviewTurnIndex !== 'function') return
+      if (current.detail.interactions.some(item=>item.ordinal===ordinal)) return
+      const index=await this.api.nativeReviewTurnIndex(current.selectedId,{ordinal})
+      const cursor=index.state==='available'?index.items[0]?.cursor:undefined
+      if (!cursor) return
+      await this.selectNativeReviewSession(current.selectedId,{cursor,turnLimit:3})
+      return
+    }
     if (!current.selectedId || ordinal < 1) return
     if (current.detail?.interactions.some(item => item.ordinal === ordinal)) return
     const selectedId = current.selectedId
@@ -714,7 +728,16 @@ export abstract class AgentLensReviewModel extends AgentLensIntegrationModel {
    * Unknown aggregate statistics and unsupported SQL-only operations stay
    * unavailable rather than fabricated.
    */
-  protected async selectNativeReviewSession(id: string): Promise<void> {
+  /** Sparse native index progress; no legacy SQL Review or body hydration. */
+  nativeReviewTurnIndex(id:string, options:{
+    ordinal?:number;tail?:number;scan?:boolean;signal?:AbortSignal
+  }={}) {
+    return this.api.nativeReviewTurnIndex(id,options)
+  }
+
+  protected async selectNativeReviewSession(id: string, options: {
+    cursor?: string; turnLimit?: number; preferStart?: boolean
+  } = {}): Promise<void> {
     this.reviewSelectionAbort?.abort()
     const controller = new AbortController()
     this.reviewSelectionAbort = controller
@@ -730,10 +753,22 @@ export abstract class AgentLensReviewModel extends AgentLensIntegrationModel {
       },
     })
     try {
-      const [summary, window] = await Promise.all([
+      // A complete sparse index can jump straight to the latest three native
+      // turns without scanning their earlier text. Unindexed sessions retain
+      // the bounded first-page fallback while the index fills separately.
+      const [summary, index] = await Promise.all([
         this.api.nativeSession(id, controller.signal),
-        this.api.nativeReviewById(id, { turnLimit: 4, signal: controller.signal }),
+        options.cursor || options.preferStart || typeof this.api.nativeReviewTurnIndex !== 'function'
+          ? Promise.resolve(null)
+          : this.api.nativeReviewTurnIndex(id,{tail:3,signal:controller.signal}).catch(()=>null),
       ])
+      const cachedTail = index?.state==='available' && index.coverage==='complete'
+        ?index.items[0]?.cursor:undefined
+      const window = await this.api.nativeReviewById(id, {
+        ...(options.cursor || cachedTail ? {cursor:options.cursor??cachedTail} : {}),
+        turnLimit:options.turnLimit??(cachedTail?3:4),
+        signal:controller.signal,
+      })
       if (controller.signal.aborted || generation !== this.detailGeneration
         || this.snapshot.review.selectedId !== id) return
       if (!summary) throw new Error(translateProduct('review:local.session.nativeIdentityUnavailable'))
@@ -814,7 +849,7 @@ export abstract class AgentLensReviewModel extends AgentLensIntegrationModel {
           }))
         }
         if (!window.interactions.length
-          || window.interactions[0]!.ordinal <= lastOrdinal
+          || window.interactions[0]!.ordinal < lastOrdinal
           || !window.nextCursor || window.nextCursor === tailCursor) {
           throw new Error('Native Review tail cursor did not advance to a new complete turn')
         }

@@ -65,6 +65,8 @@ export function ReviewPage({ model, embedded = false, latestRequest = 0 }: { mod
     taskDetailModel,
     annotatedInteractions,
     turnRailItems,
+    nativeTurnIndex,
+    onTurnRailSelect,
     pageIncomplete,
     isBackward,
     isFiltered,
@@ -256,12 +258,20 @@ export function ReviewPage({ model, embedded = false, latestRequest = 0 }: { mod
         mode="review"
         className="review-session-view"
         boundaryNavigation={detail ? {
-          startDisabled: roundFilterLoading || atStart,
-          endDisabled: roundFilterLoading || detail.statisticsCompleteness === 'window',
+          startDisabled: roundFilterLoading || (detail.statisticsCompleteness==='window'
+            ? detail.interactions[0]?.ordinal===1 : atStart),
+          endDisabled: roundFilterLoading || (detail.statisticsCompleteness==='window'
+            ? !(nativeTurnIndex?.state==='available' && nativeTurnIndex.coverage==='complete'
+              && (detail.interactions.at(-1)?.ordinal??0) < (nativeTurnIndex.totalTurns??0))
+            : false),
           onStart: showFromStart,
           onEnd: jumpToLatest,
         } : undefined}
         turnRailItems={detail ? turnRailItems : undefined}
+        turnRailTotal={detail?.statisticsCompleteness==='window'
+          && nativeTurnIndex?.state==='available' && nativeTurnIndex.coverage==='complete'
+          ?nativeTurnIndex.totalTurns:undefined}
+        onTurnRailSelect={onTurnRailSelect}
       >
         {detail && <TaskHeader
           marker={<AgentLogo sourceId={detail.productId || detail.sourceIds[0] || ''} size="normal"/>}
@@ -292,6 +302,11 @@ export function ReviewPage({ model, embedded = false, latestRequest = 0 }: { mod
             </div>
             {detail.statisticsCompleteness === 'window'
               && <span className="round-nav-status">{t('local.roundNav.nativeWindow')}</span>}
+            {detail.statisticsCompleteness==='window' && nativeTurnIndex?.state==='available'
+              && nativeTurnIndex.coverage==='partial'
+              && <span className="round-nav-status" role="status">
+                {t('local.roundNav.nativeIndexProgress',{count:nativeTurnIndex.knownTurns})}
+              </span>}
             {detail.nativeTurnIncomplete
               && <span className="round-nav-status" role="status">{t(detail.page.hasMore ? 'local.roundNav.nativeTurnPartial' : 'local.roundNav.nativeTurnPendingTail')}</span>}
             {detail.nativeHookEventsTruncated

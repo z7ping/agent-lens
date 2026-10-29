@@ -35,6 +35,7 @@ import {
   type NativeSessionCatalogResponseDto,
   type NativeSessionSummaryDto,
   type NativeReviewWindowResponseDto,
+  type NativeReviewTurnIndexResponseDto,
   type ReviewDetailDirection,
   type ReviewDetailFilter,
   type ReviewInteractionDto,
@@ -476,6 +477,23 @@ export class AgentLensApi {
     return requestJson<NativeReviewWindowResponseDto>(
       `/api/v1/native-sessions/${encodeURIComponent(id)}/review${params.size ? `?${params}` : ''}`,
       options.signal ? { signal: options.signal } : {},
+    )
+  }
+
+  /** Read sparse native turn locators. Scan stays bounded and does not hydrate Review text. */
+  nativeReviewTurnIndex(id: string, options: {
+    ordinal?: number
+    tail?: number
+    scan?: boolean
+    signal?: AbortSignal
+  } = {}): Promise<NativeReviewTurnIndexResponseDto> {
+    const params = new URLSearchParams()
+    if (options.ordinal !== undefined) params.set('ordinal', String(options.ordinal))
+    if (options.tail !== undefined) params.set('tail', String(options.tail))
+    if (options.scan) params.set('scan', '1')
+    return requestJson<NativeReviewTurnIndexResponseDto>(
+      `/api/v1/native-sessions/${encodeURIComponent(id)}/turn-index${params.size ? `?${params}` : ''}`,
+      options.signal ? {signal:options.signal} : {},
     )
   }
 

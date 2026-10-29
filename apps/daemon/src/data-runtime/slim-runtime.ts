@@ -156,6 +156,8 @@ export class SlimDataRuntime {
     assetInventory:Pick<AssetInventoryReader,'listByInstallation'>
     launchableProjects:LaunchableProjectReader
     nativeSessionMetrics:NativeSessionMetricsStore
+    checkpoints:{get<T>(scope:string,key:string):Promise<T|null>;
+      set<T>(scope:string,key:string,value:T):Promise<void>}
     health:()=>Promise<StorageHealth>
   }{
     const self=this
@@ -205,6 +207,10 @@ export class SlimDataRuntime {
         },
         replace(input){return self.write<boolean>(['nativeSessionMetrics','replace'],[input])},
         invalidate(input){return self.write<void>(['nativeSessionMetrics','invalidate'],[input])},
+      },
+      checkpoints:{
+        get<T>(scope:string,key:string){return self.read<T|null>(['checkpoints','get'],[scope,key])},
+        set<T>(scope:string,key:string,value:T){return self.write<void>(['checkpoints','set'],[scope,key,value])},
       },
       health(){return self.health()},
     }
