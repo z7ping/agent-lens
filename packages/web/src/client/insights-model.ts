@@ -30,6 +30,7 @@ export class InsightsClientModel {
   private unsubscribeLive: (() => void) | null = null
   private generation = 0
   private invalidation = 0
+  private nativeRefreshTimer:ReturnType<typeof setTimeout>|null=null
 
   constructor(private readonly api = new AgentLensApi()) {}
 
@@ -61,6 +62,8 @@ export class InsightsClientModel {
   stop(): void {
     this.unsubscribeLive?.()
     this.unsubscribeLive = null
+    if(this.nativeRefreshTimer)clearTimeout(this.nativeRefreshTimer)
+    this.nativeRefreshTimer=null
   }
 
   setFilters(patch: Partial<QueryFilters>): void {
@@ -107,6 +110,15 @@ export class InsightsClientModel {
     const affected: readonly LiveUpdateArea[] = event.affected
     if (!affected.includes('insights')) return
     this.invalidation += 1
+    if(event.type==='session.updated' && event.logicalSessionId.startsWith('native:')){
+      if(!this.nativeRefreshTimer){
+        this.nativeRefreshTimer=setTimeout(()=>{
+          this.nativeRefreshTimer=null
+          void this.refresh()
+        },350)
+      }
+      return
+    }
     if (!this.snapshot.hasNewData) {
       this.publish({ ...this.snapshot, hasNewData: true })
     }

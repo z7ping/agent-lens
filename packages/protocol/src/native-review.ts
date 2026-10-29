@@ -119,6 +119,21 @@ export type NativeMetricContributionDto =
       errorCount:number
       inputTokens:number|null
       outputTokens:number|null
+      /** Lower-bound native-file observations from partial sessions; never merged into certified totals. */
+      observed?:{
+        interactionCount:number
+        toolCallCount:number
+        errorCount:number
+        tools?:Array<{
+          sourceId:string
+          nativeToolName:string
+          callCount:number
+          resultCount:number
+          errorCount:number
+          sessionCount:number
+        }>
+        toolsTruncated?:boolean
+      }
       /** Optional bounded, per-Source numerical tool totals for Usage UI. */
       tools?:Array<{
         sourceId:string

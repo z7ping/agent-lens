@@ -104,6 +104,11 @@ export function ToolsPage({ model, toolbarHost }: { model: AgentLensClientModel;
   const nativeHasSessions=nativeMetrics?.state==='available'
     && nativeMetrics.eligibleSessions>0
   const nativeTools=nativeMetrics?.state==='available' ? nativeMetrics.tools??[] : []
+  const observedNative=nativeMetrics?.state==='available' ? nativeMetrics.observed : undefined
+  const nativeToolRows=[
+    ...nativeTools.map(tool=>({...tool,partial:false})),
+    ...(observedNative?.tools??[]).map(tool=>({...tool,partial:true})),
+  ]
   const projection = data?.meta.projection
   const projectionPartial = projection?.state === 'partial'
   const projectionPercent = projection ? Math.max(0, Math.min(100, Math.round(projection.coverageRatio * 100))) : 0
@@ -258,9 +263,13 @@ export function ToolsPage({ model, toolbarHost }: { model: AgentLensClientModel;
           aria-label={t('page.nativeTitle')}>
           <div className="table-section-head"><div><h2>{t('page.nativeTitle')}</h2>
             <small>{t('page.nativeScope', {ready:nativeMetrics.readySessions,
-              eligible:nativeMetrics.eligibleSessions})}</small></div></div>
+              eligible:nativeMetrics.eligibleSessions})}</small>
+            {nativeMetrics.partialSessions>0 && <small>{t('page.nativeObservedSummary',{
+              sessions:nativeMetrics.partialSessions,
+              calls:observedNative?.toolCallCount??0,
+            })}</small>}</div></div>
           <div className="table-scroll">
-            {nativeTools.length ? <table className="tool-table">
+            {nativeToolRows.length ? <table className="tool-table">
               <thead><tr>
                 <th scope="col">{t('page.tool')}</th>
                 <th scope="col">{t('page.calls')}</th>
@@ -268,14 +277,16 @@ export function ToolsPage({ model, toolbarHost }: { model: AgentLensClientModel;
                 <th scope="col">{t('page.failure')}</th>
                 <th scope="col">{t('page.sessions')}</th>
               </tr></thead>
-              <tbody>{nativeTools.map(tool=><tr key={tool.sourceId+'::'+tool.nativeToolName}
-                tabIndex={0} onClick={()=>{void selectNativeTool(tool)}}
-                onKeyDown={event=>{if(event.key==='Enter'||event.key===' '){
+              <tbody>{nativeToolRows.map(tool=><tr key={tool.sourceId+'::'+tool.nativeToolName+'::'+tool.partial}
+                tabIndex={tool.partial ? undefined : 0}
+                onClick={tool.partial ? undefined : ()=>{void selectNativeTool(tool)}}
+                onKeyDown={tool.partial ? undefined : event=>{if(event.key==='Enter'||event.key===' '){
                   event.preventDefault();void selectNativeTool(tool)
-                }}}>
+                }}}> 
                 <td><span className="tool-table-name"><ToolKindIcon kind={toolVisualKind(tool.nativeToolName)}/>
                   <span><b className="tool-name">{tool.nativeToolName}</b>
-                    <span className="tool-source">{sourceLabels([tool.sourceId])}</span></span></span></td>
+                    <span className="tool-source">{sourceLabels([tool.sourceId])}
+                      {tool.partial ? t('page.nativeObservedSuffix') : ''}</span></span></span></td>
                 <td>{tool.callCount}</td>
                 <td>{tool.resultCount}</td>
                 <td className={tool.errorCount ? 'cell-danger' : 'cell-muted'}>{tool.errorCount}</td>

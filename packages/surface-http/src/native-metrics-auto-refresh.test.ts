@@ -541,3 +541,46 @@ test('failed long-session resume releases its slot so a different native session
     assert.deepEqual(snapshots.map(item=>item.nativeSessionId),['healthy'])
   }finally{refresh.dispose()}
 })
+
+test('one Usage trigger drains later batches and publishes native metric updates',async()=>{
+  const ids=['native:11111111111111111111111111111111',
+    'native:22222222222222222222222222222222']
+  let next=0
+  const updated:string[]=[]
+  const metrics={
+    findRebuildCandidates:async()=>next<ids.length?[{
+      reviewSessionId:ids[next++]!,sourceId:'pi',installationId:'pi-local',
+      nativeSessionId:'session-1',lastActivityAt:at,
+    }]:[],
+    replace:async()=>true,
+  } as unknown as NativeSessionMetricsStore
+  const reader={
+    read:async()=>({
+      state:'available' as const,
+      observations:[],observationRecordIds:[],evidenceCandidates:[],
+      nextCursor:{offset:42,sequence:1,fileIdentity:'dev:1'},
+      hasMore:false,pendingTail:false,
+    }),
+  } as NativeSessionWindowReader
+  const scopedCatalog={
+    getByReviewSessionId:async(id:string)=>ids.includes(id)?entry:null,
+  } as unknown as NativeSessionCatalogStore
+  let onUpdate:()=>void=()=>undefined
+  const finished=new Promise<void>((resolve,reject)=>{
+    const timeout=setTimeout(()=>reject(new Error('Native metrics did not auto-drain')),3000)
+    onUpdate=()=>{
+      if(updated.length===ids.length){
+        clearTimeout(timeout)
+        resolve()
+      }
+    }
+  })
+  const refresh=new NativeMetricsAutoRefresh(scopedCatalog,metrics,reader,source,policy,
+    id=>{updated.push(id);onUpdate()})
+  try{
+    refresh.schedule()
+    await finished
+    assert.deepEqual(updated,ids)
+    assert.equal(next,2)
+  }finally{refresh.dispose()}
+})

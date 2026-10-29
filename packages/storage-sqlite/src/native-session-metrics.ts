@@ -235,6 +235,9 @@ export class SqliteNativeSessionMetrics implements NativeSessionMetricsStore {
           COALESCE(SUM(CASE WHEN metric_status='complete' THEN tool_result_count ELSE 0 END),0) AS toolResultCount,
           COALESCE(SUM(CASE WHEN metric_status='complete' THEN tool_error_count ELSE 0 END),0) AS toolErrorCount,
           COALESCE(SUM(CASE WHEN metric_status='complete' THEN error_count ELSE 0 END),0) AS errorCount,
+          COALESCE(SUM(CASE WHEN metric_status='partial' THEN interaction_count ELSE 0 END),0) AS partialInteractionCount,
+          COALESCE(SUM(CASE WHEN metric_status='partial' THEN tool_call_count ELSE 0 END),0) AS partialToolCallCount,
+          COALESCE(SUM(CASE WHEN metric_status='partial' THEN error_count ELSE 0 END),0) AS partialErrorCount,
           CASE WHEN SUM(CASE WHEN metric_status='complete' THEN 1 ELSE 0 END)=0
              OR SUM(CASE WHEN metric_status='complete' AND input_tokens IS NULL THEN 1 ELSE 0 END)>0
                THEN NULL
@@ -249,6 +252,7 @@ export class SqliteNativeSessionMetrics implements NativeSessionMetricsStore {
       `).get(...params) as Omit<NativeSessionMetricOverview,'sourceId'|'totals'|'tools'|'toolsTruncated'> & {
         interactionCount:number;toolCallCount:number;toolResultCount:number;
         toolErrorCount:number;errorCount:number;inputTokens:number|null;outputTokens:number|null
+        partialInteractionCount:number;partialToolCallCount:number;partialErrorCount:number
       }
       const rows=this.executor.db.prepare(`${cte}
         SELECT tool.native_tool_name AS nativeToolName,
@@ -267,6 +271,25 @@ export class SqliteNativeSessionMetrics implements NativeSessionMetricsStore {
         GROUP BY tool.native_tool_name
         ORDER BY callCount DESC,tool.native_tool_name ASC LIMIT 257
       `).all(...params,...(input.nativeToolName?[input.nativeToolName]:[])) as NativeSessionMetricOverview['tools']
+      // Partial is a separate lower-bound projection. Do not add it to certified
+      // totals or label it a complete session, even after the reader reaches EOF.
+      const partialRows=row.partialSessions>0?this.executor.db.prepare(`${cte}
+        SELECT tool.native_tool_name AS nativeToolName,
+          SUM(tool.call_count) AS callCount,
+          SUM(tool.result_count) AS resultCount,
+          SUM(tool.error_count) AS errorCount,
+          SUM(tool.total_duration_ms) AS totalDurationMs,
+          COUNT(*) AS sessionCount
+        FROM selected
+        JOIN native_session_tool_metrics AS tool
+          ON tool.source_id=selected.source_id
+         AND tool.installation_id=selected.installation_id
+         AND tool.native_session_id=selected.native_session_id
+        WHERE selected.metric_status='partial'
+          ${input.nativeToolName?"AND tool.native_tool_name=?":""}
+        GROUP BY tool.native_tool_name
+        ORDER BY callCount DESC,tool.native_tool_name ASC LIMIT 257
+      `).all(...params,...(input.nativeToolName?[input.nativeToolName]:[])) as NativeSessionMetricOverview['tools']:[]
       return {
         sourceId:input.sourceId,
         eligibleSessions:row.eligibleSessions,readySessions:row.readySessions,
@@ -279,6 +302,12 @@ export class SqliteNativeSessionMetrics implements NativeSessionMetricsStore {
         },
         tools:rows.slice(0,256),
         toolsTruncated:rows.length>256,
+        ...(row.partialSessions>0?{observed:{
+          interactionCount:row.partialInteractionCount,
+          toolCallCount:row.partialToolCallCount,
+          errorCount:row.partialErrorCount,
+          tools:partialRows.slice(0,256),toolsTruncated:partialRows.length>256,
+        }}:{}),
       }
     })
   }

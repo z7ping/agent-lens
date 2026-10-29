@@ -88,6 +88,32 @@ export async function nativeMetricContribution(
       || a.sourceId.localeCompare(b.sourceId)
       || a.nativeToolName.localeCompare(b.nativeToolName))
     const toolsTruncated=rawTools.length>256 || chunks.some(item=>item.toolsTruncated)
+    // Preserve partial-file observations as explicit lower bounds; they must
+    // never inflate complete-session counters or be called verified totals.
+    const observedTools=scope.includeTools
+      ?chunks.flatMap(item=>(item.observed?.tools??[]).map(tool=>({
+        sourceId:item.sourceId,nativeToolName:tool.nativeToolName,
+        callCount:tool.callCount,resultCount:tool.resultCount,
+        errorCount:tool.errorCount,sessionCount:tool.sessionCount,
+      }))):[]
+    observedTools.sort((a,b)=>b.callCount-a.callCount
+      || a.sourceId.localeCompare(b.sourceId)
+      || a.nativeToolName.localeCompare(b.nativeToolName))
+    const observedToolsTruncated=observedTools.length>256
+      || chunks.some(item=>item.observed?.toolsTruncated===true)
+    const partial=sum('partialSessions')
+    const observed=partial>0?{
+      interactionCount:chunks.reduce((n,item)=>n+(item.observed?.interactionCount??0),0),
+      toolCallCount:scope.toolName
+        ?observedTools.reduce((n,t)=>n+t.callCount,0)
+        :chunks.reduce((n,item)=>n+(item.observed?.toolCallCount??0),0),
+      errorCount:scope.toolName
+        ?observedTools.reduce((n,t)=>n+t.errorCount,0)
+        :chunks.reduce((n,item)=>n+(item.observed?.errorCount??0),0),
+      ...(scope.includeTools?{
+        tools:observedTools.slice(0,256),toolsTruncated:observedToolsTruncated,
+      }:{}),
+    }:undefined
     return {
       state:'available',
       coverage:eligible===ready && !toolsTruncated?'complete':'partial',
@@ -99,6 +125,7 @@ export async function nativeMetricContribution(
       errorCount:scope.toolName?rawTools.reduce((n,t)=>n+t.errorCount,0):total('errorCount'),
       inputTokens:tokens('inputTokens'),
       outputTokens:tokens('outputTokens'),
+      ...(observed?{observed}:{}),
       ...(scope.includeTools?{
         tools:rawTools.slice(0,256),toolsTruncated,
       }:{}),

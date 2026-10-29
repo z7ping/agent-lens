@@ -9,6 +9,8 @@ const MAX_SESSIONS_PER_TRIGGER=4
 const RETRY_COOLDOWN_MS=30_000
 const MAX_RECENT=128
 const MAX_RESUMABLE=8
+const MAX_BATCHES_PER_REQUEST=256
+const BATCH_PAUSE_MS=150
 
 /**
  * Lazy, bounded, single-flight repair of lightweight Native-only metrics.
@@ -26,6 +28,9 @@ export class NativeMetricsAutoRefresh {
   // is persisted. Bound open sessions to avoid retaining large call maps.
   private readonly ongoing=new Map<string,NativeMetricRebuildProgress>()
   private active:Promise<void>|null=null
+  private queueTimer:ReturnType<typeof setTimeout>|null=null
+  private batchesRemaining=0
+  private idleBatches=0
   // Independent per-Source keyset cursors; one certified Source per trigger
   // avoids multiplying the bounded reader budget as adapters are enabled.
   private readonly beforeBySource=new Map<string,NativeSessionMetricRebuildCursor>()
@@ -37,26 +42,47 @@ export class NativeMetricsAutoRefresh {
     private readonly reader:NativeSessionWindowReader|undefined,
     private readonly sources:SourceService|undefined,
     private readonly policy:CapturePolicyService|undefined,
+    private readonly onUpdated?:(reviewSessionId:string)=>void,
   ) {}
 
   schedule():void {
-    if(this.abort.signal.aborted || this.active || !this.catalog
+    if(this.abort.signal.aborted || this.active || this.queueTimer || !this.catalog
       || !this.metrics?.findRebuildCandidates || !this.reader
       || !this.sources || !this.policy) return
-    this.active=this.run().catch(()=>{
-      // An opportunistic refresh must never fail a foreground Usage/Insights
-      // response. Missing/stale coverage remains visible until next attempt.
+    if(!this.batchesRemaining) {
+      this.batchesRemaining=MAX_BATCHES_PER_REQUEST
+      this.idleBatches=0
+    }
+    this.active=this.run().then(progressed=>{
+      if(this.abort.signal.aborted)return
+      this.batchesRemaining--
+      this.idleBatches=progressed?0:this.idleBatches+1
+      // Work is lazy, but once requested it drains bounded batches without
+      // needing the user to repeatedly press Refresh. A full idle source
+      // sweep (or the safety budget) ends the run.
+      const sourceCount=this.sources!.list().filter(source=>
+        Boolean(source.readNativeSessionPage)
+        && this.policy!.isSourceEnabled(source.manifest.sourceId)).length
+      if(this.batchesRemaining>0 && sourceCount>0 && this.idleBatches<sourceCount) {
+        this.queueTimer=setTimeout(()=>{
+          this.queueTimer=null
+          this.schedule()
+        },BATCH_PAUSE_MS)
+      } else this.batchesRemaining=0
+    }).catch(()=>{
+      this.batchesRemaining=0
+      // Failed opportunistic work leaves incomplete coverage visible.
     }).finally(()=>{this.active=null})
   }
 
-  private async run():Promise<void> {
+  private async run():Promise<boolean> {
     const eligible=this.sources!.list().filter(source=>
       // Coverage certification controls snapshot completeness, not whether
       // authorized native Source data can be counted as explicitly partial.
       Boolean(source.readNativeSessionPage)
       && this.policy!.isSourceEnabled(source.manifest.sourceId))
       .sort((a,b)=>a.manifest.sourceId.localeCompare(b.manifest.sourceId))
-    if(!eligible.length)return
+    if(!eligible.length)return false
     const nextIndex=eligible.findIndex(item=>item.manifest.sourceId===this.nextSourceId)
     const source=eligible[nextIndex<0?0:nextIndex]!
     const sourceId=source.manifest.sourceId
@@ -85,8 +111,10 @@ export class NativeMetricsAutoRefresh {
           )
           this.ongoing.delete(key)
           if(result.state==='in_progress')this.ongoing.set(key,result.progress)
+          if(result.state==='available')this.onUpdated?.(progress.reviewSessionId)
+          return result.state==='available'||result.state==='in_progress'
         }catch{
-          if(this.abort.signal.aborted)return
+          if(this.abort.signal.aborted)return false
           // A permanently failing Reader must not monopolize a Source's
           // future candidate pages. Discard only its ephemeral partial state;
           // retry from the original Source after the ordinary cooldown.
@@ -94,7 +122,7 @@ export class NativeMetricsAutoRefresh {
           this.recent.set(key,Date.now()+RETRY_COOLDOWN_MS)
         }
       }else this.ongoing.delete(key)
-      return
+      return false
     }
     const candidates=await this.metrics!.findRebuildCandidates!({
       sourceId,parserVersion:source.manifest.parserVersion,
@@ -109,8 +137,9 @@ export class NativeMetricsAutoRefresh {
         nativeSessionId:last.nativeSessionId,
       })
     }else this.beforeBySource.delete(sourceId)
+    let progressed=false
     for(const candidate of candidates){
-      if(this.abort.signal.aborted)return
+      if(this.abort.signal.aborted)return false
       const key=JSON.stringify([
         candidate.sourceId,candidate.installationId,candidate.nativeSessionId,
       ])
@@ -134,7 +163,12 @@ export class NativeMetricsAutoRefresh {
           {enabled:true,reviewSessionId:candidate.reviewSessionId,
             ...(resume?{progress:resume}:{})},
         )
+        if(result.state==='available'){
+          progressed=true
+          this.onUpdated?.(candidate.reviewSessionId)
+        }
         if(result.state==='in_progress'){
+          progressed=true
           if(!this.ongoing.has(key) && this.ongoing.size>=MAX_RESUMABLE){
             const oldest=this.ongoing.keys().next().value
             if(oldest!==undefined)this.ongoing.delete(oldest)
@@ -143,14 +177,17 @@ export class NativeMetricsAutoRefresh {
           this.ongoing.set(key,result.progress)
         }else this.ongoing.delete(key)
       }catch{
-        if(this.abort.signal.aborted)return
+        if(this.abort.signal.aborted)return false
         // Failure stays missing/stale; no unverified totals are published.
       }
     }
+    return progressed
   }
 
   dispose():void {
     this.abort.abort()
+    if(this.queueTimer)clearTimeout(this.queueTimer)
+    this.queueTimer=null
     this.recent.clear()
     this.ongoing.clear()
     this.beforeBySource.clear()
