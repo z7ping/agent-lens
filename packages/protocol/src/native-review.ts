@@ -151,6 +151,8 @@ export interface NativeReviewWindowDto {
   interactions: ReviewInteractionDto[]
   /** Optional opt-in paging mode; the default mode remains raw native windows. */
   pagingUnit?: 'interaction'
+  /** A bounded fragment of a single semantic turn; partial never proves completion. */
+  turnFragment?: 'partial' | 'complete'
   observationCount: number
   /** File mutation evidence from the returned complete user-turn window only. */
   observedFileChanges?: TaskFileChangeDto[]

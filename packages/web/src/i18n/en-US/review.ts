@@ -367,6 +367,8 @@ export const englishReviewMessages: LocaleMessagesDto = {
         newRecords: 'New records available',
         querying: 'Querying full session…',
         nativeWindow: 'Native session · loaded turns only',
+        nativeTurnPartial: 'Turn partially loaded · scroll down to continue',
+        nativeTurnPendingTail: 'At native file end · turn completion unconfirmed',
         checkNativeTail: 'Check new turns',
         nativeHookPartial: 'Only some Hook events can be linked to these turns',
         nativeHookEvidence: 'Independent Hook evidence',

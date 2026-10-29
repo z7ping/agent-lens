@@ -292,6 +292,8 @@ export function ReviewPage({ model, embedded = false, latestRequest = 0 }: { mod
             </div>
             {detail.statisticsCompleteness === 'window'
               && <span className="round-nav-status">{t('local.roundNav.nativeWindow')}</span>}
+            {detail.nativeTurnIncomplete
+              && <span className="round-nav-status" role="status">{t(detail.page.hasMore ? 'local.roundNav.nativeTurnPartial' : 'local.roundNav.nativeTurnPendingTail')}</span>}
             {detail.nativeHookEventsTruncated
               && <span className="round-nav-status">{t('local.roundNav.nativeHookPartial')}</span>}
             {roundFilterLoading && <span className="round-nav-status">{t('local.roundNav.querying')}</span>}
