@@ -107,9 +107,12 @@ export function useReviewSession(model: AgentLensClientModel, embedded: boolean)
           && view.detail.interactions[0]?.ordinal===1
           && (view.detail.interactions.at(-1)?.ordinal??0)<result.totalTurns){
           await model.jumpToLatestReviewDetail()
-          if(controller.signal.aborted)return
+          // The model briefly clears detail while changing windows, which
+          // cancels this index effect. That cancellation is expected here.
           window.requestAnimationFrame(()=>{
-            if(controller.signal.aborted || initialNavigationRevision!==nativeNavigationRevisionRef.current)return
+            if(initialNavigationRevision!==nativeNavigationRevisionRef.current
+              || initialUserRevision!==readerUserRevisionRef.current
+              || model.getSnapshot().review.selectedId!==id)return
             const target=readerPaneRef.current
             if(target)target.scrollTop=target.scrollHeight
           })
