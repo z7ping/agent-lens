@@ -45,6 +45,14 @@ export interface NativeSessionMetricOverview {
     inputTokens:number|null
     outputTokens:number|null
   }
+  /** Observed facts in partial sessions are lower bounds, never certified full totals. */
+  observed?:{
+    interactionCount:number
+    toolCallCount:number
+    errorCount:number
+    tools:NativeSessionMetricToolTotal[]
+    toolsTruncated:boolean
+  }
   /** Only tool names and numbers. No event ID, args or output. */
   tools:NativeSessionMetricToolTotal[]
   toolsTruncated:boolean
