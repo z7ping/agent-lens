@@ -287,7 +287,7 @@ async function readCompleteNativeTurn(
 }
 
 /**
- * One HTTP request may hydrate several *complete* consecutive turns, but never
+ * One HTTP request may hydrate several consecutive complete turns or a partial tail, but never
  * create a new grouping implementation or keep a complete session in memory.
  * Source calls (including the initial read) are bounded across the whole
  * request: per-turn budgets alone are not a sufficient overall bound.
@@ -333,6 +333,15 @@ async function readCompleteNativeTurns(
       return next
     }
     const value = next.dto
+    // An HTTP response also has a bound independently of each individual turn.
+    // Keep the last proven cursor when the next turn would overfill this page.
+    if (assembled && Buffer.byteLength(JSON.stringify({
+      interactions: [...assembled.interactions, ...value.interactions],
+      observedFileChanges: [...(assembled.observedFileChanges ?? []),
+        ...(value.observedFileChanges ?? [])],
+    }), 'utf8') > 3 * 1024 * 1024) {
+      return {state:'available',dto:assembled}
+    }
     assembled = assembled
       ? {
           ...assembled,
