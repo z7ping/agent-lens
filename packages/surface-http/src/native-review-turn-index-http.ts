@@ -183,7 +183,7 @@ export class NativeReviewTurnIndex {
     const start=options.ordinal ?? (options.tail
       ?Math.max(1,knownTurns-options.tail+1):Math.max(1,knownTurns-MAX_INDEX_QUERY+1))
     const limit=Math.min(MAX_INDEX_QUERY,options.tail ?? (options.ordinal?1:MAX_INDEX_QUERY))
-    const items:NativeReviewTurnIndexResponseDto & {state:'available'}['items'] = []
+    const items:Extract<NativeReviewTurnIndexResponseDto,{state:'available'}>['items'] = []
     if (start<=knownTurns) {
       const end=Math.min(knownTurns,start+limit-1)
       for(let ordinal=start;ordinal<=end;) {
