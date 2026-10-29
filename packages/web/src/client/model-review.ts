@@ -965,6 +965,14 @@ export abstract class AgentLensReviewModel extends AgentLensIntegrationModel {
       }
     }
     if (affected.includes('usage')) {
+      if(event.type==='session.updated' && event.logicalSessionId.startsWith('native:')){
+        if(!this.nativeUsageRefreshTimer){
+          this.nativeUsageRefreshTimer=setTimeout(()=>{
+            this.nativeUsageRefreshTimer=null
+            void this.refreshUsage()
+          },350)
+        }
+      }
       this.usageInvalidation += 1
       const usage = this.snapshot.usage
       if (!usage.hasNewData) {
