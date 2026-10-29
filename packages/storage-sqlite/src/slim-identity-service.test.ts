@@ -108,3 +108,23 @@ test('repeat native cwd attribution does not replace a previously attested Git p
     assert.equal(count.count,1)
   }finally{await storage.close()}
 })
+
+test('Git identity supersedes a local cwd project without duplicate project filters',async()=>{
+  const storage=await SqliteSlimStorage.createFresh(':memory:')
+  try{
+    const host=await storage.identity.resolveHost({name:'local'})
+    const cwd='/work/git-project'
+    const local=await storage.identity.resolveWorkspace({hostId:host.id,path:cwd})
+    assert.ok(local?.projectId)
+    const git=await storage.identity.resolveWorkspace({
+      hostId:host.id,path:cwd,repositoryRoot:cwd,
+      gitRemote:'https://example.org/git-project.git',
+    })
+    assert.ok(git?.projectId)
+    assert.notEqual(git.projectId,local.projectId)
+    const options=await storage.nativeFacets.query()
+    assert.deepEqual(options.projects.map(value=>value.id),[git.projectId])
+    const candidate=await storage.launchableProjects.query({limit:10})
+    assert.deepEqual(candidate.items.map(value=>value.projectId),[git.projectId])
+  }finally{await storage.close()}
+})
