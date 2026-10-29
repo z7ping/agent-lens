@@ -849,7 +849,7 @@ export abstract class AgentLensReviewModel extends AgentLensIntegrationModel {
           }))
         }
         if (!window.interactions.length
-          || window.interactions[0]!.ordinal <= lastOrdinal
+          || window.interactions[0]!.ordinal < lastOrdinal
           || !window.nextCursor || window.nextCursor === tailCursor) {
           throw new Error('Native Review tail cursor did not advance to a new complete turn')
         }
