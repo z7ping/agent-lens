@@ -614,13 +614,10 @@ export function useReviewSession(model: AgentLensClientModel, embedded: boolean)
 
   const onTurnRailSelect = async (item:{ordinal?:number}) => {
     if(!detail?.id || !item.ordinal || roundFilterLoading)return
-    const selectedId=detail.id
     await model.jumpToReviewInteraction(item.ordinal)
-    const latest=model.getSnapshot().review
-    if(latest.selectedId===selectedId
-      && latest.detail?.interactions.some(turn=>turn.ordinal===item.ordinal)){
-      scrollTop()
-    }
+    // TaskSurface retains the ordinal as a pending anchor and scrolls only
+    // after the new virtual round shell has mounted. Do not race its anchor
+    // with a separate scrollTop request.
   }
 
   const showFromStart = async () => {
