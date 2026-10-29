@@ -95,7 +95,12 @@ function mergeNativeTurn(previous: ReviewInteractionDto, incoming: ReviewInterac
     nodes.push(node)
   }
   const omitted = (previous.omittedNodeCount ?? 0) + Math.max(0, nodes.length - MAX_NATIVE_TURN_NODES)
-  const visible = nodes.slice(-MAX_NATIVE_TURN_NODES)
+  // Keep the actual user prompt in the visible window so the Turn Rail never
+  // loses its preview when thousands of tool events arrive.
+  const firstUser = nodes.find(node => node.type === 'message' && node.role === 'user')
+  const tail = nodes.slice(-(MAX_NATIVE_TURN_NODES - (firstUser ? 1 : 0)))
+  const visible = firstUser && !tail.some(node => node.id === firstUser.id)
+    ? [firstUser, ...tail] : nodes.slice(-MAX_NATIVE_TURN_NODES)
   return {
     ...previous,
     endedAt: incoming.endedAt,
