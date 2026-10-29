@@ -264,3 +264,66 @@ test('native EOF keeps a safe cursor and incrementally fetches newly completed t
   }finally{model.stop()}
 })
 
+
+
+test('partial native turn preserves one rail identity and pairs an explicit cross-fragment tool result',async()=>{
+  const user=page(1,true).interactions[0]!.nodes[0]!
+  const partial:NativeReviewWindowDto={
+    ...page(1,true),boundaryIntegrity:'partial',turnFragment:'partial',
+    interactions:[{
+      ...page(1,true).interactions[0]!,id:'stable-long-turn',
+      nodes:[user,{
+        type:'tool',id:'call-event',at,sourceId:'pi',capturedAt:at,
+        name:'read_file',callId:'cross-chunk',status:'unknown',
+        startedAt:at,payload:{name:'read_file'},evidence:[],observationIds:['call-event'],
+      }],
+    }],
+  }
+  const continuation:NativeReviewWindowDto={
+    ...page(1,false),turnFragment:'complete',
+    interactions:[{
+      ...page(1,false).interactions[0]!,id:'stable-long-turn',
+      nodes:[{
+        type:'event',id:'result-event',at,sourceId:'pi',capturedAt:at,
+        kind:'tool.result',category:'unknown',label:'tool.result',
+        nativeCallId:'cross-chunk',
+        payload:{success:true,output:'verified'},evidence:[],observationIds:['result-event'],
+      }],
+    }],
+  }
+  const first=nativeReviewDetail(summary,partial)
+  assert.equal(first.nativeTurnIncomplete,true)
+  const next=nativeReviewNextPage(first,continuation)
+  assert.equal(next.nativeTurnIncomplete,undefined)
+  assert.equal(next.interactions.length,1)
+  assert.equal(next.interactions[0]?.id,'stable-long-turn')
+  assert.equal(next.interactions[0]?.nodes.length,2)
+  const tool=next.interactions[0]?.nodes[1]
+  assert.equal(tool?.type,'tool')
+  if(tool?.type!=='tool')return
+  assert.equal(tool.status,'success')
+  assert.equal(tool.output,'verified')
+  assert.deepEqual(tool.observationIds,['call-event','result-event'])
+  assert.equal(nativeVisibleWindowStatistics(next.interactions).toolCount,1)
+
+  const api={
+    async nativeSession(){return summary},
+    async nativeReviewById(_id:string,opts:{cursor?:string}) {
+      return opts.cursor?continuation:partial
+    },
+  } as unknown as AgentLensApi
+  const model=new AgentLensClientModel(api)
+  try {
+    await model.selectReviewSession(id)
+    await model.loadMoreReviewDetail()
+    const loaded=model.getSnapshot().review.detail
+    assert.equal(loaded?.interactions.length,1)
+    assert.equal(loaded?.interactions[0]?.id,'stable-long-turn')
+    assert.equal(loaded?.nativeTurnIncomplete,false)
+    assert.equal(loaded?.toolCount,1)
+  }finally{model.stop()}
+})
+
+test('unverified partial native windows without a fragment contract remain rejected',()=>{
+  assert.throws(()=>nativeReviewDetail(summary,{...page(1,true),boundaryIntegrity:'partial'}))
+})
