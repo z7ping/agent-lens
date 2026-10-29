@@ -48,6 +48,13 @@ export class SqliteSlimNativeFacetReader implements NativeFacetReader {
           activity.last_activity_at AS lastActivityAt
         FROM projects AS project
         LEFT JOIN native_activity AS activity ON activity.project_id=project.id
+        -- Local cwd-derived identities are valid only while still referenced.
+        -- A later verified Git association may supersede their local identity.
+        -- Keep unrelated legacy projects (which may not have a workspace).
+        WHERE project.repository_identity IS NULL
+          OR project.repository_identity NOT LIKE 'local-workspace:%'
+          OR EXISTS(SELECT 1 FROM workspaces AS ws WHERE ws.project_id=project.id)
+          OR EXISTS(SELECT 1 FROM native_session_context AS ctx WHERE ctx.project_id=project.id)
         ORDER BY COALESCE(activity.last_activity_at,project.last_seen_at) DESC,project.id
         LIMIT ?
       `).all(limit+1) as Array<{
