@@ -54,7 +54,7 @@ export class NativeMetricsAutoRefresh {
       this.idleBatches=0
     }
     this.active=this.run().then(progressed=>{
-      if(this.abort.signal.aborted)return false
+      if(this.abort.signal.aborted)return
       this.batchesRemaining--
       this.idleBatches=progressed?0:this.idleBatches+1
       // Work is lazy, but once requested it drains bounded batches without
