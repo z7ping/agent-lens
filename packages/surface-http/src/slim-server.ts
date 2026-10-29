@@ -123,6 +123,10 @@ export async function startNativeOnlyHttpSurface(
   const refresh=new NativeMetricsAutoRefresh(
     storage.nativeSessionCatalog,storage.nativeSessionMetrics,
     options.reader,options.sources,options.capturePolicy,
+    reviewSessionId=>eventHub.publish({
+      type:'session.updated',logicalSessionId:reviewSessionId,
+      affected:['usage','insights'],emittedAt:new Date().toISOString(),
+    }),
   )
   const server:Server=createServer(async(request,response)=>{
     try{
