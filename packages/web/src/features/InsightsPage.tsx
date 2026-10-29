@@ -177,8 +177,29 @@ export function InsightsPage({ model, toolbarHost }: { model: AgentLensClientMod
               <strong>{verifiedNative.errorCount}</strong>
             </div>
           </section>}
+          {verifiedNative?.observed && <section className="insight-kpi-grid"
+            aria-label={t('page.nativeObservedTitle')}>
+            <div className="workspace-metric-card insight-kpi">
+              <span>{t('page.nativeObservedSessions')}</span>
+              <strong>{verifiedNative.partialSessions}</strong>
+            </div>
+            <div className="workspace-metric-card insight-kpi">
+              <span>{t('page.nativeObservedInteractions')}</span>
+              <strong>{verifiedNative.observed.interactionCount}</strong>
+            </div>
+            <div className="workspace-metric-card insight-kpi">
+              <span>{t('page.nativeObservedCalls')}</span>
+              <strong>{verifiedNative.observed.toolCallCount}</strong>
+            </div>
+            <div className="workspace-metric-card insight-kpi">
+              <span>{t('page.nativeObservedErrors')}</span>
+              <strong>{verifiedNative.observed.errorCount}</strong>
+            </div>
+          </section>}
           <section className="insight-method-note" role="status">
-            <span>{t('page.nativeOnlyModeNote')}</span>
+            <span>{verifiedNative?.observed
+              ?t('page.nativeObservedNote')
+              :t('page.nativeOnlyModeNote')}</span>
           </section>
         </> : data && data.summary.sessionCount > 0 ? <>
           <section className="insight-coverage-strip" aria-label={t('page.coverageAria')}>
