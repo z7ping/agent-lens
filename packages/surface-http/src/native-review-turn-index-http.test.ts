@@ -67,6 +67,12 @@ test('native sparse turn index is bounded, restart-resumable and invalidates rep
   assert.deepEqual(second.items.map(x=>x.ordinal),[14,15,16])
   const decoded=JSON.parse(Buffer.from(second.items[0]!.cursor,'base64url').toString('utf8'))
   assert.deepEqual([decoded.offset,decoded.turnOrdinal,decoded.mode],[221,14,'review-turns'])
+  const range=await index().query(id,{from:5,limit:4})
+  assert.equal(range.state,'available')
+  if(range.state==='available')assert.deepEqual(range.items.map(x=>x.ordinal),[5,6,7,8])
+  const around=await index().query(id,{around:10,limit:5})
+  assert.equal(around.state,'available')
+  if(around.state==='available')assert.deepEqual(around.items.map(x=>x.ordinal),[8,9,10,11,12])
   const readsAfter=reads
   const reopened=await index().query(id,{ordinal:10})
   assert.equal(reads,readsAfter,'persisted boundaries must not rehydrate source bodies')

@@ -484,12 +484,18 @@ export class AgentLensApi {
   nativeReviewTurnIndex(id: string, options: {
     ordinal?: number
     tail?: number
+    from?: number
+    around?: number
+    limit?: number
     scan?: boolean
     signal?: AbortSignal
   } = {}): Promise<NativeReviewTurnIndexResponseDto> {
     const params = new URLSearchParams()
     if (options.ordinal !== undefined) params.set('ordinal', String(options.ordinal))
     if (options.tail !== undefined) params.set('tail', String(options.tail))
+    if (options.from !== undefined) params.set('from', String(options.from))
+    if (options.around !== undefined) params.set('around', String(options.around))
+    if (options.limit !== undefined) params.set('limit', String(options.limit))
     if (options.scan) params.set('scan', '1')
     return requestJson<NativeReviewTurnIndexResponseDto>(
       `/api/v1/native-sessions/${encodeURIComponent(id)}/turn-index${params.size ? `?${params}` : ''}`,

@@ -56,6 +56,7 @@ export function useReviewSession(model: AgentLensClientModel, embedded: boolean)
   const entryPositionedSessionRef = useRef('')
   const pendingReaderAnchorRef = useRef<{ position: ReviewReaderPosition; userRevision: number } | null>(null)
   const readerUserRevisionRef = useRef(0)
+  const nativeNavigationRevisionRef=useRef(0)
   const detailAutoLoadBaselineRef = useRef(0)
   const followingTailRef = useRef(false)
   const roundExpansionRef = useRef(new Map<string, boolean>())
@@ -77,6 +78,9 @@ export function useReviewSession(model: AgentLensClientModel, embedded: boolean)
     if(!id)return
     const controller=new AbortController()
     let timer:ReturnType<typeof setTimeout>|undefined
+    let indexedFromCold=false
+    const initialUserRevision=readerUserRevisionRef.current
+    const initialNavigationRevision=nativeNavigationRevisionRef.current
     const update=async()=>{
       try{
         const result=await model.nativeReviewTurnIndex(id,{
@@ -84,8 +88,34 @@ export function useReviewSession(model: AgentLensClientModel, embedded: boolean)
         })
         if(controller.signal.aborted)return
         setNativeTurnIndex(result)
-        if(result.state==='available' && result.coverage==='partial'){
+        if(result.state!=='available')return
+        if(result.coverage==='partial'){
+          indexedFromCold=true
           timer=setTimeout(()=>{void update()},250)
+          return
+        }
+        const view=model.getSnapshot().review
+        const pane=readerPaneRef.current
+        // Fresh cold indexes may finish after the first visible native page.
+        // Jump to the newest turn only if the user has not read, scrolled or
+        // navigated elsewhere. Never steal an active reader's position.
+        if(indexedFromCold && result.totalTurns
+          && initialUserRevision===readerUserRevisionRef.current
+          && initialNavigationRevision===nativeNavigationRevisionRef.current
+          && (pane?.scrollTop??0)<24
+          && view.selectedId===id && view.detail?.statisticsCompleteness==='window'
+          && view.detail.interactions[0]?.ordinal===1
+          && (view.detail.interactions.at(-1)?.ordinal??0)<result.totalTurns){
+          await model.jumpToLatestReviewDetail()
+          // The model briefly clears detail while changing windows, which
+          // cancels this index effect. That cancellation is expected here.
+          window.requestAnimationFrame(()=>{
+            if(initialNavigationRevision!==nativeNavigationRevisionRef.current
+              || initialUserRevision!==readerUserRevisionRef.current
+              || model.getSnapshot().review.selectedId!==id)return
+            const target=readerPaneRef.current
+            if(target)target.scrollTop=target.scrollHeight
+          })
         }
       }catch {
         // A failed index must not disable the already readable native Review.
@@ -534,6 +564,7 @@ export function useReviewSession(model: AgentLensClientModel, embedded: boolean)
   }, [detail?.id, detail?.page.hasMore, detail?.page.nextCursor, detail?.page.direction, review.detailLoadingMore, review.error, loadFollowing])
 
   const select = (id: string) => {
+    nativeNavigationRevisionRef.current++
     const pane = readerPaneRef.current
     if (detail?.id && pane) readerPositionsRef.current.set(detail.id, captureReviewReaderPosition(pane))
     readerPositionsRef.current.delete(id)
@@ -571,6 +602,7 @@ export function useReviewSession(model: AgentLensClientModel, embedded: boolean)
   const scrollBottom = () => scrollToBoundary('bottom')
 
   const selectRoundFilter = async (filter: RoundFilter) => {
+    nativeNavigationRevisionRef.current++
     if (!detail || roundFilterLoading) return
     const selectedId = detail.id
     pendingReaderAnchorRef.current = null
@@ -596,6 +628,7 @@ export function useReviewSession(model: AgentLensClientModel, embedded: boolean)
   }
 
   const jumpToLatest = async () => {
+    nativeNavigationRevisionRef.current++
     if (!detail || roundFilterLoading) return
     const selectedId = detail.id
     pendingReaderAnchorRef.current = null
@@ -614,6 +647,7 @@ export function useReviewSession(model: AgentLensClientModel, embedded: boolean)
 
   const onTurnRailSelect = async (item:{ordinal?:number}) => {
     if(!detail?.id || !item.ordinal || roundFilterLoading)return
+    nativeNavigationRevisionRef.current++
     await model.jumpToReviewInteraction(item.ordinal)
     // TaskSurface retains the ordinal as a pending anchor and scrolls only
     // after the new virtual round shell has mounted. Do not race its anchor
@@ -621,6 +655,7 @@ export function useReviewSession(model: AgentLensClientModel, embedded: boolean)
   }
 
   const showFromStart = async () => {
+    nativeNavigationRevisionRef.current++
     if (!detail || roundFilterLoading) return
     const selectedId = detail.id
     pendingReaderAnchorRef.current = null

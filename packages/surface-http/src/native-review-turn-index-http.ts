@@ -154,7 +154,7 @@ export class NativeReviewTurnIndex {
     }
   }
 
-  async query(id:string, options:{ordinal?:number;tail?:number;scan?:boolean}):Promise<NativeReviewTurnIndexResponseDto> {
+  async query(id:string, options:{ordinal?:number;tail?:number;from?:number;around?:number;limit?:number;scan?:boolean}):Promise<NativeReviewTurnIndexResponseDto> {
     if (!/^native:[a-f0-9]{32}$/.test(id)) return {state:'unavailable',reason:'native-session-invalid'}
     const entry = await this.catalog.getByReviewSessionId(id)
     if (!entry || entry.locationKind!=='native') return {state:'unavailable',reason:'native-session-not-indexed'}
@@ -193,9 +193,12 @@ export class NativeReviewTurnIndex {
       state = await this.checkpoints.get<NativeTurnIndexState>(SCOPE,stateKey(id)) ?? state
     }
     const knownTurns=state.knownTurns
-    const start=options.ordinal ?? (options.tail
-      ?Math.max(1,knownTurns-options.tail+1):Math.max(1,knownTurns-MAX_INDEX_QUERY+1))
-    const limit=Math.min(MAX_INDEX_QUERY,options.tail ?? (options.ordinal?1:MAX_INDEX_QUERY))
+    const limit=Math.min(MAX_INDEX_QUERY,
+      options.ordinal?1:options.tail??options.limit??MAX_INDEX_QUERY)
+    const start=options.ordinal ?? options.from ?? (options.around
+      ?Math.max(1,Math.min(Math.max(1,knownTurns-limit+1),
+        options.around-Math.floor(limit/2)))
+      :Math.max(1,knownTurns-limit+1))
     const items:Extract<NativeReviewTurnIndexResponseDto,{state:'available'}>['items'] = []
     if (start<=knownTurns) {
       const end=Math.min(knownTurns,start+limit-1)
@@ -240,17 +243,24 @@ export async function handleNativeReviewTurnIndexRequest(
     return true
   }
   if(!service){writeJson(response,503,{state:'unavailable',reason:'native-turn-index-unavailable'});return true}
-  if([...url.searchParams.keys()].some(key=>!['ordinal','tail','scan'].includes(key))
+  if([...url.searchParams.keys()].some(key=>!['ordinal','tail','from','around','limit','scan'].includes(key))
     || [...url.searchParams.keys()].some(key=>url.searchParams.getAll(key).length!==1)) {
     throw badRequest('Invalid native turn index query')
   }
-  const ordinalText=url.searchParams.get('ordinal')
-  const tailText=url.searchParams.get('tail')
-  const ordinal=ordinalText===null?undefined:Number(ordinalText)
-  const tail=tailText===null?undefined:Number(tailText)
-  if((ordinal!==undefined && (!Number.isSafeInteger(ordinal)||ordinal<1||ordinal>MAX_INDEX_ORDINAL))
-    || (tail!==undefined && (!Number.isSafeInteger(tail)||tail<1||tail>MAX_INDEX_QUERY))
-    || (ordinal!==undefined && tail!==undefined)
+  const parse=(key:string)=>url.searchParams.has(key)
+    ?Number(url.searchParams.get(key)):undefined
+  const ordinal=parse('ordinal')
+  const tail=parse('tail')
+  const from=parse('from')
+  const around=parse('around')
+  const limit=parse('limit')
+  const positions=[ordinal,tail,from,around].filter(value=>value!==undefined)
+  if(positions.length>1
+    || [ordinal,from,around].some(value=>value!==undefined
+      && (!Number.isSafeInteger(value)||value<1||value>MAX_INDEX_ORDINAL))
+    || [tail,limit].some(value=>value!==undefined
+      && (!Number.isSafeInteger(value)||value<1||value>MAX_INDEX_QUERY))
+    || ((ordinal!==undefined||tail!==undefined)&&limit!==undefined)
     || (url.searchParams.has('scan') && url.searchParams.get('scan')!=='1')) {
     throw badRequest('Invalid native turn index range')
   }
@@ -259,6 +269,9 @@ export async function handleNativeReviewTurnIndexRequest(
   writeJson(response,200,await service.query(id,{
     ...(ordinal!==undefined?{ordinal}:{}),
     ...(tail!==undefined?{tail}:{}),
+    ...(from!==undefined?{from}:{}),
+    ...(around!==undefined?{around}:{}),
+    ...(limit!==undefined?{limit}:{}),
     scan:url.searchParams.has('scan'),
   }))
   return true
