@@ -121,13 +121,19 @@ export class NativeReviewTurnIndex {
         })
       }
       // A checkpoint block is a bounded sparse index, never a JSONL copy.
-      for (const added of additions) {
-        const block = Math.floor((added.ordinal - 1) / BLOCK_SIZE)
-        const key = blockKey(id,block)
-        const existing = await this.checkpoints.get<NativeTurnLocator[]>(SCOPE,key)
-        const prefix = (existing ?? []).filter(item =>
-          item.ordinal >= block * BLOCK_SIZE + 1 && item.ordinal < added.ordinal)
-        await this.checkpoints.set(SCOPE,key,[...prefix,added])
+      const grouped=new Map<number,NativeTurnLocator[]>()
+      for(const locator of additions){
+        const block=Math.floor((locator.ordinal-1)/BLOCK_SIZE)
+        const existing=grouped.get(block)??[]
+        existing.push(locator)
+        grouped.set(block,existing)
+      }
+      for(const [block,locators] of grouped){
+        const key=blockKey(id,block)
+        const existing=await this.checkpoints.get<NativeTurnLocator[]>(SCOPE,key)
+        const prefix=(existing??[]).filter(item=>
+          item.ordinal >= block*BLOCK_SIZE+1 && item.ordinal < locators[0]!.ordinal)
+        await this.checkpoints.set(SCOPE,key,[...prefix,...locators])
       }
       // State is stored last; a crash may replay exactly this page, but never
       // publish uncommitted locators or fabricate totalRounds.
@@ -169,7 +175,9 @@ export class NativeReviewTurnIndex {
     if (options.scan && (!state.complete || entry.fileSize > (state.nextCursor?.offset ?? 0))) {
       const existing = this.scans.get(id)
       if (existing) {
-        await existing
+        try{await existing}catch(error){
+          return {state:'unsupported',reason:error instanceof Error?error.message:'native-review-index-scan-failed'}
+        }
       } else {
         const task=this.scan(id,entry,parserVersion,state).finally(()=>this.scans.delete(id))
         this.scans.set(id,task)
