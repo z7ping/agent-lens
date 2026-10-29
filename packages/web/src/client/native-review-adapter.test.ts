@@ -327,3 +327,39 @@ test('partial native turn preserves one rail identity and pairs an explicit cros
 test('unverified partial native windows without a fragment contract remain rejected',()=>{
   assert.throws(()=>nativeReviewDetail(summary,{...page(1,true),boundaryIntegrity:'partial'}))
 })
+
+test('indexed native Review opens the last window and jumps by ordinal without previous pages',async()=>{
+  const calls:string[]=[]
+  const api={
+    async nativeSession(){return summary},
+    async nativeReviewTurnIndex(_id:string,options:{ordinal?:number;tail?:number}){
+      calls.push(options.ordinal?'index:'+options.ordinal:'index:tail')
+      const ordinal=options.ordinal??8
+      return {
+        state:'available',coverage:'complete',knownTurns:10,totalTurns:10,
+        scannedOffset:200,hasMore:false,
+        items:[{ordinal,cursor:'cursor-'+ordinal}],
+      }
+    },
+    async nativeReviewById(_id:string,options:{cursor?:string}){
+      calls.push('review:'+(options.cursor??'first'))
+      const ordinal=Number(options.cursor?.split('-').at(-1)??1)
+      return page(ordinal,false)
+    },
+  } as unknown as AgentLensApi
+  const model=new AgentLensClientModel(api)
+  try{
+    await model.selectReviewSession(id)
+    assert.deepEqual(model.getSnapshot().review.detail?.interactions.map(x=>x.ordinal),[8])
+    await model.jumpToReviewInteraction(3)
+    assert.deepEqual(model.getSnapshot().review.detail?.interactions.map(x=>x.ordinal),[3])
+    await model.jumpToLatestReviewDetail()
+    assert.deepEqual(model.getSnapshot().review.detail?.interactions.map(x=>x.ordinal),[8])
+    await model.showReviewFromStart()
+    assert.deepEqual(model.getSnapshot().review.detail?.interactions.map(x=>x.ordinal),[1])
+    assert.deepEqual(calls,[
+      'index:tail','review:cursor-8','index:3','review:cursor-3',
+      'index:tail','review:cursor-8','review:first',
+    ])
+  }finally{model.stop()}
+})
