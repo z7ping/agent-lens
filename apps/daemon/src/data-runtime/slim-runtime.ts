@@ -324,6 +324,13 @@ export class SlimDataRuntime {
     return this.write(['runtimeProfiles','resolve'],[hint])
   }
 
+  /** Rebuild from existing Slim Project/Workspace/Native Context metadata.
+   * No Legacy SQL and no native transcript replay.
+   */
+  rebuildLaunchableProjects():Promise<void>{
+    return this.write<void>(['launchableProjects','rebuild'])
+  }
+
   /** Read-only profile enumeration for bounded Native-only startup. */
   profiles(installationId:string):Promise<RuntimeProfile[]>{
     return this.read(['runtimeProfiles','listByInstallation'],[installationId])

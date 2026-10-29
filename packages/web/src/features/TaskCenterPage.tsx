@@ -6,7 +6,8 @@ import { useLocation, useNavigate } from 'react-router-dom'
 import type { HubReadAvailability, HubReviewSessionSummaryDto, LaunchableProjectDto, LaunchableProjectsResponseDto, LiveRuntimeRefDto, NativeBodySearchHitDto, NativeSessionSummaryDto } from '@agent-lens/protocol'
 import type { AgentLensClientModel } from '../client/model'
 import { fetchHubReviewSessions } from '../client/hub-review'
-import { cachedLaunchableProjects, fetchLaunchableProjects, prefetchLaunchableProjects } from '../client/launchable-projects'
+import { cachedLaunchableProjects, fetchLaunchableProjects, invalidateLaunchableProjectCache, prefetchLaunchableProjects } from '../client/launchable-projects'
+import { fetchBackgroundActivity } from '../client/background-activity'
 import { useClientSnapshotField } from '../client/use-client-snapshot'
 import { agentLabel, useOrderedAgents } from '../components/AgentScope'
 import { AgentLogo } from '../components/AgentLogo'
@@ -218,6 +219,9 @@ export function TaskCenterPage({ model, mode, sidebarHost }: { model: AgentLensC
   const review = useClientSnapshotField(model, 'review')
   const runtimes = useTaskCenterRuntimes()
   const facets = useClientSnapshotField(model, 'facets')
+  const health = useClientSnapshotField(model, 'health')
+  const agentsRescanResult = useClientSnapshotField(model, 'agentsRescanResult')
+  const slimNative = health?.storage.details?.schemaKind === 'slim-native-session-v1'
   const location = useLocation()
   const navigate = useNavigate()
   const [hubSessions, setHubSessions] = useState<HubReviewSessionSummaryDto[]>([])
@@ -241,6 +245,8 @@ export function TaskCenterPage({ model, mode, sidebarHost }: { model: AgentLensC
   const [projectLoadingMore, setProjectLoadingMore] = useState(false)
   const [projectDiscoveryError, setProjectDiscoveryError] = useState('')
   const projectRequestGenerationRef = useRef(0)
+  const [projectDiscoveryRevision, setProjectDiscoveryRevision] = useState(0)
+  const nativeIndexSettledRef = useRef(false)
   const agents = useOrderedAgents(facets?.agents ?? [])
   const agentSelectionSummary = review.filters.sourceIds === null
     ? t('center.history.allAgents')
@@ -456,7 +462,45 @@ export function TaskCenterPage({ model, mode, sidebarHost }: { model: AgentLensC
       window.clearTimeout(timer)
       controller.abort()
     }
-  }, [mode, projectSearch])
+  }, [mode, projectSearch, projectDiscoveryRevision])
+
+  // Native Catalog indexing runs after the HTTP surface is ready. The first
+  // launchable-project query can legitimately return an empty list before
+  // Source metadata has created its Workspaces. Refresh once after that job
+  // finishes; never cache or permanently display the premature empty page.
+  useEffect(() => {
+    if(mode !== 'new' || !slimNative || projectSearch.trim()
+      || launchableProjects.length || nativeIndexSettledRef.current)return
+    let disposed=false
+    let checking=false
+    const check=async()=>{
+      if(checking)return
+      checking=true
+      try{
+        const progress=await fetchBackgroundActivity()
+        if(disposed)return
+        const index=[...progress.active,...progress.recent].find(item=>item.id==='native:startup-index')
+        if(!index || index.state==='running')return
+        nativeIndexSettledRef.current=true
+        invalidateLaunchableProjectCache()
+        setProjectDiscoveryRevision(value=>value+1)
+        void Promise.all([model.refreshFacets(),model.refreshReview()]).catch(()=>undefined)
+      }catch { /* keep the existing manual refresh and directory picker */ }
+      finally{checking=false}
+    }
+    void check()
+    const timer=window.setInterval(()=>{void check()},3000)
+    return ()=>{disposed=true;window.clearInterval(timer)}
+  },[mode,slimNative,projectSearch,launchableProjects.length,model])
+
+  // Manual Agent re-scan may discover new workspaces without remounting
+  // Task Center. Refetch the project dropdown from the refreshed Slim index.
+  useEffect(()=>{
+    if(mode!=='new' || !slimNative || !agentsRescanResult?.completedAt)return
+    invalidateLaunchableProjectCache()
+    setProjectDiscoveryRevision(value=>value+1)
+    void model.refreshReview().catch(()=>undefined)
+  },[mode,slimNative,agentsRescanResult?.completedAt,model])
 
   const loadMoreProjects = useCallback(async () => {
     const cursor = launchablePage?.nextCursor

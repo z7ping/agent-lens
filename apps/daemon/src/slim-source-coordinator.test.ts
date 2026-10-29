@@ -16,6 +16,7 @@ test('Slim coordinator indexes per Profile first, captures only authorized Sourc
       {id:'profile-a',installationId:'install'},
       {id:'profile-b',installationId:'install'},
     ]},
+    async rebuildLaunchableProjects(){},
     async reindexInstallation(input:{runtimeProfileId?:string}){
       operations.push('index:'+input.runtimeProfileId)
       return {indexed:2}
@@ -52,6 +53,7 @@ test('failed indexing never starts capture or falls back to legacy history',asyn
     async resolveProfile(){return {id:'profile-1'}},
     async facets(){return {installedProducts:[{productId:'pi',installationIds:['i']}]}},
     async profiles(){return []},
+    async rebuildLaunchableProjects(){},
     async reindexInstallation(){throw Error('source missing')},
     async captureInstallation(){captured++;throw Error('must not run')},
   } as never,{list:()=>[{manifest:{sourceId:'pi',productId:'pi'},detect:async()=>[],startCapture(){}}]} as never,
@@ -91,6 +93,7 @@ test('fresh Slim installation is discovered before the first native index withou
       installedProducts:[{productId:'pi',installationIds:['new-install']}],
     }},
     async profiles(){return [{id:'new-profile',installationId:'new-install'}]},
+    async rebuildLaunchableProjects(){calls.push('rebuild')},
     async reindexInstallation(input:{runtimeProfileId?:string}){
       assert.equal(input.runtimeProfileId,'new-profile')
       calls.push('reindex')
@@ -119,7 +122,7 @@ test('fresh Slim installation is discovered before the first native index withou
   for(let i=0;i<100&&!coordinator.snapshot().finished;i++)await new Promise(
     resolve=>setImmediate(resolve))
   assert.equal(coordinator.snapshot().failedScopes,0)
-  assert.deepEqual(calls,['host','detect','installation','profile','facets','reindex','capture'])
+  assert.deepEqual(calls,['host','detect','installation','profile','facets','reindex','capture','rebuild'])
   await coordinator.dispose()
   assert.equal(calls.at(-1),'dispose')
 })
@@ -132,6 +135,7 @@ test('failed Source.detect preserves pre-existing Slim catalog and never invokes
     async resolveProfile(){throw Error('must not insert')},
     async facets(){calls.push('facets');return {installedProducts:[]}},
     async profiles(){return []},
+    async rebuildLaunchableProjects(){},
     async reindexInstallation(){throw Error('must not reindex')},
     async captureInstallation(){throw Error('must not capture')},
   } as never,{list:()=>[{manifest:{sourceId:'pi',productId:'pi'},
@@ -155,6 +159,7 @@ test('Slim asset scan runs after bounded native Catalog indexing and never block
     async resolveProfile(){return {id:'profile'}},
     async facets(){return {installedProducts:[{productId:'pi',installationIds:['install']}]}},
     async profiles(){return []},
+    async rebuildLaunchableProjects(){calls.push('rebuild')},
     async reindexInstallation(){calls.push('index');return {indexed:1}},
     async scanInstallationAssets(input:{source:{manifest:{sourceId:string}}}){
       assert.equal(input.source.manifest.sourceId,'pi')
@@ -177,7 +182,7 @@ test('Slim asset scan runs after bounded native Catalog indexing and never block
   coordinator.start()
   for(let i=0;i<100&&!coordinator.snapshot().finished;i++)await new Promise(
     resolve=>setImmediate(resolve))
-  assert.deepEqual(calls,['index','assets','capture'])
+  assert.deepEqual(calls,['index','assets','capture','rebuild'])
   assert.equal(coordinator.snapshot().failedScopes,1)
   await coordinator.dispose()
   assert.equal(calls.at(-1),'dispose')
@@ -196,6 +201,7 @@ test('manual native rescan reuses the scanner without opening duplicate capture 
     async resolveInstallation(){return {id:'install'}},
     async facets(){return {installedProducts:[{productId:'pi',installationIds:['install']}]}},
     async profiles(){return []},
+    async rebuildLaunchableProjects(){calls.push('rebuild')},
     async reindexInstallation(){calls.push('index');return {indexed:1}},
     async scanInstallationAssets(){calls.push('assets');return {
       assetsDiscovered:2,assetsRemoved:0,statesRecorded:1,statesCleared:0,
@@ -214,7 +220,7 @@ test('manual native rescan reuses the scanner without opening duplicate capture 
   assert.equal(summary.assetSourcesScanned,1)
   assert.equal(summary.assetsDiscovered,2)
   assert.equal(summary.statesRecorded,1)
-  assert.deepEqual(calls,['index','assets','capture','index','assets'])
+  assert.deepEqual(calls,['index','assets','capture','rebuild','index','assets','rebuild'])
   await coordinator.dispose()
   assert.equal(calls.at(-1),'dispose')
 })

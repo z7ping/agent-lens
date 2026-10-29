@@ -12,6 +12,11 @@ export function cachedLaunchableProjects(): LaunchableProjectsResponseDto | unde
   return initialProjectPage.value
 }
 
+/** Source indexing can add a project after the prefetch was cached. */
+export function invalidateLaunchableProjectCache(): void {
+  initialProjectPage = undefined
+}
+
 export function prefetchLaunchableProjects(): void {
   if (cachedLaunchableProjects()) return
   void fetchLaunchableProjects().catch(() => undefined)
