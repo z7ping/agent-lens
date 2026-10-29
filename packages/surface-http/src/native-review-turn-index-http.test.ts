@@ -33,9 +33,11 @@ test('native sparse turn index is bounded, restart-resumable and invalidates rep
   }]}} as unknown as SourceService
   const policy={isSourceEnabled(sourceId:string){return sourceId==='pi'}} as CapturePolicyService
   let reads=0
+  const pageLimits:number[]=[]
   const reader:NativeSessionWindowReader={
     async read(query){
       reads++
+      pageLimits.push(query.limit??0)
       const start=query.cursor?.offset??0
       if(query.cursor?.fileIdentity!==undefined && query.cursor.fileIdentity!==fileIdentity)
         return {state:'drifted',reason:'native-file-identity-changed'}
@@ -58,11 +60,13 @@ test('native sparse turn index is bounded, restart-resumable and invalidates rep
   if(first.state!=='available')return
   assert.equal(first.coverage,'partial')
   assert.equal(first.knownTurns,12)
+  assert.deepEqual(pageLimits,Array(12).fill(16), 'cold first pass stays bounded and returns early')
   assert.equal(first.totalTurns,undefined,'partial scans must never pretend to know total')
   const second=await index().query(id,{scan:true,tail:3})
   assert.equal(second.state,'available')
   if(second.state!=='available')return
   assert.equal(second.coverage,'complete')
+  assert.ok(pageLimits.slice(12).every(limit=>limit===64), 'later scans reuse bounded 64-record Source pages')
   assert.equal(second.totalTurns,16)
   assert.deepEqual(second.items.map(x=>x.ordinal),[14,15,16])
   const decoded=JSON.parse(Buffer.from(second.items[0]!.cursor,'base64url').toString('utf8'))

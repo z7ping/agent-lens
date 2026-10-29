@@ -37,7 +37,8 @@ interface NativeTurnIndexState {
 }
 const SCOPE = 'native-review-turn-index-v1'
 const BLOCK_SIZE = 64
-const SOURCE_PAGE_SIZE = 16
+const INITIAL_SOURCE_PAGE_SIZE = 16
+const CONTINUATION_SOURCE_PAGE_SIZE = 64
 const PAGES_PER_SCAN = 12
 const MAX_INDEX_QUERY = 120
 const MAX_INDEX_ORDINAL = 10_000_000
@@ -76,12 +77,16 @@ export class NativeReviewTurnIndex {
     const signal = AbortSignal.timeout(12_000)
     let state = { ...previous }
     let cursor = state.nextCursor
+    // Return the first partial index quickly; subsequent calls use the existing
+    // 64-record Source limit to fill the remaining index with fewer IPC hops.
+    // Neither mode reads entire session content into memory.
+    const pageSize = state.nextCursor ? CONTINUATION_SOURCE_PAGE_SIZE : INITIAL_SOURCE_PAGE_SIZE
     for (let pageIndex = 0; pageIndex < PAGES_PER_SCAN; pageIndex++) {
       signal.throwIfAborted()
       const result = await this.reader.read({
         sourceId: entry.sourceId, installationId: entry.installationId,
         nativeSessionId: entry.nativeSessionId,
-        ...(cursor ? {cursor} : {}), limit: SOURCE_PAGE_SIZE, signal,
+        ...(cursor ? {cursor} : {}), limit: pageSize, signal,
       })
       if (result.state !== 'available') {
         // Keep the old checkpoint but never return stale locators as complete.
