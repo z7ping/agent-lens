@@ -17,61 +17,83 @@ const rows = Array.from({ length: 94 }, (_, index) => ({
   occurredAt: timestamp, capturedAt: timestamp,
 } as ObservationCandidate))
 
-test('native Review returns resumable, stable one-turn fragments beyond eight source pages', async () => {
-  const reader: NativeSessionWindowReader = {
-    async read(query) {
-      const start = query.cursor?.offset ?? 0
-      const end = Math.min(start + (query.limit ?? 8), rows.length)
-      return {
-        state: 'available',
-        observations: rows.slice(start, end),
-        observationRecordIds: rows.slice(start, end).map((_, index) => 'record-' + (start + index)),
-        observationCursors: rows.slice(start, end).map((_, index) => ({
-          offset: start + index, sequence: start + index, fileIdentity,
-        })),
-        evidenceCandidates: [],
-        nextCursor: {offset:end,sequence:end,fileIdentity},
-        hasMore: end < rows.length,
-        pendingTail: false,
+for (const byId of [false, true]) {
+  test(`原生 Review ${byId ? 'Catalog 深链接' : '来源窗口'}超页分片可续读且不丢失轮次身份`, async () => {
+    let hookReads = 0
+    const reader: NativeSessionWindowReader = {
+      async readArchivedHooks() {
+        hookReads++
+        return {state:'available',observations:[],observationRecordIds:[],truncated:false}
+      },
+      async read(query) {
+        const start = query.cursor?.offset ?? 0
+        const end = Math.min(start + (query.limit ?? 8), rows.length)
+        return {
+          state: 'available',
+          observations: rows.slice(start, end),
+          observationRecordIds: rows.slice(start, end).map((_, index) => 'record-' + (start + index)),
+          observationCursors: rows.slice(start, end).map((_, index) => ({
+            offset: start + index, sequence: start + index, fileIdentity,
+          })),
+          evidenceCandidates: [],
+          nextCursor: {offset:end,sequence:end,fileIdentity},
+          hasMore: end < rows.length,
+          pendingTail: false,
+        }
+      },
+    }
+    const reviewId = 'native:' + 'a'.repeat(32)
+    const catalog = {async getByReviewSessionId(id: string) {
+      return id === reviewId ? {
+        sourceId:'codex',installationId:'inst',nativeSessionId:'session',
+        locationKind:'native' as const,filePath:'/fixture.jsonl',fileIdentity,
+        fileSize:rows.length,fileMtimeMs:0,lastActivityAt:timestamp,updatedAt:timestamp,
+      } : null
+    }}
+    const server = createServer((request, response) => {
+      void handleNativeSessionWindowRequest(
+        request,response,new URL(request.url ?? '/', 'http://127.0.0.1'),reader,catalog,
+      ).catch(error => { response.statusCode = 500; response.end(String(error)) })
+    })
+    await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve))
+    try {
+      const addr = server.address()
+      assert(addr && typeof addr !== 'string')
+      const base = 'http://127.0.0.1:' + addr.port + (byId
+        ? '/api/v1/native-sessions/' + encodeURIComponent(reviewId) + '/review?turnLimit=4'
+        : '/api/v1/native-sessions/window?sourceId=codex&installationId=inst'
+          + '&nativeSessionId=session&format=review-turns&turnLimit=1')
+      const firstResponse = await fetch(base)
+      assert.equal(firstResponse.status, 200)
+      const first = await firstResponse.json() as NativeReviewWindowDto
+      assert.equal(first.state, 'available')
+      assert.equal(first.pagingUnit, 'interaction')
+      assert.equal(first.boundaryIntegrity, 'partial')
+      assert.equal(first.turnFragment, 'partial')
+      assert.equal(first.interactions.length, 1)
+      assert.equal(first.interactions[0]?.ordinal, 1)
+      assert.equal(hookReads, 0, '分片边界未完成时不能合并 Hook')
+      if (byId) {
+        assert.equal(first.hookFactsPartial, true)
+        assert.equal(first.hookEventsTruncated, true)
       }
-    },
-  }
-  const server = createServer((request, response) => {
-    void handleNativeSessionWindowRequest(
-      request,response,new URL(request.url ?? '/', 'http://127.0.0.1'),reader,
-    ).catch(error => { response.statusCode = 500; response.end(String(error)) })
+      const nextResponse = await fetch(base + '&cursor=' + encodeURIComponent(first.nextCursor))
+      assert.equal(nextResponse.status, 200)
+      const next = await nextResponse.json() as NativeReviewWindowDto
+      assert.equal(next.state, 'available')
+      assert.equal(next.pagingUnit, 'interaction')
+      assert.equal(next.boundaryIntegrity, 'complete')
+      assert.equal(next.turnFragment, 'complete')
+      assert.equal(next.interactions.length, byId ? 2 : 1)
+      assert.equal(hookReads, byId ? 1 : 0, '完整深链接窗口继续使用 Hook 合并')
+      assert.equal(next.interactions[0]?.id, first.interactions[0]?.id)
+      assert.equal(next.interactions[0]?.ordinal, 1)
+      assert.notEqual(next.nextCursor, first.nextCursor)
+      assert.equal(next.interactions[0]?.nodes.some(node => node.type === 'event'
+        && node.kind === 'tool.result'), true,
+        'the result must remain evidence-bearing even before client reconciliation')
+    } finally {
+      await new Promise<void>(resolve => server.close(() => resolve()))
+    }
   })
-  await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve))
-  try {
-    const addr = server.address()
-    assert(addr && typeof addr !== 'string')
-    const base = 'http://127.0.0.1:' + addr.port
-      + '/api/v1/native-sessions/window?sourceId=codex&installationId=inst'
-      + '&nativeSessionId=session&format=review-turns&turnLimit=1'
-    const firstResponse = await fetch(base)
-    assert.equal(firstResponse.status, 200)
-    const first = await firstResponse.json() as NativeReviewWindowDto
-    assert.equal(first.state, 'available')
-    assert.equal(first.pagingUnit, 'interaction')
-    assert.equal(first.boundaryIntegrity, 'partial')
-    assert.equal(first.turnFragment, 'partial')
-    assert.equal(first.interactions.length, 1)
-    assert.equal(first.interactions[0]?.ordinal, 1)
-    const nextResponse = await fetch(base + '&cursor=' + encodeURIComponent(first.nextCursor))
-    assert.equal(nextResponse.status, 200)
-    const next = await nextResponse.json() as NativeReviewWindowDto
-    assert.equal(next.state, 'available')
-    assert.equal(next.pagingUnit, 'interaction')
-    assert.equal(next.boundaryIntegrity, 'complete')
-    assert.equal(next.turnFragment, 'complete')
-    assert.equal(next.interactions.length, 1)
-    assert.equal(next.interactions[0]?.id, first.interactions[0]?.id)
-    assert.equal(next.interactions[0]?.ordinal, 1)
-    assert.notEqual(next.nextCursor, first.nextCursor)
-    assert.equal(next.interactions[0]?.nodes.some(node => node.type === 'event'
-      && node.kind === 'tool.result'), true,
-      'the result must remain evidence-bearing even before client reconciliation')
-  } finally {
-    await new Promise<void>(resolve => server.close(() => resolve()))
-  }
-})
+}

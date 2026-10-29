@@ -11,6 +11,7 @@ import { BackgroundDataNotice } from '../components/BackgroundDataNotice'
 import { EmptyStatePanel, ErrorStateBanner, WorkspaceSkeleton } from '../components/StateViews'
 import { SidebarFilterDisclosure } from '../components/SidebarFilterDisclosure'
 import { Button, Disclosure, IconButton, SelectMenu, UiIcon } from '../components/ui'
+import { projectSelectOption } from './project-presentation'
 
 function duration(ms: number, t: TFunction): string {
   if (ms < 1000) return t('duration.milliseconds', { value: ms })
@@ -106,7 +107,7 @@ export function InsightsPage({ model, toolbarHost }: { model: AgentLensClientMod
   const relaxFilters = () => insightsModel.setFilters({ sourceIds: null, projectId: '', range: 'all' })
   const projectFilterOptions = [
     { value: '', label: t('filters.allProjects') },
-    ...projects.map(project => ({ value: project.id, label: project.name ?? project.repositoryIdentity ?? project.id, description: project.repositoryIdentity ?? undefined })),
+    ...projects.map(projectSelectOption),
   ]
   const toolbarFilters = <div className="workspace-view-controls" aria-label={t('filters.aria')}>
     <div className="workspace-view-filter">
