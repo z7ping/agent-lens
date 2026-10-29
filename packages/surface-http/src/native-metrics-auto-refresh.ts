@@ -114,7 +114,7 @@ export class NativeMetricsAutoRefresh {
           if(result.state==='available')this.onUpdated?.(progress.reviewSessionId)
           return result.state==='available'||result.state==='in_progress'
         }catch{
-          if(this.abort.signal.aborted)return
+          if(this.abort.signal.aborted)return false
           // A permanently failing Reader must not monopolize a Source's
           // future candidate pages. Discard only its ephemeral partial state;
           // retry from the original Source after the ordinary cooldown.
@@ -139,7 +139,7 @@ export class NativeMetricsAutoRefresh {
     }else this.beforeBySource.delete(sourceId)
     let progressed=false
     for(const candidate of candidates){
-      if(this.abort.signal.aborted)return
+      if(this.abort.signal.aborted)return false
       const key=JSON.stringify([
         candidate.sourceId,candidate.installationId,candidate.nativeSessionId,
       ])
@@ -177,7 +177,7 @@ export class NativeMetricsAutoRefresh {
           this.ongoing.set(key,result.progress)
         }else this.ongoing.delete(key)
       }catch{
-        if(this.abort.signal.aborted)return
+        if(this.abort.signal.aborted)return false
         // Failure stays missing/stale; no unverified totals are published.
       }
     }
