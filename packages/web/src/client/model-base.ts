@@ -218,6 +218,7 @@ export abstract class AgentLensModelBase {
   protected detailGeneration = 0
   protected reviewSelectionAbort: AbortController | null = null
   protected usageGeneration = 0
+  protected nativeUsageRefreshTimer:ReturnType<typeof setTimeout>|null=null
   protected agentsGeneration = 0
   protected usageInvalidation = 0
   protected agentsInvalidation = 0
@@ -353,6 +354,8 @@ export abstract class AgentLensModelBase {
     if (this.reviewSummaryPatchTimer) clearTimeout(this.reviewSummaryPatchTimer)
     this.pendingReviewSummaryIds.clear()
     if (this.integrationDiscoveryTimer) clearTimeout(this.integrationDiscoveryTimer)
+    if (this.nativeUsageRefreshTimer)clearTimeout(this.nativeUsageRefreshTimer)
+    this.nativeUsageRefreshTimer=null
     if (this.visibilityListener && typeof document !== 'undefined') document.removeEventListener('visibilitychange', this.visibilityListener)
     this.refreshTimer = null
     this.detailTimer = null
