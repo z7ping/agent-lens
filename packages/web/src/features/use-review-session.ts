@@ -700,6 +700,7 @@ export function useReviewSession(model: AgentLensClientModel, embedded: boolean)
     () => annotatedInteractions.map(({ round }) => ({
       id: round.id,
       semanticId: round.semanticId,
+      ...(round.ordinal ? {ordinal:round.ordinal,loaded:true} : {}),
       label: round.label,
       preview: round.preview,
       error: round.errorCount > 0,
