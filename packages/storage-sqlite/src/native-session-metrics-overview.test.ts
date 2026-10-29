@@ -104,6 +104,10 @@ test('revoked Source certification instantly masks previously complete Native-on
       assert.equal(revoked.totals.inputTokens,null)
       assert.equal(revoked.totals.outputTokens,null)
       assert.deepEqual(revoked.tools,[])
+      assert.equal(revoked.observed?.toolCallCount,3)
+      assert.equal(revoked.observed?.interactionCount,5)
+      assert.equal(revoked.observed?.tools[0]?.nativeToolName,'shell')
+      assert.equal(revoked.observed?.tools[0]?.callCount,3)
     }
     const recertified=await storage.nativeSessionMetrics.overview({...scope,coverageCertified:true})
     assert.equal(recertified.readySessions,1)
