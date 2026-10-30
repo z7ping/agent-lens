@@ -799,10 +799,15 @@ function roundIndex(all = session.sessionManager.getEntries()) {
     && cached.leafId === leafId
     && all.length >= cached.entryCount
     && (cached.entryCount === 0 || entryId(all[cached.entryCount - 1]) === cached.lastEntryId)
-  const rows = appendOnly ? [...cached.rows] : []
-  const entryPositions = appendOnly ? new Map(cached.entryPositions) : new Map()
-  const roundByCursor = appendOnly ? new Map(cached.roundByCursor) : new Map()
+  // The index lives only inside this Worker. Append in place: cloning all
+  // positions/maps for every new entry makes a long active session quadratic.
+  const rows = appendOnly ? cached.rows : []
+  const entryPositions = appendOnly ? cached.entryPositions : new Map()
+  const roundByCursor = appendOnly ? cached.roundByCursor : new Map()
   const start = appendOnly ? cached.entryCount : 0
+  // An appended record can change only the preceding last turn. Its expensive
+  // summary is recomputed on demand, never for a count-only index request.
+  if (appendOnly && start < all.length && rows.length) delete rows[rows.length - 1].summary
 
   for (let entryIndex = start; entryIndex < all.length; entryIndex += 1) {
     const entry = record(all[entryIndex])
@@ -827,13 +832,8 @@ function roundIndex(all = session.sessionManager.getEntries()) {
     roundByCursor.set(row.cursor, row)
   }
 
-  const firstAffectedRound = appendOnly ? Math.max(0, cached.rows.length - 1) : 0
-  for (let index = firstAffectedRound; index < rows.length; index += 1) {
-    const row = rows[index]
-    const nextEntryIndex = rows[index + 1]?.entryIndex ?? all.length
-    row.summary = roundSummary(all, row, nextEntryIndex)
-  }
-
+  // Round details are lazy. A historyIndex({ limit: 0 }) call may only need
+  // the total; precomputing every round's tools/events here defeats paging.
   roundIndexCache = { entryCount: all.length, lastEntryId, leafId, rows, entryPositions, roundByCursor }
   return rows
 }
@@ -841,10 +841,18 @@ function roundIndex(all = session.sessionManager.getEntries()) {
 function snapshotRoundPage(all, start, end) {
   if (!roundIndexCache) return undefined
   const rows = roundIndex(all)
+  // A snapshot near the end should not walk every earlier round.
+  let left = 0
+  let right = rows.length
+  while (left < right) {
+    const middle = Math.floor((left + right) / 2)
+    if (rows[middle].entryIndex < start) left = middle + 1
+    else right = middle
+  }
   let first
   let last
-  for (const row of rows) {
-    if (row.entryIndex < start) continue
+  for (let index = left; index < rows.length; index++) {
+    const row = rows[index]
     if (row.entryIndex >= end) break
     first ??= row
     last = row
@@ -933,18 +941,26 @@ function beginSnapshotTransfer(since, window) {
 
 function historyIndex(queryValue) {
   const query = record(queryValue)
-  const rows = roundIndex()
+  const all = session.sessionManager.getEntries()
+  const rows = roundIndex(all)
+  const indexedItem = row => {
+    if (!row.summary) {
+      const nextEntryIndex = rows[row.ordinal]?.entryIndex ?? all.length
+      row.summary = roundSummary(all, row, nextEntryIndex)
+    }
+    return {
+      cursor: row.cursor,
+      ordinal: row.ordinal,
+      ...(row.preview ? { preview: row.preview } : {}),
+      summary: row.summary,
+    }
+  }
   const cursor = typeof query.cursor === 'string' ? query.cursor.trim() : ''
   if (cursor) {
     const row = roundIndexCache?.roundByCursor?.get(cursor)
     return {
       total: rows.length,
-      items: row ? [{
-        cursor: row.cursor,
-        ordinal: row.ordinal,
-        ...(row.preview ? { preview: row.preview } : {}),
-        ...(row.summary ? { summary: row.summary } : {}),
-      }] : [],
+      items: row ? [indexedItem(row)] : [],
     }
   }
 
@@ -959,7 +975,7 @@ function historyIndex(queryValue) {
   const start = Math.min(rows.length, fromOrdinal - 1)
   return {
     total: rows.length,
-    items: rows.slice(start, start + limit).map(({ entryIndex, ...item }) => item),
+    items: rows.slice(start, start + limit).map(indexedItem),
   }
 }
 

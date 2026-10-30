@@ -196,9 +196,11 @@ class InProcessHandle implements PiRuntimeHandle {
       && all.length >= cached.entryCount
       && (cached.entryCount === 0
         || String(record(all[cached.entryCount - 1]).id ?? '') === cached.lastEntryId)
-    const rows = appendOnly ? [...cached.rows] : []
-    const entryPositions = appendOnly ? new Map(cached.entryPositions) : new Map<string, number>()
-    const roundByCursor = appendOnly ? new Map(cached.roundByCursor) : new Map<string, PiRoundIndexRow>()
+    // The maps are private to this handle; updates need not copy the entire
+    // index on each appended entry. A branch change still rebuilds from scratch.
+    const rows = appendOnly ? cached.rows : []
+    const entryPositions = appendOnly ? cached.entryPositions : new Map<string, number>()
+    const roundByCursor = appendOnly ? cached.roundByCursor : new Map<string, PiRoundIndexRow>()
     const start = appendOnly ? cached.entryCount : 0
 
     for (let entryIndex = start; entryIndex < all.length; entryIndex += 1) {
@@ -236,10 +238,17 @@ class InProcessHandle implements PiRuntimeHandle {
   private roundPage(all: readonly unknown[], start: number, end: number) {
     if (!this.roundIndexCache) return undefined
     const rows = this.roundIndex(all)
+    let left = 0
+    let right = rows.length
+    while (left < right) {
+      const middle = Math.floor((left + right) / 2)
+      if (rows[middle]!.entryIndex < start) left = middle + 1
+      else right = middle
+    }
     let first: PiRoundIndexRow | undefined
     let last: PiRoundIndexRow | undefined
-    for (const row of rows) {
-      if (row.entryIndex < start) continue
+    for (let index = left; index < rows.length; index++) {
+      const row = rows[index]!
       if (row.entryIndex >= end) break
       first ??= row
       last = row
