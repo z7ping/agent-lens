@@ -137,8 +137,10 @@
   cursor: pointer;
 }
 .tool-table .tool-table-sort:hover { color: var(--al-ink); }
-.tool-table tbody tr { cursor: pointer; }
-.tool-table tbody tr:hover td { background: var(--al-soft-2); }
+.tool-native-summary { display: flex; flex-direction: column; gap: 6px; }
+.tool-native-summary small { color: var(--al-muted); font-size: 12px; line-height: 1.6; }
+.tool-table tbody tr[tabindex] { cursor: pointer; }
+.tool-table tbody tr[tabindex]:hover td { background: var(--al-soft-2); }
 .tool-table .tool-table-sort:focus-visible,
 .tool-table tbody tr:focus-visible {
   outline: 2px solid color-mix(in srgb, var(--al-accent) 55%, transparent);

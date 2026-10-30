@@ -1,0 +1,32 @@
+.native-failure-examples {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 12px;
+}
+.native-failure-note {
+  margin: 0;
+  color: var(--al-muted);
+  font-size: 12px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+.native-failure-detail {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 12px;
+}
+.native-failure-detail strong { color: var(--al-ink); font-size: 13px; }
+.native-failure-detail pre { max-height: 240px; overflow: auto; }
+.native-failure-context {
+  display: -webkit-box;
+  overflow: hidden;
+  margin: 0;
+  color: var(--al-muted);
+  font-size: 12px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}

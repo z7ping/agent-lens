@@ -143,6 +143,7 @@ function reviewNodeSource(item: TimelineItemDto): ReviewNodeSourceDto {
 
 export function buildNodes(items: TimelineItemDto[], registry = new ToolRegistrationIndex(items)): ReviewNodeDto[] {
   const nodes: ReviewNodeDto[] = []
+  const messagesByNativeId = new Map<string, ReviewMessageNodeDto>()
   const toolsByCallId = new Map<string, ReviewToolNodeDto>()
   const scopedCallId = (item: TimelineItemDto, callId: string) =>
     JSON.stringify([item.installationId, item.sourceId, item.sourceSessionId, callId])
@@ -172,6 +173,18 @@ export function buildNodes(items: TimelineItemDto[], registry = new ToolRegistra
         evidence: item.evidence,
         observationIds: [item.id],
       }
+      // 原生完成事件与持久化消息可能指向同一个消息 ID。只合并同一
+      // Source 会话、角色、正文的显式身份，保留两个记录的全部证据。
+      const messageKey = item.nativeEventId
+        ? JSON.stringify([item.installationId, item.sourceId, item.sourceSessionId, item.nativeEventId, node.role])
+        : undefined
+      const existing = messageKey ? messagesByNativeId.get(messageKey) : undefined
+      if (existing && existing.text === node.text) {
+        existing.observationIds = [...new Set([...existing.observationIds, ...node.observationIds])]
+        existing.evidence = [...new Map([...existing.evidence, ...node.evidence].map(entry => [entry.id, entry])).values()]
+        continue
+      }
+      if (messageKey) messagesByNativeId.set(messageKey, node)
       nodes.push(node)
       continue
     }

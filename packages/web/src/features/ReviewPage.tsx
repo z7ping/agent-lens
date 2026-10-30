@@ -441,8 +441,8 @@ export function ReviewPage({ model, embedded = false, latestRequest = 0 }: { mod
               >
                 <ReviewRoundAdapter
                   sessionId={detail.id}
-                  fileChangesEnabled={item.round.toolCount > 0
-                     || item.interaction.nodes.some(node => node.type === 'event' && node.kind === 'artifact.action')}
+                  fileChangesEnabled={detail.statisticsCompleteness !== 'window' && (item.round.toolCount > 0
+                     || item.interaction.nodes.some(node => node.type === 'event' && node.kind === 'artifact.action'))}
                   interaction={item.interaction}
                   round={item.round}
                   expansionStore={roundExpansionRef.current}

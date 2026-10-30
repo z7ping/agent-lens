@@ -28,7 +28,7 @@ test('实时 Pi 提供的状态项目名补齐未关联历史行',()=>{
     projectName:undefined,
     state:{...runtime.state,projectName:'Slowlight'},
   }
-  const rows=mergeTaskCenterSessions([{...history,projectName:undefined,workspacePath:undefined}], [linked])
+  const rows=mergeTaskCenterSessions([history], [linked])
   assert.equal(rows[0]?.item.projectName,'Slowlight')
   assert.equal(rows[0]?.item.workspacePath,'/work/Slowlight')
 })

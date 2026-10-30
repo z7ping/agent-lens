@@ -16,6 +16,28 @@ const page = {
   nextCursor: 'opaque-cursor',
 }
 
+test('同一原生消息身份的双记录合并展示并保留证据，独立消息不按文本去重', () => {
+  const message = (sequence: number, nativeEventId?: string): ObservationCandidate => ({
+    ...candidate('message.assistant', sequence, {text:'相同回复',phase:'final_answer'}),
+    ...(nativeEventId ? {nativeEventId} : {}),
+  })
+  const result = projectNativeReviewWindow({
+    ...page,
+    observations:[candidate('message.user',0,{text:'开始'}),
+      message(1,'message-one'),message(2,'message-one'),
+      message(3,'message-two'),message(4),message(5)],
+    observationRecordIds:['user','completed','persisted','independent','unknown-one','unknown-two'],
+    evidenceCandidates:['completed','persisted'].map(sourceRecordId=>({
+      sourceRecordId,capturedAt:at,captureMethod:'native-log' as const,
+      derivation:'reported' as const,confidenceHint:'exact' as const,
+    })),
+  })
+  const messages = result.interactions[0]!.nodes.filter(node=>node.type==='message'&&node.role==='assistant')
+  assert.equal(messages.length,4)
+  assert.equal(messages[0]!.observationIds.length,2)
+  assert.equal(messages[0]!.evidence.length,2)
+})
+
 test('native page reuses actual Review grouping and tool-call/result pairing, no stored evidence IDs', () => {
   const observations = [
     candidate('message.user', 1000, { text: 'run test' }),

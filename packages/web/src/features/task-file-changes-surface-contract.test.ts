@@ -12,7 +12,7 @@ const reviewStyles = readFileSync(new URL('../review.css', import.meta.url), 'ut
 test('会话级文件归入任务信息，Review 逐轮文件仍留在轮次末尾', () => {
   assert.match(review, /reviewInteractionFileChanges\(sessionId, \{[\s\S]*?id: interaction\.id,[\s\S]*?observationRange: interaction\.observationRange[\s\S]*?controller\.signal\)/)
   assert.match(review, /afterProcessEntries\.map\(renderEntry\)[\s\S]*?TaskFileChangesDisclosure/)
-  assert.match(reviewPage, /fileChangesEnabled=\{item\.round\.toolCount > 0/)
+  assert.match(reviewPage, /fileChangesEnabled=\{detail\.statisticsCompleteness !== 'window' && \(item\.round\.toolCount > 0/)
   assert.doesNotMatch(reviewPage, /fileChangesEnabled=\{Boolean\(review\.fileChanges/)
   assert.doesNotMatch(reviewPage, /detail\.interactionCount > 1/)
   assert.match(reviewPage, /infoPanel=\{review\.fileChanges[\s\S]*?<TaskFileChangesDisclosure value=\{review\.fileChanges\} inlineDetails\/>/)

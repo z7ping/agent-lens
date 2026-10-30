@@ -83,3 +83,11 @@ test('missing package and restart status use Integration lifecycle semantics', (
   ]
   assert.equal(missingIntegrationLiveReason(restarted), 'needs-restart')
 })
+
+test('未提供包管理状态时保留真实授权原因，不虚构未安装状态', () => {
+  const item = integration()
+  item.packageState = null
+  assert.equal(missingIntegrationLiveReason(item), 'needs-authorization')
+  item.capabilities = [{capability:'live',availability:'unavailable',authorization:'granted'}]
+  assert.equal(missingIntegrationLiveReason(item), 'registration-failed')
+})

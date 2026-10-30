@@ -22,10 +22,18 @@ export function nativeReviewTitle(summary: Pick<NativeSessionSummaryDto, 'title'
   } : {}
 }
 
-/** Rebuild statistics only from the bounded visible native Review nodes.
- * Original Source candidates can include lifecycle metadata that does not
- * produce a visible node; never promote these counts to full-session SQL totals.
- */
+/** 原生窗口与失败样本共用明确错误判据，包含跨窗口尚未配对的工具结果。 */
+export function nativeReviewNodeIsFailure(node: ReviewNodeDto): boolean {
+  if(node.type==='tool')return node.status==='error'
+  if(node.type!=='event'||!node.payload||typeof node.payload!=='object'||Array.isArray(node.payload))return false
+  const payload=node.payload
+  if(node.kind==='tool.result')return payload.success===false||payload.status==='error'||payload.isError===true
+  if(node.kind!=='session.lifecycle')return false
+  const action=payload.event??payload.action
+  return action==='turn.error'||action==='assistant.error'||action==='turn.failed'
+}
+
+/** 只统计已加载窗口，不能将窗口数值宣称为完整会话总量。 */
 export function nativeVisibleWindowStatistics(interactions: readonly ReviewInteractionDto[]) {
   const sourceObservations = new Set<string>()
   let toolCount = 0
@@ -33,17 +41,9 @@ export function nativeVisibleWindowStatistics(interactions: readonly ReviewInter
   for (const interaction of interactions) {
     for (const node of interaction.nodes) {
       for (const id of node.observationIds) sourceObservations.add(id)
+      if(nativeReviewNodeIsFailure(node))errorCount+=1
       if (node.type === 'tool') {
         toolCount += 1
-        if (node.status === 'error') errorCount += 1
-      } else if (node.type === 'event' && node.kind === 'session.lifecycle') {
-        const payload = node.payload
-        if (payload && typeof payload === 'object' && !Array.isArray(payload)) {
-          const action = payload.event ?? payload.action
-          if (action === 'turn.error' || action === 'assistant.error' || action === 'turn.failed') {
-            errorCount += 1
-          }
-        }
       }
     }
   }

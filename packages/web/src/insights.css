@@ -49,6 +49,13 @@
   white-space: nowrap;
 }
 .insight-coverage-strip b.is-warning { color: var(--al-warning); }
+.insight-coverage-strip > small {
+  grid-column: 1 / -1;
+  padding: 9px 14px;
+  color: var(--al-muted);
+  font-size: 12px;
+  line-height: 1.6;
+}
 
 /* 核心指标 */
 .insight-kpi-grid {
@@ -56,6 +63,7 @@
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 12px;
 }
+.insight-kpi-grid + .insight-kpi-grid { margin-top: 12px; }
 
 .insight-kpi > span,
 .insight-kpi > small { display: block; color: var(--al-muted); font-size: 12px; }

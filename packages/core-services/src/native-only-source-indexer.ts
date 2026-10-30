@@ -87,8 +87,9 @@ async function inspectNativeMetadata(
     }
     if (explicitTitle || (firstUser && workspacePath)) break
   }
+  const title = explicitTitle ?? firstUser
   return {
-    ...((explicitTitle ?? firstUser) ? { title: explicitTitle ?? firstUser } : {}),
+    ...(title ? { title } : {}),
     ...(workspacePath ? { workspacePath } : {}),
   }
 }
