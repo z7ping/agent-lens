@@ -353,7 +353,7 @@ export function ToolsPage({ model, toolbarHost }: { model: AgentLensClientModel;
             ? t('page.nativePartialNote') : nativeOnlyMode
                ? t('page.nativeOnlyModeNote') : t('page.nativeSeparateNote')}</small>
           <small>{t('page.nativeDurationNote')}</small>
-        </section>
+        </section>}
         {(nativeMostErrors||nativeSlowest||nativeLongest)&&<section className="tool-attention">
           <div className="section-heading-row"><div><h3>{t('page.attention')}</h3></div></div>
           <div className="tool-attention-list">
