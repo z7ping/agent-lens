@@ -156,6 +156,7 @@
 .tool-rate-cell[data-rate='mid'] { color: var(--al-warning); font-weight: 640; }
 .tool-rate-cell[data-rate='unknown'] { color: var(--al-muted-2); }
 .cell-danger { color: var(--al-danger); font-weight: 640; }
+.cell-slow { color: color-mix(in srgb, var(--al-warning) 78%, var(--al-muted)); font-weight: 560; }
 .cell-muted { color: var(--al-muted-2); }
 
 /* 关注项 */
