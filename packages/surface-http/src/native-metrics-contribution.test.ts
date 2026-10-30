@@ -222,3 +222,27 @@ test('partial native observations stay separate from certified totals and never 
   }])
   assert.equal(JSON.stringify(result).includes('totalDurationMs'),false)
 })
+
+test('native tool durations derive averages only from observed result samples',async()=>{
+  const metrics={
+    overview:async()=>({
+      ...overview('pi',2),eligibleSessions:2,readySessions:2,missingSessions:0,
+      tools:[{
+        nativeToolName:'shell',callCount:5,resultCount:4,errorCount:1,
+        totalDurationMs:7500,durationSampleCount:2,maxDurationMs:6000,sessionCount:2,
+      },{
+        nativeToolName:'read',callCount:3,resultCount:2,errorCount:0,
+        totalDurationMs:0,durationSampleCount:0,maxDurationMs:null,sessionCount:2,
+      }],
+    }),
+  } as unknown as NativeSessionMetricsStore
+  const response=await nativeMetricContribution(metrics,sources,policy,{includeTools:true})
+  if(response.state!=='available')assert.fail('Expected available native metrics')
+  const slow=response.tools?.find(tool=>tool.nativeToolName==='shell')
+  const unknown=response.tools?.find(tool=>tool.nativeToolName==='read')
+  assert.equal(slow?.durationSampleCount,2)
+  assert.equal(slow?.averageDurationMs,3750)
+  assert.equal(slow?.maxDurationMs,6000)
+  assert.equal(unknown?.averageDurationMs,undefined)
+  assert.equal(unknown?.maxDurationMs,undefined)
+})
