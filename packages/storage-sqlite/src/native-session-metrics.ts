@@ -48,6 +48,13 @@ function assertSnapshot(snapshot: NativeSessionMetricSnapshot): void {
         throw new TypeError(`Invalid native tool metric ${key}`)
       }
     }
+    const samples=tool.durationSampleCount??0
+    const longest=tool.maxDurationMs??null
+    if(!Number.isSafeInteger(samples)||samples<0||samples>tool.resultCount
+      ||(longest!==null&&(!Number.isSafeInteger(longest)||longest<0))
+      ||(samples===0&&longest!==null)||(samples>0&&longest===null)){
+      throw new TypeError('Invalid native tool duration samples')
+    }
   }
 }
 
@@ -62,6 +69,7 @@ type SnapshotRow = {
 type ToolRow = {
   native_tool_name:string;call_count:number;result_count:number
   error_count:number;total_duration_ms:number
+  duration_sample_count:number;max_duration_ms:number|null
 }
 
 export class SqliteNativeSessionMetrics implements NativeSessionMetricsStore {
@@ -108,12 +116,14 @@ export class SqliteNativeSessionMetrics implements NativeSessionMetricsStore {
       const insert = this.executor.db.prepare(`
         INSERT INTO native_session_tool_metrics (
           source_id,installation_id,native_session_id,native_tool_name,
-          call_count,result_count,error_count,total_duration_ms
-        ) VALUES (?,?,?,?,?,?,?,?)
+          call_count,result_count,error_count,total_duration_ms,
+          duration_sample_count,max_duration_ms
+        ) VALUES (?,?,?,?,?,?,?,?,?,?)
       `)
       for (const tool of input.tools) insert.run(
         input.sourceId,input.installationId,input.nativeSessionId,tool.nativeToolName,
         tool.callCount,tool.resultCount,tool.errorCount,tool.totalDurationMs,
+        tool.durationSampleCount??0,tool.maxDurationMs??null,
       )
       return true
     })
@@ -155,6 +165,8 @@ export class SqliteNativeSessionMetrics implements NativeSessionMetricsStore {
             nativeToolName:tool.native_tool_name,callCount:tool.call_count,
             resultCount:tool.result_count,errorCount:tool.error_count,
             totalDurationMs:tool.total_duration_ms,
+            durationSampleCount:tool.duration_sample_count,
+            maxDurationMs:tool.max_duration_ms,
           })),
         },
       }
@@ -260,6 +272,8 @@ export class SqliteNativeSessionMetrics implements NativeSessionMetricsStore {
           SUM(tool.result_count) AS resultCount,
           SUM(tool.error_count) AS errorCount,
           SUM(tool.total_duration_ms) AS totalDurationMs,
+          SUM(tool.duration_sample_count) AS durationSampleCount,
+          MAX(tool.max_duration_ms) AS maxDurationMs,
           COUNT(*) AS sessionCount
         FROM selected
         JOIN native_session_tool_metrics AS tool
@@ -279,6 +293,8 @@ export class SqliteNativeSessionMetrics implements NativeSessionMetricsStore {
           SUM(tool.result_count) AS resultCount,
           SUM(tool.error_count) AS errorCount,
           SUM(tool.total_duration_ms) AS totalDurationMs,
+          SUM(tool.duration_sample_count) AS durationSampleCount,
+          MAX(tool.max_duration_ms) AS maxDurationMs,
           COUNT(*) AS sessionCount
         FROM selected
         JOIN native_session_tool_metrics AS tool
