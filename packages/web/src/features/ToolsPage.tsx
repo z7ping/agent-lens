@@ -84,6 +84,14 @@ function sameUsageFilters(
 }
 
 type SortKey = 'callCount' | 'sessionCount' | 'successRate' | 'errorCount' | 'averageDurationMs'
+type NativeSortKey = 'callCount' | 'resultCount' | 'errorCount' | 'sessionCount' | 'averageDurationMs' | 'maxDurationMs'
+const NATIVE_SLOW_AVERAGE_MS = 3_000
+const NATIVE_SLOW_MAX_MS = 10_000
+
+function nativeDuration(value: number | null | undefined, t: TFunction): string {
+  return value == null ? '—' : duration(value, t) === t('duration.unobserved')
+    ? t('duration.milliseconds', {value:0}) : duration(value,t)
+}
 type SortDirection = 'ascending' | 'descending'
 
 function sortMetric(tool: ToolUsageDto, key: SortKey): number {
@@ -105,10 +113,28 @@ export function ToolsPage({ model, toolbarHost }: { model: AgentLensClientModel;
     && nativeMetrics.eligibleSessions>0
   const nativeTools=nativeMetrics?.state==='available' ? nativeMetrics.tools??[] : []
   const observedNative=nativeMetrics?.state==='available' ? nativeMetrics.observed : undefined
+  const [nativeSort,setNativeSort]=useState<{key:NativeSortKey;direction:SortDirection}>({
+    key:'callCount',direction:'descending',
+  })
   const nativeToolRows=[
     ...nativeTools.map(tool=>({...tool,partial:false})),
     ...(observedNative?.tools??[]).map(tool=>({...tool,partial:true})),
-  ]
+  ].sort((left,right)=>{
+    const a=left[nativeSort.key]??null
+    const b=right[nativeSort.key]??null
+    if(a===null || b===null) {
+      if(a!==b)return a===null?1:-1
+    }else if(a!==b) return nativeSort.direction==='descending'?b-a:a-b
+    return left.nativeToolName.localeCompare(right.nativeToolName)
+      || left.sourceId.localeCompare(right.sourceId)
+      || Number(left.partial)-Number(right.partial)
+  })
+  const nativeMostErrors=[...nativeTools].filter(tool=>tool.errorCount>0)
+    .sort((a,b)=>b.errorCount-a.errorCount)[0]
+  const nativeSlowest=[...nativeTools].filter(tool=>tool.averageDurationMs!=null)
+    .sort((a,b)=>(b.averageDurationMs??0)-(a.averageDurationMs??0))[0]
+  const nativeLongest=[...nativeTools].filter(tool=>tool.maxDurationMs!=null)
+    .sort((a,b)=>(b.maxDurationMs??0)-(a.maxDurationMs??0))[0]
   const projection = data?.meta.projection
   const projectionPartial = projection?.state === 'partial'
   const projectionPercent = projection ? Math.max(0, Math.min(100, Math.round(projection.coverageRatio * 100))) : 0
@@ -209,6 +235,17 @@ export function ToolsPage({ model, toolbarHost }: { model: AgentLensClientModel;
       setDetailLoadingKey(current => current === key ? null : current)
     }
   }
+  const toggleNativeSort=(key:NativeSortKey)=>{
+    setNativeSort(current=>current.key===key
+      ?{key,direction:current.direction==='descending'?'ascending':'descending'}
+      :{key,direction:'descending'})
+  }
+  const nativeAriaSort=(key:NativeSortKey):'none'|SortDirection=>
+    nativeSort.key===key?nativeSort.direction:'none'
+  const nativeSortIcon=(key:NativeSortKey)=>
+    nativeSort.key===key
+      ?<UiIcon name={nativeSort.direction==='descending'?'sort-down':'sort-up'} size={12}/>
+      :null
   const toggleSort = (key: SortKey) => {
     setSort(current => current.key === key
       ? { key, direction: current.direction === 'descending' ? 'ascending' : 'descending' }
