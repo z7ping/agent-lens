@@ -309,10 +309,15 @@ export function ToolsPage({ model, toolbarHost }: { model: AgentLensClientModel;
             {nativeToolRows.length ? <table className="tool-table">
               <thead><tr>
                 <th scope="col">{t('page.tool')}</th>
-                <th scope="col">{t('page.calls')}</th>
-                <th scope="col">{t('page.nativeResults')}</th>
-                <th scope="col">{t('page.failure')}</th>
-                <th scope="col">{t('page.sessions')}</th>
+                {([
+                  ['callCount','calls'],['resultCount','nativeResults'],
+                  ['errorCount','failure'],['sessionCount','sessions'],
+                  ['averageDurationMs','averageDuration'],['maxDurationMs','maxDuration'],
+                ] as const).map(([key,label])=><th key={key} scope="col"
+                  aria-sort={nativeAriaSort(key)}>
+                  <button type="button" className="tool-table-sort"
+                    onClick={()=>toggleNativeSort(key)}>{t('page.'+label)} {nativeSortIcon(key)}</button>
+                </th>)}
               </tr></thead>
               <tbody>{nativeToolRows.map(tool=><tr key={tool.sourceId+'::'+tool.nativeToolName+'::'+tool.partial}
                 tabIndex={tool.partial ? undefined : 0}
@@ -328,12 +333,44 @@ export function ToolsPage({ model, toolbarHost }: { model: AgentLensClientModel;
                 <td>{tool.resultCount}</td>
                 <td className={tool.errorCount ? 'cell-danger' : 'cell-muted'}>{tool.errorCount}</td>
                 <td>{tool.sessionCount}</td>
+                <td className={tool.averageDurationMs!=null && tool.averageDurationMs>=NATIVE_SLOW_AVERAGE_MS?'cell-slow':''}
+                  title={t('page.nativeDurationSamples',{count:tool.durationSampleCount??0})}>
+                  {nativeDuration(tool.averageDurationMs,t)}
+                </td>
+                <td className={tool.maxDurationMs!=null && tool.maxDurationMs>=NATIVE_SLOW_MAX_MS?'cell-slow':''}
+                  title={t('page.nativeDurationSamples',{count:tool.durationSampleCount??0})}>
+                  {nativeDuration(tool.maxDurationMs,t)}
+                </td>
               </tr>)}</tbody>
             </table> : <div className="tools-empty-state">{t('page.nativeNoCalls')}</div>}
           </div>
           <small>{nativeMetrics.coverage==='partial' || nativeMetrics.toolsTruncated
             ? t('page.nativePartialNote') : nativeOnlyMode
                ? t('page.nativeOnlyModeNote') : t('page.nativeSeparateNote')}</small>
+          <small>{t('page.nativeDurationNote')}</small>
+        </section>
+        {(nativeMostErrors||nativeSlowest||nativeLongest)&&<section className="tool-attention">
+          <div className="section-heading-row"><div><h3>{t('page.attention')}</h3></div></div>
+          <div className="tool-attention-list">
+            {nativeMostErrors&&<button type="button" className="tool-attention-row"
+              onClick={()=>void selectNativeTool(nativeMostErrors)}>
+              <span className="tool-attention-badge is-danger">{t('page.failureCluster')}</span>
+              <span><b>{nativeMostErrors.nativeToolName}</b><small>{sourceLabels([nativeMostErrors.sourceId])}</small></span>
+              <strong className="cell-danger">{t('page.countTimes',{count:nativeMostErrors.errorCount})}</strong>
+            </button>}
+            {nativeSlowest&&<button type="button" className="tool-attention-row"
+              onClick={()=>void selectNativeTool(nativeSlowest)}>
+              <span className="tool-attention-badge is-warning">{t('page.slowestBadge')}</span>
+              <span><b>{nativeSlowest.nativeToolName}</b><small>{t('page.nativeDurationSamples',{count:nativeSlowest.durationSampleCount??0})}</small></span>
+              <strong className="cell-slow">{nativeDuration(nativeSlowest.averageDurationMs,t)}</strong>
+            </button>}
+            {nativeLongest&&<button type="button" className="tool-attention-row"
+              onClick={()=>void selectNativeTool(nativeLongest)}>
+              <span className="tool-attention-badge is-warning">{t('page.longestBadge')}</span>
+              <span><b>{nativeLongest.nativeToolName}</b><small>{sourceLabels([nativeLongest.sourceId])}</small></span>
+              <strong className="cell-slow">{nativeDuration(nativeLongest.maxDurationMs,t)}</strong>
+            </button>}
+          </div>
         </section>}
 
         {blockingError ? null : usage.loading && !data ? <WorkspaceSkeleton kind="tools"/> : nativeOnlyMode ? (
@@ -428,6 +465,8 @@ export function ToolsPage({ model, toolbarHost }: { model: AgentLensClientModel;
             <div className="tool-drill-stat"><b>{selectedNativeTool.resultCount}</b><span>{t('page.nativeResults')}</span></div>
             <div className="tool-drill-stat"><b>{selectedNativeTool.errorCount}</b><span>{t('page.failureCount')}</span></div>
             <div className="tool-drill-stat"><b>{selectedNativeTool.sessionCount}</b><span>{t('page.involvedSessions')}</span></div>
+            <div className="tool-drill-stat"><b>{nativeDuration(selectedNativeTool.averageDurationMs,t)}</b><span>{t('page.averageDuration')}</span></div>
+            <div className="tool-drill-stat"><b className={selectedNativeTool.maxDurationMs!=null&&selectedNativeTool.maxDurationMs>=NATIVE_SLOW_MAX_MS?'cell-slow':''}>{nativeDuration(selectedNativeTool.maxDurationMs,t)}</b><span>{t('page.maxDuration')}</span></div>
           </div>
           {nativeDetailLoading&&<div className="tool-drill-note">{t('page.loadingSessions')}</div>}
           {nativeDetailError&&<div className="tool-drill-note">{nativeDetailError}</div>}
