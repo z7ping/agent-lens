@@ -89,8 +89,9 @@ const NATIVE_SLOW_AVERAGE_MS = 3_000
 const NATIVE_SLOW_MAX_MS = 10_000
 
 function nativeDuration(value: number | null | undefined, t: TFunction): string {
-  return value == null ? '—' : duration(value, t) === t('duration.unobserved')
-    ? t('duration.milliseconds', {value:0}) : duration(value,t)
+  if(value==null)return '—'
+  if(value===0)return t('duration.milliseconds',{value:0})
+  return duration(value,t)
 }
 type SortDirection = 'ascending' | 'descending'
 
@@ -316,7 +317,7 @@ export function ToolsPage({ model, toolbarHost }: { model: AgentLensClientModel;
                 ] as const).map(([key,label])=><th key={key} scope="col"
                   aria-sort={nativeAriaSort(key)}>
                   <button type="button" className="tool-table-sort"
-                    onClick={()=>toggleNativeSort(key)}>{t('page.'+label)} {nativeSortIcon(key)}</button>
+                    onClick={()=>toggleNativeSort(key)}>{t(`page.${label}`)} {nativeSortIcon(key)}</button>
                 </th>)}
               </tr></thead>
               <tbody>{nativeToolRows.map(tool=><tr key={tool.sourceId+'::'+tool.nativeToolName+'::'+tool.partial}
