@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import type { AssetStateObservation, SourceDefinition } from '@agent-lens/core'
+import type { AssetStateObservation, SourceDefinition, SourceExecutionContext } from '@agent-lens/core'
 import { NativeOnlyAssetScanner } from './native-only-asset-scanner'
 
 const at='2026-10-26T09:00:00Z'
@@ -27,7 +27,7 @@ test('native-only asset scan reconciles current state without creating Evidence'
   } as never)
   const source={
     manifest:{sourceId:'pi',productId:'pi'},
-    async *discoverAssets(ctx){
+    async *discoverAssets(ctx:SourceExecutionContext){
       seenCheckpoints.push(await ctx.checkpoint.get('project-roots'))
       await ctx.checkpoint.set('project-roots',['/workspaces/a'])
       assert.deepEqual(await ctx.checkpoint.get('project-roots'),['/workspaces/a'])

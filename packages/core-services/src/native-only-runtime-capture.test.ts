@@ -100,7 +100,7 @@ test('Slim capture writes verified native Profile association before Catalog vis
   const file=join(root,'native.jsonl')
   await writeFile(file,'{"type":"user"}\n')
   const sequence:string[]=[]
-  const contextWrites:Array<{runtimeProfileId:string;nativeSessionId:string}>=[]
+  const contextWrites:Array<{runtimeProfileId?:string;nativeSessionId:string}>=[]
   const record:SourceRecord={
     id:'rec',sourceId:'pi',installationId:'install',
     sourceSessionNativeId:'profile-session',nativeType:'message',capturedAt:at,
@@ -177,6 +177,7 @@ test('verified native tail records attach workspace once per session',async()=>{
     const runner=new NativeOnlyRuntimeCapture({
       nativeSessionCatalog:{async upsert(){}} as never,
       identity:{async resolveWorkspace(input){
+        assert.ok(input.path)
         workspaces.push(input.path)
         return {id:'ws-1',hostId:'host',path:root,projectId:'prj-1'}
       }},

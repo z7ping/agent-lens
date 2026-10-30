@@ -8,11 +8,12 @@ export type MissingIntegrationLiveReason =
 /** Missing Live is an Integration lifecycle fact, never a provider ID heuristic. */
 export function missingIntegrationLiveReason(item: IntegrationManagementItemDto): MissingIntegrationLiveReason {
   const pack = item.packageState
-  if (!pack?.installed) return 'not-installed'
-  if (pack.integrity !== 'verified' || pack.compatibility !== 'compatible'
-    || integrationPackageUpdateAvailable(pack)) return 'needs-update'
+  // 未提供包管理状态不等于未安装；原生内置接入仍由能力和授权事实说明原因。
+  if (pack && !pack.installed) return 'not-installed'
+  if (pack && (pack.integrity !== 'verified' || pack.compatibility !== 'compatible'
+    || integrationPackageUpdateAvailable(pack))) return 'needs-update'
   if (!item.enabled.configured || !item.enabled.effective) return 'disabled'
-  if (item.enabled.restartRequired || pack.restartRequired) return 'needs-restart'
+  if (item.enabled.restartRequired || pack?.restartRequired) return 'needs-restart'
   const live = item.capabilities.find(capability => capability.capability === 'live')
   if (live?.authorization === 'required' || live?.reasonCode === 'authorization-required') {
     return 'needs-authorization'

@@ -765,8 +765,9 @@ export abstract class AgentLensReviewModel extends AgentLensIntegrationModel {
       ])
       const cachedTail = index?.state==='available' && index.coverage==='complete'
         ?index.items[0]?.cursor:undefined
+      const cursor = options.cursor ?? cachedTail
       const window = await this.api.nativeReviewById(id, {
-        ...(options.cursor || cachedTail ? {cursor:options.cursor??cachedTail} : {}),
+        ...(cursor ? {cursor} : {}),
         turnLimit:options.turnLimit??(cachedTail?3:4),
         signal:controller.signal,
       })

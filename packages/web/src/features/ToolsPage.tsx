@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import type { TFunction } from 'i18next'
 import { useTranslation } from 'react-i18next'
 import { createPortal } from 'react-dom'
@@ -13,6 +13,7 @@ import { ToolKindIcon, toolVisualKind } from '../components/ToolKindIcon'
 import { SidebarFilterDisclosure } from '../components/SidebarFilterDisclosure'
 import { Button, Drawer, IconButton, SelectMenu, UiIcon } from '../components/ui'
 import { projectSelectOption } from './project-presentation'
+import { NativeFailureExamples } from './NativeFailureExamples'
 
 const toolDetailApi = new AgentLensApi()
 
@@ -161,9 +162,10 @@ export function ToolsPage({ model, toolbarHost }: { model: AgentLensClientModel;
   const canRelaxFilters = Boolean(usage.filters.sourceIds !== null || usage.filters.projectId || usage.filters.range !== 'all')
   const blockingError = Boolean(usage.error && !data)
   const [selectedToolKey, setSelectedToolKey] = useState<string | null>(null)
-  const [selectedNativeTool,setSelectedNativeTool]=useState<(typeof nativeTools)[number]|null>(null)
+  const [selectedNativeTool,setSelectedNativeTool]=useState<(typeof nativeToolRows)[number]|null>(null)
   const [nativeDetailLoading,setNativeDetailLoading]=useState(false)
   const [nativeDetailError,setNativeDetailError]=useState('')
+  const nativeRequest = useRef(0)
   const [detailTools, setDetailTools] = useState<Map<string, ToolUsageDto>>(() => new Map())
   const [detailLoadingKey, setDetailLoadingKey] = useState<string | null>(null)
   const [detailError, setDetailError] = useState('')
@@ -182,6 +184,7 @@ export function ToolsPage({ model, toolbarHost }: { model: AgentLensClientModel;
     return sort.direction === 'ascending' ? delta : -delta
   }), [tools, sort])
   useEffect(() => {
+    nativeRequest.current++
     setSelectedToolKey(null)
     setSelectedNativeTool(null)
     setNativeDetailError('')
@@ -192,7 +195,8 @@ export function ToolsPage({ model, toolbarHost }: { model: AgentLensClientModel;
 
   // Native-only usage drills into indexed numeric facts. It must never fake
   // per-session/event links or success duration from an aggregate row.
-  const selectNativeTool=async(tool:(typeof nativeTools)[number])=>{
+  const selectNativeTool=async(tool:(typeof nativeToolRows)[number])=>{
+    const request=++nativeRequest.current
     setSelectedNativeTool(tool)
     setNativeDetailLoading(true)
     setNativeDetailError('')
@@ -200,18 +204,18 @@ export function ToolsPage({ model, toolbarHost }: { model: AgentLensClientModel;
     try{
       const detail=await toolDetailApi.usageDetail(
         {...originalFilters,sourceIds:[tool.sourceId]},tool.nativeToolName)
-      if(!sameUsageFilters(model.getSnapshot().usage.filters,originalFilters))return
+      if(request!==nativeRequest.current||!sameUsageFilters(model.getSnapshot().usage.filters,originalFilters))return
       if(detail.meta.native?.state!=='available'){
         throw new Error(t('page.nativePartialNote'))
       }
-      const precise=detail.meta.native.tools?.find(item=>
+      const precise=(tool.partial?detail.meta.native.observed?.tools:detail.meta.native.tools)?.find(item=>
         item.sourceId===tool.sourceId&&item.nativeToolName===tool.nativeToolName)
-      if(precise)setSelectedNativeTool(precise)
+      if(precise)setSelectedNativeTool({...precise,partial:tool.partial})
     }catch(error){
-      if(sameUsageFilters(model.getSnapshot().usage.filters,originalFilters)){
+      if(request===nativeRequest.current&&sameUsageFilters(model.getSnapshot().usage.filters,originalFilters)){
         setNativeDetailError(error instanceof Error?error.message:String(error))
       }
-    }finally{setNativeDetailLoading(false)}
+    }finally{if(request===nativeRequest.current)setNativeDetailLoading(false)}
   }
 
   const selectTool = async (key: string) => {
@@ -299,7 +303,7 @@ export function ToolsPage({ model, toolbarHost }: { model: AgentLensClientModel;
 
         {nativeHasSessions && nativeMetrics?.state==='available' && <section className="tool-table-card"
           aria-label={t('page.nativeTitle')}>
-          <div className="table-section-head"><div><h2>{t('page.nativeTitle')}</h2>
+          <div className="table-section-head"><div className="tool-native-summary"><h2>{t('page.nativeTitle')}</h2>
             <small>{t('page.nativeScope', {ready:nativeMetrics.readySessions,
               eligible:nativeMetrics.eligibleSessions})}</small>
             {nativeMetrics.partialSessions>0 && <small>{t('page.nativeObservedSummary',{
@@ -321,9 +325,9 @@ export function ToolsPage({ model, toolbarHost }: { model: AgentLensClientModel;
                 </th>)}
               </tr></thead>
               <tbody>{nativeToolRows.map(tool=><tr key={tool.sourceId+'::'+tool.nativeToolName+'::'+tool.partial}
-                tabIndex={tool.partial ? undefined : 0}
-                onClick={tool.partial ? undefined : ()=>{void selectNativeTool(tool)}}
-                onKeyDown={tool.partial ? undefined : event=>{if(event.key==='Enter'||event.key===' '){
+                tabIndex={0}
+                onClick={()=>{void selectNativeTool(tool)}}
+                onKeyDown={event=>{if(event.key==='Enter'||event.key===' '){
                   event.preventDefault();void selectNativeTool(tool)
                 }}}> 
                 <td><span className="tool-table-name"><ToolKindIcon kind={toolVisualKind(tool.nativeToolName)}/>
@@ -457,8 +461,8 @@ export function ToolsPage({ model, toolbarHost }: { model: AgentLensClientModel;
         open
         className="tool-drill-overlay"
         title={<span className="tool-drawer-title"><ToolKindIcon kind={toolVisualKind(selectedNativeTool.nativeToolName)}/>{selectedNativeTool.nativeToolName}</span>}
-        description={sourceLabels([selectedNativeTool.sourceId])}
-        onClose={()=>setSelectedNativeTool(null)}
+        description={sourceLabels([selectedNativeTool.sourceId])+(selectedNativeTool.partial?t('page.nativeObservedSuffix'):'')}
+        onClose={()=>{nativeRequest.current++;setSelectedNativeTool(null)}}
       >
         <div className="tool-drill-body">
           <div className="tool-drill-grid">
@@ -472,6 +476,8 @@ export function ToolsPage({ model, toolbarHost }: { model: AgentLensClientModel;
           {nativeDetailLoading&&<div className="tool-drill-note">{t('page.loadingSessions')}</div>}
           {nativeDetailError&&<div className="tool-drill-note">{nativeDetailError}</div>}
           <div className="tool-drill-note">{t('page.nativeOnlyModeNote')}</div>
+          <NativeFailureExamples filters={{...usage.filters,sourceIds:[selectedNativeTool.sourceId]}}
+            toolName={selectedNativeTool.nativeToolName}/>
         </div>
       </Drawer>}
 

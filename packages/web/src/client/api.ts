@@ -78,7 +78,7 @@ const managedAssetReadInFlight = new Map<string, Promise<unknown>>()
 const aggregateReadInFlight = new Map<string, Promise<unknown>>()
 const abortableAggregateReadInFlight = new Map<string, AbortableInFlightEntry>()
 
-function rangeStart(range: QueryFilters['range']): string | undefined {
+export function rangeStart(range: QueryFilters['range']): string | undefined {
   if (range === 'all') return undefined
   const date = new Date()
   if (range === 'today') date.setHours(0, 0, 0, 0)

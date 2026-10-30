@@ -645,7 +645,7 @@ export function useReviewSession(model: AgentLensClientModel, embedded: boolean)
     }
   }
 
-  const onTurnRailSelect = async (item:{ordinal?:number}) => {
+  const onTurnRailSelect = async (item:{ordinal?:number | undefined}) => {
     if(!detail?.id || !item.ordinal || roundFilterLoading)return
     nativeNavigationRevisionRef.current++
     await model.jumpToReviewInteraction(item.ordinal)

@@ -35,7 +35,8 @@ if (!reviewPage.includes('className="round-nav-filters"') || !reviewPage.include
 if (!reviewPage.includes('className="round-nav-live"')) throw new Error('任务复盘必须保留新记录快捷入口')
 for (const marker of [
   'boundaryNavigation={detail ? {',
-  'startDisabled: roundFilterLoading || atStart',
+  "startDisabled: roundFilterLoading || (detail.statisticsCompleteness==='window'",
+  '? detail.interactions[0]?.ordinal===1 : atStart)',
   'endDisabled: roundFilterLoading',
   'onStart: showFromStart',
   'onEnd: jumpToLatest',
@@ -50,8 +51,7 @@ for (const marker of [
   "aria-label={t('surface.jumpStart')}",
   'className="task-boundary-latest"',
   "title={t('surface.jumpLatest')}",
-  'onClick={() => void resolvedBoundaryNavigation.onStart()}',
-  'onClick={() => void resolvedBoundaryNavigation.onEnd()}',
+  // 实际点击回调由 check-task-style-ownership.mjs 统一校验，允许取消待定位状态。
 ]) {
   if (!taskSurface.includes(marker)) throw new Error(`TaskSurface 缺少统一边界导航契约：${marker}`)
 }

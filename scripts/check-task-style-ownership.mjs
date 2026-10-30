@@ -96,10 +96,13 @@ for (const marker of [
   'const resolvedBoundaryNavigation: TaskBoundaryNavigation | undefined',
   'className="task-boundary-nav"',
   "aria-label={t('surface.boundaryNavigation')}",
-  'onClick={() => void resolvedBoundaryNavigation.onStart()}',
-  'onClick={() => void resolvedBoundaryNavigation.onEnd()}',
 ]) {
   if (!taskSurface.includes(marker)) throw new Error(`TaskSurface 缺少统一会话边界导航契约：${marker}`)
+}
+for (const action of ['onStart', 'onEnd']) {
+  // 允许点击回调先取消待定位轮次；保留对边界操作真实调用的校验。
+  const handler = new RegExp(`onClick=\\{\\(\\) => (?:void resolvedBoundaryNavigation\\.${action}\\(\\)|\\{[^}]*void resolvedBoundaryNavigation\\.${action}\\(\\)[^}]*\\})\\}`)
+  if (!handler.test(taskSurface)) throw new Error(`TaskSurface 缺少边界点击调用：${action}`)
 }
 for (const marker of [
   'boundaryNavigation={detail ? {',

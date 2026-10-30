@@ -19,7 +19,7 @@ test('native sparse turn index is bounded, restart-resumable and invalidates rep
   const id='native:'+'a'.repeat(32)
   const checkpoint=new Map<string,unknown>()
   const store:NativeTurnIndexCheckpointStore={
-    async get<T>(scope,key){return checkpoint.get(scope+'|'+key) as T??null},
+    async get<T>(scope:string,key:string){return checkpoint.get(scope+'|'+key) as T??null},
     async set(scope,key,value){checkpoint.set(scope+'|'+key,value)},
   }
   const entry=():NativeSessionCatalogEntry=>({
@@ -31,7 +31,7 @@ test('native sparse turn index is bounded, restart-resumable and invalidates rep
   const sources={list(){return [{
     manifest:{sourceId:'pi',parserVersion:'v1'},readNativeSessionPage:()=>undefined,
   }]}} as unknown as SourceService
-  const policy={isSourceEnabled(sourceId:string){return sourceId==='pi'}} as CapturePolicyService
+  const policy={isSourceEnabled(sourceId:string){return sourceId==='pi'}} as unknown as CapturePolicyService
   let reads=0
   const pageLimits:number[]=[]
   const reader:NativeSessionWindowReader={

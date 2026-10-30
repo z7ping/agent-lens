@@ -169,7 +169,7 @@ export interface LiveRuntimeState {
   nativeSessionId?: string
   workspacePath?: string
   /** Agent-provided workspace name; not a generated task title. */
-  projectName?: string
+  projectName?: string | undefined
   isStreaming: boolean
   pendingMessageCount: number
   contextUsage?: LiveContextUsage | undefined
