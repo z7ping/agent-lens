@@ -10,7 +10,7 @@ function candidate(kind:ObservationCandidate['kind'],payload:unknown,extra:Parti
 const input={
   sourceId:'pi',installationId:'pi-local',nativeSessionId:'native-1',
   fileIdentity:'inode',fileSize:1200,fileMtimeMs:100,
-  parserVersion:'pi-v1',projectionVersion:'native-source-metrics-v1',
+  parserVersion:'pi-v1',projectionVersion:'native-source-metrics-v2',
   computedAt:at,complete:true,
 }
 
@@ -36,8 +36,8 @@ test('native metric aggregation reuses normalized Tool/Usage semantics across pa
     input:snapshot.inputTokens,output:snapshot.outputTokens,
   },{coverage:'complete',interactions:2,calls:2,results:2,toolErrors:1,errors:2,input:127,output:41})
   assert.deepEqual(snapshot.tools,[
-    {nativeToolName:'read',callCount:1,resultCount:1,errorCount:0,totalDurationMs:9},
-    {nativeToolName:'shell',callCount:1,resultCount:1,errorCount:1,totalDurationMs:22},
+    {nativeToolName:'read',callCount:1,resultCount:1,errorCount:0,totalDurationMs:9,durationSampleCount:1,maxDurationMs:9},
+    {nativeToolName:'shell',callCount:1,resultCount:1,errorCount:1,totalDurationMs:22,durationSampleCount:1,maxDurationMs:22},
   ])
   for(const secret of ['Private prompt','secret','/private','private stdout','private provider error']){
     assert.equal(JSON.stringify(snapshot).includes(secret),false)
@@ -71,4 +71,23 @@ test('native coverage is explicitly partial when source tool attribution is miss
   assert.equal(value.outputTokens,null,
     'Unknown output Token usage must not silently become zero')
   assert.equal(a.snapshot({...input,complete:false}).coverage,'partial')
+})
+
+test('native tool duration uses observed samples, not result count; zero duration is valid',()=>{
+  const a=new NativeSessionMetricAccumulator()
+  a.add(candidate('tool.call',{nativeToolName:'shell',callId:'x'}))
+  a.add(candidate('tool.result',{callId:'x',durationMs:0}))
+  a.add(candidate('tool.result',{callId:'x',durationMs:5500}))
+  a.add(candidate('tool.result',{callId:'x'}))
+  a.add(candidate('tool.result',{callId:'x',durationMs:-3}))
+  const b=a.snapshot(input).tools[0]!
+  assert.equal(b.resultCount,4)
+  assert.equal(b.durationSampleCount,2)
+  assert.equal(b.totalDurationMs,5500)
+  assert.equal(b.maxDurationMs,5500)
+  const unknown=new NativeSessionMetricAccumulator()
+  unknown.add(candidate('tool.call',{nativeToolName:'read',callId:'y'}))
+  unknown.add(candidate('tool.result',{callId:'y'}))
+  assert.equal(unknown.snapshot(input).tools[0]?.durationSampleCount,0)
+  assert.equal(unknown.snapshot(input).tools[0]?.maxDurationMs,null)
 })
