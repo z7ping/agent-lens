@@ -73,7 +73,14 @@ export class NativeSessionMetricAccumulator {
           if(failed)tool.errorCount++
           const duration=payload.durationMs ?? payload.duration_ms
           const ms=count(duration)
-          if(ms!==null)tool.totalDurationMs+=ms
+          if(ms!==null){
+            const total=tool.totalDurationMs+ms
+            if(Number.isSafeInteger(total)){
+              tool.totalDurationMs=total
+              tool.durationSampleCount=(tool.durationSampleCount??0)+1
+              tool.maxDurationMs=Math.max(tool.maxDurationMs??0,ms)
+            }else this.truncated=true
+          }
         } else this.truncated=true
         break
       }
@@ -112,7 +119,7 @@ export class NativeSessionMetricAccumulator {
     let value=this.tools.get(name)
     if(value)return value
     if(this.tools.size>=MAX_TOOL_NAMES)return null
-    value={nativeToolName:name,callCount:0,resultCount:0,errorCount:0,totalDurationMs:0}
+    value={nativeToolName:name,callCount:0,resultCount:0,errorCount:0,totalDurationMs:0,durationSampleCount:0,maxDurationMs:null}
     this.tools.set(name,value)
     return value
   }
