@@ -1,7 +1,7 @@
 import type Database from 'better-sqlite3'
-import { SLIM_SCHEMA_SQL } from './slim-schema-sql'
+import { SLIM_SCHEMA_SQL, SLIM_SCHEMA_V2_SQL } from './slim-schema-sql'
 
-export const SLIM_SCHEMA_VERSION = 1
+export const SLIM_SCHEMA_VERSION = 2
 
 /** Only create the replacement schema in an EMPTY staging database.
  * An existing v38 installation cannot receive replacement DDL during startup.
@@ -26,11 +26,38 @@ export async function initializeSlimSchema(db: Database.Database): Promise<void>
     db.prepare(`
       INSERT INTO schema_migrations(version,name,applied_at)
       VALUES (?,?,?)
-    `).run(SLIM_SCHEMA_VERSION, 'slim-native-session-v1', new Date().toISOString())
+    `).run(1, 'slim-native-session-v1', new Date().toISOString())
+    db.exec(SLIM_SCHEMA_V2_SQL)
+    db.prepare(`
+      INSERT INTO schema_migrations(version,name,applied_at)
+      VALUES (?,?,?)
+    `).run(2, 'slim-tool-duration-v2', new Date().toISOString())
     const violations = db.pragma('foreign_key_check') as unknown[]
     if (violations.length > 0) throw new Error('Slim database has foreign-key violations')
     db.exec('COMMIT')
   } catch (error) {
+    db.exec('ROLLBACK')
+    throw error
+  }
+}
+
+/** Only extend an authenticated slim v1 file. Never alter a Legacy database.
+ * A read-only v1 file needs one writable open before duration analytics.
+ */
+export function upgradeSlimSchema(db: Database.Database): void {
+  if (!isSlimDatabase(db)) return
+  const row=db.prepare('SELECT MAX(version) AS version FROM schema_migrations')
+    .get() as {version:number|null}
+  if(row.version===SLIM_SCHEMA_VERSION)return
+  if(row.version!==1)throw new Error('Unexpected slim schema version')
+  if(db.readonly)throw new Error('Slim v1 tool duration migration requires writable access')
+  db.exec('BEGIN IMMEDIATE')
+  try{
+    db.exec(SLIM_SCHEMA_V2_SQL)
+    db.prepare(`INSERT INTO schema_migrations(version,name,applied_at)
+      VALUES (?,?,?)`).run(2,'slim-tool-duration-v2',new Date().toISOString())
+    db.exec('COMMIT')
+  }catch(error){
     db.exec('ROLLBACK')
     throw error
   }
