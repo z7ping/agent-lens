@@ -14,7 +14,9 @@ function section(start: string, end: string): string {
 }
 
 test('Pi Live count-only queries never calculate full-round summaries', () => {
-  const state = {
+  const state: { leaf: string; entries: Array<{
+    id: string; type: string; message: { role: string; content?: unknown }
+  }> } = {
     leaf: 'main',
     entries: [
       { id: 'u1', type: 'message', message: { role: 'user', content: [{ type: 'text', text: 'first' }] } },
@@ -40,9 +42,9 @@ test('Pi Live count-only queries never calculate full-round summaries', () => {
     LIVE_HISTORY_INDEX_QUERY_MAX_LIMIT: 120,
   }
   const api = runInNewContext(
-    section('function roundIndex(', '\\nfunction snapshotRoundPage(')
-      + section('function historyIndex(queryValue)', '\\nfunction sessionTreePreview(')
-      + '\\n({ historyIndex })',
+    section('function roundIndex(', '\nfunction snapshotRoundPage(')
+      + section('function historyIndex(queryValue)', '\nfunction sessionTreePreview(')
+      + '\n({ historyIndex })',
     context,
   ) as { historyIndex(query: { limit?: number; cursor?: string; fromOrdinal?: number }): {
     total: number; items: Array<{ cursor: string; ordinal: number; summary: unknown }>
@@ -84,9 +86,18 @@ test('Pi Live count-only queries never calculate full-round summaries', () => {
 })
 
 test('Pi in-process fallback also avoids cloning large index maps on append', () => {
-  assert.match(inProcess, /const rows = appendOnly \\? cached\\.rows : \\[\\]/)
-  assert.match(inProcess, /const entryPositions = appendOnly \\? cached\\.entryPositions/)
-  assert.match(inProcess, /const roundByCursor = appendOnly \\? cached\\.roundByCursor/)
-  assert.doesNotMatch(inProcess, /new Map\\(cached\\.entryPositions\\)/)
-  assert.doesNotMatch(inProcess, /new Map\\(cached\\.roundByCursor\\)/)
+  assert.match(inProcess, /const rows = appendOnly \? cached\.rows : \[\]/)
+  assert.match(inProcess, /const entryPositions = appendOnly \? cached\.entryPositions/)
+  assert.match(inProcess, /const roundByCursor = appendOnly \? cached\.roundByCursor/)
+  assert.doesNotMatch(inProcess, /new Map\(cached\.entryPositions\)/)
+  assert.doesNotMatch(inProcess, /new Map\(cached\.roundByCursor\)/)
+})
+
+test('Pi snapshot round metadata seeks directly to the visible index range', () => {
+  const source = section('function snapshotRoundPage(', '\nfunction beginSnapshotTransfer(')
+  assert.match(source, /while \(left < right\)/)
+  assert.match(source, /rows\[middle\]\.entryIndex < start/)
+  assert.doesNotMatch(source, /for \(const row of rows\)/)
+  assert.match(inProcess, /while \(left < right\)/)
+  assert.doesNotMatch(inProcess, /for \(const row of rows\)/)
 })

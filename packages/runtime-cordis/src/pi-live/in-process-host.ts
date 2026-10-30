@@ -238,10 +238,17 @@ class InProcessHandle implements PiRuntimeHandle {
   private roundPage(all: readonly unknown[], start: number, end: number) {
     if (!this.roundIndexCache) return undefined
     const rows = this.roundIndex(all)
+    let left = 0
+    let right = rows.length
+    while (left < right) {
+      const middle = Math.floor((left + right) / 2)
+      if (rows[middle]!.entryIndex < start) left = middle + 1
+      else right = middle
+    }
     let first: PiRoundIndexRow | undefined
     let last: PiRoundIndexRow | undefined
-    for (const row of rows) {
-      if (row.entryIndex < start) continue
+    for (let index = left; index < rows.length; index++) {
+      const row = rows[index]!
       if (row.entryIndex >= end) break
       first ??= row
       last = row

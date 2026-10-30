@@ -841,10 +841,18 @@ function roundIndex(all = session.sessionManager.getEntries()) {
 function snapshotRoundPage(all, start, end) {
   if (!roundIndexCache) return undefined
   const rows = roundIndex(all)
+  // A snapshot near the end should not walk every earlier round.
+  let left = 0
+  let right = rows.length
+  while (left < right) {
+    const middle = Math.floor((left + right) / 2)
+    if (rows[middle].entryIndex < start) left = middle + 1
+    else right = middle
+  }
   let first
   let last
-  for (const row of rows) {
-    if (row.entryIndex < start) continue
+  for (let index = left; index < rows.length; index++) {
+    const row = rows[index]
     if (row.entryIndex >= end) break
     first ??= row
     last = row
