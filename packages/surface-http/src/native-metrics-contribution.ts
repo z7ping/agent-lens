@@ -82,6 +82,11 @@ export async function nativeMetricContribution(
         sourceId:item.sourceId,nativeToolName:tool.nativeToolName,
         callCount:tool.callCount,resultCount:tool.resultCount,
         errorCount:tool.errorCount,sessionCount:tool.sessionCount,
+        ...((tool.durationSampleCount??0)>0?{
+          durationSampleCount:tool.durationSampleCount!,
+          averageDurationMs:tool.totalDurationMs/tool.durationSampleCount!,
+          maxDurationMs:tool.maxDurationMs??null,
+        }:{}),
       })))
       :[]
     rawTools.sort((a,b)=>b.callCount-a.callCount
@@ -95,6 +100,11 @@ export async function nativeMetricContribution(
         sourceId:item.sourceId,nativeToolName:tool.nativeToolName,
         callCount:tool.callCount,resultCount:tool.resultCount,
         errorCount:tool.errorCount,sessionCount:tool.sessionCount,
+        ...((tool.durationSampleCount??0)>0?{
+          durationSampleCount:tool.durationSampleCount!,
+          averageDurationMs:tool.totalDurationMs/tool.durationSampleCount!,
+          maxDurationMs:tool.maxDurationMs??null,
+        }:{}),
       }))):[]
     observedTools.sort((a,b)=>b.callCount-a.callCount
       || a.sourceId.localeCompare(b.sourceId)

@@ -5,10 +5,11 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import Database from 'better-sqlite3'
 import { assertSlimSchema, FORBIDDEN_LEGACY_TABLES, initializeSlimSchema, isSlimDatabase } from './slim-schema'
-import { SLIM_SCHEMA_SQL } from './slim-schema-sql'
+import { SLIM_SCHEMA_SQL, SLIM_SCHEMA_V2_SQL } from './slim-schema-sql'
 import { inspectLegacyCutover } from './slim-cutover-preflight'
+import { SqliteSlimStorage } from './slim-storage'
 
-test('slim v1 is a separate fresh schema without old event or replication tables', async () => {
+test('slim v2 is a separate fresh schema without old event or replication tables', async () => {
   const db = new Database(':memory:')
   try {
     await initializeSlimSchema(db)
@@ -22,7 +23,7 @@ test('slim v1 is a separate fresh schema without old event or replication tables
     }
     assert.deepEqual(db.pragma('foreign_key_check'), [])
     assert.equal((db.prepare('SELECT MAX(version) AS v FROM schema_migrations')
-      .get() as {v:number}).v, 1)
+      .get() as {v:number}).v, 2)
     // Data provenance and numeric aggregation are represented without content.
     db.prepare(`INSERT INTO native_session_catalog(
       source_id,installation_id,native_session_id,location_kind,file_path,
@@ -113,6 +114,8 @@ test('bundled slim schema exactly matches the reviewed standalone SQL file', asy
   const diskSql = await readFile(new URL('../slim/001-schema.sql', import.meta.url), 'utf8')
   // Windows checkout 的 CRLF 不改变 SQL 合同；其余字符仍须完全一致。
   assert.equal(SLIM_SCHEMA_SQL.replaceAll('\r\n','\n'), diskSql.replaceAll('\r\n','\n'))
+  const diskV2 = await readFile(new URL('../slim/002-tool-duration.sql', import.meta.url), 'utf8')
+  assert.equal(SLIM_SCHEMA_V2_SQL.replaceAll('\r\n','\n'),diskV2.replaceAll('\r\n','\n'))
   const legacy = new Database(':memory:')
   try {
     legacy.exec(`CREATE TABLE schema_migrations(version INTEGER PRIMARY KEY,name TEXT,applied_at TEXT);
@@ -124,4 +127,37 @@ test('bundled slim schema exactly matches the reviewed standalone SQL file', asy
     await initializeSlimSchema(slim)
     assert.equal(isSlimDatabase(slim), true)
   } finally { slim.close() }
+})
+
+test('existing slim v1 upgrades atomically without losing historical tool counts', async()=>{
+  const dir=await mkdtemp(join(tmpdir(),'al-slim-duration-'))
+  const path=join(dir,'slim.sqlite')
+  try {
+    const old=new Database(path)
+    old.exec(SLIM_SCHEMA_SQL)
+    old.prepare(`INSERT INTO schema_migrations(version,name,applied_at) VALUES(?,?,?)`)
+      .run(1,'slim-native-session-v1','2026-10-25')
+    old.exec(`INSERT INTO native_session_metrics(
+      source_id,installation_id,native_session_id,file_identity,file_size,
+      file_mtime_ms,parser_version,projection_version,coverage,
+      interaction_count,tool_call_count,tool_result_count,tool_error_count,error_count,computed_at
+    ) VALUES('pi','local','s','inode',1,1,'p1','old','complete',1,1,1,0,0,'2026-10-25');
+    INSERT INTO native_session_tool_metrics(
+      source_id,installation_id,native_session_id,native_tool_name,
+      call_count,result_count,error_count,total_duration_ms
+    ) VALUES ('pi','local','s','shell',1,1,0,250);`)
+    old.close()
+    const upgraded=SqliteSlimStorage.openExisting(path)
+    try {
+      const data=upgraded.db.prepare('SELECT * FROM native_session_tool_metrics').get()
+        as {total_duration_ms:number;duration_sample_count:number;max_duration_ms:number|null}
+      assert.equal(data.total_duration_ms,250)
+      assert.equal(data.duration_sample_count,0)
+      assert.equal(data.max_duration_ms,null)
+      assert.equal((upgraded.db.prepare('SELECT MAX(version) AS version FROM schema_migrations')
+        .get() as {version:number}).version,2)
+    } finally {await upgraded.close()}
+    const again=SqliteSlimStorage.openExisting(path)
+    await again.close()
+  }finally{await rm(dir,{recursive:true,force:true})}
 })

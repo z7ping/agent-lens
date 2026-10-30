@@ -32,8 +32,8 @@ const snapshot=():NativeSessionMetricSnapshot=>({
   toolCallCount:5,toolResultCount:4,toolErrorCount:1,errorCount:2,
   inputTokens:null,outputTokens:200,computedAt:at,
   tools:[
-    {nativeToolName:'read',callCount:3,resultCount:3,errorCount:0,totalDurationMs:12},
-    {nativeToolName:'shell',callCount:2,resultCount:1,errorCount:1,totalDurationMs:300},
+    {nativeToolName:'read',callCount:3,resultCount:3,errorCount:0,totalDurationMs:12,durationSampleCount:3,maxDurationMs:8},
+    {nativeToolName:'shell',callCount:2,resultCount:1,errorCount:1,totalDurationMs:300,durationSampleCount:1,maxDurationMs:300},
   ],
 })
 
@@ -53,6 +53,12 @@ test('native metrics persist only bounded numerical rollups, never event content
       ...snapshot(),tools:[...snapshot().tools].sort((a,b)=>a.nativeToolName.localeCompare(b.nativeToolName)),
     })
     assert.equal(result.snapshot.inputTokens,null,'unknown usage must not become zero')
+    assert.equal(result.snapshot.tools.find(tool=>tool.nativeToolName==='shell')?.durationSampleCount,1)
+    assert.equal(result.snapshot.tools.find(tool=>tool.nativeToolName==='shell')?.maxDurationMs,300)
+    await assert.rejects(metrics.replace({...snapshot(),tools:[{
+      nativeToolName:'invalid',callCount:1,resultCount:1,errorCount:0,
+      totalDurationMs:0,durationSampleCount:0,maxDurationMs:10,
+    }]}),/Invalid native tool duration samples/)
     const tableRows=storage.db.prepare(`
       SELECT name,sql FROM sqlite_master
       WHERE name IN ('native_session_metrics','native_session_tool_metrics')
@@ -69,7 +75,7 @@ test('native metrics persist only bounded numerical rollups, never event content
     assert.equal((storage.db.prepare('SELECT COUNT(*) as n FROM native_session_tool_metrics')
       .get() as {n:number}).n,2)
     const shorter={...snapshot(),coverage:'partial' as const,inputTokens:0,
-      tools:[{nativeToolName:'shell',callCount:1,resultCount:0,errorCount:0,totalDurationMs:0}]}
+      tools:[{nativeToolName:'shell',callCount:1,resultCount:0,errorCount:0,totalDurationMs:0,durationSampleCount:0,maxDurationMs:null}]}
     assert.equal(await metrics.replace(shorter),true)
     const updated=await metrics.get(identity)
     assert.equal(updated.state,'available')

@@ -86,6 +86,7 @@ export interface NativeMetricOverviewSourceDto {
   tools:Array<{
     nativeToolName:string;callCount:number;resultCount:number
     errorCount:number;totalDurationMs:number;sessionCount:number
+    durationSampleCount?:number;maxDurationMs?:number|null
   }>
   toolsTruncated:boolean
 }
@@ -131,6 +132,9 @@ export type NativeMetricContributionDto =
           resultCount:number
           errorCount:number
           sessionCount:number
+          durationSampleCount?:number
+          averageDurationMs?:number|null
+          maxDurationMs?:number|null
         }>
         toolsTruncated?:boolean
       }

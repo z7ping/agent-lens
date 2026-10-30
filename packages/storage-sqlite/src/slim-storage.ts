@@ -16,7 +16,7 @@ import { SqliteAssetInventoryReader } from './asset-inventory'
 import { SqliteCheckpointRepository } from './checkpoints'
 import { SqliteLaunchableProjectReader } from './launchable-projects'
 import { SqliteMaintenanceJobStore } from './maintenance-jobs'
-import { assertSlimSchema, initializeSlimSchema } from './slim-schema'
+import { assertSlimSchema, initializeSlimSchema, upgradeSlimSchema, SLIM_SCHEMA_VERSION } from './slim-schema'
 
 /**
  * The replacement SQLite composition root: no Canonical Repositories,
@@ -48,6 +48,7 @@ export class SqliteSlimStorage {
   readonly maintenanceJobs: SqliteMaintenanceJobStore
 
   constructor(readonly db: Database.Database) {
+    upgradeSlimSchema(db)
     assertSlimSchema(db)
     db.pragma('foreign_keys = ON')
     db.pragma('busy_timeout = 5000')
@@ -132,7 +133,7 @@ export class SqliteSlimStorage {
   health():Promise<StorageHealth> {
     return this.executor.run(()=>{
       this.db.prepare('SELECT 1 AS ready').get()
-      return {ok:true,schemaVersion:1,details:{
+      return {ok:true,schemaVersion:SLIM_SCHEMA_VERSION,details:{
         schemaKind:'slim-native-session-v1',
         readonly:this.db.readonly,
       }}
