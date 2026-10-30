@@ -42,7 +42,7 @@ function metric(nativeSessionId:string,coverage:'complete'|'partial'='complete')
     toolResultCount:2,toolErrorCount:1,errorCount:1,
     inputTokens:null,outputTokens:10,
     tools:[{nativeToolName:'shell',callCount:3,resultCount:2,
-      errorCount:1,totalDurationMs:200}],
+      errorCount:1,totalDurationMs:200,durationSampleCount:2,maxDurationMs:150}],
   }
 }
 
@@ -93,6 +93,8 @@ test('revoked Source certification instantly masks previously complete Native-on
     assert.equal(verified.readySessions,1)
     assert.equal(verified.totals.toolCallCount,3)
     assert.equal(verified.tools.length,1)
+    assert.equal(verified.tools[0]?.durationSampleCount,2)
+    assert.equal(verified.tools[0]?.maxDurationMs,150)
     // Changing Source certification is NOT a new file/Parser revision.
     // Historical complete numerical rows must not leak into Usage/Insights.
     for(const query of [{...scope,coverageCertified:false},scope]){
@@ -104,6 +106,8 @@ test('revoked Source certification instantly masks previously complete Native-on
       assert.equal(revoked.totals.inputTokens,null)
       assert.equal(revoked.totals.outputTokens,null)
       assert.deepEqual(revoked.tools,[])
+      assert.equal(revoked.observed?.tools[0]?.durationSampleCount,2)
+      assert.equal(revoked.observed?.tools[0]?.maxDurationMs,150)
       assert.equal(revoked.observed?.toolCallCount,3)
       assert.equal(revoked.observed?.interactionCount,5)
       assert.equal(revoked.observed?.tools[0]?.nativeToolName,'shell')
