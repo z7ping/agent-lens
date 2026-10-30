@@ -4,7 +4,7 @@
  * IDs, prompts, arguments, outputs, raw errors, evidence, or payload JSON.
  */
 /** A projection rule change requires rebuilding the affected Source sessions. */
-export const NATIVE_SESSION_METRIC_PROJECTION_VERSION='native-source-metrics-v1'
+export const NATIVE_SESSION_METRIC_PROJECTION_VERSION='native-source-metrics-v2'
 
 export interface NativeSessionMetricOverviewQuery {
   sourceId:string
@@ -26,6 +26,10 @@ export interface NativeSessionMetricToolTotal {
   resultCount:number
   errorCount:number
   totalDurationMs:number
+  /** Count of result events with an explicitly observed duration. */
+  durationSampleCount?:number
+  /** Null when no duration can be observed; zero is a valid duration. */
+  maxDurationMs?:number|null
   sessionCount:number
 }
 export interface NativeSessionMetricOverview {
@@ -77,6 +81,8 @@ export interface NativeSessionMetricTool {
   resultCount: number
   errorCount: number
   totalDurationMs: number
+  durationSampleCount?: number
+  maxDurationMs?: number | null
 }
 
 export interface NativeSessionMetricSnapshot {
