@@ -115,7 +115,7 @@ test('bundled slim schema exactly matches the reviewed standalone SQL file', asy
   // Windows checkout 的 CRLF 不改变 SQL 合同；其余字符仍须完全一致。
   assert.equal(SLIM_SCHEMA_SQL.replaceAll('\r\n','\n'), diskSql.replaceAll('\r\n','\n'))
   const diskV2 = await readFile(new URL('../slim/002-tool-duration.sql', import.meta.url), 'utf8')
-  assert.equal(SLIM_SCHEMA_V2_SQL.replaceAll('\\r\\n','\\n'),diskV2.replaceAll('\\r\\n','\\n'))
+  assert.equal(SLIM_SCHEMA_V2_SQL.replaceAll('\r\n','\n'),diskV2.replaceAll('\r\n','\n'))
   const legacy = new Database(':memory:')
   try {
     legacy.exec(`CREATE TABLE schema_migrations(version INTEGER PRIMARY KEY,name TEXT,applied_at TEXT);
