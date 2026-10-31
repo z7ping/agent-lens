@@ -93,6 +93,11 @@ test('Pi Live count-only queries never calculate full-round summaries', () => {
     .entryPositions.get('u2'), -1)
   assert.equal(api.historyIndex({ limit: 0 }).total, 4,
     'round count remains based on physical native user entries')
+  state.entries.push({ id: 'u1', type: 'message', message: { role: 'assistant', content: 'non-user duplicate' } })
+  assert.equal(api.historyIndex({cursor:'u1'}).items.length, 0,
+    'a non-user duplicate must also invalidate the earlier user cursor')
+  assert.equal(api.historyIndex({limit:0}).total, 4,
+    'non-user native entries cannot fabricate semantic user turns')
   state.leaf = 'other-branch'
   state.entries = [
     { id: 'branch-u1', type: 'message', message: { role: 'user', content: 'branched' } },
