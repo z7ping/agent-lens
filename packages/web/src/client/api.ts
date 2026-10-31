@@ -483,6 +483,8 @@ export class AgentLensApi {
   /** Read sparse native turn locators. Scan stays bounded and does not hydrate Review text. */
   nativeReviewTurnIndex(id: string, options: {
     ordinal?: number
+    /** Require exact native identity before accepting an original-file cursor. */
+    expectedNativeEventId?: string
     tail?: number
     from?: number
     around?: number
@@ -492,6 +494,7 @@ export class AgentLensApi {
   } = {}): Promise<NativeReviewTurnIndexResponseDto> {
     const params = new URLSearchParams()
     if (options.ordinal !== undefined) params.set('ordinal', String(options.ordinal))
+    if (options.expectedNativeEventId !== undefined) params.set('expectedNativeEventId', options.expectedNativeEventId)
     if (options.tail !== undefined) params.set('tail', String(options.tail))
     if (options.from !== undefined) params.set('from', String(options.from))
     if (options.around !== undefined) params.set('around', String(options.around))

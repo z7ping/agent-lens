@@ -87,6 +87,17 @@ test('native sparse turn index is bounded, restart-resumable and invalidates rep
   assert.equal(around.state,'available')
   if(around.state==='available')assert.deepEqual(around.items.map(x=>x.ordinal),[8,9,10,11,12])
   const readsAfter=reads
+  const verified=await index().query(id,{ordinal:10,expectedNativeEventId:'user-153'})
+  assert.equal(verified.state,'available')
+  if(verified.state==='available'){
+    assert.deepEqual(verified.items.map(x=>x.nativeEventId),['user-153'])
+    assert.equal(verified.items[0]?.ordinal,10)
+  }
+  const incompatible=await index().query(id,{ordinal:10,expectedNativeEventId:'inactive-branch'})
+  assert.equal(incompatible.state,'available')
+  if(incompatible.state==='available')assert.deepEqual(incompatible.items,[],
+    'wrong native identity must not return a cursor from the same ordinal')
+  assert.equal(reads,readsAfter,'verified lookup reuses sparse metadata without reading source bodies')
   const reopened=await index().query(id,{ordinal:10})
   assert.equal(reads,readsAfter,'persisted boundaries must not rehydrate source bodies')
   assert.equal(reopened.state,'available')

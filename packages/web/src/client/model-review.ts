@@ -730,7 +730,7 @@ export abstract class AgentLensReviewModel extends AgentLensIntegrationModel {
    */
   /** Sparse native index progress; no legacy SQL Review or body hydration. */
   nativeReviewTurnIndex(id:string, options:{
-    ordinal?:number;tail?:number;from?:number;around?:number;limit?:number;
+    ordinal?:number;expectedNativeEventId?:string;tail?:number;from?:number;around?:number;limit?:number;
     scan?:boolean;signal?:AbortSignal
   }={}) {
     return this.api.nativeReviewTurnIndex(id,options)
