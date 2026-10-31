@@ -222,6 +222,7 @@ export const piSourceDefinition: SourceDefinition = {
         offset: line.offset, sequence: line.sequence - 1,
         fileIdentity: page.nextCursor.fileIdentity,
         boundaryHash: line.boundaryHash,
+        recordFingerprint: line.textFingerprint,
       })),
       nextCursor: page.nextCursor,
       hasMore: page.hasMore,

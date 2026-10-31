@@ -1,6 +1,6 @@
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { realpath, stat } from 'node:fs/promises'
-import { sourceFileIdentity } from '@agent-lens/source-support'
+import { readVerifiedNativeJsonlObject, sourceFileIdentity } from '@agent-lens/source-support'
 import type {
   CapturePolicyService, NativeSessionCatalogEntry, NativeSessionCatalogStore,
   SourceNativeSessionCursor, SourceService,
@@ -29,7 +29,7 @@ interface NativeTurnLocator {
   at?: string
 }
 interface NativeTurnIndexState {
-  version: 1
+  version: 2
   fileIdentity: string
   parserVersion: string
   fileSize: number
@@ -49,7 +49,7 @@ const MAX_INDEX_ORDINAL = 10_000_000
 function stateKey(id: string): string { return id + ':state' }
 function blockKey(id: string, block: number): string { return id + ':block:' + block }
 function sameRevision(state: NativeTurnIndexState, entry: NativeSessionCatalogEntry, parserVersion: string): boolean {
-  return state.version === 1
+  return state.version === 2
     && state.fileIdentity === entry.fileIdentity
     && state.parserVersion === parserVersion
     && Number.isSafeInteger(state.knownTurns) && state.knownTurns >= 0
@@ -106,7 +106,7 @@ export class NativeReviewTurnIndex {
         // The next request can retry after Source/Catalog resynchronization.
         if (result.state === 'drifted') {
           await this.checkpoints.set(SCOPE,stateKey(id),{
-            version:1, fileIdentity:'drifted',parserVersion,
+            version:2, fileIdentity:'drifted',parserVersion,
             fileSize:0,fileMtimeMs:0,knownTurns:0,complete:false,
           } satisfies NativeTurnIndexState)
         }
@@ -293,12 +293,27 @@ export class NativeReviewTurnIndex {
       }
     }
     if(!matched||!await checkLiveFile())return undefined
+    // Metadata-only stat cannot detect an in-place overwrite followed by
+    // timestamp restoration. Verify the *one* original Source JSONL record
+    // against its bounded, Source-issued SHA-256 before handing out a cursor.
+    // Missing proof from legacy checkpoints fails closed and is reindexed by
+    // the v2 checkpoint state upgrade rather than guessed.
+    if(entry.filePath.toLowerCase().endsWith('.jsonl')){
+      const fingerprint=matched.cursor.recordFingerprint
+      if(!fingerprint||!/^[0-9a-f]{64}$/.test(fingerprint))return undefined
+      const verified=await readVerifiedNativeJsonlObject({
+        path:entry.filePath,offset:matched.cursor.offset,
+        expectedFingerprint:fingerprint,
+      })
+      if(verified.state!=='available')return undefined
+    }
     const latest=await this.checkpoints.get<NativeTurnIndexState>(SCOPE,stateKey(id))
     if(!latest||!latest.complete||latest.knownTurns!==original.knownTurns
       ||latest.fileIdentity!==original.fileIdentity
       ||latest.fileSize!==original.fileSize
       ||latest.fileMtimeMs!==original.fileMtimeMs
-      ||latest.nextCursor?.offset!==original.nextCursor?.offset)return undefined
+      ||latest.nextCursor?.offset!==original.nextCursor?.offset
+      ||!await checkLiveFile())return undefined
     return {
       ordinal:matched.ordinal,nativeEventId,
       cursor:encodeNativeSessionCursor({
@@ -318,7 +333,7 @@ export class NativeReviewTurnIndex {
     let state = await this.checkpoints.get<NativeTurnIndexState>(SCOPE,stateKey(id))
     if (!state || !sameRevision(state,entry,parserVersion)) {
       state = {
-        version:1,fileIdentity:entry.fileIdentity,parserVersion,
+        version:2,fileIdentity:entry.fileIdentity,parserVersion,
         fileSize:entry.fileSize,fileMtimeMs:entry.fileMtimeMs,
         knownTurns:0,complete:false,
       }

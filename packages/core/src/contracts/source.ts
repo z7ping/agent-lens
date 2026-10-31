@@ -209,6 +209,9 @@ export interface SourceNativeSessionCursor {
   fileIdentity: string
   /** Optional source-owned boundary proof: JSONL preceding 256 bytes, or a verified SQLite row fingerprint. */
   boundaryHash?: string
+  /** Optional SHA-256 of the original bounded physical JSONL record text.
+   * Kept with the Source cursor only; never a copy of the event payload. */
+  recordFingerprint?: string
 }
 
 export interface SourceNativeSessionPageQuery {
