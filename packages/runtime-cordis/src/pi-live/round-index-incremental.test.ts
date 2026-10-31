@@ -85,6 +85,19 @@ test('Pi Live count-only queries never calculate full-round summaries', () => {
   api.historyIndex({ fromOrdinal: 1, limit: 1 })
   assert.equal(scans.length, beforeNativeEvent + 1, 'completed prefix remains cached')
 
+  // Corrupt/replayed native entries can reuse an ID. Cursor-based seeking
+  // must fail closed rather than selecting whichever duplicate came last.
+  state.entries.push({ id: 'u2', type: 'message', message: { role: 'user', content: 'duplicate' } })
+  assert.equal(api.historyIndex({ cursor: 'u2' }).items.length, 0)
+  assert.equal((context.roundIndexCache as {entryPositions: Map<string,number>})
+    .entryPositions.get('u2'), -1)
+  assert.equal(api.historyIndex({ limit: 0 }).total, 4,
+    'round count remains based on physical native user entries')
+  state.entries.push({ id: 'u1', type: 'message', message: { role: 'assistant', content: 'non-user duplicate' } })
+  assert.equal(api.historyIndex({cursor:'u1'}).items.length, 0,
+    'a non-user duplicate must also invalidate the earlier user cursor')
+  assert.equal(api.historyIndex({limit:0}).total, 4,
+    'non-user native entries cannot fabricate semantic user turns')
   state.leaf = 'other-branch'
   state.entries = [
     { id: 'branch-u1', type: 'message', message: { role: 'user', content: 'branched' } },
@@ -103,6 +116,12 @@ test('Pi in-process fallback also avoids cloning large index maps on append', ()
   assert.match(inProcess, /const roundByCursor = appendOnly \? cached\.roundByCursor/)
   assert.doesNotMatch(inProcess, /new Map\(cached\.entryPositions\)/)
   assert.doesNotMatch(inProcess, /new Map\(cached\.roundByCursor\)/)
+  assert.match(inProcess, /entryPositions\.has\(entry\.id\)/)
+  assert.match(inProcess, /entryPositions\.get\(row\.cursor\) === -1\) roundByCursor\.delete/)
+  assert.match(inProcess, /if \(position !== -1\) return -1/,
+    'initial snapshots must reject duplicate cursors even without a built index')
+  assert.match(worker, /if \(position !== -1\) return -1/,
+    'Worker initial snapshot must reject duplicate native cursors')
 })
 
 test('Pi snapshot round metadata seeks directly to the visible index range', () => {

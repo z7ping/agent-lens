@@ -835,7 +835,15 @@ function roundIndex(all = session.sessionManager.getEntries()) {
   for (let entryIndex = start; entryIndex < all.length; entryIndex += 1) {
     const entry = record(all[entryIndex])
     const id = entryId(entry)
-    if (id) entryPositions.set(id, entryIndex)
+    // Native entry IDs are cursor authority. If a damaged/replayed journal
+    // reuses one ID, mark it ambiguous rather than silently navigating to the
+    // most recent copy. This also survives append-only index updates.
+    if (id) {
+      if (entryPositions.has(id)) {
+        entryPositions.set(id, -1)
+        roundByCursor.delete(id)
+      } else entryPositions.set(id, entryIndex)
+    }
     const message = record(entry.message)
     const cursor = entryId(entry)
     if (entry.type !== 'message' || message.role !== 'user' || !cursor) continue
@@ -847,7 +855,8 @@ function roundIndex(all = session.sessionManager.getEntries()) {
       ...(preview ? { preview } : {}),
     }
     rows.push(row)
-    roundByCursor.set(row.cursor, row)
+    if (entryPositions.get(row.cursor) === -1) roundByCursor.delete(row.cursor)
+    else roundByCursor.set(row.cursor, row)
   }
 
   // Round details are lazy. A historyIndex({ limit: 0 }) call may only need
@@ -893,9 +902,20 @@ function beginSnapshotTransfer(since, window) {
 
   const all = session.sessionManager.getEntries()
   if (roundIndexCache) roundIndex(all)
-  const entryPosition = cursor => cursor
-    ? roundIndexCache?.entryPositions?.get(cursor) ?? all.findIndex(entry => entryId(entry) === cursor)
-    : -1
+  const entryPosition = cursor => {
+    if (!cursor) return -1
+    const indexed = roundIndexCache?.entryPositions?.get(cursor)
+    if (indexed !== undefined) return indexed
+    // The first latest-window snapshot can arrive before the metadata index.
+    // Verify uniqueness without prebuilding an unbounded full-round summary.
+    let position = -1
+    for (let index = 0; index < all.length; index++) {
+      if (entryId(all[index]) !== cursor) continue
+      if (position !== -1) return -1
+      position = index
+    }
+    return position
+  }
   const limit = snapshotLimit(requestedWindow)
   let start = 0
   let end = all.length
