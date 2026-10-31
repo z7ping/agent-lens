@@ -52,6 +52,136 @@ function inside(root: string, child: string): boolean {
   return (rel === '' || (rel !== '..' && !rel.startsWith('../') && !rel.startsWith('..\\') && !isAbsolute(rel)))
 }
 
+type NativePathAuthorization =
+  | { state:'authorized';sourcePath:string }
+  | { state:'unavailable'|'unsupported';reason:string }
+
+/** Both the ordinary reader and the oversized-record inspector use the
+ * same Source-owned realpath / allowedRoots authorization. */
+async function authorizeNativeSessionPath(
+  path:string,allowedRoots:readonly string[],
+):Promise<NativePathAuthorization>{
+  let sourcePath:string
+  try{sourcePath=await realpath(path)}catch(error){
+    const code=(error as NodeJS.ErrnoException).code
+    if(code==='ENOENT')return {state:'unavailable',reason:'native-file-missing'}
+    if(code==='EACCES'||code==='EPERM')return {state:'unavailable',reason:'native-file-not-readable'}
+    throw error
+  }
+  let allowed=false
+  for(const root of allowedRoots){
+    if(!root||!isAbsolute(root))continue
+    try{
+      if(inside(await realpath(root),sourcePath)){allowed=true;break}
+    }catch(error){
+      if((error as NodeJS.ErrnoException).code!=='ENOENT')throw error
+    }
+  }
+  return allowed?{state:'authorized',sourcePath}
+    :{state:'unsupported',reason:'source-path-not-authorized'}
+}
+
+const MAX_RECORD_SPAN_SCAN_BYTES=64*1024*1024
+
+export type NativeSessionRecordSpanResult =
+  | {
+      state:'available'
+      /** Physical byte evidence ONLY: JSON syntax and semantic facts are NOT
+       * validated. Never use nextOffset as an ingestion / Review cursor until
+       * a Source parser has certified the entire logical record. */
+      span:{
+        offset:number
+        nextOffset:number
+        rawByteLength:number
+        sha256:string
+        fileIdentity:string
+        boundaryHash:string
+        endBoundaryHash:string
+        oversized:boolean
+      }
+    }
+  | {state:'pending';reason:'native-record-pending-tail'}
+  | {state:'unavailable'|'drifted'|'unsupported';reason:string}
+
+/** Inspect exactly ONE physical JSONL record using at most 64KiB of payload
+ * memory. The resulting hash and boundaries can support future token-based
+ * fragments, but do not mean a giant JSON object has been parsed.
+ */
+export async function inspectNativeSessionRecordSpan(input:{
+  path:string
+  allowedRoots:readonly string[]
+  cursor?:NativeSessionCursor
+  expectedSha256?:string
+  signal?:AbortSignal
+}):Promise<NativeSessionRecordSpanResult>{
+  if(!isAbsolute(input.path)||extname(input.path).toLowerCase()!=='.jsonl'
+    || (input.cursor&&(!Number.isSafeInteger(input.cursor.offset)||input.cursor.offset<0
+      || !Number.isSafeInteger(input.cursor.sequence)||input.cursor.sequence<0
+      || !input.cursor.fileIdentity
+      || (input.cursor.boundaryHash!==undefined
+        && !/^[0-9a-f]{64}$/.test(input.cursor.boundaryHash))))
+    || (input.expectedSha256!==undefined&&!/^[0-9a-f]{64}$/.test(input.expectedSha256))){
+    return {state:'unsupported',reason:'invalid-window-reference'}
+  }
+  input.signal?.throwIfAborted()
+  const authorization=await authorizeNativeSessionPath(input.path,input.allowedRoots)
+  if(authorization.state!=='authorized')return authorization
+  const file=await open(authorization.sourcePath,'r')
+  try{
+    const initial=await file.stat()
+    if(!initial.isFile())return {state:'unsupported',reason:'native-source-is-not-a-file'}
+    const fileIdentity=sourceFileIdentity(initial)
+    const offset=input.cursor?.offset??0
+    if(input.cursor&&input.cursor.fileIdentity!==fileIdentity)
+      return {state:'drifted',reason:'native-file-identity-changed'}
+    if(offset>initial.size)return {state:'drifted',reason:'native-file-shrank'}
+    if(offset>0){
+      const previous=Buffer.alloc(1)
+      const n=await file.read(previous,0,1,offset-1)
+      if(n.bytesRead!==1||previous[0]!==0x0a)
+        return {state:'drifted',reason:'native-cursor-not-line-aligned'}
+    }
+    const boundaryHash=await hashAtBoundary(file,offset)
+    if(input.cursor?.boundaryHash&&input.cursor.boundaryHash!==boundaryHash)
+      return {state:'drifted',reason:'native-cursor-boundary-changed'}
+    const hash=createHash('sha256')
+    let scanned=0
+    let lastByte:number|undefined
+    while(scanned<=MAX_RECORD_SPAN_SCAN_BYTES){
+      input.signal?.throwIfAborted()
+      const chunk=Buffer.allocUnsafe(Math.min(CHUNK_BYTES,MAX_RECORD_SPAN_SCAN_BYTES+1-scanned))
+      const {bytesRead}=await file.read(chunk,0,chunk.length,offset+scanned)
+      if(!bytesRead)return {state:'pending',reason:'native-record-pending-tail'}
+      const newline=chunk.subarray(0,bytesRead).indexOf(0x0a)
+      const length=newline<0?bytesRead:newline
+      const part=chunk.subarray(0,length)
+      hash.update(part)
+      if(length)lastByte=part[length-1]
+      scanned+=length
+      if(newline>=0){
+        const final=await file.stat()
+        if(!final.isFile()||sourceFileIdentity(final)!==fileIdentity
+          ||final.size!==initial.size||final.mtimeMs!==initial.mtimeMs
+          ||await hashAtBoundary(file,offset)!==boundaryHash){
+          return {state:'drifted',reason:'native-record-changed-during-scan'}
+        }
+        const digest=hash.digest('hex')
+        if(input.expectedSha256&&input.expectedSha256!==digest)
+          return {state:'drifted',reason:'native-record-hash-changed'}
+        const endOffset=offset+scanned+1
+        return {state:'available',span:{
+          offset,nextOffset:endOffset,rawByteLength:scanned,sha256:digest,
+          fileIdentity,boundaryHash,endBoundaryHash:await hashAtBoundary(file,endOffset),
+          oversized:scanned-(lastByte===0x0d?1:0)>MAX_RECORD_BYTES,
+        }}
+      }
+      if(scanned>MAX_RECORD_SPAN_SCAN_BYTES)
+        return {state:'unsupported',reason:'native-record-span-budget'}
+    }
+    return {state:'unsupported',reason:'native-record-span-budget'}
+  }finally{await file.close()}
+}
+
 /**
  * Read a bounded JSONL page directly from a Source-owned native file, without
  * any database checkpoints, Canonical writes, or whole-session in-memory scan.
@@ -76,30 +206,9 @@ export async function readNativeSessionWindow(input: {
     return { state: 'unsupported', reason: 'invalid-window-reference' }
   }
   signal?.throwIfAborted()
-  let sourcePath: string
-  try {
-    sourcePath = await realpath(input.path)
-  } catch (error) {
-    const code = (error as NodeJS.ErrnoException).code
-    if (code === 'ENOENT') return { state: 'unavailable', reason: 'native-file-missing' }
-    if (code === 'EACCES' || code === 'EPERM') return { state: 'unavailable', reason: 'native-file-not-readable' }
-    throw error
-  }
-  let allowed = false
-  for (const root of input.allowedRoots) {
-    if (!root || !isAbsolute(root)) continue
-    try {
-      if (inside(await realpath(root), sourcePath)) {
-        allowed = true
-        break
-      }
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
-    }
-  }
-  if (!allowed) return { state: 'unsupported', reason: 'source-path-not-authorized' }
-
-  const file = await open(sourcePath, 'r')
+  const authorization=await authorizeNativeSessionPath(input.path,input.allowedRoots)
+  if(authorization.state!=='authorized')return authorization
+  const file = await open(authorization.sourcePath, 'r')
   try {
     const current = await file.stat()
     if (!current.isFile()) return { state: 'unsupported', reason: 'native-source-is-not-a-file' }
