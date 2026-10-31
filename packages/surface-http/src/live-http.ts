@@ -1291,7 +1291,7 @@ export async function handleLiveRequest(
       // This optional source-backed locator is requested only by an exact
       // native cursor lookup. Never assume Live ordinal equals file ordinal,
       // and never block the Live index when Source is not fully indexed.
-      let reviewLocator: Awaited<ReturnType<typeof matchIndexedNativeReviewTurn>>
+      let reviewLocator: Awaited<ReturnType<typeof matchIndexedNativeReviewTurn>> = undefined
       if (cursor && index.items.length===1 && index.items[0]?.nativeEventId
         && history?.turnIndex) {
         reviewLocator = await (async()=>{
