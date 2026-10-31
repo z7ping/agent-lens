@@ -796,6 +796,22 @@ function invalidateActiveRoundSummary() {
   if (tail) delete tail.summary
 }
 
+function boundedRoundPreview(content) {
+  const parts = Array.isArray(content) ? content : [content]
+  let preview = ''
+  for (const part of parts) {
+    if (preview.length >= 86) break
+    const raw = typeof part === 'string' ? part : record(part).text
+    if (typeof raw !== 'string') continue
+    // Only the first small text prefix is needed for a navigation preview;
+    // never join or whitespace-normalize an entire multi-megabyte prompt.
+    const snippet = raw.slice(0, 8192).replace(/\s+/g, ' ').trim()
+    if (!snippet) continue
+    preview = `${preview ? `${preview} ` : ''}${snippet}`.slice(0, 86)
+  }
+  return preview
+}
+
 function roundIndex(all = session.sessionManager.getEntries()) {
   const lastEntryId = all.length ? entryId(all.at(-1)) : undefined
   const leafId = session.sessionManager.getLeafId()
@@ -823,17 +839,12 @@ function roundIndex(all = session.sessionManager.getEntries()) {
     const message = record(entry.message)
     const cursor = entryId(entry)
     if (entry.type !== 'message' || message.role !== 'user' || !cursor) continue
-    const content = message.content ?? entry.content
-    const preview = Array.isArray(content)
-      ? content.map(part => typeof part === 'string'
-        ? part
-        : typeof record(part).text === 'string' ? String(record(part).text) : '').join(' ')
-      : typeof content === 'string' ? content : ''
+    const preview = boundedRoundPreview(message.content ?? entry.content)
     const row = {
       cursor,
       ordinal: rows.length + 1,
       entryIndex,
-      ...(preview.trim() ? { preview: preview.replace(/\s+/g, ' ').trim().slice(0, 86) } : {}),
+      ...(preview ? { preview } : {}),
     }
     rows.push(row)
     roundByCursor.set(row.cursor, row)
