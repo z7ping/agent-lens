@@ -1,30 +1,23 @@
 import type { NativeReviewTurnIndex } from './native-review-turn-index-http'
 
-/** Links one Live user entry to an already indexed native Review record.
- * Source Catalog authorization and unique Live->historySessionId resolution
- * happen at the caller; only the Source-validated sparse index owns cursors.
- * This is a *bounded* local seek, never an invented full-session alignment.
+/** A Live event may link to one Source-verified original-session turn.
+ * The Live adapter must attest the native file path; all source identity,
+ * checkpoint completeness, uniqueness and file revision checks stay on the
+ * common Source-backed index service.
  */
 export async function matchIndexedNativeReviewTurn(
-  index: Pick<NativeReviewTurnIndex,'query'>,
+  index: Pick<NativeReviewTurnIndex,'findByNativeEventId'>,
   historySessionId: string,
   live: {ordinal:number;nativeEventId?:string},
+  nativeSessionFilePath: string,
 ): Promise<{historySessionId:string;cursor:string;ordinal:number}|undefined> {
-  if (!/^native:[a-f0-9]{32}$/.test(historySessionId)
-    || !Number.isSafeInteger(live.ordinal) || live.ordinal<1
-    || !live.nativeEventId || live.nativeEventId.length>256) return undefined
-  // Index lookup is metadata-only; a branch may insert other file turns.
-  // The interval is a hint, never an ordinal equality assertion.
-  const result=await index.query(historySessionId,{
-    from:Math.max(1,live.ordinal-59),limit:120,
-    expectedNativeEventId:live.nativeEventId,
-  })
-  if (result.state!=='available' || result.items.length!==1) return undefined
-  const [item]=result.items
-  if (!item || item.nativeEventId!==live.nativeEventId
-    || !Number.isSafeInteger(item.ordinal) || item.ordinal<1
-    || !item.cursor) return undefined
-  // Even partial indexes may safely expose a verified known prefix; no
-  // absence outside the scanned prefix is ever inferred.
-  return {historySessionId,cursor:item.cursor,ordinal:item.ordinal}
+  if(!/^native:[a-f0-9]{32}$/.test(historySessionId)
+    ||!Number.isSafeInteger(live.ordinal)||live.ordinal<1
+    ||!live.nativeEventId||live.nativeEventId.length>256
+    ||!nativeSessionFilePath)return undefined
+  const match=await index.findByNativeEventId(
+    historySessionId,live.nativeEventId,nativeSessionFilePath)
+  if(!match||match.nativeEventId!==live.nativeEventId
+    ||!Number.isSafeInteger(match.ordinal)||match.ordinal<1||!match.cursor)return undefined
+  return {historySessionId,cursor:match.cursor,ordinal:match.ordinal}
 }

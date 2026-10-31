@@ -5,42 +5,33 @@ import { matchIndexedNativeReviewTurn } from './live-native-review-anchor'
 
 const id='native:0123456789abcdef0123456789abcdef'
 const nativeId='user-from-live'
-function reader(items:Array<{ordinal:number;cursor:string;nativeEventId:string}>,state='available') {
+function reader(result?:{ordinal:number;cursor:string;nativeEventId:string}){
   const calls:unknown[]=[]
-  const index={
-    async query(sessionId:string,options:unknown) {
-      calls.push([sessionId,options])
-      return state==='available'
-        ? {state:'available',coverage:'partial',knownTurns:80,items,hasMore:true}
-        : {state:'drifted',reason:'native-file-identity-changed'}
-    },
-  } as unknown as Pick<NativeReviewTurnIndex,'query'>
+  const index={async findByNativeEventId(...args:unknown[]){
+    calls.push(args)
+    return result
+  }} as unknown as Pick<NativeReviewTurnIndex,'findByNativeEventId'>
   return {index,calls}
 }
-
-test('same source user ID resolves actual different file ordinal within a bounded indexed prefix',async()=>{
-  const {index,calls}=reader([{ordinal:25,nativeEventId:nativeId,cursor:'source-verified-cursor'}])
-  assert.deepEqual(await matchIndexedNativeReviewTurn(index,id,{ordinal:3,nativeEventId:nativeId}),{
-    historySessionId:id,ordinal:25,cursor:'source-verified-cursor',
-  })
-  assert.deepEqual(calls,[[id,{from:1,limit:120,expectedNativeEventId:nativeId}]])
+test('native identity maps to the real file ordinal without a nearby-turn assumption',async()=>{
+  const {index,calls}=reader({ordinal:9000,nativeEventId:nativeId,cursor:'verified-cursor'})
+  assert.deepEqual(await matchIndexedNativeReviewTurn(index,id,
+    {ordinal:1,nativeEventId:nativeId},'/root/native.jsonl'),
+    {historySessionId:id,ordinal:9000,cursor:'verified-cursor'})
+  assert.deepEqual(calls,[[id,nativeId,'/root/native.jsonl']])
 })
-
-test('invalid identity and missing exact matches cannot claim a native locator',async()=>{
-  const {index,calls}=reader([{ordinal:25,nativeEventId:'other',cursor:'wrong'}])
-  assert.equal(await matchIndexedNativeReviewTurn(index,id,{ordinal:3,nativeEventId:nativeId}),undefined)
-  assert.equal(await matchIndexedNativeReviewTurn(index,'native:invalid',{ordinal:3,nativeEventId:nativeId}),undefined)
-  assert.equal(await matchIndexedNativeReviewTurn(index,id,{ordinal:0,nativeEventId:nativeId}),undefined)
-  assert.equal(await matchIndexedNativeReviewTurn(index,id,{ordinal:3}),undefined)
+test('no source file proof, invalid IDs or mismatched lookup fail closed',async()=>{
+  const {index,calls}=reader({ordinal:12,nativeEventId:'other',cursor:'wrong'})
+  assert.equal(await matchIndexedNativeReviewTurn(index,id,
+    {ordinal:10,nativeEventId:nativeId},'/root/native.jsonl'),undefined)
+  assert.equal(await matchIndexedNativeReviewTurn(index,id,{ordinal:10,nativeEventId:nativeId},''),undefined)
+  assert.equal(await matchIndexedNativeReviewTurn(index,'invalid',{ordinal:10,nativeEventId:nativeId},'/root/native.jsonl'),undefined)
+  assert.equal(await matchIndexedNativeReviewTurn(index,id,{ordinal:0,nativeEventId:nativeId},'/root/native.jsonl'),undefined)
+  assert.equal(await matchIndexedNativeReviewTurn(index,id,{ordinal:10},'/root/native.jsonl'),undefined)
   assert.equal(calls.length,1)
 })
-
-test('ambiguous, drifted and out-of-prefix indexes fail closed',async()=>{
-  const matched={ordinal:25,nativeEventId:nativeId,cursor:'a'}
-  const duplicate=reader([matched,{...matched,cursor:'b'}])
-  assert.equal(await matchIndexedNativeReviewTurn(duplicate.index,id,{ordinal:3,nativeEventId:nativeId}),undefined)
-  const changed=reader([matched],'drifted')
-  assert.equal(await matchIndexedNativeReviewTurn(changed.index,id,{ordinal:3,nativeEventId:nativeId}),undefined)
-  const absent=reader([])
-  assert.equal(await matchIndexedNativeReviewTurn(absent.index,id,{ordinal:3,nativeEventId:nativeId}),undefined)
+test('no indexed match never invents a locator',async()=>{
+  const {index}=reader()
+  assert.equal(await matchIndexedNativeReviewTurn(index,id,
+    {ordinal:3,nativeEventId:nativeId},'/root/native.jsonl'),undefined)
 })

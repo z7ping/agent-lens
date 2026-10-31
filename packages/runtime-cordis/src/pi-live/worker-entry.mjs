@@ -998,6 +998,7 @@ function historyIndex(queryValue) {
   if (cursor) {
     const row = roundIndexCache?.roundByCursor?.get(cursor)
     return {
+      historyView:'native-journal',
       total: rows.length,
       items: row ? [indexedItem(row)] : [],
     }
@@ -1006,13 +1007,14 @@ function historyIndex(queryValue) {
   const limit = Number.isInteger(query.limit)
     ? Math.max(0, Math.min(LIVE_HISTORY_INDEX_QUERY_MAX_LIMIT, query.limit))
     : 0
-  if (limit === 0) return { total: rows.length, items: [] }
+  if (limit === 0) return { historyView:'native-journal',total: rows.length, items: [] }
 
   const fromOrdinal = Number.isInteger(query.fromOrdinal) && query.fromOrdinal > 0
     ? query.fromOrdinal
     : 1
   const start = Math.min(rows.length, fromOrdinal - 1)
   return {
+    historyView:'native-journal',
     total: rows.length,
     items: rows.slice(start, start + limit).map(indexedItem),
   }
