@@ -175,7 +175,7 @@ export class NativeReviewTurnIndex {
     }
   }
 
-  async query(id:string, options:{ordinal?:number;tail?:number;from?:number;around?:number;limit?:number;scan?:boolean}):Promise<NativeReviewTurnIndexResponseDto> {
+  async query(id:string, options:{ordinal?:number;tail?:number;from?:number;around?:number;limit?:number;scan?:boolean;expectedNativeEventId?:string}):Promise<NativeReviewTurnIndexResponseDto> {
     if (!/^native:[a-f0-9]{32}$/.test(id)) return {state:'unavailable',reason:'native-session-invalid'}
     const entry = await this.catalog.getByReviewSessionId(id)
     if (!entry || entry.locationKind!=='native') return {state:'unavailable',reason:'native-session-not-indexed'}
@@ -229,6 +229,10 @@ export class NativeReviewTurnIndex {
         for (const item of entries) {
           if(item.ordinal<ordinal || item.ordinal>end)continue
           if(item.cursor.fileIdentity!==entry.fileIdentity)continue
+          // A numeric offset alone is not enough when different native
+          // history views (or branches) enumerate turns differently.
+          if(options.expectedNativeEventId!==undefined
+            && item.nativeEventId!==options.expectedNativeEventId)continue
           items.push({
             ordinal:item.ordinal,
             ...(item.nativeEventId ? {nativeEventId:item.nativeEventId} : {}),
@@ -265,7 +269,7 @@ export async function handleNativeReviewTurnIndexRequest(
     return true
   }
   if(!service){writeJson(response,503,{state:'unavailable',reason:'native-turn-index-unavailable'});return true}
-  if([...url.searchParams.keys()].some(key=>!['ordinal','tail','from','around','limit','scan'].includes(key))
+  if([...url.searchParams.keys()].some(key=>!['ordinal','tail','from','around','limit','scan','expectedNativeEventId'].includes(key))
     || [...url.searchParams.keys()].some(key=>url.searchParams.getAll(key).length!==1)) {
     throw badRequest('Invalid native turn index query')
   }
@@ -276,6 +280,7 @@ export async function handleNativeReviewTurnIndexRequest(
   const from=parse('from')
   const around=parse('around')
   const limit=parse('limit')
+  const expectedNativeEventId=url.searchParams.get('expectedNativeEventId')??undefined
   const positions=[ordinal,tail,from,around].filter(value=>value!==undefined)
   if(positions.length>1
     || [ordinal,from,around].some(value=>value!==undefined
@@ -283,6 +288,9 @@ export async function handleNativeReviewTurnIndexRequest(
     || [tail,limit].some(value=>value!==undefined
       && (!Number.isSafeInteger(value)||value<1||value>MAX_INDEX_QUERY))
     || ((ordinal!==undefined||tail!==undefined)&&limit!==undefined)
+    || (expectedNativeEventId!==undefined
+      && (ordinal===undefined || expectedNativeEventId.length<1
+        || expectedNativeEventId.length>256))
     || (url.searchParams.has('scan') && url.searchParams.get('scan')!=='1')) {
     throw badRequest('Invalid native turn index range')
   }
@@ -290,6 +298,7 @@ export async function handleNativeReviewTurnIndexRequest(
   try{id=decodeURIComponent(match[1]!)}catch{id=''}
   writeJson(response,200,await service.query(id,{
     ...(ordinal!==undefined?{ordinal}:{}),
+    ...(expectedNativeEventId!==undefined?{expectedNativeEventId}:{}),
     ...(tail!==undefined?{tail}:{}),
     ...(from!==undefined?{from}:{}),
     ...(around!==undefined?{around}:{}),
