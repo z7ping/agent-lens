@@ -835,7 +835,11 @@ function roundIndex(all = session.sessionManager.getEntries()) {
   for (let entryIndex = start; entryIndex < all.length; entryIndex += 1) {
     const entry = record(all[entryIndex])
     const id = entryId(entry)
-    if (id) entryPositions.set(id, entryIndex)
+    // Native entry IDs are cursor authority. If a damaged/replayed journal
+    // reuses one ID, mark it ambiguous rather than silently navigating to the
+    // most recent copy. This also survives append-only index updates.
+    if (id) entryPositions.set(id,
+      entryPositions.has(id) ? -1 : entryIndex)
     const message = record(entry.message)
     const cursor = entryId(entry)
     if (entry.type !== 'message' || message.role !== 'user' || !cursor) continue
@@ -847,7 +851,8 @@ function roundIndex(all = session.sessionManager.getEntries()) {
       ...(preview ? { preview } : {}),
     }
     rows.push(row)
-    roundByCursor.set(row.cursor, row)
+    if (entryPositions.get(row.cursor) === -1) roundByCursor.delete(row.cursor)
+    else roundByCursor.set(row.cursor, row)
   }
 
   // Round details are lazy. A historyIndex({ limit: 0 }) call may only need

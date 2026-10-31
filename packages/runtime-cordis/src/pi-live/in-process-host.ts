@@ -221,7 +221,10 @@ class InProcessHandle implements PiRuntimeHandle {
 
     for (let entryIndex = start; entryIndex < all.length; entryIndex += 1) {
       const entry = record(all[entryIndex])
-      if (typeof entry.id === 'string' && entry.id) entryPositions.set(entry.id, entryIndex)
+      if (typeof entry.id === 'string' && entry.id) {
+        // A duplicate upstream ID is not an unambiguous navigation cursor.
+        entryPositions.set(entry.id, entryPositions.has(entry.id) ? -1 : entryIndex)
+      }
       const message = record(entry.message)
       if (entry.type !== 'message' || message.role !== 'user' || typeof entry.id !== 'string' || !entry.id) continue
       const preview = boundedRoundPreview(message.content ?? entry.content)
@@ -232,7 +235,8 @@ class InProcessHandle implements PiRuntimeHandle {
         ...(preview ? { preview } : {}),
       }
       rows.push(row)
-      roundByCursor.set(row.cursor, row)
+      if (entryPositions.get(row.cursor) === -1) roundByCursor.delete(row.cursor)
+      else roundByCursor.set(row.cursor, row)
     }
 
     this.roundIndexCache = {
