@@ -207,6 +207,9 @@ export interface LiveHistoryIndexItemDto {
   ordinal: number
   /** Optional, source-attested user-entry ID. Never use file ordinal as this ID. */
   nativeEventId?: string | undefined
+  /** Source-verified native Review cursor only when one identity matches.
+   * Absent if the source prefix is unindexed or session identity is uncertain. */
+  reviewLocator?: {historySessionId: string; cursor: string; ordinal: number} | undefined
   preview?: string | undefined
   summary?: LiveHistoryRoundSummaryDto | undefined
 }

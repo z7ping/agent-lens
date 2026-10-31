@@ -34,6 +34,8 @@ import { readHostProjectDirectory } from './project-directory-host'
 import { validateHostWorkingDirectory } from './host-working-directory'
 import { browseHostWorkingDirectory } from './host-directory-browser'
 import { nativeLiveHistoryReference } from './live-history-reference'
+import { matchIndexedNativeReviewTurn } from './live-native-review-anchor'
+import type { NativeReviewTurnIndex } from './native-review-turn-index-http'
 
 const MAX_LIVE_JSON_BYTES = 1024 * 1024
 const MAX_LIVE_MESSAGE_ACTIONS = 16
@@ -860,7 +862,12 @@ async function describeProduct(adapter: LiveAdapter): Promise<JsonValue> {
   return liveDescriptor(adapter, availability, [])
 }
 
-type LiveHistoryContext = {nativeSessions:NativeSessionListReader;sources:SourceService;policy:Pick<CapturePolicyService,'isSourceEnabled'>}
+type LiveHistoryContext = {
+  nativeSessions:NativeSessionListReader
+  sources:SourceService
+  policy:Pick<CapturePolicyService,'isSourceEnabled'>
+  turnIndex?:Pick<NativeReviewTurnIndex,'query'>
+}
 
 async function listKnownRuntimes(service: LiveService, history?: LiveHistoryContext): Promise<JsonValue> {
   const groups = await Promise.all(service.list().map(async adapter => {
@@ -1281,8 +1288,29 @@ export async function handleLiveRequest(
         `history-index:${runtimeSessionId}:${fromOrdinal ?? ''}:${cursor ?? ''}:${limit}`,
         () => adapter.historyIndex!(runtimeSessionId, query),
       ))
+      // This optional source-backed locator is requested only by an exact
+      // native cursor lookup. Never assume Live ordinal equals file ordinal,
+      // and never block the Live index when Source is not fully indexed.
+      let reviewLocator: Awaited<ReturnType<typeof matchIndexedNativeReviewTurn>>
+      if (cursor && index.items.length===1 && index.items[0]?.nativeEventId
+        && history?.turnIndex) {
+        reviewLocator = await (async()=>{
+          const state = await shareAdapterRead(adapter,
+            `state:${runtimeSessionId}`,()=>adapter.state(runtimeSessionId))
+          const reference = await nativeLiveHistoryReference(
+            history.nativeSessions,history.sources,history.policy,adapter,state)
+          if (!reference.historySessionId) return undefined
+          return matchIndexedNativeReviewTurn(history.turnIndex!,
+            reference.historySessionId,index.items[0]!)
+        })().catch(()=>undefined)
+      }
       markRuntimeValidated(adapter, runtimeSessionId)
-      writeJson(response, 200, jsonValue(index))
+      writeJson(response, 200, jsonValue({
+        ...index,
+        items:reviewLocator
+          ?[{...index.items[0],reviewLocator}]
+          :index.items,
+      }))
       return true
     }
     if (action === 'session-tree' && request.method === 'GET') {

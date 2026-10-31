@@ -153,6 +153,7 @@ export async function startNativeOnlyHttpSurface(
         nativeSessions:storage.nativeSessionList,
         sources:options.sources,
         policy:options.capturePolicy,
+        ...(turnIndex ? {turnIndex} : {}),
       }))return
 
       if(await handleNativeSessionMetricsOverviewRequest(
