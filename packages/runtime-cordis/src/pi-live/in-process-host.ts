@@ -365,19 +365,20 @@ class InProcessHandle implements PiRuntimeHandle {
     const cursor = query.cursor?.trim()
     if (cursor) {
       const row = this.roundIndexCache?.roundByCursor.get(cursor)
-      return { total: rows.length, items: row ? [{ cursor: row.cursor, ordinal: row.ordinal, nativeEventId: row.cursor, ...(row.preview ? { preview: row.preview } : {}) }] : [] }
+      return { historyView:'native-journal',total: rows.length, items: row ? [{ cursor: row.cursor, ordinal: row.ordinal, nativeEventId: row.cursor, ...(row.preview ? { preview: row.preview } : {}) }] : [] }
     }
 
     const limit = Number.isInteger(query.limit)
       ? Math.max(0, Math.min(LIVE_HISTORY_INDEX_QUERY_MAX_LIMIT, query.limit!))
       : 0
-    if (limit === 0) return { total: rows.length, items: [] }
+    if (limit === 0) return { historyView:'native-journal',total: rows.length, items: [] }
 
     const fromOrdinal = Number.isInteger(query.fromOrdinal) && query.fromOrdinal! > 0
       ? query.fromOrdinal!
       : 1
     const start = Math.min(rows.length, fromOrdinal - 1)
     return {
+      historyView:'native-journal',
       total: rows.length,
       items: rows.slice(start, start + limit).map(({ entryIndex: _entryIndex, ...item }) => ({
         ...item, nativeEventId: item.cursor,

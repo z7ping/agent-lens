@@ -52,6 +52,7 @@ test('Pi Live count-only queries never calculate full-round summaries', () => {
   assert.equal(api.historyIndex({ limit: 0 }).total, 2)
   assert.equal(scans.length, 0, 'count-only must not read per-turn details')
   const first = api.historyIndex({ fromOrdinal: 2, limit: 1 })
+  assert.equal(first.historyView,'native-journal')
   assert.equal(first.items[0]?.cursor, 'u2')
   assert.equal((first.items[0] as { nativeEventId?: string })?.nativeEventId,'u2')
   assert.deepEqual(scans.map(item => item.cursor), ['u2'])

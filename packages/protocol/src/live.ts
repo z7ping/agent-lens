@@ -221,6 +221,7 @@ export interface LiveHistoryIndexQueryDto {
 }
 
 export interface LiveHistoryIndexDto {
+  historyView?: 'native-journal' | undefined
   total: number
   items: LiveHistoryIndexItemDto[]
 }

@@ -573,6 +573,9 @@ export function normalizeHistoryIndex(value: unknown) {
   if (!Number.isSafeInteger(row.total) || Number(row.total) < 0 || !Array.isArray(row.items)) {
     throw httpError(500, 'Live adapter returned invalid history index metadata')
   }
+  if (row.historyView!==undefined&&row.historyView!=='native-journal') {
+    throw httpError(500,'Live adapter returned an invalid history view')
+  }
   if (row.items.length > LIVE_HISTORY_INDEX_QUERY_MAX_LIMIT) {
     throw httpError(500, 'Live adapter history index exceeded the per-query bounded limit')
   }
@@ -690,7 +693,10 @@ export function normalizeHistoryIndex(value: unknown) {
       ...(summary ? { summary } : {}),
     }
   })
-  return { total: Number(row.total), items }
+  return {
+    ...(row.historyView==='native-journal' ? {historyView:'native-journal' as const} : {}),
+    total:Number(row.total),items,
+  }
 }
 
 function normalizeRuntimeActionResult(value: unknown): LiveRuntimeActionResult {
@@ -1292,7 +1298,8 @@ export async function handleLiveRequest(
       // native cursor lookup. Never assume Live ordinal equals file ordinal,
       // and never block the Live index when Source is not fully indexed.
       let reviewLocator: Awaited<ReturnType<typeof matchIndexedNativeReviewTurn>> = undefined
-      if (cursor && index.items.length===1 && index.items[0]?.nativeEventId
+      if (cursor && index.historyView==='native-journal'
+        && index.items.length===1 && index.items[0]?.nativeEventId
         && history?.turnIndex) {
         reviewLocator = await (async()=>{
           const state = await shareAdapterRead(adapter,

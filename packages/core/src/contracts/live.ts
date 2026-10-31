@@ -276,6 +276,9 @@ export interface LiveHistoryIndexItem {
 }
 
 export interface LiveHistoryIndex {
+  /** Explicit Source/Runtime proof that ordinals follow the complete native
+   * journal (including previous branches), not an active-ancestor view. */
+  historyView?: 'native-journal' | undefined
   /** Total semantic rounds in the complete session, never a sampled count. */
   total: number
   items: readonly LiveHistoryIndexItem[]
