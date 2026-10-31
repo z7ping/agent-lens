@@ -42,11 +42,11 @@ test('Pi Live count-only queries never calculate full-round summaries', () => {
     LIVE_HISTORY_INDEX_QUERY_MAX_LIMIT: 120,
   }
   const api = runInNewContext(
-    section('function roundIndex(', '\nfunction snapshotRoundPage(')
+    section('function invalidateActiveRoundSummary(', '\nfunction snapshotRoundPage(')
       + section('function historyIndex(queryValue)', '\nfunction sessionTreePreview(')
-      + '\n({ historyIndex })',
+      + '\n({ historyIndex, invalidateActiveRoundSummary })',
     context,
-  ) as { historyIndex(query: { limit?: number; cursor?: string; fromOrdinal?: number }): {
+  ) as { invalidateActiveRoundSummary(): void; historyIndex(query: { limit?: number; cursor?: string; fromOrdinal?: number }): {
     total: number; items: Array<{ cursor: string; ordinal: number; summary: unknown }>
   } }
   assert.equal(api.historyIndex({ limit: 0 }).total, 2)
@@ -74,6 +74,16 @@ test('Pi Live count-only queries never calculate full-round summaries', () => {
   assert.equal(scans.at(-1)?.cursor, 'u1')
   assert.equal(api.historyIndex({ limit: 0 }).total, 3)
 
+  // The SDK can revise a message with the same entry id/count. Only the
+  // active tail summary must be refreshed when its native event arrives.
+  const beforeNativeEvent = scans.length
+  state.entries.at(-1)!.message.content = 'updated in-place'
+  api.invalidateActiveRoundSummary()
+  api.historyIndex({ fromOrdinal: 3, limit: 1 })
+  assert.equal(scans.length, beforeNativeEvent + 1)
+  api.historyIndex({ fromOrdinal: 1, limit: 1 })
+  assert.equal(scans.length, beforeNativeEvent + 1, 'completed prefix remains cached')
+
   state.leaf = 'other-branch'
   state.entries = [
     { id: 'branch-u1', type: 'message', message: { role: 'user', content: 'branched' } },
@@ -100,4 +110,12 @@ test('Pi snapshot round metadata seeks directly to the visible index range', () 
   assert.doesNotMatch(source, /for \(const row of rows\)/)
   assert.match(inProcess, /while \(left < right\)/)
   assert.doesNotMatch(inProcess, /for \(const row of rows\)/)
+})
+
+test('Pi SDK event invalidates the active summary without rebuilding the position index', () => {
+  assert.match(worker, /session\.subscribe\(event => \{\s*invalidateActiveRoundSummary\(\)/)
+  const invalidator = section('function invalidateActiveRoundSummary(', '\nfunction roundIndex(')
+  assert.match(invalidator, /roundIndexCache\?\.rows\?\.at\(-1\)/)
+  assert.match(invalidator, /delete tail\.summary/)
+  assert.doesNotMatch(invalidator, /roundIndexCache = undefined/)
 })
