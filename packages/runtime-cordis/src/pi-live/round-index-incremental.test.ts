@@ -111,8 +111,12 @@ test('Pi in-process fallback also avoids cloning large index maps on append', ()
   assert.match(inProcess, /const roundByCursor = appendOnly \? cached\.roundByCursor/)
   assert.doesNotMatch(inProcess, /new Map\(cached\.entryPositions\)/)
   assert.doesNotMatch(inProcess, /new Map\(cached\.roundByCursor\)/)
-  assert.match(inProcess, /entryPositions\.has\(entry\.id\) \? -1 : entryIndex/)
+  assert.match(inProcess, /entryPositions\.has\(entry\.id\)/)
   assert.match(inProcess, /entryPositions\.get\(row\.cursor\) === -1\) roundByCursor\.delete/)
+  assert.match(inProcess, /if \(position !== -1\) return -1/,
+    'initial snapshots must reject duplicate cursors even without a built index')
+  assert.match(worker, /if \(position !== -1\) return -1/,
+    'Worker initial snapshot must reject duplicate native cursors')
 })
 
 test('Pi snapshot round metadata seeks directly to the visible index range', () => {

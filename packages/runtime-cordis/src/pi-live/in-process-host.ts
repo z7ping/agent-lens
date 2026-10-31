@@ -223,7 +223,10 @@ class InProcessHandle implements PiRuntimeHandle {
       const entry = record(all[entryIndex])
       if (typeof entry.id === 'string' && entry.id) {
         // A duplicate upstream ID is not an unambiguous navigation cursor.
-        entryPositions.set(entry.id, entryPositions.has(entry.id) ? -1 : entryIndex)
+        if (entryPositions.has(entry.id)) {
+          entryPositions.set(entry.id, -1)
+          roundByCursor.delete(entry.id)
+        } else entryPositions.set(entry.id, entryIndex)
       }
       const message = record(entry.message)
       if (entry.type !== 'message' || message.role !== 'user' || typeof entry.id !== 'string' || !entry.id) continue
@@ -292,10 +295,20 @@ class InProcessHandle implements PiRuntimeHandle {
     if (selectors.length > 1) throw new Error('Live snapshot accepts only one cursor or edge selector')
     const all = this.session.sessionManager.getEntries()
     if (this.roundIndexCache) this.roundIndex(all)
-    const entryPosition = (cursor: string | undefined) => cursor
-      ? this.roundIndexCache?.entryPositions.get(cursor)
-        ?? all.findIndex(entry => record(entry).id === cursor)
-      : -1
+    const entryPosition = (cursor: string | undefined): number => {
+      if (!cursor) return -1
+      const indexed = this.roundIndexCache?.entryPositions.get(cursor)
+      if (indexed !== undefined) return indexed
+      // Initial latest-window requests do not build the whole session index.
+      // The rare direct seek still must reject ambiguous native IDs.
+      let position = -1
+      for (let index = 0; index < all.length; index++) {
+        if (record(all[index]).id !== cursor) continue
+        if (position !== -1) return -1
+        position = index
+      }
+      return position
+    }
     const requested = window?.limit
     const limit = Number.isInteger(requested)
       ? Math.max(1, Math.min(LIVE_SNAPSHOT_MAX_LIMIT, requested!))
