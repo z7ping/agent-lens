@@ -205,6 +205,8 @@ export interface LiveHistoryRoundSummaryDto {
 export interface LiveHistoryIndexItemDto {
   cursor: string
   ordinal: number
+  /** Optional, source-attested user-entry ID. Never use file ordinal as this ID. */
+  nativeEventId?: string | undefined
   preview?: string | undefined
   summary?: LiveHistoryRoundSummaryDto | undefined
 }

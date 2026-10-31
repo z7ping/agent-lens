@@ -563,7 +563,7 @@ function normalizePublicSnapshot(value: unknown): LiveSnapshot {
   }
 }
 
-function normalizeHistoryIndex(value: unknown) {
+export function normalizeHistoryIndex(value: unknown) {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
     throw httpError(500, 'Live adapter returned an invalid history index')
   }
@@ -574,6 +574,7 @@ function normalizeHistoryIndex(value: unknown) {
   if (row.items.length > LIVE_HISTORY_INDEX_QUERY_MAX_LIMIT) {
     throw httpError(500, 'Live adapter history index exceeded the per-query bounded limit')
   }
+  const seenNativeIds = new Set<string>()
   const items = row.items.map(raw => {
     if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
       throw httpError(500, 'Live adapter history index item is invalid')
@@ -586,6 +587,16 @@ function normalizeHistoryIndex(value: unknown) {
     }
     if (item.preview !== undefined && typeof item.preview !== 'string') {
       throw httpError(500, 'Live adapter history index preview is invalid')
+    }
+    // Preserve a proven Source identity end-to-end. The Core/Runtime
+    // adapters own identity interpretation; HTTP neither fabricates an
+    // entry ID from a cursor nor mistakes an ordinal for a native ID.
+    if (item.nativeEventId !== undefined) {
+      if (typeof item.nativeEventId !== 'string' || !item.nativeEventId
+        || item.nativeEventId.length > 256 || seenNativeIds.has(item.nativeEventId)) {
+        throw httpError(500, 'Live adapter history index native identity is invalid')
+      }
+      seenNativeIds.add(item.nativeEventId)
     }
     let summary
     if (item.summary !== undefined) {
@@ -672,6 +683,7 @@ function normalizeHistoryIndex(value: unknown) {
     return {
       cursor: item.cursor,
       ordinal: Number(item.ordinal),
+      ...(typeof item.nativeEventId === 'string' ? { nativeEventId: item.nativeEventId } : {}),
       ...(typeof item.preview === 'string' ? { preview: item.preview.slice(0, 120) } : {}),
       ...(summary ? { summary } : {}),
     }

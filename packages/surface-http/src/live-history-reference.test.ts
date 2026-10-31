@@ -68,3 +68,27 @@ test('Slim Live history reference never searches a disabled Source or guesses mi
     ...state,logicalSessionId:'native:ffffffffffffffffffffffffffffffff',
   }),{})
 })
+
+test('Live HTTP history index preserves only source-attested native user identity',async()=>{
+  const { normalizeHistoryIndex } = await import('./live-http')
+  assert.deepEqual(normalizeHistoryIndex({total:3,items:[
+    {cursor:'u1',ordinal:1,nativeEventId:'native-user-1',preview:'hello'},
+    {cursor:'runtime-cursor-2',ordinal:2},
+  ]}),{total:3,items:[
+    {cursor:'u1',ordinal:1,nativeEventId:'native-user-1',preview:'hello'},
+    {cursor:'runtime-cursor-2',ordinal:2},
+  ]})
+})
+
+test('Live HTTP history index rejects fabricated, duplicate and oversized native identities',async()=>{
+  const { normalizeHistoryIndex } = await import('./live-http')
+  for(const nativeEventId of ['',42,'x'.repeat(257)]) {
+    assert.throws(()=>normalizeHistoryIndex({total:1,items:[
+      {cursor:'u1',ordinal:1,nativeEventId},
+    ]}),/native identity is invalid/)
+  }
+  assert.throws(()=>normalizeHistoryIndex({total:2,items:[
+    {cursor:'a',ordinal:1,nativeEventId:'same'},
+    {cursor:'b',ordinal:2,nativeEventId:'same'},
+  ]}),/native identity is invalid/)
+})
