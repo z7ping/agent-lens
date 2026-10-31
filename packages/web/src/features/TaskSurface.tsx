@@ -9,16 +9,18 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useId,
   useMemo,
   useRef,
   useState,
   type ForwardedRef,
+  type FormEvent,
   type HTMLAttributes,
   type PropsWithChildren,
   type ReactElement,
   type ReactNode,
 } from 'react'
-import { IconButton, UiIcon } from '../components/ui'
+import { Button, IconButton, Input, Popover, UiIcon } from '../components/ui'
 import { agentLensI18n } from '../i18n/runtime'
 
 export type TaskSurfaceMode = 'review' | 'live' | 'hub' | 'new'
@@ -458,7 +460,13 @@ export const TaskSurface = forwardRef<HTMLElement, TaskSurfaceProps>(function Ta
   const providedTurnRailItemsRef = useRef(providedTurnRailItems)
   providedTurnRailItemsRef.current = providedTurnRailItems
   const railViewportRef = useRef<HTMLElement | null>(null)
+  const desktopRoundJumpRef = useRef<HTMLButtonElement>(null)
+  const compactRoundJumpRef = useRef<HTMLButtonElement>(null)
+  const roundJumpInputId = useId()
   const frameRef = useRef<number | null>(null)
+  const [roundJumpOpen, setRoundJumpOpen] = useState(false)
+  const [roundJumpAnchor, setRoundJumpAnchor] = useState<'desktop' | 'compact'>('desktop')
+  const [roundJumpInput, setRoundJumpInput] = useState('')
   const [railItems, setRailItems] = useState<TaskTurnRailItem[]>([])
   const [activeRoundId, setActiveRoundId] = useState('')
   const [railPosition, setRailPosition] = useState<TaskTurnRailPosition | null>(null)
@@ -711,6 +719,25 @@ export const TaskSurface = forwardRef<HTMLElement, TaskSurfaceProps>(function Ta
     })
   }
 
+  // The visible rail samples at most 80 ticks, but any verified ordinal is
+  // addressable through the existing Live/Review indexed navigation callback.
+  const roundJumpTotal = Number.isSafeInteger(turnRailTotal) && turnRailTotal! > 0 ? turnRailTotal! : 0
+  const roundJumpEnabled = roundJumpTotal > 0 && typeof onTurnRailSelect === 'function'
+  const requestedOrdinal = /^\d+$/.test(roundJumpInput.trim()) ? Number(roundJumpInput.trim()) : 0
+  const validRoundJump = Number.isSafeInteger(requestedOrdinal)
+    && requestedOrdinal >= 1 && requestedOrdinal <= roundJumpTotal
+  const openRoundJump = (anchor: 'desktop' | 'compact') => {
+    setRoundJumpAnchor(anchor)
+    setRoundJumpInput(String(railItems.find(item => item.id === activeRoundId)?.ordinal ?? roundJumpTotal))
+    setRoundJumpOpen(true)
+  }
+  const submitRoundJump = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    if (!roundJumpEnabled || !validRoundJump) return
+    setRoundJumpOpen(false)
+    jumpToRound(railItems.find(item => item.ordinal === requestedOrdinal) ?? virtualTurnRailItem(requestedOrdinal))
+  }
+
   const jumpToBoundary = (boundary: 'start' | 'end') => {
     const viewport = railViewportRef.current
     if (!viewport) return
@@ -775,6 +802,15 @@ export const TaskSurface = forwardRef<HTMLElement, TaskSurfaceProps>(function Ta
           >
             <UiIcon name="arrow-big-up" size={20} strokeWidth={2}/>
           </IconButton>
+          {roundJumpEnabled && <IconButton
+            ref={desktopRoundJumpRef}
+            title={t('surface.jumpToRound')}
+            aria-label={t('surface.jumpToRound')}
+            aria-expanded={roundJumpOpen && roundJumpAnchor === 'desktop'}
+            onClick={() => openRoundJump('desktop')}
+          >
+            <UiIcon name="search" size={16}/>
+          </IconButton>}
           <IconButton
             className="task-boundary-latest"
             title={t('surface.jumpLatest')}
@@ -815,6 +851,15 @@ export const TaskSurface = forwardRef<HTMLElement, TaskSurfaceProps>(function Ta
             <UiIcon name="arrow-big-up" size={20} strokeWidth={2}/>
           </IconButton>
           <span aria-live="polite">{activeRailOrdinal} / {compactRailTotal}</span>
+          {roundJumpEnabled && <IconButton
+            ref={compactRoundJumpRef}
+            title={t('surface.jumpToRound')}
+            aria-label={t('surface.jumpToRound')}
+            aria-expanded={roundJumpOpen && roundJumpAnchor === 'compact'}
+            onClick={() => openRoundJump('compact')}
+          >
+            <UiIcon name="search" size={16}/>
+          </IconButton>}
           {firstErrorItem && <IconButton
             className="task-compact-round-error"
             title={t('surface.jumpErrorRound', { label: firstErrorItem.label })}
@@ -852,5 +897,28 @@ export const TaskSurface = forwardRef<HTMLElement, TaskSurfaceProps>(function Ta
     {rail}
     {boundaryNav}
     {compactNav}
+    <Popover
+      open={roundJumpOpen && roundJumpEnabled}
+      anchorRef={roundJumpAnchor === 'desktop' ? desktopRoundJumpRef : compactRoundJumpRef}
+      placement={roundJumpAnchor === 'desktop' ? 'right-end' : 'bottom-end'}
+      onClose={() => setRoundJumpOpen(false)}
+      className="task-turn-jump-popover"
+    >
+      <form onSubmit={submitRoundJump}>
+        <label htmlFor={roundJumpInputId}>{t('surface.roundNumber')}</label>
+        <Input
+          id={roundJumpInputId}
+          type="number"
+          inputMode="numeric"
+          min={1}
+          max={roundJumpTotal}
+          step={1}
+          autoFocus
+          value={roundJumpInput}
+          onChange={event => setRoundJumpInput(event.target.value)}
+        />
+        <Button type="submit" disabled={!validRoundJump}>{t('surface.jumpToRoundAction')}</Button>
+      </form>
+    </Popover>
   </TaskSurfaceViewProvider>
 })

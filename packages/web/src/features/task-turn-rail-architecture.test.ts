@@ -168,3 +168,12 @@ test('Live 用单一处理详情容器管理过程，结论单独展示，思考
   assert.match(timeline, /answer=\{<>/)
   assert.doesNotMatch(timeline, /flushProcess\(\); content\.push\(renderItem\(item\)\)/)
 })
+\ntest('共享轮次导航支持按编号直达未加载轮次，不扩张 80 个 DOM 刻度', () => {
+  assert.match(taskSurface, /roundJumpEnabled = roundJumpTotal > 0 && typeof onTurnRailSelect === 'function'/)
+  assert.match(taskSurface, /Number\.isSafeInteger\(requestedOrdinal\)/)
+  assert.match(taskSurface, /requestedOrdinal >= 1 && requestedOrdinal <= roundJumpTotal/)
+  assert.match(taskSurface, /jumpToRound\(railItems\.find\(item => item\.ordinal === requestedOrdinal\) \?\? virtualTurnRailItem\(requestedOrdinal\)\)/)
+  assert.match(taskSurface, /<Popover[\s\S]*anchorRef=\{roundJumpAnchor === 'desktop' \? desktopRoundJumpRef : compactRoundJumpRef\}/)
+  assert.match(taskSurface, /<Input[\s\S]*type="number"[\s\S]*max=\{roundJumpTotal\}/)
+  assert.match(taskSurface, /TASK_TURN_RAIL_MAX_TICKS = 80/)
+})
