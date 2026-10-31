@@ -348,7 +348,7 @@ class InProcessHandle implements PiRuntimeHandle {
     const cursor = query.cursor?.trim()
     if (cursor) {
       const row = this.roundIndexCache?.roundByCursor.get(cursor)
-      return { total: rows.length, items: row ? [{ cursor: row.cursor, ordinal: row.ordinal, ...(row.preview ? { preview: row.preview } : {}) }] : [] }
+      return { total: rows.length, items: row ? [{ cursor: row.cursor, ordinal: row.ordinal, nativeEventId: row.cursor, ...(row.preview ? { preview: row.preview } : {}) }] : [] }
     }
 
     const limit = Number.isInteger(query.limit)
@@ -362,7 +362,9 @@ class InProcessHandle implements PiRuntimeHandle {
     const start = Math.min(rows.length, fromOrdinal - 1)
     return {
       total: rows.length,
-      items: rows.slice(start, start + limit).map(({ entryIndex: _entryIndex, ...item }) => item),
+      items: rows.slice(start, start + limit).map(({ entryIndex: _entryIndex, ...item }) => ({
+        ...item, nativeEventId: item.cursor,
+      })),
     }
   }
 

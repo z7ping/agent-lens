@@ -196,6 +196,8 @@ export interface NativeReviewWindowDto {
 /** Sparse, source-validated native turn index. No message, tool or evidence text. */
 export interface NativeReviewTurnLocatorDto {
   ordinal: number
+  /** Source-proven native identity scoped to this original session. */
+  nativeEventId?: string
   /** Opaque, Source-owned record-boundary cursor accepted by native Review. */
   cursor: string
   at?: string

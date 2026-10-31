@@ -23,6 +23,7 @@ export interface NativeTurnIndexCheckpointStore {
 interface NativeTurnLocator {
   ordinal: number
   cursor: SourceNativeSessionCursor
+  nativeEventId?: string
   at?: string
 }
 interface NativeTurnIndexState {
@@ -123,8 +124,14 @@ export class NativeReviewTurnIndex {
         const ordinal = state.knownTurns + additions.length + 1
         if (ordinal > MAX_INDEX_ORDINAL) throw new Error('native-review-index-ordinal-budget')
         const observation = result.observations[index]!
+        // Native identity may join Live/Review; their ordinals remain
+        // independent because the original file may contain other branches.
+        const nativeEventId = typeof observation.nativeEventId === 'string'
+          && observation.nativeEventId.length > 0 && observation.nativeEventId.length <= 256
+          ? observation.nativeEventId : undefined
         additions.push({
           ordinal, cursor:rewind,
+          ...(nativeEventId ? {nativeEventId} : {}),
           ...(observation.occurredAt ? {at:observation.occurredAt} : {}),
         })
       }
@@ -224,6 +231,7 @@ export class NativeReviewTurnIndex {
           if(item.cursor.fileIdentity!==entry.fileIdentity)continue
           items.push({
             ordinal:item.ordinal,
+            ...(item.nativeEventId ? {nativeEventId:item.nativeEventId} : {}),
             cursor:encodeNativeSessionCursor({
               ...item.cursor,mode:'review-turns',turnOrdinal:item.ordinal,
             }),
