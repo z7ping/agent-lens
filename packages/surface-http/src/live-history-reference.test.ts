@@ -92,3 +92,17 @@ test('Live HTTP history index rejects fabricated, duplicate and oversized native
     {cursor:'b',ordinal:2,nativeEventId:'same'},
   ]}),/native identity is invalid/)
 })
+
+test('Live HTTP carries only attested native-journal view and rejects an unknown branch view',async()=>{
+  const { normalizeHistoryIndex } = await import('./live-http')
+  assert.deepEqual(normalizeHistoryIndex({
+    historyView:'native-journal',total:1,
+    items:[{cursor:'one',ordinal:1,nativeEventId:'one'}],
+  }),{
+    historyView:'native-journal',total:1,
+    items:[{cursor:'one',ordinal:1,nativeEventId:'one'}],
+  })
+  assert.throws(()=>normalizeHistoryIndex({
+    historyView:'active-branch',total:1,items:[],
+  }),/invalid history view/)
+})
