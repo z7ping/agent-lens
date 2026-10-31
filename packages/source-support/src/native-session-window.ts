@@ -126,7 +126,10 @@ export async function readNativeSessionWindow(input: {
     let bytesReadInWindow = 0
     let start = offset
     let sequence = input.cursor?.sequence ?? 0
-    let buffer = Buffer.alloc(0)
+    // Keep only bounded references to unread chunks. Repeated Buffer.concat
+    // on every 64KiB read recopies a long JSONL record many times.
+    let pendingChunks: Buffer[] = []
+    let pendingBytes = 0
     let pendingTail = false
 
     while (lines.length < limit && bytesReadInWindow < MAX_WINDOW_BYTES) {
@@ -135,17 +138,34 @@ export async function readNativeSessionWindow(input: {
       const chunk = Buffer.allocUnsafe(length)
       const { bytesRead } = await file.read(chunk, 0, length, offset + bytesReadInWindow)
       if (bytesRead === 0) {
-        pendingTail = buffer.length > 0
+        pendingTail = pendingBytes > 0
         break
       }
       bytesReadInWindow += bytesRead
-      buffer = Buffer.concat([buffer, chunk.subarray(0, bytesRead)])
-      let newline: number
-      while (lines.length < limit && (newline = buffer.indexOf(0x0a)) !== -1) {
-        const lineEnd = start + newline + 1
-        let raw = buffer.subarray(0, newline)
+      let position = 0
+      while (lines.length < limit && position < bytesRead) {
+        const newline = chunk.indexOf(0x0a, position)
+        if (newline === -1 || newline >= bytesRead) {
+          const remainder = chunk.subarray(position, bytesRead)
+          pendingChunks.push(remainder)
+          pendingBytes += remainder.length
+          break
+        }
+        const part = chunk.subarray(position, newline)
+        const rawBytes = pendingBytes + part.length
+        // Allow a trailing CR before stripping it, but never concatenate an
+        // unbounded record or silently skip a physical SourceRecord.
+        if (rawBytes > MAX_RECORD_BYTES + 1) {
+          return { state: 'unsupported', reason: 'native-record-too-large' }
+        }
+        let raw = pendingBytes
+          ? Buffer.concat([...pendingChunks, part], rawBytes)
+          : part
         if (raw.length && raw[raw.length - 1] === 0x0d) raw = raw.subarray(0, -1)
-        if (raw.length > MAX_RECORD_BYTES) return { state: 'unsupported', reason: 'native-record-too-large' }
+        if (raw.length > MAX_RECORD_BYTES) {
+          return { state: 'unsupported', reason: 'native-record-too-large' }
+        }
+        const lineEnd = start + rawBytes + 1
         const text = raw.toString('utf8')
         let entry: unknown
         if (text.trim()) {
@@ -166,14 +186,16 @@ export async function readNativeSessionWindow(input: {
           offset: start,
           sequence,
         })
-        buffer = buffer.subarray(newline + 1)
+        pendingChunks = []
+        pendingBytes = 0
         start = lineEnd
+        position = newline + 1
       }
-      if (buffer.length > MAX_RECORD_BYTES + 2) {
+      if (pendingBytes > MAX_RECORD_BYTES + 2) {
         return { state: 'unsupported', reason: 'native-record-too-large' }
       }
     }
-    if (bytesReadInWindow >= MAX_WINDOW_BYTES && lines.length === 0 && buffer.length) {
+    if (bytesReadInWindow >= MAX_WINDOW_BYTES && lines.length === 0 && pendingBytes) {
       return { state: 'unsupported', reason: 'native-window-byte-limit' }
     }
     signal?.throwIfAborted()
@@ -185,7 +207,7 @@ export async function readNativeSessionWindow(input: {
         offset: start, sequence, fileIdentity,
         boundaryHash: await hashAtBoundary(file, start),
       },
-      hasMore: start < current.size && (lines.length >= limit || buffer.length > 0 || bytesReadInWindow >= MAX_WINDOW_BYTES),
+      hasMore: start < current.size && (lines.length >= limit || pendingBytes > 0 || bytesReadInWindow >= MAX_WINDOW_BYTES),
       pendingTail: pendingTail || (start < current.size && lines.length < limit && bytesReadInWindow < MAX_WINDOW_BYTES),
     }
   } finally {
