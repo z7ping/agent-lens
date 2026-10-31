@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { appendFile, mkdtemp, rm, stat, writeFile } from 'node:fs/promises'
+import { appendFile, mkdtemp, rm, stat, utimes, writeFile } from 'node:fs/promises'
+import { createHash } from 'node:crypto'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { CapturePolicyService, NativeSessionCatalogEntry, ObservationCandidate,
@@ -16,7 +17,12 @@ test('full-range original identity lookup validates uniqueness and physical file
     const records=Array.from({length:1100},(_,n)=>({
       id:idFor(n),type:'message',message:{role:'user',content:`message-${n}`},
     }))
-    await writeFile(file,records.map(x=>JSON.stringify(x)).join('\n')+'\n')
+    const lines=records.map(x=>JSON.stringify(x))
+    const offsets=[0]
+    for(const line of lines)offsets.push(offsets.at(-1)!+Buffer.byteLength(line,'utf8')+1)
+    await writeFile(file,lines.join('\n')+'\n')
+    const fixedTime=new Date('2026-01-01T00:00:00.000Z')
+    await utimes(file,fixedTime,fixedTime)
     const info=await stat(file)
     const id='native:'+'b'.repeat(32)
     const entry:NativeSessionCatalogEntry={
@@ -40,10 +46,13 @@ test('full-range original identity lookup validates uniqueness and physical file
     let reads=0
     const reader:NativeSessionWindowReader={async read(query){
       reads++
-      const start=query.cursor?.offset??0
+      const start=query.cursor?offsets.indexOf(query.cursor.offset):0
+      if(start<0)return {state:'drifted',reason:'native-file-cursor-drifted'}
       const end=Math.min(records.length,start+(query.limit??16))
       const cursor=(n:number):SourceNativeSessionCursor=>({
-        fileIdentity:entry.fileIdentity,offset:n,sequence:n,
+        fileIdentity:entry.fileIdentity,offset:offsets[n]!,sequence:n,
+        ...(n<lines.length?{recordFingerprint:createHash('sha256')
+          .update(lines[n]!).digest('hex')}:{}),
       })
       const observations=records.slice(start,end).map(r=>({
         kind:'message.user',nativeEventId:r.id,capturedAt:'2026-11-01T00:00:00.000Z',
@@ -84,8 +93,19 @@ test('full-range original identity lookup validates uniqueness and physical file
       'duplicates in different 64-turn blocks must fail closed')
     assert.equal(await index.findByNativeEventId(id,'u-1099',join(root,'different.jsonl')),
       undefined,'no correspondence to a different physical source file')
+    const modified=[...lines]
+    modified[1099]=modified[1099]!.replace('message-1099','MESSAGE-1099')
+    assert.equal(Buffer.byteLength(modified[1099]!),Buffer.byteLength(lines[1099]!))
+    await writeFile(file,modified.join('\n')+'\n')
+    await utimes(file,fixedTime,fixedTime)
+    const overwritten=await stat(file)
+    assert.equal(overwritten.size,info.size)
+    assert.equal(overwritten.mtimeMs,info.mtimeMs)
+    assert.equal(overwritten.ino,info.ino)
+    assert.equal(await index.findByNativeEventId(id,'u-1099',file),undefined,
+      'record SHA-256 rejects same-inode, same-size, same-mtime in-place overwrite')
     await appendFile(file,' ')
     assert.equal(await index.findByNativeEventId(id,'u-1099',file),undefined,
-      'live locator must not use a stale file revision')
+      'live locator must not use a stale appended file revision')
   }finally{await rm(root,{recursive:true,force:true})}
 })
