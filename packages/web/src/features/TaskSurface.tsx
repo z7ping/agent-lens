@@ -49,6 +49,9 @@ export interface TaskSurfaceProps extends HTMLAttributes<HTMLElement> {
   boundaryNavigation?: TaskBoundaryNavigation | undefined
   turnRailItems?: readonly TaskTurnRailData[] | undefined
   turnRailTotal?: number | undefined
+  /** Verified ordinal prefix while an original session is still being indexed.
+   * It is a lower bound, never a claim about the session's full turn count. */
+  turnRailKnownCount?: number | undefined
   onTurnRailSelect?(item: TaskTurnRailData): void | Promise<void>
 }
 
@@ -449,7 +452,7 @@ function activeTurnRailItem(items: TaskTurnRailItem[], anchorY: number): TaskTur
  * TaskSurface 持有统一 Reader/Document/Composer 槽位、语义轮次导轨与边界导航。
  */
 export const TaskSurface = forwardRef<HTMLElement, TaskSurfaceProps>(function TaskSurface(
-  { mode, className, children, boundaryNavigation, turnRailItems: providedTurnRailItems, turnRailTotal, onTurnRailSelect, ...props },
+  { mode, className, children, boundaryNavigation, turnRailItems: providedTurnRailItems, turnRailTotal, turnRailKnownCount, onTurnRailSelect, ...props },
   ref,
 ) {
   const { t } = useTranslation('task')
@@ -721,14 +724,19 @@ export const TaskSurface = forwardRef<HTMLElement, TaskSurfaceProps>(function Ta
 
   // The visible rail samples at most 80 ticks, but any verified ordinal is
   // addressable through the existing Live/Review indexed navigation callback.
-  const roundJumpTotal = Number.isSafeInteger(turnRailTotal) && turnRailTotal! > 0 ? turnRailTotal! : 0
+  const roundJumpTotal = Number.isSafeInteger(turnRailTotal) && turnRailTotal! > 0
+    ? turnRailTotal!
+    : Number.isSafeInteger(turnRailKnownCount) && turnRailKnownCount! > 0
+      ? turnRailKnownCount!
+      : 0
   const roundJumpEnabled = roundJumpTotal > 0 && typeof onTurnRailSelect === 'function'
   const requestedOrdinal = /^\d+$/.test(roundJumpInput.trim()) ? Number(roundJumpInput.trim()) : 0
   const validRoundJump = Number.isSafeInteger(requestedOrdinal)
     && requestedOrdinal >= 1 && requestedOrdinal <= roundJumpTotal
   const openRoundJump = (anchor: 'desktop' | 'compact') => {
     setRoundJumpAnchor(anchor)
-    setRoundJumpInput(String(railItems.find(item => item.id === activeRoundId)?.ordinal ?? roundJumpTotal))
+    const activeOrdinal = railItems.find(item => item.id === activeRoundId)?.ordinal
+    setRoundJumpInput(String(Math.min(activeOrdinal ?? roundJumpTotal, roundJumpTotal)))
     setRoundJumpOpen(true)
   }
   const submitRoundJump = (event: FormEvent<HTMLFormElement>) => {
@@ -830,7 +838,13 @@ export const TaskSurface = forwardRef<HTMLElement, TaskSurfaceProps>(function Ta
 
   const activeRailIndex = Math.max(0, railItems.findIndex(item => item.id === activeRoundId))
   const activeRailOrdinal = railItems.find(item => item.id === activeRoundId)?.ordinal ?? activeRailIndex + 1
-  const compactRailTotal = Number.isInteger(turnRailTotal) && turnRailTotal! > 0 ? turnRailTotal! : railItems.length
+  // A partial native index cannot define the session total. Keep the loaded
+  // round's ordinal visible even when it lies beyond the indexed prefix.
+  const compactRailTotal = Number.isInteger(turnRailTotal) && turnRailTotal! > 0
+    ? turnRailTotal!
+    : railItems.reduce((max, item) => Math.max(max, item.ordinal ?? 0),
+      Math.max(railItems.length, roundJumpTotal))
+  const compactRailPartial = turnRailTotal === undefined && turnRailKnownCount !== undefined
   const firstErrorItem = railItems.find(item => item.error)
   const compactNav = railItems.length > 0 && resolvedBoundaryNavigation && railPosition && typeof document !== 'undefined'
     ? createPortal(
@@ -850,7 +864,7 @@ export const TaskSurface = forwardRef<HTMLElement, TaskSurfaceProps>(function Ta
           >
             <UiIcon name="arrow-big-up" size={20} strokeWidth={2}/>
           </IconButton>
-          <span aria-live="polite">{activeRailOrdinal} / {compactRailTotal}</span>
+          <span aria-live="polite">{activeRailOrdinal} / {compactRailTotal}{compactRailPartial ? '+' : ''}</span>
           {roundJumpEnabled && <IconButton
             ref={compactRoundJumpRef}
             title={t('surface.jumpToRound')}
