@@ -34,6 +34,7 @@ export function alignVerifiedNativeTurns(
     return { state: 'unavailable', reason: 'incomplete-index' }
   }
   const sourceById = new Map<string, number>()
+  let lastIndexedOrdinal = 0
   for (const source of sourceTurns) {
     if (!Number.isSafeInteger(source.ordinal) || source.ordinal < 1 || !source.nativeEventId) {
       return { state: 'unavailable', reason: 'missing-identity' }
@@ -41,6 +42,10 @@ export function alignVerifiedNativeTurns(
     if (sourceById.has(source.nativeEventId)) {
       return { state: 'unavailable', reason: 'duplicate-identity' }
     }
+    if (source.ordinal <= lastIndexedOrdinal) {
+      return { state: 'unavailable', reason: 'out-of-order' }
+    }
+    lastIndexedOrdinal = source.ordinal
     sourceById.set(source.nativeEventId, source.ordinal)
   }
   const items: Extract<NativeTurnAlignment, { state: 'verified' }>['items'] = []

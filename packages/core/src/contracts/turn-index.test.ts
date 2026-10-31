@@ -24,9 +24,14 @@ test('unverified scope, partial indexes, duplicate/missing ids, changed branch a
     {state:'unavailable',reason:'scope-unverified'})
   assert.deepEqual(alignVerifiedNativeTurns(a,a,{...scope,sourceIndexComplete:false}),
     {state:'unavailable',reason:'incomplete-index'})
+  assert.deepEqual(alignVerifiedNativeTurns(a,a,{...scope,sameNativeSession:false}),
+    {state:'unavailable',reason:'scope-unverified'})
   assert.deepEqual(alignVerifiedNativeTurns(a,b,scope),{state:'verified',items:[{nativeEventId:'a',liveOrdinal:1,sourceOrdinal:2}]})
   assert.deepEqual(alignVerifiedNativeTurns(a,[...a,...a],scope),
     {state:'unavailable',reason:'duplicate-identity'})
+  assert.deepEqual(alignVerifiedNativeTurns(a,[
+    {ordinal:2,nativeEventId:'b'},{ordinal:1,nativeEventId:'a'},
+  ],scope),{state:'unavailable',reason:'out-of-order'})
   assert.deepEqual(alignVerifiedNativeTurns([{ordinal:1,nativeEventId:'missing'}],a,scope),
     {state:'unavailable',reason:'missing-anchor'})
   assert.deepEqual(alignVerifiedNativeTurns([
