@@ -9,7 +9,9 @@ export interface NativeTurnAnchor {
  * A metadata-only equality check cannot verify an SDK parent chain. */
 export interface NativeTurnAlignmentProof {
   sameNativeSession: boolean
-  activeBranchVerified: boolean
+  /** True only when both indexes refer to the same verified history view:
+   * a complete native journal, or an explicitly verified ancestor path. */
+  sameTurnViewVerified: boolean
   sourceIndexComplete: boolean
   liveIndexComplete: boolean
 }
@@ -25,7 +27,7 @@ export function alignVerifiedNativeTurns(
   sourceTurns: readonly NativeTurnAnchor[],
   proof: NativeTurnAlignmentProof,
 ): NativeTurnAlignment {
-  if (!proof.sameNativeSession || !proof.activeBranchVerified) {
+  if (!proof.sameNativeSession || !proof.sameTurnViewVerified) {
     return { state: 'unavailable', reason: 'scope-unverified' }
   }
   if (!proof.sourceIndexComplete || !proof.liveIndexComplete) {

@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import { alignVerifiedNativeTurns } from './turn-index'
 
-const scope = {sameNativeSession:true,activeBranchVerified:true,sourceIndexComplete:true,liveIndexComplete:true}
+const scope = {sameNativeSession:true,sameTurnViewVerified:true,sourceIndexComplete:true,liveIndexComplete:true}
 
 test('same native ids align with different active-branch and file ordinals', () => {
   const result = alignVerifiedNativeTurns([
@@ -20,7 +20,7 @@ test('same native ids align with different active-branch and file ordinals', () 
 test('unverified scope, partial indexes, duplicate/missing ids, changed branch all fail closed', () => {
   const a=[{ordinal:1,nativeEventId:'a'}]
   const b=[{ordinal:1,nativeEventId:'b'},{ordinal:2,nativeEventId:'a'}]
-  assert.deepEqual(alignVerifiedNativeTurns(a,a,{...scope,activeBranchVerified:false}),
+  assert.deepEqual(alignVerifiedNativeTurns(a,a,{...scope,sameTurnViewVerified:false}),
     {state:'unavailable',reason:'scope-unverified'})
   assert.deepEqual(alignVerifiedNativeTurns(a,a,{...scope,sourceIndexComplete:false}),
     {state:'unavailable',reason:'incomplete-index'})
