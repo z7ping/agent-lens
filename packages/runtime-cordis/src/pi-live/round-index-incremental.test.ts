@@ -47,7 +47,7 @@ test('Pi Live count-only queries never calculate full-round summaries', () => {
       + '\n({ historyIndex, invalidateActiveRoundSummary })',
     context,
   ) as { invalidateActiveRoundSummary(): void; historyIndex(query: { limit?: number; cursor?: string; fromOrdinal?: number }): {
-    total: number; items: Array<{ cursor: string; ordinal: number; summary: unknown }>
+    historyView?: 'native-journal';total: number; items: Array<{ cursor: string; ordinal: number; summary: unknown }>
   } }
   assert.equal(api.historyIndex({ limit: 0 }).total, 2)
   assert.equal(scans.length, 0, 'count-only must not read per-turn details')
@@ -109,6 +109,27 @@ test('Pi Live count-only queries never calculate full-round summaries', () => {
   assert.equal(replacement.items[0]?.cursor, 'branch-u1',
     'branch switch must not leak the former turn index')
   assert.notEqual((context.roundIndexCache as { entryPositions: Map<string, number> }).entryPositions, oldMap)
+
+  // Pi SDK getEntries() is the complete append journal, not the active
+  // ancestor view. Switching leaves must not drop an abandoned branch's
+  // physical turns or change their native entry identities.
+  state.leaf = 'main-active-leaf'
+  state.entries = [
+    {id:'root-u1',type:'message',message:{role:'user',content:'root'}},
+    {id:'abandoned-u2',type:'message',message:{role:'user',content:'old branch'}},
+    {id:'selected-u2',type:'message',message:{role:'user',content:'new branch'}},
+  ]
+  const branchJournal=api.historyIndex({fromOrdinal:1,limit:3})
+  assert.equal(branchJournal.historyView,'native-journal')
+  assert.deepEqual(branchJournal.items.map(item=>item.cursor),
+    ['root-u1','abandoned-u2','selected-u2'])
+  const beforeSwitch=(context.roundIndexCache as {entryPositions:Map<string,number>}).entryPositions
+  state.leaf='another-active-leaf'
+  const switched=api.historyIndex({fromOrdinal:1,limit:3})
+  assert.deepEqual(switched.items.map(item=>item.cursor),
+    ['root-u1','abandoned-u2','selected-u2'])
+  assert.notEqual((context.roundIndexCache as {entryPositions:Map<string,number>}).entryPositions,
+    beforeSwitch,'branch leaf changes rebuild the journal index, not its meaning')
 })
 
 test('Pi in-process fallback also avoids cloning large index maps on append', () => {
