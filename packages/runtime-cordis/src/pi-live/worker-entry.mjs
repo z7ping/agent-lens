@@ -789,6 +789,13 @@ function roundSummary(all, row, nextEntryIndex) {
   }
 }
 
+function invalidateActiveRoundSummary() {
+  // The native SDK can update a message in-place while its entry count and
+  // last entry id remain unchanged. Only the active tail summary is mutable.
+  const tail = roundIndexCache?.rows?.at(-1)
+  if (tail) delete tail.summary
+}
+
 function roundIndex(all = session.sessionManager.getEntries()) {
   const lastEntryId = all.length ? entryId(all.at(-1)) : undefined
   const leafId = session.sessionManager.getLeafId()
@@ -1384,7 +1391,10 @@ async function initialize(input) {
   capabilities = runtimeCapabilities(hasSessionRuntime)
   send('event', { type: 'runtime_capabilities', capabilities })
   extensionUi = createExtensionUi()
-  unsubscribe = session.subscribe(event => send('event', wireEvent(event)))
+  unsubscribe = session.subscribe(event => {
+    invalidateActiveRoundSummary()
+    send('event', wireEvent(event))
+  })
   // Never replay a stale launch title onto an existing native Pi session.
   if (input.name && (!input.sessionPath || input.historyAction === 'fork')) session.setSessionName(input.name)
   if (input.provider || input.model) await selectModel(input.provider, input.model)
