@@ -14,6 +14,7 @@ test('native sparse turn index is bounded, restart-resumable and invalidates rep
   let mtime=1
   let records=Array.from({length:260},(_,n)=>({
     kind:n%17===0?'message.user':'message.commentary',
+    ...(n%17===0?{nativeEventId:'user-'+n}:{}),
     occurredAt:at,capturedAt:at,payload:{text:'payload-'+n},
   } as ObservationCandidate))
   const id='native:'+'a'.repeat(32)
@@ -75,6 +76,8 @@ test('native sparse turn index is bounded, restart-resumable and invalidates rep
   assert.ok(pageLimits.slice(12).every(limit=>limit===64), 'later scans reuse bounded 64-record Source pages')
   assert.equal(second.totalTurns,16)
   assert.deepEqual(second.items.map(x=>x.ordinal),[14,15,16])
+  assert.deepEqual(second.items.map(x=>x.nativeEventId),['user-221','user-238','user-255'],
+    'native identity remains independent of file-order ordinal')
   const decoded=JSON.parse(Buffer.from(second.items[0]!.cursor,'base64url').toString('utf8'))
   assert.deepEqual([decoded.offset,decoded.turnOrdinal,decoded.mode],[221,14,'review-turns'])
   const range=await index().query(id,{from:5,limit:4})
@@ -87,7 +90,11 @@ test('native sparse turn index is bounded, restart-resumable and invalidates rep
   const reopened=await index().query(id,{ordinal:10})
   assert.equal(reads,readsAfter,'persisted boundaries must not rehydrate source bodies')
   assert.equal(reopened.state,'available')
-  if(reopened.state==='available')assert.deepEqual(reopened.items.map(x=>x.ordinal),[10])
+  if(reopened.state==='available'){
+    assert.deepEqual(reopened.items.map(x=>x.ordinal),[10])
+    assert.equal(reopened.items[0]?.nativeEventId,'user-153',
+      'checkpoint preserves native identity without storing message body')
+  }
   // Append-only growth resumes from the verified last cursor.
   records.push({kind:'message.user',occurredAt:at,capturedAt:at,payload:{text:'new'}} as ObservationCandidate)
   fileSize=records.length

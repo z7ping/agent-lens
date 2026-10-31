@@ -269,6 +269,8 @@ export interface LiveHistoryRoundSummary {
 export interface LiveHistoryIndexItem {
   cursor: string
   ordinal: number
+  /** Stable native user-turn id when provided. Not a file-order ordinal. */
+  nativeEventId?: string | undefined
   preview?: string | undefined
   summary?: LiveHistoryRoundSummary | undefined
 }
