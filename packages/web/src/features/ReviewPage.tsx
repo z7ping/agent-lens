@@ -272,6 +272,9 @@ export function ReviewPage({ model, embedded = false, latestRequest = 0 }: { mod
         turnRailTotal={detail?.statisticsCompleteness==='window'
           && nativeTurnIndex?.state==='available' && nativeTurnIndex.coverage==='complete'
           ?nativeTurnIndex.totalTurns:undefined}
+        turnRailKnownCount={detail?.statisticsCompleteness==='window'
+          && nativeTurnIndex?.state==='available'
+          ?nativeTurnIndex.knownTurns:undefined}
         onTurnRailSelect={onTurnRailSelect}
       >
         {detail && <TaskHeader

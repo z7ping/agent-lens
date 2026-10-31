@@ -177,3 +177,14 @@ test('Live 用单一处理详情容器管理过程，结论单独展示，思考
   assert.match(taskSurface, /<Input[\s\S]*type="number"[\s\S]*max=\{roundJumpTotal\}/)
   assert.match(taskSurface, /TASK_TURN_RAIL_MAX_TICKS = 80/)
 })
+
+test('Native Review 索引尚未完成时只能跳已验证前缀，不伪造全量总数', () => {
+  assert.match(taskSurface, /turnRailKnownCount\?: number/)
+  assert.match(taskSurface, /Number\.isSafeInteger\(turnRailKnownCount\)/)
+  assert.match(taskSurface, /const roundJumpTotal = Number\.isSafeInteger\(turnRailTotal\)/)
+  assert.match(taskSurface, /Math\.min\(activeOrdinal \?\? roundJumpTotal, roundJumpTotal\)/)
+  assert.match(taskSurface, /turnRailTotal === undefined && turnRailKnownCount !== undefined/)
+  assert.match(review, /turnRailKnownCount=\{detail\?\.statisticsCompleteness==='window'/)
+  assert.match(review, /nativeTurnIndex\.knownTurns:undefined/)
+  assert.match(review, /nativeTurnIndex\.coverage==='complete'/)
+})

@@ -29,3 +29,9 @@ test('Compact Round Navigation 保留最早、错误轮次与最新入口', () =
   assert.match(taskSurface, /aria-label=\{t\('surface\.jumpErrorRound', \{ label: firstErrorItem\.label \}\)\}/)
   assert.match(taskSurface, /aria-label=\{t\('surface\.jumpLatest'\)\}/)
 })
+
+test('部分索引计数明确标记下界且不丢失已加载的大轮次编号', () => {
+  assert.match(taskSurface, /railItems\.reduce\(\(max, item\) => Math\.max\(max, item\.ordinal \?\? 0\)/)
+  assert.match(taskSurface, /compactRailPartial \? '\+' : ''/)
+  assert.match(taskSurface, /roundJumpTotal = Number\.isSafeInteger\(turnRailTotal\)/)
+})
