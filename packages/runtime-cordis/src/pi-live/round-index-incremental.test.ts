@@ -53,6 +53,7 @@ test('Pi Live count-only queries never calculate full-round summaries', () => {
   assert.equal(scans.length, 0, 'count-only must not read per-turn details')
   const first = api.historyIndex({ fromOrdinal: 2, limit: 1 })
   assert.equal(first.items[0]?.cursor, 'u2')
+  assert.equal((first.items[0] as { nativeEventId?: string })?.nativeEventId,'u2')
   assert.deepEqual(scans.map(item => item.cursor), ['u2'])
   api.historyIndex({ cursor: 'u2' })
   assert.equal(scans.length, 1, 'requested summary is cached')
@@ -90,6 +91,7 @@ test('Pi Live count-only queries never calculate full-round summaries', () => {
   ]
   const replacement = api.historyIndex({ fromOrdinal: 1, limit: 1 })
   assert.equal(replacement.total, 1)
+  assert.equal((replacement.items[0] as { nativeEventId?: string })?.nativeEventId,'branch-u1')
   assert.equal(replacement.items[0]?.cursor, 'branch-u1',
     'branch switch must not leak the former turn index')
   assert.notEqual((context.roundIndexCache as { entryPositions: Map<string, number> }).entryPositions, oldMap)

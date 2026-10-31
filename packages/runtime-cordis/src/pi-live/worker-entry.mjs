@@ -969,6 +969,7 @@ function historyIndex(queryValue) {
     return {
       cursor: row.cursor,
       ordinal: row.ordinal,
+      nativeEventId: row.cursor,
       ...(row.preview ? { preview: row.preview } : {}),
       summary: row.summary,
     }
