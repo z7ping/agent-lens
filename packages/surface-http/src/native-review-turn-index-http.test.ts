@@ -83,6 +83,18 @@ test('native sparse turn index is bounded, restart-resumable and invalidates rep
   const range=await index().query(id,{from:5,limit:4})
   assert.equal(range.state,'available')
   if(range.state==='available')assert.deepEqual(range.items.map(x=>x.ordinal),[5,6,7,8])
+  // File-order and active-branch ordinal may differ. Resolve by ID inside
+  // an explicitly bounded sparse metadata window, never by guessed ordinal.
+  const readsBeforeIdentityLookup=reads
+  const shifted=await index().query(id,{from:8,limit:6,expectedNativeEventId:'user-170'})
+  assert.equal(shifted.state,'available')
+  if(shifted.state==='available')assert.deepEqual(
+    shifted.items.map(x=>[x.ordinal,x.nativeEventId]),[[11,'user-170']])
+  const nonmatch=await index().query(id,{from:8,limit:6,expectedNativeEventId:'inactive-branch'})
+  assert.equal(nonmatch.state,'available')
+  if(nonmatch.state==='available')assert.deepEqual(nonmatch.items,[])
+  assert.equal(reads,readsBeforeIdentityLookup,
+    'identity lookup uses only sparse checkpoints, never source message bodies')
   const around=await index().query(id,{around:10,limit:5})
   assert.equal(around.state,'available')
   if(around.state==='available')assert.deepEqual(around.items.map(x=>x.ordinal),[8,9,10,11,12])
