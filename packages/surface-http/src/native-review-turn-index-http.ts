@@ -77,6 +77,9 @@ export class NativeReviewTurnIndex {
     const signal = AbortSignal.timeout(12_000)
     let state = { ...previous }
     let cursor = state.nextCursor
+    // A scan can revisit the same 64-turn block on many consecutive pages.
+    // Cache only blocks touched by this bounded scan, not the session history.
+    const blockCache = new Map<number, NativeTurnLocator[]>()
     // Return the first partial index quickly; subsequent calls use the existing
     // 64-record Source limit to fill the remaining index with fewer IPC hops.
     // Neither mode reads entire session content into memory.
@@ -135,10 +138,16 @@ export class NativeReviewTurnIndex {
       }
       for(const [block,locators] of grouped){
         const key=blockKey(id,block)
-        const existing=await this.checkpoints.get<NativeTurnLocator[]>(SCOPE,key)
-        const prefix=(existing??[]).filter(item=>
+        let existing=blockCache.get(block)
+        if (!existing) {
+          existing=await this.checkpoints.get<NativeTurnLocator[]>(SCOPE,key)??[]
+          blockCache.set(block,existing)
+        }
+        const prefix=existing.filter(item=>
           item.ordinal >= block*BLOCK_SIZE+1 && item.ordinal < locators[0]!.ordinal)
-        await this.checkpoints.set(SCOPE,key,[...prefix,...locators])
+        const committed=[...prefix,...locators]
+        await this.checkpoints.set(SCOPE,key,committed)
+        blockCache.set(block,committed)
       }
       // State is stored last; a crash may replay exactly this page, but never
       // publish uncommitted locators or fabricate totalRounds.

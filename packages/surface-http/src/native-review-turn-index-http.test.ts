@@ -18,8 +18,12 @@ test('native sparse turn index is bounded, restart-resumable and invalidates rep
   } as ObservationCandidate))
   const id='native:'+'a'.repeat(32)
   const checkpoint=new Map<string,unknown>()
+  const blockReads=new Map<string,number>()
   const store:NativeTurnIndexCheckpointStore={
-    async get<T>(scope:string,key:string){return checkpoint.get(scope+'|'+key) as T??null},
+    async get<T>(scope:string,key:string){
+      if(key.includes(':block:'))blockReads.set(key,(blockReads.get(key)??0)+1)
+      return checkpoint.get(scope+'|'+key) as T??null
+    },
     async set(scope,key,value){checkpoint.set(scope+'|'+key,value)},
   }
   const entry=():NativeSessionCatalogEntry=>({
@@ -61,6 +65,8 @@ test('native sparse turn index is bounded, restart-resumable and invalidates rep
   assert.equal(first.coverage,'partial')
   assert.equal(first.knownTurns,12)
   assert.deepEqual(pageLimits,Array(12).fill(16), 'cold first pass stays bounded and returns early')
+  assert.equal(blockReads.get(id+':block:0'),1,
+    'one bounded scan reuses its active 64-turn checkpoint block')
   assert.equal(first.totalTurns,undefined,'partial scans must never pretend to know total')
   const second=await index().query(id,{scan:true,tail:3})
   assert.equal(second.state,'available')
