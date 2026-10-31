@@ -233,6 +233,13 @@ export class NativeReviewTurnIndex {
           // history views (or branches) enumerate turns differently.
           if(options.expectedNativeEventId!==undefined
             && item.nativeEventId!==options.expectedNativeEventId)continue
+          // A bounded metadata-only range can locate the Source ordinal for
+          // a stable Live native ID, even if other branches shifted ordinals.
+          // Duplicate native IDs in this range must not select an arbitrary
+          // cursor.
+          if (options.expectedNativeEventId!==undefined && items.length>0) {
+            return {state:'unsupported',reason:'native-turn-identity-ambiguous'}
+          }
           items.push({
             ordinal:item.ordinal,
             ...(item.nativeEventId ? {nativeEventId:item.nativeEventId} : {}),
@@ -289,7 +296,8 @@ export async function handleNativeReviewTurnIndexRequest(
       && (!Number.isSafeInteger(value)||value<1||value>MAX_INDEX_QUERY))
     || ((ordinal!==undefined||tail!==undefined)&&limit!==undefined)
     || (expectedNativeEventId!==undefined
-      && (ordinal===undefined || expectedNativeEventId.length<1
+      && ((ordinal===undefined && from===undefined)
+        || expectedNativeEventId.length<1
         || expectedNativeEventId.length>256))
     || (url.searchParams.has('scan') && url.searchParams.get('scan')!=='1')) {
     throw badRequest('Invalid native turn index range')
