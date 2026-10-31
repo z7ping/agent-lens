@@ -1300,8 +1300,13 @@ export async function handleLiveRequest(
           const reference = await nativeLiveHistoryReference(
             history.nativeSessions,history.sources,history.policy,adapter,state)
           if (!reference.historySessionId) return undefined
+          // Adapters own their original native path; never guess a Source
+          // version from the Live ordinal or a title/workspace match.
+          const nativeFile=(state as {nativeSessionFilePath?:unknown;sessionFile?:unknown})
+            .nativeSessionFilePath ?? (state as {sessionFile?:unknown}).sessionFile
+          if(typeof nativeFile!=='string')return undefined
           return matchIndexedNativeReviewTurn(history.turnIndex!,
-            reference.historySessionId,index.items[0]!)
+            reference.historySessionId,index.items[0]!,nativeFile)
         })().catch(()=>undefined)
       }
       markRuntimeValidated(adapter, runtimeSessionId)

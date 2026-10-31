@@ -1,4 +1,6 @@
 import type { IncomingMessage, ServerResponse } from 'node:http'
+import { realpath, stat } from 'node:fs/promises'
+import { sourceFileIdentity } from '@agent-lens/source-support'
 import type {
   CapturePolicyService, NativeSessionCatalogEntry, NativeSessionCatalogStore,
   SourceNativeSessionCursor, SourceService,
@@ -172,6 +174,75 @@ export class NativeReviewTurnIndex {
       await this.checkpoints.set(SCOPE,stateKey(id),state)
       cursor = result.nextCursor
       if (!result.hasMore || result.pendingTail) break
+    }
+  }
+
+  /** Find a native user entry anywhere in a COMPLETE sparse metadata index,
+   * not just near the Live ordinal. Verify the live and Source file paths are
+   * the same physical file and refuse stale/incomplete/duplicate identities.
+   * A scan of checkpoint blocks never hydrates event bodies.
+   */
+  async findByNativeEventId(
+    id:string,nativeEventId:string,liveFilePath:string,
+  ):Promise<{ordinal:number;cursor:string;nativeEventId:string}|undefined>{
+    if(!/^native:[a-f0-9]{32}$/.test(id)
+      || !nativeEventId || nativeEventId.length>256
+      || !liveFilePath || liveFilePath.length>4096)return undefined
+    const status=await this.query(id,{tail:1})
+    if(status.state!=='available'||status.coverage!=='complete')return undefined
+    const entry=await this.catalog.getByReviewSessionId(id)
+    if(!entry||entry.locationKind!=='native'||!this.policy.isSourceEnabled(entry.sourceId))return undefined
+    const source=this.sources.list().find(value=>value.manifest.sourceId===entry.sourceId)
+    if(!source?.readNativeSessionPage)return undefined
+    const original=await this.checkpoints.get<NativeTurnIndexState>(SCOPE,stateKey(id))
+    if(!original||!original.complete||!sameRevision(original,entry,source.manifest.parserVersion)
+      || original.fileSize!==entry.fileSize||original.fileMtimeMs!==entry.fileMtimeMs)return undefined
+    const checkLiveFile=async()=>{
+      try{
+        const [sourcePath,livePath,file]=await Promise.all([
+          realpath(entry.filePath),realpath(liveFilePath),stat(entry.filePath),
+        ])
+        return sourcePath===livePath&&file.isFile()
+          && sourceFileIdentity(file)===entry.fileIdentity
+          && file.size===entry.fileSize&&file.mtimeMs===entry.fileMtimeMs
+      }catch{return false}
+    }
+    if(!await checkLiveFile())return undefined
+    let matched:NativeTurnLocator|undefined
+    // All known IDs must be inspected before accepting uniqueness; otherwise
+    // an inactive branch can contain a duplicate outside the nearby window.
+    // Batches cap both active heap and checkpoint read concurrency.
+    const totalBlocks=Math.ceil(original.knownTurns/BLOCK_SIZE)
+    for(let startBlock=0;startBlock<totalBlocks;startBlock+=16){
+      const blocks=await Promise.all(Array.from({
+        length:Math.min(16,totalBlocks-startBlock),
+      },(_,i)=>this.checkpoints.get<NativeTurnLocator[]>(SCOPE,blockKey(id,startBlock+i))))
+      for(let i=0;i<blocks.length;i++){
+        const block=blocks[i]
+        if(!block||!Array.isArray(block))return undefined
+        for(const item of block){
+          if(item.ordinal<(startBlock+i)*BLOCK_SIZE+1
+            ||item.ordinal>(startBlock+i+1)*BLOCK_SIZE
+            ||item.ordinal>original.knownTurns
+            ||item.cursor.fileIdentity!==entry.fileIdentity)return undefined
+          if(item.nativeEventId!==nativeEventId)continue
+          if(matched)return undefined
+          matched=item
+        }
+      }
+    }
+    if(!matched||!await checkLiveFile())return undefined
+    const latest=await this.checkpoints.get<NativeTurnIndexState>(SCOPE,stateKey(id))
+    if(!latest||!latest.complete||latest.knownTurns!==original.knownTurns
+      ||latest.fileIdentity!==original.fileIdentity
+      ||latest.fileSize!==original.fileSize
+      ||latest.fileMtimeMs!==original.fileMtimeMs
+      ||latest.nextCursor?.offset!==original.nextCursor?.offset)return undefined
+    return {
+      ordinal:matched.ordinal,nativeEventId,
+      cursor:encodeNativeSessionCursor({
+        ...matched.cursor,mode:'review-turns',turnOrdinal:matched.ordinal,
+      }),
     }
   }
 
