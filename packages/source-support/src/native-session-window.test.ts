@@ -252,3 +252,27 @@ test('span scanner respects incomplete tails, authorized roots and cursor drift'
       signal:controller.signal}))
   }finally{await rm(root,{recursive:true,force:true})}
 })
+
+test('span scanner preserves exact 2MiB CRLF boundary and UTF-8 physical bytes',async()=>{
+  const root=await mkdtemp(join(tmpdir(),'agent-lens-span-crlf-'))
+  const path=join(root,'record.jsonl')
+  try{
+    const empty=JSON.stringify({value:''})
+    const record=JSON.stringify({value:'x'.repeat(2*1024*1024-empty.length)})
+    assert.equal(Buffer.byteLength(record),2*1024*1024)
+    await writeFile(path,record+'\r\n'+JSON.stringify({value:'中文'})+'\n')
+    const first=await inspectNativeSessionRecordSpan({path,allowedRoots:[root]})
+    assert.equal(first.state,'available')
+    if(first.state!=='available')return
+    assert.equal(first.span.rawByteLength,2*1024*1024+1)
+    assert.equal(first.span.oversized,false,
+      'CRLF separator must not turn an accepted 2MiB JSON record into oversized')
+    const next=await inspectNativeSessionRecordSpan({path,allowedRoots:[root],cursor:{
+      offset:first.span.nextOffset,sequence:1,fileIdentity:first.span.fileIdentity,
+      boundaryHash:first.span.endBoundaryHash,
+    }})
+    assert.equal(next.state,'available')
+    if(next.state==='available')assert.equal(next.span.rawByteLength,
+      Buffer.byteLength(JSON.stringify({value:'中文'})))
+  }finally{await rm(root,{recursive:true,force:true})}
+})
