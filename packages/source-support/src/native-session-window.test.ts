@@ -1,9 +1,10 @@
 import assert from 'node:assert/strict'
 import { appendFile, mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises'
+import { createHash } from 'node:crypto'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import test from 'node:test'
-import { readNativeSessionWindow } from './native-session-window'
+import { inspectNativeSessionRecordSpan, readNativeSessionWindow } from './native-session-window'
 
 test('native window paginates without scanning history or persisting checkpoints', async () => {
   const root = await mkdtemp(join(tmpdir(), 'agent-lens-native-window-'))
@@ -193,4 +194,85 @@ test('native window resumes a multi-chunk unfinished tail after append', async (
   } finally {
     await rm(root, { recursive: true, force: true })
   }
+})
+
+test('oversized JSONL span is hashed by bounded byte scan without parsing or consuming its SourceRecord',async()=>{
+  const root=await mkdtemp(join(tmpdir(),'agent-lens-oversize-span-'))
+  const path=join(root,'record.jsonl')
+  try{
+    const record=JSON.stringify({type:'message',id:'large-user',message:{
+      role:'user',content:'x'.repeat(2*1024*1024+7),
+    }})
+    await writeFile(path,record+'\n'+JSON.stringify({id:'next'})+'\n')
+    const result=await inspectNativeSessionRecordSpan({path,allowedRoots:[root]})
+    assert.equal(result.state,'available')
+    if(result.state!=='available')return
+    assert.equal(result.span.offset,0)
+    assert.equal(result.span.rawByteLength,Buffer.byteLength(record))
+    assert.equal(result.span.nextOffset,Buffer.byteLength(record)+1)
+    assert.equal(result.span.sha256,createHash('sha256').update(record).digest('hex'))
+    assert.equal(result.span.oversized,true)
+    assert.match(result.span.boundaryHash,/^[a-f0-9]{64}$/)
+    assert.match(result.span.endBoundaryHash,/^[a-f0-9]{64}$/)
+    assert.deepEqual(await readNativeSessionWindow({path,allowedRoots:[root]}),
+      {state:'unsupported',reason:'native-record-too-large'},
+      'inspecting an oversized span must not silently skip or normalize it')
+    assert.deepEqual(await inspectNativeSessionRecordSpan({path,allowedRoots:[root],
+      expectedSha256:'0'.repeat(64)}),
+    {state:'drifted',reason:'native-record-hash-changed'})
+  }finally{await rm(root,{recursive:true,force:true})}
+})
+
+test('span scanner respects incomplete tails, authorized roots and cursor drift',async()=>{
+  const root=await mkdtemp(join(tmpdir(),'agent-lens-span-guard-'))
+  const path=join(root,'record.jsonl')
+  const excluded=join(root,'excluded')
+  try{
+    await mkdir(excluded)
+    await writeFile(path,'{"id":"first"}')
+    assert.deepEqual(await inspectNativeSessionRecordSpan({path,allowedRoots:[root]}),
+      {state:'pending',reason:'native-record-pending-tail'})
+    assert.deepEqual(await inspectNativeSessionRecordSpan({path,allowedRoots:[excluded]}),
+      {state:'unsupported',reason:'source-path-not-authorized'})
+    await appendFile(path,'\n{"id":"second"}\n')
+    const first=await inspectNativeSessionRecordSpan({path,allowedRoots:[root]})
+    assert.equal(first.state,'available')
+    if(first.state!=='available')return
+    const cursor={offset:first.span.nextOffset,sequence:1,
+      fileIdentity:first.span.fileIdentity,boundaryHash:first.span.endBoundaryHash}
+    const second=await inspectNativeSessionRecordSpan({path,allowedRoots:[root],cursor})
+    assert.equal(second.state,'available')
+    if(second.state==='available')assert.equal(second.span.rawByteLength,15)
+    await writeFile(path,'{"id":"other"}\n{"id":"second"}\n')
+    assert.deepEqual(await inspectNativeSessionRecordSpan({path,allowedRoots:[root],cursor}),
+      {state:'drifted',reason:'native-cursor-boundary-changed'})
+    const controller=new AbortController()
+    controller.abort()
+    await assert.rejects(inspectNativeSessionRecordSpan({path,allowedRoots:[root],
+      signal:controller.signal}))
+  }finally{await rm(root,{recursive:true,force:true})}
+})
+
+test('span scanner preserves exact 2MiB CRLF boundary and UTF-8 physical bytes',async()=>{
+  const root=await mkdtemp(join(tmpdir(),'agent-lens-span-crlf-'))
+  const path=join(root,'record.jsonl')
+  try{
+    const empty=JSON.stringify({value:''})
+    const record=JSON.stringify({value:'x'.repeat(2*1024*1024-empty.length)})
+    assert.equal(Buffer.byteLength(record),2*1024*1024)
+    await writeFile(path,record+'\r\n'+JSON.stringify({value:'中文'})+'\n')
+    const first=await inspectNativeSessionRecordSpan({path,allowedRoots:[root]})
+    assert.equal(first.state,'available')
+    if(first.state!=='available')return
+    assert.equal(first.span.rawByteLength,2*1024*1024+1)
+    assert.equal(first.span.oversized,false,
+      'CRLF separator must not turn an accepted 2MiB JSON record into oversized')
+    const next=await inspectNativeSessionRecordSpan({path,allowedRoots:[root],cursor:{
+      offset:first.span.nextOffset,sequence:1,fileIdentity:first.span.fileIdentity,
+      boundaryHash:first.span.endBoundaryHash,
+    }})
+    assert.equal(next.state,'available')
+    if(next.state==='available')assert.equal(next.span.rawByteLength,
+      Buffer.byteLength(JSON.stringify({value:'中文'})))
+  }finally{await rm(root,{recursive:true,force:true})}
 })
