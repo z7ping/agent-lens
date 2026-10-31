@@ -58,12 +58,19 @@ test('full-range original identity lookup validates uniqueness and physical file
     const index=new NativeReviewTurnIndex(reader,
       {getByReviewSessionId:async()=>entry},store,sources,policy)
     assert.equal(await index.findByNativeEventId(id,'u-1099',file),undefined,
-      'a partial index cannot prove identity uniqueness')
-    for(let n=0;n<6;n++){
-      const progress=await index.query(id,{scan:true,tail:1})
-      assert.equal(progress.state,'available')
-      if(progress.state==='available'&&progress.coverage==='complete')break
+      'an incomplete index must not return an unverified locator')
+    // The first user-triggered lookup starts bounded background hydration;
+    // later requests can resume if the current budget was insufficient.
+    let completed=false
+    for(let attempt=0;attempt<100;attempt++){
+      const progress=await index.query(id,{tail:1})
+      if(progress.state==='available'&&progress.coverage==='complete'){
+        completed=true
+        break
+      }
+      await new Promise(resolve=>setTimeout(resolve,10))
     }
+    assert.equal(completed,true,'on-demand warmup should populate this small fixture')
     const before=reads
     const found=await index.findByNativeEventId(id,'u-1099',file)
     assert.equal(found?.ordinal,1100,'a Live ordinal near 1 cannot constrain the file lookup')

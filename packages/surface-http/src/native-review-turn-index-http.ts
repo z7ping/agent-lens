@@ -69,6 +69,7 @@ export class NativeReviewTurnIndex {
   private readonly identityCache = new Map<string,{
     revision:string;items:Map<string,NativeTurnLocator|null>
   }>()
+  private readonly warmups = new Map<string,Promise<void>>()
   constructor(
     private readonly reader: NativeSessionWindowReader,
     private readonly catalog: Pick<NativeSessionCatalogStore,'getByReviewSessionId'>,
@@ -183,6 +184,29 @@ export class NativeReviewTurnIndex {
     }
   }
 
+  /** On-demand bounded index hydration never blocks a Live history-index
+   * response. At most one session is warmed concurrently; each attempt is
+   * capped by time and Source page budgets, and resumes from the checkpoint.
+   * It does not run on startup or process absent/disabled Sources.
+   */
+  private scheduleWarmup(id:string):void{
+    if(this.warmups.has(id)||this.warmups.size>=1)return
+    const task=Promise.resolve().then(async()=>{
+      const deadline=Date.now()+15_000
+      for(let n=0;n<16&&Date.now()<deadline;n++){
+        const before=await this.query(id,{tail:1})
+        if(before.state!=='available'||before.coverage==='complete')return
+        const next=await this.query(id,{scan:true,tail:1})
+        if(next.state!=='available'||next.coverage==='complete')return
+        if(next.scannedOffset<=before.scannedOffset)return
+      }
+    })
+    this.warmups.set(id,task)
+    void task.catch(()=>{}).finally(()=>{
+      if(this.warmups.get(id)===task)this.warmups.delete(id)
+    })
+  }
+
   /** Find a native user entry anywhere in a COMPLETE sparse metadata index,
    * not just near the Live ordinal. Verify the live and Source file paths are
    * the same physical file and refuse stale/incomplete/duplicate identities.
@@ -195,7 +219,11 @@ export class NativeReviewTurnIndex {
       || !nativeEventId || nativeEventId.length>256
       || !liveFilePath || liveFilePath.length>4096)return undefined
     const status=await this.query(id,{tail:1})
-    if(status.state!=='available'||status.coverage!=='complete')return undefined
+    if(status.state!=='available')return undefined
+    if(status.coverage!=='complete'){
+      this.scheduleWarmup(id)
+      return undefined
+    }
     const entry=await this.catalog.getByReviewSessionId(id)
     if(!entry||entry.locationKind!=='native'||!this.policy.isSourceEnabled(entry.sourceId))return undefined
     const source=this.sources.list().find(value=>value.manifest.sourceId===entry.sourceId)
