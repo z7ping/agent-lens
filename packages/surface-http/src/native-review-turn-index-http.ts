@@ -63,6 +63,12 @@ function sameRevision(state: NativeTurnIndexState, entry: NativeSessionCatalogEn
 
 export class NativeReviewTurnIndex {
   private readonly scans = new Map<string, Promise<void>>()
+  // Derived from existing 64-turn metadata checkpoints, never Source bodies.
+  // Two completed indexes max; oversized sessions fall back to bounded-batch
+  // checkpoint reads without pinning an unbounded in-memory map.
+  private readonly identityCache = new Map<string,{
+    revision:string;items:Map<string,NativeTurnLocator|null>
+  }>()
   constructor(
     private readonly reader: NativeSessionWindowReader,
     private readonly catalog: Pick<NativeSessionCatalogStore,'getByReviewSessionId'>,
@@ -208,27 +214,54 @@ export class NativeReviewTurnIndex {
       }catch{return false}
     }
     if(!await checkLiveFile())return undefined
+    const revision=JSON.stringify([original.fileIdentity,original.parserVersion,
+      original.fileSize,original.fileMtimeMs,original.knownTurns,
+      original.nextCursor?.offset,original.nextCursor?.boundaryHash])
+    const cached=this.identityCache.get(id)
+    if(cached && cached.revision!==revision)this.identityCache.delete(id)
     let matched:NativeTurnLocator|undefined
-    // All known IDs must be inspected before accepting uniqueness; otherwise
-    // an inactive branch can contain a duplicate outside the nearby window.
-    // Batches cap both active heap and checkpoint read concurrency.
-    const totalBlocks=Math.ceil(original.knownTurns/BLOCK_SIZE)
-    for(let startBlock=0;startBlock<totalBlocks;startBlock+=16){
-      const blocks=await Promise.all(Array.from({
-        length:Math.min(16,totalBlocks-startBlock),
-      },(_,i)=>this.checkpoints.get<NativeTurnLocator[]>(SCOPE,blockKey(id,startBlock+i))))
-      for(let i=0;i<blocks.length;i++){
-        const block=blocks[i]
-        if(!block||!Array.isArray(block))return undefined
-        for(const item of block){
-          if(item.ordinal<(startBlock+i)*BLOCK_SIZE+1
-            ||item.ordinal>(startBlock+i+1)*BLOCK_SIZE
-            ||item.ordinal>original.knownTurns
-            ||item.cursor.fileIdentity!==entry.fileIdentity)return undefined
-          if(item.nativeEventId!==nativeEventId)continue
-          if(matched)return undefined
-          matched=item
+    const validCache=this.identityCache.get(id)
+    if(validCache){
+      // Refresh LRU order without copying the map.
+      this.identityCache.delete(id)
+      this.identityCache.set(id,validCache)
+      matched=validCache.items.get(nativeEventId)??undefined
+    }else{
+      const build=original.knownTurns<=32_768
+        ?new Map<string,NativeTurnLocator|null>():undefined
+      let nextOrdinal=1
+      let ambiguous=false
+      // Check every checkpoint block before trusting global uniqueness.
+      // Concurrency and heap are bounded even for very long sessions.
+      const totalBlocks=Math.ceil(original.knownTurns/BLOCK_SIZE)
+      for(let startBlock=0;startBlock<totalBlocks;startBlock+=16){
+        const blocks=await Promise.all(Array.from({
+          length:Math.min(16,totalBlocks-startBlock),
+        },(_,i)=>this.checkpoints.get<NativeTurnLocator[]>(SCOPE,blockKey(id,startBlock+i))))
+        for(let i=0;i<blocks.length;i++){
+          const block=blocks[i]
+          if(!block||!Array.isArray(block))return undefined
+          for(const item of block){
+            if(item.ordinal!==nextOrdinal++
+              ||item.cursor.fileIdentity!==entry.fileIdentity)return undefined
+            if(item.nativeEventId){
+              if(build){
+                build.set(item.nativeEventId,
+                  build.has(item.nativeEventId)?null:item)
+              }
+              if(item.nativeEventId===nativeEventId){
+                if(matched)ambiguous=true
+                matched=item
+              }
+            }
+          }
         }
+      }
+      if(nextOrdinal!==original.knownTurns+1)return undefined
+      if(ambiguous)matched=undefined
+      if(build){
+        if(this.identityCache.size>=2)this.identityCache.delete(this.identityCache.keys().next().value!)
+        this.identityCache.set(id,{revision,items:build})
       }
     }
     if(!matched||!await checkLiveFile())return undefined

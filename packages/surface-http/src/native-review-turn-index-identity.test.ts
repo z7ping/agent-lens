@@ -26,8 +26,12 @@ test('full-range original identity lookup validates uniqueness and physical file
       lastActivityAt:'2026-11-01T00:00:00.000Z',updatedAt:'2026-11-01T00:00:00.000Z',
     }
     const checkpoints=new Map<string,unknown>()
+    let blockReads=0
     const store:NativeTurnIndexCheckpointStore={
-      async get<T>(scope:string,key:string){return checkpoints.get(scope+'|'+key) as T??null},
+      async get<T>(scope:string,key:string){
+        if(key.includes(':block:'))blockReads++
+        return checkpoints.get(scope+'|'+key) as T??null
+      },
       async set(scope:string,key:string,value:unknown){checkpoints.set(scope+'|'+key,value)},
     }
     const sources={list:()=>[{manifest:{sourceId:'pi',parserVersion:'8'},
@@ -65,6 +69,10 @@ test('full-range original identity lookup validates uniqueness and physical file
     assert.equal(found?.ordinal,1100,'a Live ordinal near 1 cannot constrain the file lookup')
     assert.equal(found?.nativeEventId,'u-1099')
     assert.equal(reads,before,'lookup reads only stored metadata, never Source content')
+    const blocksBefore=blockReads
+    assert.equal((await index.findByNativeEventId(id,'u-1098',file))?.ordinal,1099)
+    assert.equal(blockReads,blocksBefore,
+      'a second full-range seek reuses bounded metadata-only identity cache')
     assert.equal(await index.findByNativeEventId(id,'duplicate-key',file),undefined,
       'duplicates in different 64-turn blocks must fail closed')
     assert.equal(await index.findByNativeEventId(id,'u-1099',join(root,'different.jsonl')),
