@@ -190,6 +190,22 @@
   color: var(--al-on-accent);
 }
 
+.task-turn-jump-popover form {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px;
+}
+.task-turn-jump-popover label {
+  color: var(--al-muted);
+  font-size: 12px;
+  white-space: nowrap;
+}
+.task-turn-jump-popover .ui-field {
+  width: 100px;
+  min-width: 0;
+}
+
 @media (max-width: 991.98px) {
   .task-turn-rail,
   .task-boundary-nav { display: none; }

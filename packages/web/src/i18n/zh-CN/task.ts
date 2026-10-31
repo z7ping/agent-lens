@@ -84,6 +84,9 @@ export const chineseTaskMessages: LocaleMessagesDto = {
       compactNavigation: '窄窗长会话导航',
       jumpEarliest: '跳到最早',
       jumpErrorRound: '跳到错误轮次：{{label}}',
+      jumpToRound: '跳至指定轮次',
+      roundNumber: '轮次',
+      jumpToRoundAction: '跳转',
     },
     thinking: {
       thinkingProcess: '思考过程',

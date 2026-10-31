@@ -84,6 +84,9 @@ export const englishTaskMessages: LocaleMessagesDto = {
       compactNavigation: 'Compact long-session navigation',
       jumpEarliest: 'Jump to earliest',
       jumpErrorRound: 'Jump to error round: {{label}}',
+      jumpToRound: 'Jump to round number',
+      roundNumber: 'Round',
+      jumpToRoundAction: 'Go',
     },
     thinking: {
       thinkingProcess: 'Thinking process',
