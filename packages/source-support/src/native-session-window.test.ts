@@ -129,3 +129,68 @@ test('native JSONL cursor detects same-inode overwrite at its previous line boun
   }finally{await rm(root,{recursive:true,force:true})}
 })
 
+
+
+test('native window assembles multi-chunk UTF-8 records once and preserves exact cursors', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'agent-lens-native-long-line-'))
+  const path = join(root, 'long.jsonl')
+  try {
+    // CR is the final byte of the first 64KiB chunk; the newline comes next.
+    const firstText = JSON.stringify({ id: 1, text: 'a'.repeat(65_535 - JSON.stringify({ id: 1, text: '' }).length) })
+    assert.equal(Buffer.byteLength(firstText), 65_535)
+    const secondText = JSON.stringify({ id: 2, text: '中'.repeat(100_000) })
+    const thirdText = JSON.stringify({ id: 3, text: 'end' })
+    await writeFile(path, firstText + '\r\n' + secondText + '\n' + thirdText + '\n')
+    const args = { path, allowedRoots: [root], limit: 1 }
+    const first = await readNativeSessionWindow(args)
+    assert.equal(first.state, 'available')
+    if (first.state !== 'available') return
+    assert.equal(first.lines[0]?.entry.id, 1)
+    assert.equal(first.nextCursor.offset, Buffer.byteLength(firstText) + 2)
+    assert.match(first.nextCursor.boundaryHash ?? '', /^[a-f0-9]{64}$/)
+    const second = await readNativeSessionWindow({ ...args, cursor: first.nextCursor })
+    assert.equal(second.state, 'available')
+    if (second.state !== 'available') return
+    assert.equal(second.lines[0]?.entry.id, 2)
+    assert.equal((second.lines[0]?.entry.text as string).length, 100_000)
+    assert.equal(second.lines[0]?.offset, first.nextCursor.offset)
+    assert.equal(second.nextCursor.offset, first.nextCursor.offset + Buffer.byteLength(secondText) + 1)
+    const third = await readNativeSessionWindow({ ...args, cursor: second.nextCursor })
+    assert.equal(third.state, 'available')
+    if (third.state !== 'available') return
+    assert.equal(third.lines[0]?.entry.id, 3)
+    assert.equal(third.nextCursor.sequence, 3)
+    assert.equal(third.hasMore, false)
+  } finally {
+    await rm(root, { recursive: true, force: true })
+  }
+})
+
+test('native window resumes a multi-chunk unfinished tail after append', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'agent-lens-native-long-tail-'))
+  const path = join(root, 'tail.jsonl')
+  try {
+    const prefix = JSON.stringify({ id: 1 }) + '\n'
+    const large = JSON.stringify({ id: 2, text: '甲'.repeat(95_000) })
+    const cut = large.length - 3
+    await writeFile(path, prefix + large.slice(0, cut))
+    const first = await readNativeSessionWindow({ path, allowedRoots: [root] })
+    assert.equal(first.state, 'available')
+    if (first.state !== 'available') return
+    assert.equal(first.pendingTail, true)
+    assert.equal(first.lines.length, 1)
+    assert.equal(first.nextCursor.offset, Buffer.byteLength(prefix))
+    await appendFile(path, large.slice(cut) + '\n')
+    const continued = await readNativeSessionWindow({
+      path, allowedRoots: [root], cursor: first.nextCursor,
+    })
+    assert.equal(continued.state, 'available')
+    if (continued.state !== 'available') return
+    assert.equal(continued.lines.length, 1)
+    assert.equal(continued.lines[0]?.entry.id, 2)
+    assert.equal(continued.hasMore, false)
+    assert.equal(continued.pendingTail, false)
+  } finally {
+    await rm(root, { recursive: true, force: true })
+  }
+})
