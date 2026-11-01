@@ -42,6 +42,11 @@ export interface NativeJsonlTextFragment {
   contentIndex?:number
   /** SHA-256 of bounded native tool ID, without disclosing the raw ID. */
   callKey?:string
+  /** Internal-only original argument property chain. Core must strip it
+   * after key-aware CapturePolicy; this is not a public evidence field. */
+  fieldKeys?:string[]
+  /** True when property nesting is too deep for safe policy evaluation. */
+  fieldKeysTooDeep?:boolean
   /** This text leaf spans multiple fragments; policy must not redact them
    * separately without taking token-boundary context into account. */
   splitScalar?:boolean
@@ -153,6 +158,8 @@ export async function readNativeJsonlTextFragments(input:{
     let mediaFound=false
     let selectedIndex:number|undefined
     let textKind:FragmentKind='message'
+    let argumentKeys:string[]|undefined
+    let argumentKeysTooDeep=false
     let failed:string|undefined
     let inKey=false
     let keyBuffer=''
@@ -187,7 +194,12 @@ export async function readNativeJsonlTextFragments(input:{
           throw new Error(failed)
         }
         fragments.push({ordinal,text:textBuffer,kind:textKind,
-          ...(selectedIndex===undefined?{}:{contentIndex:selectedIndex})})
+          ...(selectedIndex===undefined?{}:{contentIndex:selectedIndex}),
+          ...(textKind==='tool-call'&&argumentKeys?.length
+            ?{fieldKeys:argumentKeys}:{}),
+          ...(textKind==='tool-call'&&argumentKeysTooDeep
+            ?{fieldKeysTooDeep:true}:{}),
+        })
         selectedLeafIds.push(currentTextLeaf)
         selectedBytes+=textBytes
       }
@@ -301,6 +313,13 @@ export async function readNativeJsonlTextFragments(input:{
             stringKind='ignored'
           textKind=stringKind==='thinking'?'thinking'
             :stringKind==='argument'?'tool-call':'message'
+          // Carry keys only inside trusted Source -> Reader. The CapturePolicy
+          // must see ancestors such as credentials.password, including arrays.
+          const keys=stringKind==='argument'
+            ?path.slice(3).filter((part):part is string=>typeof part==='string')
+            :[]
+          argumentKeysTooDeep=keys.length>16
+          argumentKeys=argumentKeysTooDeep?undefined:keys
           meta='';textBuffer='';textBytes=0;pendingHighSurrogate=''
           if(stringKind==='text'||stringKind==='thinking'||stringKind==='argument'){
             currentTextLeaf=nextTextLeaf++;textPieces=0

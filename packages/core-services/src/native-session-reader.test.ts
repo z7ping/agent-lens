@@ -512,23 +512,25 @@ test('large split scalar fragments are masked under redacted CapturePolicy',asyn
       }}
     },
   } as unknown as SourceDefinition
-  let called=false
-  const policy={
-    isSourceEnabled:()=>true,
-    modeFor:()=> 'redacted' as const,
-    capture(){called=true;return {value:'unexpected',mode:'redacted',redactionApplied:false}},
-  } as unknown as CapturePolicyService
-  const reader=new NativeSessionReader(storage,
-    {list:()=>[source]} as unknown as SourceService,policy)
-  const value=await reader.readTextFragments({
-    ...query,cursor:{offset:0,sequence:0,fileIdentity:'1:9'},
-  })
-  assert.equal(value.state,'available')
-  if(value.state==='available')assert.deepEqual(value.record.fragments,[{
-    ordinal:0,text:'[超长文本片段已脱敏]',kind:'thinking',contentIndex:0,
-    splitScalar:true,redactionApplied:true,suppressed:true,
-  }])
-  assert.equal(called,false,'raw split token must not be redacted independently')
+  for(const mode of ['redacted','full'] as const){
+    let called=false
+    const policy={
+      isSourceEnabled:()=>true,
+      modeFor:()=>mode,
+      capture(){called=true;return {value:'unexpected',mode,redactionApplied:false}},
+    } as unknown as CapturePolicyService
+    const reader=new NativeSessionReader(storage,
+      {list:()=>[source]} as unknown as SourceService,policy)
+    const value=await reader.readTextFragments({
+      ...query,cursor:{offset:0,sequence:0,fileIdentity:'1:9'},
+    })
+    assert.equal(value.state,'available')
+    if(value.state==='available')assert.deepEqual(value.record.fragments,[{
+      ordinal:0,text:'[超长文本片段已脱敏]',kind:'thinking',contentIndex:0,
+      splitScalar:true,redactionApplied:true,suppressed:true,
+    }])
+    assert.equal(called,false,`${mode} must not sanitize a partial scalar independently`)
+  }
 })
 
 test('inline image chunks require enabled prompt capture and validated original identities',async()=>{
@@ -574,4 +576,71 @@ test('inline image chunks require enabled prompt capture and validated original 
     state:'unsupported',reason:'native-attachment-capture-disabled',
   })
   assert.equal(calls,1,'disabled capture never enters the Source adapter')
+})
+
+test('native tool argument fragments use key-aware CapturePolicy and hide private field paths',async()=>{
+  const storage={nativeSessionCatalog:{async get(){return catalog}},
+    repositories:{installations:{async get(){return installation}},
+      hosts:{async get(){return host}}},
+  } as unknown as StorageService
+  const callKey='a'.repeat(64)
+  const source={manifest:{sourceId:'pi',productId:'pi'},
+    async readNativeTextFragments(){
+      return {state:'available' as const,record:{
+        offset:70,fileIdentity:'1:9',recordSha256:'b'.repeat(64),
+        role:'assistant',totalTextFragments:4,
+        fragments:[
+          {ordinal:0,text:'plain-secret',kind:'tool-call' as const,
+            callKey,fieldKeys:['arguments','credentials','password']},
+          {ordinal:1,text:'src/index.ts',kind:'tool-call' as const,
+            callKey,fieldKeys:['arguments','path']},
+          {ordinal:2,text:'other-secret',kind:'tool-call' as const,
+            callKey,fieldKeys:['arguments','items','token']},
+          {ordinal:3,text:'untrusted-prototype',kind:'tool-call' as const,
+            fieldKeys:['arguments','__proto__']},
+        ],
+      }}
+    },
+  } as unknown as SourceDefinition
+  const captures:unknown[]=[]
+  const policy={
+    isSourceEnabled:()=>true,
+    modeFor:()=> 'redacted' as const,
+    capture(scope:string,input:unknown){
+      assert.equal(scope,'tool')
+      captures.push(input)
+      const value=JSON.stringify(input)
+      const isSensitive=value.includes('plain-secret')||value.includes('other-secret')
+      if(value.includes('plain-secret'))
+        return {value:{arguments:{credentials:'[已脱敏]'}},
+          mode:'redacted' as const,redactionApplied:true}
+      if(value.includes('other-secret'))
+        return {value:{arguments:{items:{token:'[已脱敏]'}}},
+          mode:'redacted' as const,redactionApplied:true}
+      assert.equal(isSensitive,false)
+      return {value:input,mode:'redacted' as const,redactionApplied:false}
+    },
+  } as unknown as CapturePolicyService
+  const reader=new NativeSessionReader(storage,
+    {list:()=>[source]} as unknown as SourceService,policy)
+  const value=await reader.readTextFragments({
+    sourceId:'pi',installationId:'install',nativeSessionId:'S1',
+    cursor:{fileIdentity:'1:9',offset:70,sequence:0},
+    signal:new AbortController().signal,
+  })
+  assert.equal(value.state,'available')
+  if(value.state!=='available')return
+  assert.deepEqual(captures,[
+    {arguments:{credentials:{password:'plain-secret'}}},
+    {arguments:{path:'src/index.ts'}},
+    {arguments:{items:{token:'other-secret'}}},
+  ])
+  assert.deepEqual(value.record.fragments.map(x=>x.text),
+    ['[已脱敏]','src/index.ts','[已脱敏]','[超长文本片段已脱敏]'])
+  assert.equal(value.record.fragments[3]?.suppressed,true)
+  assert.equal(JSON.stringify(value).includes('fieldKeys'),false)
+  assert.equal(JSON.stringify(value).includes('plain-secret'),false)
+  assert.equal(JSON.stringify(value).includes('other-secret'),false)
+  assert.equal(value.record.fragments[0]?.callKey,callKey)
+  assert.equal(value.record.fragments[3]?.callKey,undefined)
 })

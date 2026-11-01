@@ -444,26 +444,45 @@ export class NativeSessionReader {
       return {state:'unsupported',reason:'native-inline-image-window-invalid'}
     const scope=result.record.role==='user'?'prompt':'tool'
     const fragments=result.record.fragments.map(fragment=>{
-      // A token spanning two pages cannot be safely redacted by applying the
-      // regex policy independently to each arbitrary substring. For default
-      // redacted/off modes suppress the piece; explicit full mode still passes
-      // through the existing CapturePolicy hard-redaction path.
-      if(fragment.splitScalar&&this.capturePolicy.modeFor(scope)!=='full'){
-        // An obscured split scalar cannot also expose its join identity.
-        const safeFragment={...fragment}
-        delete safeFragment.callKey
-        return {...safeFragment,text:'[超长文本片段已脱敏]',
-          splitScalar:true,redactionApplied:true,suppressed:true}
-      }
-      const captured=this.capturePolicy.capture(scope,fragment.text,{maxText:12_000})
-      const safeFragment={...fragment}
+      // Trusted source field ancestry is for CapturePolicy only. Never send
+      // credential-containing parameter names across the HTTP boundary.
+      const {fieldKeys,fieldKeysTooDeep,...publicFragment}=fragment
+      const safeFragment={...publicFragment}
       delete safeFragment.callKey
+      // A fragmented scalar cannot be independently regex-redacted without
+      // leaking split tokens. Deep parameter structures also fail closed.
+      if(fieldKeysTooDeep
+        ||fieldKeys?.some(key=>key==='__proto__'||key==='prototype'||key==='constructor')
+        ||fragment.splitScalar){
+        return {...safeFragment,text:'[超长文本片段已脱敏]',
+          redactionApplied:true,suppressed:true}
+      }
+      // The shared CapturePolicy knows which object keys (token, password,
+      // credentials, etc.) are sensitive. Recreate only the bounded field
+      // ancestry, NOT a SourceRecord or the entire tool arguments object.
+      const keys=fragment.kind==='tool-call'?fieldKeys??[]:[]
+      const input=keys.reduceRight<unknown>(
+        (value,key)=>({[key]:value}),fragment.text)
+      const captured=this.capturePolicy.capture(scope,input,{maxText:12_000})
+      let value:unknown=captured.value
+      for(const key of keys){
+        if(value&&typeof value==='object'&&!Array.isArray(value)){
+          value=(value as Record<string,unknown>)[key]
+        }else{
+          // CapturePolicy may redact a sensitive ancestor (credentials) as
+          // one marker, rather than retaining its nested object shape.
+          value=captured.redactionApplied&&typeof value==='string'
+            ?value:undefined
+          break
+        }
+      }
+      const text=typeof value==='string'?value:''
       return {
-        ...(captured.mode==='off'?safeFragment:fragment),
-        text:typeof captured.value==='string'?captured.value:'',
-        ...(fragment.splitScalar?{splitScalar:true}:{}),
+        ...(captured.mode==='off'?safeFragment:publicFragment),
+        text,
         ...(captured.redactionApplied?{redactionApplied:true}:{}),
-        ...(captured.mode==='off'?{suppressed:true}:{}),
+        ...(captured.mode==='off'||value===undefined
+          ?{suppressed:true}:{}),
       }
     })
     return {state:'available',record:{...result.record,fragments}}

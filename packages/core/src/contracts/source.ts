@@ -231,6 +231,8 @@ export type SourceNativeTextFragmentResult =
       fragments:Array<{ordinal:number;text:string
         kind:'message'|'thinking'|'tool-call'|'tool-result'
         contentIndex?:number;callKey?:string
+        /** Trusted Source -> Reader privacy context, forbidden on HTTP DTO. */
+        fieldKeys?:string[];fieldKeysTooDeep?:boolean
         redactionApplied?:boolean;suppressed?:boolean;splitScalar?:boolean}>
       totalTextFragments:number;nextFragmentOffset?:number
       images?:Array<{contentIndex:number;mimeType:string}>

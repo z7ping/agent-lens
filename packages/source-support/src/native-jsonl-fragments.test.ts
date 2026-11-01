@@ -175,6 +175,9 @@ test('Pi thinking and tool evidence preserve original positions and opaque call 
     const pieces=call.record.fragments
     assert.deepEqual(pieces.map(x=>x.kind),['thinking','tool-call','tool-call','message'])
     assert.deepEqual(pieces.map(x=>x.contentIndex),[0,1,1,2])
+    assert.deepEqual(pieces[1]?.fieldKeys,['arguments','path'])
+    assert.deepEqual(pieces[2]?.fieldKeys,['arguments','options','note'])
+    assert.equal(pieces[0]?.fieldKeys,undefined)
     assert.equal(pieces[1]?.callKey,callKey)
     assert.equal(pieces[2]?.callKey,callKey)
     assert.equal(pieces[0]?.callKey,undefined)
@@ -279,5 +282,27 @@ test('inline media rejects untrusted MIME, invalid base64 and unauthorized image
       media:{contentIndex:0,offset:0,limit:128},
     })
     assert.deepEqual(wrongType,{state:'unsupported',reason:'native-inline-image-not-found'})
+  }finally{await rm(root,{recursive:true,force:true})}
+})
+
+test('tool argument fragments retain private nested field ancestry without exposing it as public evidence',async()=>{
+  const root=await mkdtemp(join(tmpdir(),'agent-lens-tool-private-keys-'))
+  const path=join(root,'session.jsonl')
+  try{
+    await writeFile(path,JSON.stringify({type:'message',
+      message:{role:'assistant',content:[{type:'toolCall',id:'call-sensitive',
+        arguments:{credentials:{api_key:'VALUE_NOT_A_TOKEN',password:'plain-value'},
+          items:[{token:'another-plain-value'}],
+          path:'src/index.ts'}}]},
+    })+'\n')
+    const result=await readNativeJsonlTextFragments({path,allowedRoots:[root]})
+    assert.equal(result.state,'available')
+    if(result.state!=='available')return
+    assert.deepEqual(result.record.fragments.map(x=>x.fieldKeys),[
+      ['arguments','credentials','api_key'],
+      ['arguments','credentials','password'],
+      ['arguments','items','token'],
+      ['arguments','path'],
+    ])
   }finally{await rm(root,{recursive:true,force:true})}
 })
