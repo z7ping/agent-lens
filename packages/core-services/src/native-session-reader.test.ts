@@ -495,3 +495,38 @@ test('large native record fragments require Source identity and parent CapturePo
     state:'unsupported',reason:'source-disabled',
   })
 })
+
+test('large split scalar fragments are masked under redacted CapturePolicy',async()=>{
+  const storage={nativeSessionCatalog:{async get(){return catalog}},
+    repositories:{installations:{async get(){return installation}},
+      hosts:{async get(){return host}}},
+  } as unknown as StorageService
+  const source={
+    manifest:{sourceId:'pi',productId:'pi'},
+    async readNativeTextFragments(){
+      return {state:'available' as const,record:{
+        offset:0,fileIdentity:'1:9',recordSha256:'a'.repeat(64),
+        role:'user',
+        fragments:[{ordinal:0,text:'sk-sensitive-long-token-part',splitScalar:true}],
+        totalTextFragments:2,nextFragmentOffset:1,
+      }}
+    },
+  } as unknown as SourceDefinition
+  let called=false
+  const policy={
+    isSourceEnabled:()=>true,
+    modeFor:()=> 'redacted' as const,
+    capture(){called=true;return {value:'unexpected',mode:'redacted',redactionApplied:false}},
+  } as unknown as CapturePolicyService
+  const reader=new NativeSessionReader(storage,
+    {list:()=>[source]} as unknown as SourceService,policy)
+  const value=await reader.readTextFragments({
+    ...query,cursor:{offset:0,sequence:0,fileIdentity:'1:9'},
+  })
+  assert.equal(value.state,'available')
+  if(value.state==='available')assert.deepEqual(value.record.fragments,[{
+    ordinal:0,text:'[超长文本片段已脱敏]',
+    splitScalar:true,redactionApplied:true,suppressed:true,
+  }])
+  assert.equal(called,false,'raw split token must not be redacted independently')
+})
