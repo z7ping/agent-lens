@@ -92,7 +92,7 @@ test('rejects invalid JSON, incomplete tail, wrong SHA, bad roots and drift',asy
     const valid=await readNativeJsonlTextFragments({path,allowedRoots:[root]})
     assert.equal(valid.state,'available')
     if(valid.state!=='available')return
-    assert.deepEqual(valid.record.fragments,[{ordinal:0,text:'one'}])
+    assert.deepEqual(valid.record.fragments,[{ordinal:0,text:'one',kind:'message',contentIndex:0}])
     assert.deepEqual(await readNativeJsonlTextFragments({
       path,allowedRoots:[root],expectedSha256:'0'.repeat(64),
     }),{state:'drifted',reason:'native-record-hash-changed'})
@@ -149,8 +149,66 @@ test('large media strings are ignored without materializing binary-as-text',asyn
     const out=await readNativeJsonlTextFragments({path,allowedRoots:[root],limit:2})
     assert.equal(out.state,'available')
     if(out.state==='available'){
-      assert.deepEqual(out.record.fragments,[{ordinal:0,text:'visible text'}])
+      assert.deepEqual(out.record.fragments,[{ordinal:0,text:'visible text',kind:'message',contentIndex:1}])
       assert.equal(out.record.totalTextFragments,1)
+    }
+  }finally{await rm(root,{recursive:true,force:true})}
+})
+
+test('Pi thinking and tool evidence preserve original positions and opaque call association',async()=>{
+  const root=await mkdtemp(join(tmpdir(),'agent-lens-streamed-tool-evidence-'))
+  const path=join(root,'session.jsonl')
+  try{
+    const id='native-call-741'
+    const callKey=createHash('sha256').update(id).digest('hex')
+    await writeFile(path,JSON.stringify({id:'assistant-entry',type:'message',
+      message:{role:'assistant',content:[
+        {type:'thinking',thinking:'Check the project first'},
+        {type:'toolCall',id,name:'read',arguments:{path:'src/main.ts',options:{note:'bounded'}}},
+        {type:'text',text:'Found the file'},
+        {type:'image',data:'A'.repeat(3*1024*1024)},
+      ]},
+    })+'\n')
+    const call=await readNativeJsonlTextFragments({path,allowedRoots:[root],limit:8})
+    assert.equal(call.state,'available')
+    if(call.state!=='available')return
+    const pieces=call.record.fragments
+    assert.deepEqual(pieces.map(x=>x.kind),['thinking','tool-call','tool-call','message'])
+    assert.deepEqual(pieces.map(x=>x.contentIndex),[0,1,1,2])
+    assert.equal(pieces[1]?.callKey,callKey)
+    assert.equal(pieces[2]?.callKey,callKey)
+    assert.equal(pieces[0]?.callKey,undefined)
+    assert.equal(JSON.stringify(pieces).includes(id),false)
+    assert.equal(call.record.nativeEventId,'assistant-entry')
+    assert.equal(call.record.totalTextFragments,4)
+    await writeFile(path,JSON.stringify({id:'tool-entry',type:'message',
+      message:{role:'toolResult',toolCallId:id,content:[{type:'text',text:'read complete'}]},
+    })+'\n')
+    const result=await readNativeJsonlTextFragments({path,allowedRoots:[root]})
+    assert.equal(result.state,'available')
+    if(result.state==='available')assert.deepEqual(result.record.fragments,[{
+      ordinal:0,kind:'tool-result',contentIndex:0,text:'read complete',callKey,
+    }])
+  }finally{await rm(root,{recursive:true,force:true})}
+})
+
+test('unknown and late tool argument types are not exposed as verified tool evidence',async()=>{
+  const root=await mkdtemp(join(tmpdir(),'agent-lens-streamed-tool-safe-'))
+  const path=join(root,'session.jsonl')
+  try{
+    await writeFile(path,JSON.stringify({type:'message',
+      message:{role:'assistant',content:[
+        {arguments:{secret:'unverified'},type:'toolCall',id:'late'},
+        {type:'toolCall',id:'known',arguments:{base64:'A'.repeat(3*1024*1024),text:'safe'}},
+      ]},
+    })+'\n')
+    const result=await readNativeJsonlTextFragments({path,allowedRoots:[root]})
+    assert.equal(result.state,'available')
+    if(result.state==='available'){
+      assert.equal(result.record.totalTextFragments,1)
+      assert.deepEqual(result.record.fragments.map(x=>x.text),['safe'])
+      assert.equal(result.record.fragments[0]?.kind,'tool-call')
+      assert.equal(result.record.fragments[0]?.contentIndex,1)
     }
   }finally{await rm(root,{recursive:true,force:true})}
 })
