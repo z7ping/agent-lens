@@ -189,10 +189,14 @@ async function readPiVerifiedLargeUserImagePage(
     media:{contentIndex:image.contentIndex,offset:0,limit:4},
     signal:ctx.abortSignal,
   })
-  if(media.state!=='available'||media.record.recordSha256!==scan.span.sha256
-    ||media.record.media?.contentIndex!==image.contentIndex)
-    return {state:media.state==='drifted'?'drifted':'unsupported',
-      reason:'native-record-too-large'}
+  if(media.state!=='available'){
+    if(media.state==='drifted'||media.state==='unavailable')return media
+    return {state:'unsupported',reason:'native-record-too-large'}
+  }
+  if(media.record.recordSha256!==scan.span.sha256)
+    return {state:'drifted',reason:'native-record-hash-changed'}
+  if(media.record.media?.contentIndex!==image.contentIndex)
+    return {state:'unsupported',reason:'native-record-too-large'}
 
   const auth=await authorizeNativeSessionPath(query.filePath,roots)
   if(auth.state!=='authorized')return auth
