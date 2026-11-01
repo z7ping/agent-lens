@@ -68,6 +68,9 @@ export const englishTaskMessages: LocaleMessagesDto = {
       copied: 'Copied',
       copyFailed: 'Copy failed',
       imageAttachment: 'Image attachment',
+      loadImage: 'Load image',
+      loadingImage: 'Loading…',
+      loadImageFailed: 'Image failed to load. Retry',
       fileAttachment: 'File attachment',
     },
     surface: {

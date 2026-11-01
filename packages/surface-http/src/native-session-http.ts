@@ -664,6 +664,34 @@ export async function handleNativeSessionAttachmentRequest(
       total+=item.dataUrl.length
       return item
     })
+    // An oversized Pi image is represented in the formal TaskSurface by
+    // Source-verified metadata, never copied as base64 into the observation.
+    // Reattest this exact original record before granting a lazy media handle.
+    // Only a unique Source image can be matched to a unique attachment.
+    const unresolved=items.filter(item=>item.type==='image'&&!item.dataUrl)
+    if(unresolved.length===1 && items.filter(item=>item.type==='image').length===1
+      && sourceCursor.recordFingerprint && reader.readTextFragments){
+      const verified=await reader.readTextFragments({
+        sourceId:entry.sourceId,installationId:entry.installationId,
+        nativeSessionId:entry.nativeSessionId,cursor:sourceCursor,
+        fragmentOffset:0,limit:1,signal,
+      })
+      if(verified.state==='available'
+        &&verified.record.offset===sourceCursor.offset
+        &&verified.record.fileIdentity===sourceCursor.fileIdentity
+        &&verified.record.sourceLineSha256===sourceCursor.recordFingerprint
+        &&verified.record.images?.length===1
+        &&verified.record.images[0]?.mimeType===unresolved[0]?.mimeType){
+        const image=verified.record.images[0]!
+        const mediaRef={
+          sessionId:id,
+          cursor:encodeNativeSessionCursor({...sourceCursor,mode:'record-fragments'}),
+          recordSha256:verified.record.recordSha256,
+          contentIndex:image.contentIndex,mimeType:image.mimeType,
+        }
+        items[items.indexOf(unresolved[0]!)]={...unresolved[0]!,nativeMedia:mediaRef}
+      }
+    }
     writeJson(response,200,{observationId,items})
     return true
   }

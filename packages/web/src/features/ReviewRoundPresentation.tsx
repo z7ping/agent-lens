@@ -24,6 +24,7 @@ function MessageBubble({
   node,
   inspect,
   loadAttachments,
+  loadImage,
   nestedTools = [],
   expansionStore,
   modelLabel,
@@ -34,6 +35,8 @@ function MessageBubble({
   node: ReviewMessageNodeDto
   inspect(node: ReviewNodeDto): void
   loadAttachments(observationId: string): Promise<ReviewMessageAttachmentDto[]>
+  loadImage?:((observationId:string,attachment:ReviewMessageAttachmentDto,
+    signal?:AbortSignal)=>Promise<string>)|undefined
   nestedTools?: ReviewToolNodeDto[]
   expansionStore?: Map<string, boolean> | undefined
   modelLabel?: string | undefined
@@ -79,6 +82,8 @@ function MessageBubble({
     role={node.role === 'user' ? 'user' : 'assistant'}
     text={node.role === 'user' ? taskUserRequestText(node.text) : node.text}
     attachments={attachments}
+    {...(loadImage?{loadImage:(attachment:ReviewMessageAttachmentDto,signal:AbortSignal)=>
+      loadImage(node.id,attachment,signal)}:{})}
     presentation={{
       author: node.role === 'user' ? t('local.role.you') : agentLabel(node.sourceId),
       ...(node.role === 'assistant' && modelLabel ? { modelLabel } : {}),
@@ -345,6 +350,7 @@ export function ReviewRoundAdapter({
   round,
   inspect,
   loadAttachments,
+  loadImage,
   loadProcess,
   expansionStore,
   showAllEvents,
@@ -358,6 +364,8 @@ export function ReviewRoundAdapter({
   round: TaskRoundModel
   inspect(node: ReviewNodeDto): void
   loadAttachments(observationId: string): Promise<ReviewMessageAttachmentDto[]>
+  loadImage?:((observationId:string,attachment:ReviewMessageAttachmentDto,
+    signal?:AbortSignal)=>Promise<string>)|undefined
   loadProcess(sessionId: string, ordinal: number, revision: string, signal?: AbortSignal): Promise<ReviewInteractionDto | null>
   expansionStore: Map<string, boolean>
   showAllEvents: boolean
@@ -516,8 +524,8 @@ export function ReviewRoundAdapter({
       if (entry.items.every(isSessionTitleUpdate)) return null
       return showAllEvents ? <RawEventGroup key={`raw-${index}`} items={entry.items} inspect={inspect}/> : null
     }
-    if (entry.type === 'reasoning') return <MessageBubble key={entry.node.id} node={entry.node} nestedTools={entry.tools} inspect={inspect} loadAttachments={loadAttachments} expansionStore={expansionStore}/>
-    if (entry.type === 'message') return <MessageBubble key={entry.node.id} node={entry.node} inspect={inspect} loadAttachments={loadAttachments} modelLabel={modelLabels.get(entry.node.id)} showContentActions={entry.node.id === lastAssistantId} onForkAt={onForkAt} forkPending={forkPending}/>
+    if (entry.type === 'reasoning') return <MessageBubble key={entry.node.id} node={entry.node} nestedTools={entry.tools} inspect={inspect} loadAttachments={loadAttachments} loadImage={loadImage} expansionStore={expansionStore}/>
+    if (entry.type === 'message') return <MessageBubble key={entry.node.id} node={entry.node} inspect={inspect} loadAttachments={loadAttachments} loadImage={loadImage} modelLabel={modelLabels.get(entry.node.id)} showContentActions={entry.node.id === lastAssistantId} onForkAt={onForkAt} forkPending={forkPending}/>
     if (entry.type === 'event') {
       if (isConsolidatedEvent(entry.node)) return null
       return <EventRow key={entry.node.id} event={entry.node} inspect={inspect}/>

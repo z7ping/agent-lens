@@ -1,5 +1,6 @@
 import type { AgentCoverageResponseDto, AgentDetailResponseDto, AgentEnrichmentResponseDto, AgentOverviewResponseDto, AgentRescanResponseDto, AgentSummaryResponseDto, CapturePolicyResponseDto, FacetResponseDto, HealthResponseDto, HostFilePreviewResponseDto, IntegrationManagementResponseDto, IntegrationPreferencesResponseDto, IntegrationToolDiscoveryResponseDto, ManagedAssetDirectoryResponseDto, ManagedAssetFilePreviewResponseDto, ManagedAssetRoot, LiveUpdateEventDto, ReviewInteractionDto, ReviewMessageAttachmentDto, ReviewResponseDto, ReviewSessionDetailDto, NativeSessionCatalogResponseDto, SessionRelationshipResponseDto, SourceRecordResponseDto, TaskFileChangesResponseDto, ToolAssetUsageResponseDto } from '@agent-lens/protocol'
 import { AgentLensApi, type QueryFilters, type ReviewFilters } from './api'
+import { loadNativeImagePreview } from './native-media-preview'
 import { translateProduct } from '../i18n/runtime'
 
 export function discoveryFromManagement(
@@ -246,6 +247,25 @@ export abstract class AgentLensModelBase {
         : Promise.resolve(node.attachments ?? [])
     }
     return this.api.reviewAttachments(observationId)
+  }
+
+  /** Called only after the user requests a native image preview. Never
+   * auto-download large images when mounting the Review round rail.
+   */
+  reviewAttachmentImage = (
+    observationId:string,attachment:ReviewMessageAttachmentDto,
+    signal?:AbortSignal,
+  ):Promise<string> => {
+    const ref=attachment.nativeMedia
+    const detail=this.snapshot.review.detail
+    if(!ref||attachment.type!=='image'||attachment.mimeType!==ref.mimeType
+      ||!detail||detail.id!==ref.sessionId
+      ||detail.statisticsCompleteness!=='window'
+      ||!detail.interactions.some(interaction=>interaction.nodes.some(node=>
+        node.type==='message' &&node.observationIds.includes(observationId)
+        &&Boolean(node.nativeAttachmentCursor))))
+      return Promise.reject(new Error('native-media-reference-not-in-active-review'))
+    return loadNativeImagePreview(this.api,ref,signal)
   }
 
   reviewProcessDetail = (

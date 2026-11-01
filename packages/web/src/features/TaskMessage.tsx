@@ -21,6 +21,8 @@ export interface TaskMessageProps {
   role: TaskMessageRole
   text: string
   attachments?: readonly TaskMessageAttachment[] | undefined
+  /** Optional on-demand native preview; never used for ordinary Live images. */
+  loadImage?: ((attachment:TaskMessageAttachment,signal:AbortSignal)=>Promise<string>) | undefined
   author?: string | undefined
   modelLabel?: string | undefined
   time?: string | undefined
@@ -42,6 +44,7 @@ export function TaskMessage({
   role,
   text,
   attachments = EMPTY_TASK_MESSAGE_ATTACHMENTS,
+  loadImage,
   author,
   modelLabel,
   time,
@@ -67,6 +70,34 @@ export function TaskMessage({
   const [copyState, setCopyState] = useState<'idle' | 'copied' | 'error'>('idle')
   const surfaceRef = useRef<HTMLDivElement>(null)
   const copyResetTimer = useRef<number | undefined>(undefined)
+  const [nativePreviews,setNativePreviews]=useState<Record<number,{
+    dataUrl?:string;loading?:boolean;error?:boolean
+  }>>({})
+  const imageLoads=useRef(new Map<number,AbortController>())
+
+  useEffect(()=>()=>{
+    for(const controller of imageLoads.current.values())controller.abort()
+    imageLoads.current.clear()
+  },[])
+
+  const loadNativeImage=async(index:number,attachment:TaskMessageAttachment)=>{
+    if(!loadImage||!attachment.nativeMedia||nativePreviews[index]?.loading)return
+    imageLoads.current.get(index)?.abort()
+    const controller=new AbortController()
+    imageLoads.current.set(index,controller)
+    setNativePreviews(previous=>({...previous,[index]:{loading:true}}))
+    try{
+      const dataUrl=await loadImage(attachment,controller.signal)
+      if(controller.signal.aborted)return
+      setNativePreviews(previous=>({...previous,[index]:{dataUrl}}))
+    }catch{
+      if(controller.signal.aborted)return
+      setNativePreviews(previous=>({...previous,[index]:{error:true}}))
+    }finally{
+      if(imageLoads.current.get(index)===controller)imageLoads.current.delete(index)
+    }
+  }
+
 
   useEffect(() => () => {
     for (const attachment of attachments) {
@@ -186,6 +217,7 @@ export function TaskMessage({
               </span>
             }
             const source = attachment.previewUrl || attachment.dataUrl
+              || nativePreviews[index]?.dataUrl
             return source
               ? <ImagePreview
                   key={key}
@@ -195,7 +227,17 @@ export function TaskMessage({
               : <span
                   key={key}
                   className="task-message-attachment-placeholder"
-                >{attachment.name ?? t('message.imageAttachment')}</span>
+                >{attachment.name ?? t('message.imageAttachment')}
+                  {loadImage&&attachment.nativeMedia
+                    &&<Button size="small"
+                      disabled={Boolean(nativePreviews[index]?.loading)}
+                      onClick={()=>void loadNativeImage(index,attachment)}>
+                      {nativePreviews[index]?.loading
+                        ?t('message.loadingImage'):t('message.loadImage')}
+                    </Button>}
+                  {nativePreviews[index]?.error
+                    &&<span role="alert">{t('message.loadImageFailed')}</span>}
+                </span>
           })}
         </div>}
         {text && <div className="markdown-message task-message-content" data-view={view}>
