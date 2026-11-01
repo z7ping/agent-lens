@@ -84,3 +84,12 @@ test('partial native TaskSurface keeps its content while locating the exact over
   assert.equal((page.match(/<TaskSurface\b/g)??[]).length,1,
     'the fallback must reuse the existing shared TaskSurface')
 })
+
+test('oversized block outline stays in the existing fragment-only Review disclosure',()=>{
+  assert.match(page,/contentBlocks:\s*page\.contentBlocks/)
+  assert.match(page,/oversized\.contentBlocks\?\.map\(block/)
+  assert.match(page,/nativeOversizedBlocksTruncated/)
+  assert.match(page,/nativeOversizedBlockFragments/)
+  assert.equal((page.match(/<TaskSurface\b/g)??[]).length,1,
+    'native structure must not introduce a second TaskSurface renderer')
+})
