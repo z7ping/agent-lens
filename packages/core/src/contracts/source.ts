@@ -214,6 +214,22 @@ export interface SourceNativeSessionCursor {
   recordFingerprint?: string
 }
 
+/** Read-only verified text leaves of one original Source JSONL record.
+ * A fragment is not a full SourceRecord or a Review interaction.
+ */
+export interface SourceNativeTextFragmentQuery {
+  filePath:string;nativeSessionId:string;cursor:SourceNativeSessionCursor
+  expectedSha256?:string;fragmentOffset?:number;limit?:number
+}
+export type SourceNativeTextFragmentResult =
+  | {state:'available';record:{
+      offset:number;fileIdentity:string;recordSha256:string
+      nativeEventId?:string;nativeType?:string;role?:string
+      fragments:Array<{ordinal:number;text:string;redactionApplied?:boolean;suppressed?:boolean}>
+      totalTextFragments:number;nextFragmentOffset?:number
+    }}
+  | {state:'pending'|'unavailable'|'drifted'|'unsupported';reason:string}
+
 export interface SourceNativeSessionPageQuery {
   filePath: string
   nativeSessionId: string
@@ -244,6 +260,8 @@ export interface SourceDefinition {
   startCapture?(ctx: SourceExecutionContext, emit: SourceRecordEmitter): Promise<Disposable>
   rawRecovery?: SourceRawRecoveryPolicy
   readNativeSessionPage?(query: SourceNativeSessionPageQuery, ctx: SourceExecutionContext): Promise<SourceNativeSessionPageResult>
+  /** Optional Source-native record fragment reader; no implicit full turn. */
+  readNativeTextFragments?(query: SourceNativeTextFragmentQuery, ctx: SourceExecutionContext): Promise<SourceNativeTextFragmentResult>
   /** Explicit attestation that all durable per-session history and runtime facts
    * can be reconstructed from the original source store. Defaults to false.
    * Sources with transient runtime-hook-only facts must not set this until a
