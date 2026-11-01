@@ -248,7 +248,7 @@ export interface SourceOversizedRecordQuery {
 }
 export type SourceOversizedRecordResult =
   | {state:'found';cursor:SourceNativeSessionCursor
-      recordSha256:string;hasText:boolean;nativeEventId?:string
+      recordSha256:string;hasText:boolean;hasMedia?:boolean;nativeEventId?:string
       /** Exact next physical record boundary; absent at verified EOF. */
       nextCursor?:SourceNativeSessionCursor}
   | {state:'more';nextCursor:SourceNativeSessionCursor}
