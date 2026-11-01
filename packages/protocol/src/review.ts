@@ -27,6 +27,8 @@ export interface ReviewMessageAttachmentDto {
   name?: string
   mimeType?: string
   sizeBytes?: number
+  /** Source-attested original content[] index for lazy native media lookup. */
+  nativeContentIndex?:number
   /**
    * Only inline image data is exposed to Web. Native file paths / arbitrary
    * external URLs are intentionally not promoted into the public Review contract.
@@ -119,6 +121,10 @@ function attachmentFromValue(value: unknown, wrapperKind: string | undefined, in
     ...(name ? { name } : {}),
     ...(mimeType ? { mimeType } : {}),
     ...(sizeBytes !== undefined ? { sizeBytes } : {}),
+    ...(image&&typeof record.nativeContentIndex==='number'
+      &&Number.isSafeInteger(record.nativeContentIndex)
+      &&record.nativeContentIndex>=0
+      ?{nativeContentIndex:record.nativeContentIndex}:{}),
     ...(dataUrl ? { dataUrl } : {}),
   }
 }

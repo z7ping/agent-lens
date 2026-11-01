@@ -60,6 +60,11 @@ function normalizedMessageAttachments(
       attachments.push({
         type: 'image',
         mimeType,
+        ...(verifiedLargeImageRecord
+          &&Number.isSafeInteger(block.nativeContentIndex)
+          &&typeof block.nativeContentIndex==='number'
+          &&block.nativeContentIndex>=0
+          ?{nativeContentIndex:block.nativeContentIndex}:{}),
         ...(data ? {data} : {}),
         ...(stringField(block, 'name', 'fileName', 'file_name', 'filename')
           ? { name: stringField(block, 'name', 'fileName', 'file_name', 'filename')! }

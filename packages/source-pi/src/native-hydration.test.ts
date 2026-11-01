@@ -827,3 +827,64 @@ test('oversized Pi assistant with bounded nested tool arguments reaches the exis
       x.sourceRecordId===oversized.records[0]!.id))
   }finally{await rm(root,{recursive:true,force:true})}
 })
+
+test('oversized Pi user message with two same-MIME images retains original verified content indexes',async()=>{
+  const root=await mkdtemp(join(tmpdir(),'agent-lens-pi-two-images-'))
+  const file=join(root,'session.jsonl')
+  const header=JSON.stringify({type:'session',id:'two-images'})
+  const content=JSON.stringify({type:'message',id:'two-images-user',
+    message:{role:'user',content:[
+      {type:'image',mimeType:'image/png',data:'A'.repeat(1_200_000)},
+      {type:'text',text:'both attached'},
+      {type:'image',mimeType:'image/png',data:'B'.repeat(1_200_000)},
+    ]},
+  })
+  const ts='2026-11-01T00:00:00Z'
+  const host={id:'host',name:'host',platform:process.platform,arch:process.arch,
+    createdAt:ts,lastSeenAt:ts}
+  const installation={id:'two-images-inst',hostId:'host',productId:'pi',
+    dataRoot:root,firstSeenAt:ts,lastSeenAt:ts}
+  const ctx:SourceRawRecoveryContext={host,installation,
+    abortSignal:new AbortController().signal,
+    checkpoint:{async get(){return null},async set(){throw Error('read-only')},
+      async clear(){throw Error('read-only')}},
+  }
+  try{
+    assert.ok(Buffer.byteLength(content)>2*1024*1024)
+    await writeFile(file,[header,content].join('\n')+'\n')
+    const first=await piSourceDefinition.readNativeSessionPage!({
+      filePath:file,nativeSessionId:'two-images',limit:1},ctx)
+    assert.equal(first.state,'available')
+    if(first.state!=='available')return
+    const second=await piSourceDefinition.readNativeSessionPage!({
+      filePath:file,nativeSessionId:'two-images',
+      cursor:first.nextCursor,limit:1},ctx)
+    assert.equal(second.state,'available')
+    if(second.state!=='available')return
+    assert.equal(second.records[0]?.fingerprint,hash(content))
+    const normalized=await piSourceDefinition.normalize(second.records[0]!,{
+      host,installation,
+    })
+    const user=normalized.observations.find(x=>x.kind==='message.user')
+    const attachments=(user?.payload as {attachments?:Array<{
+      type:string;mimeType:string;nativeContentIndex:number;data?:string
+    }>}).attachments
+    assert.deepEqual(attachments,[
+      {type:'image',mimeType:'image/png',nativeContentIndex:0},
+      {type:'image',mimeType:'image/png',nativeContentIndex:2},
+    ])
+    assert.ok(JSON.stringify(second.records[0]?.payload).length<2048)
+    assert.equal(JSON.stringify(second.records[0]?.payload).includes('A'.repeat(128)),false)
+    const bad=content.replace('B'.repeat(100),'$'+'B'.repeat(99))
+    await writeFile(file,[header,bad].join('\n')+'\n')
+    const restart=await piSourceDefinition.readNativeSessionPage!({
+      filePath:file,nativeSessionId:'two-images',limit:1},ctx)
+    assert.equal(restart.state,'available')
+    if(restart.state==='available'){
+      const invalid=await piSourceDefinition.readNativeSessionPage!({
+        filePath:file,nativeSessionId:'two-images',
+        cursor:restart.nextCursor,limit:1},ctx)
+      assert.deepEqual(invalid,{state:'unsupported',reason:'native-record-too-large'})
+    }
+  }finally{await rm(root,{recursive:true,force:true})}
+})
