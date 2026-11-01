@@ -374,6 +374,54 @@ export function ReviewPage({ model, embedded = false, latestRequest = 0 }: { mod
     }
   }
 
+  const loadNextLinkedToolFragments = async () => {
+    const current=oversized
+    const id=review.selectedId
+    const link=current?.toolLink
+    const match=link?.match
+    if(!id||!current||current.sessionId!==id||!link||!match
+      ||match.nextFragmentOffset===undefined||link.loading
+      ||current.loading||current.locating)return
+    oversizedAbortRef.current?.abort()
+    const controller=new AbortController()
+    oversizedAbortRef.current=controller
+    const revision=++oversizedRevisionRef.current
+    const offset=match.nextFragmentOffset
+    setOversized({...current,toolLink:{...link,loading:true}})
+    try{
+      const page=await hookApi.nativeRecordTextFragments(id,{
+        cursor:match.cursor,expectedSha256:match.recordSha256,
+        fragmentOffset:offset,limit:4,signal:controller.signal,
+      })
+      if(controller.signal.aborted||oversizedRevisionRef.current!==revision)return
+      if(page.state!=='available')throw new Error(page.reason)
+      if(page.coverage!=='fragment-only'
+        ||page.recordSha256!==match.recordSha256
+        ||page.totalTextFragments!==match.totalTextFragments
+        ||!page.fragments.length
+        ||page.fragments.some((item,index)=>item.ordinal!==offset+index
+          ||item.kind!=='tool-result'
+          ||(item.callKey!==undefined&&item.callKey!==link.callKey))
+        ||(page.nextFragmentOffset!==undefined
+          &&page.nextFragmentOffset<=offset))
+        throw new Error('native-tool-link-result-mismatch')
+      setOversized(previous=>previous?.sessionId===id
+        &&previous.recordSha256===current.recordSha256
+        &&previous.toolLink?.match?.recordSha256===match.recordSha256
+        ?{...previous,toolLink:{...previous.toolLink,loading:false,
+          match:{...match,
+            fragments:[...match.fragments,...page.fragments].slice(-16),
+            nextFragmentOffset:page.nextFragmentOffset}}}:previous)
+    }catch(error){
+      if(controller.signal.aborted||oversizedRevisionRef.current!==revision)return
+      setOversized(previous=>previous?.sessionId===id
+        &&previous.recordSha256===current.recordSha256
+        &&previous.toolLink?.match?.recordSha256===match.recordSha256
+        ?{...previous,toolLink:{...previous.toolLink,loading:false,
+          error:error instanceof Error?error.message:String(error)}}:previous)
+    }
+  }
+
   const loadOversizedImage = async (image:{contentIndex:number;mimeType:string}) => {
     const current=oversized
     const id=review.selectedId
@@ -693,7 +741,12 @@ export function ReviewPage({ model, embedded = false, latestRequest = 0 }: { mod
                           <pre className="review-oversized-fragment">{piece.text}</pre>
                         </div>)}
                       {oversized.toolLink.match.nextFragmentOffset!==undefined
-                        &&<small>{t('local.roundNav.nativeOversizedLinkedPartial')}</small>}
+                        &&<Button size="small"
+                          disabled={oversized.toolLink.loading}
+                          onClick={()=>void loadNextLinkedToolFragments()}>
+                          {oversized.toolLink.loading?t('local.roundNav.querying')
+                            :t('local.roundNav.nativeOversizedLinkedMore')}
+                        </Button>}
                     </>
                     :!oversized.toolLink.loading&&!oversized.toolLink.error
                       ?<small>{t('local.roundNav.nativeOversizedLinkedMissing')}</small>
