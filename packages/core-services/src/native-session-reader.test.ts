@@ -644,3 +644,53 @@ test('native tool argument fragments use key-aware CapturePolicy and hide privat
   assert.equal(value.record.fragments[0]?.callKey,callKey)
   assert.equal(value.record.fragments[3]?.callKey,undefined)
 })
+
+test('tool result details use the same key-aware policy as tool call arguments',async()=>{
+  const storage={nativeSessionCatalog:{async get(){return catalog}},
+    repositories:{installations:{async get(){return installation}},
+      hosts:{async get(){return host}}},
+  } as unknown as StorageService
+  const source={manifest:{sourceId:'pi',productId:'pi'},
+    async readNativeTextFragments(){
+      return {state:'available' as const,record:{
+        offset:70,fileIdentity:'1:9',recordSha256:'d'.repeat(64),
+        role:'toolResult',totalTextFragments:2,
+        fragments:[
+          {ordinal:0,kind:'tool-result' as const,text:'raw-value',
+            fieldKeys:['details','credentials','token'],valueType:'string' as const},
+          {ordinal:1,kind:'tool-result' as const,text:'200',
+            fieldKeys:['details','status'],valueType:'number' as const},
+        ],
+      }}
+    },
+  } as unknown as SourceDefinition
+  const inputs:unknown[]=[]
+  const policy={
+    isSourceEnabled:()=>true,
+    capture(scope:string,value:unknown){
+      assert.equal(scope,'tool')
+      inputs.push(value)
+      if(JSON.stringify(value).includes('raw-value'))
+        return {value:{details:{credentials:'[已脱敏]'}},
+          mode:'redacted' as const,redactionApplied:true}
+      return {value,mode:'redacted' as const,redactionApplied:false}
+    },
+  } as unknown as CapturePolicyService
+  const reader=new NativeSessionReader(storage,
+    {list:()=>[source]} as unknown as SourceService,policy)
+  const result=await reader.readTextFragments({
+    sourceId:'pi',installationId:'install',nativeSessionId:'S1',
+    cursor:{offset:70,sequence:2,fileIdentity:'1:9'},
+    signal:new AbortController().signal,
+  })
+  assert.equal(result.state,'available')
+  if(result.state!=='available')return
+  assert.deepEqual(inputs,[
+    {details:{credentials:{token:'raw-value'}}},
+    {details:{status:'200'}},
+  ])
+  assert.deepEqual(result.record.fragments.map(x=>x.text),['[已脱敏]','200'])
+  assert.equal(result.record.fragments[1]?.valueType,'number')
+  assert.equal(JSON.stringify(result).includes('fieldKeys'),false)
+  assert.equal(JSON.stringify(result).includes('raw-value'),false)
+})

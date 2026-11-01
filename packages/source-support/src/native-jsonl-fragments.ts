@@ -71,7 +71,7 @@ export type NativeJsonlFragmentReadResult =
 type PathKey=string|number
 type Frame={kind:'object'|'array';path:PathKey[];key?:string;next:number}
 type StringKind='id'|'type'|'role'|'text'|'thinking'|'argument'
-  |'blockType'|'blockId'|'resultCallId'|'imageMime'|'imageData'|'ignored'
+  |'blockType'|'blockId'|'resultCallId'|'imageMime'|'imageData'|'resultField'|'ignored'
 type FragmentKind=NativeJsonlTextFragment['kind']
 
 function contentIndex(path:readonly PathKey[]):number|undefined{
@@ -84,6 +84,10 @@ function classify(path:readonly PathKey[]):StringKind{
   if(path.length===1&&path[0]==='type')return 'type'
   if(path.length===2&&path[0]==='message'&&path[1]==='role')return 'role'
   if(path.length===2&&path[0]==='message'&&path[1]==='toolCallId')return 'resultCallId'
+  // Source-level details remain partial evidence, never a normalized result.
+  if(path.length>=2&&path[0]==='message'&&path[1]==='details'
+    &&!path.some(key=>key==='data'||key==='base64'||key==='image'))
+    return 'resultField'
   // Scalar and typed message content; media/base64 stays outside this lane.
   if(path.length===2&&path[0]==='message'&&path[1]==='content')return 'text'
   const index=contentIndex(path)
@@ -189,12 +193,15 @@ export async function readNativeJsonlTextFragments(input:{
       frame.key=undefined
       return result
     }
-    const toolArgumentContext=(path:readonly PathKey[])=>{
-      if(media||currentBlock?.type!=='toolCall'||classify(path)!=='argument')
-        return false
+    const toolFieldContext=(path:readonly PathKey[])=>{
+      const fieldType=classify(path)
+      const argument=fieldType==='argument'&&currentBlock?.type==='toolCall'
+      const result=fieldType==='resultField'&&(role==='tool'||role==='toolResult')
+      if(media||(!argument&&!result))return false
       selectedIndex=contentIndex(path)
-      textKind='tool-call'
-      const keys=path.slice(3).filter((part):part is string=>typeof part==='string')
+      textKind=result?'tool-result':'tool-call'
+      const keys=path.slice(result?1:3)
+        .filter((part):part is string=>typeof part==='string')
       argumentKeysTooDeep=keys.length>16
       argumentKeys=argumentKeysTooDeep?undefined:keys
       return true
@@ -209,11 +216,11 @@ export async function readNativeJsonlTextFragments(input:{
         }
         fragments.push({ordinal,text:textBuffer,kind:textKind,
           ...(selectedIndex===undefined?{}:{contentIndex:selectedIndex}),
-          ...(textKind==='tool-call'&&argumentKeys?.length
+          ...((textKind==='tool-call'||textKind==='tool-result')&&argumentKeys?.length
             ?{fieldKeys:argumentKeys}:{}),
-          ...(textKind==='tool-call'&&argumentKeysTooDeep
+          ...((textKind==='tool-call'||textKind==='tool-result')&&argumentKeysTooDeep
             ?{fieldKeysTooDeep:true}:{}),
-          ...(textKind==='tool-call'&&valueType?{valueType}:{}),
+          ...((textKind==='tool-call'||textKind==='tool-result')&&valueType?{valueType}:{}),
         })
         selectedLeafIds.push(currentTextLeaf)
         selectedBytes+=textBytes
@@ -321,26 +328,33 @@ export async function readNativeJsonlTextFragments(input:{
           // A late/missing type cannot authorize arbitrary tool arguments.
           if(stringKind==='argument'&&currentBlock?.type!=='toolCall')
             stringKind='ignored'
+          if(stringKind==='resultField'&&role!=='tool'&&role!=='toolResult')
+            stringKind='ignored'
           if(stringKind==='thinking'&&currentBlock?.type!=='thinking')
             stringKind='ignored'
           if(stringKind==='text'&&currentBlock?.type
             &&currentBlock.type!=='text'&&currentBlock.type!=='thinking')
             stringKind='ignored'
           textKind=stringKind==='thinking'?'thinking'
-            :stringKind==='argument'?'tool-call':'message'
+            :stringKind==='argument'?'tool-call'
+              :stringKind==='resultField'?'tool-result':'message'
           // Carry keys only inside trusted Source -> Reader. The CapturePolicy
           // must see ancestors such as credentials.password, including arrays.
-          if(stringKind==='argument')toolArgumentContext(path)
+          if(stringKind==='argument'||stringKind==='resultField')
+            toolFieldContext(path)
           else{argumentKeys=undefined;argumentKeysTooDeep=false}
-          valueType=stringKind==='argument'?'string':undefined
+          valueType=stringKind==='argument'||stringKind==='resultField'
+            ?'string':undefined
           meta='';textBuffer='';textBytes=0;pendingHighSurrogate=''
-          if(stringKind==='text'||stringKind==='thinking'||stringKind==='argument'){
+          if(stringKind==='text'||stringKind==='thinking'||stringKind==='argument'
+            ||stringKind==='resultField'){
             currentTextLeaf=nextTextLeaf++;textPieces=0
           }
           return
         }
         case 'endString':
-          if(stringKind==='text'||stringKind==='thinking'||stringKind==='argument'){
+          if(stringKind==='text'||stringKind==='thinking'||stringKind==='argument'
+            ||stringKind==='resultField'){
             if(pendingHighSurrogate){
               const lone=pendingHighSurrogate
               pendingHighSurrogate=''
@@ -378,7 +392,7 @@ export async function readNativeJsonlTextFragments(input:{
             }
             keyBuffer+=text
           }else if(stringKind==='text'||stringKind==='thinking'
-            ||stringKind==='argument')writeText(text)
+            ||stringKind==='argument'||stringKind==='resultField')writeText(text)
           else if(stringKind==='imageData'&&media
             &&selectedIndex===media.contentIndex){
             // Validate entire original base64 alphabet, not merely the selected
@@ -406,7 +420,7 @@ export async function readNativeJsonlTextFragments(input:{
         }
         case 'startNumber':{
           const path=nextPath()
-          activeNumber=toolArgumentContext(path)
+          activeNumber=toolFieldContext(path)
           if(activeNumber){
             valueType='number'
             textBuffer='';textBytes=0;textPieces=0
@@ -436,7 +450,7 @@ export async function readNativeJsonlTextFragments(input:{
         case 'trueValue':
         case 'falseValue':{
           const path=nextPath()
-          if(toolArgumentContext(path)){
+          if(toolFieldContext(path)){
             valueType=name==='nullValue'?'null':'boolean'
             currentTextLeaf=nextTextLeaf++
             textBuffer=name==='nullValue'?'null':name==='trueValue'?'true':'false'
@@ -509,9 +523,8 @@ export async function readNativeJsonlTextFragments(input:{
       const callKey=resultCallId
         ?createHash('sha256').update(resultCallId).digest('hex'):undefined
       for(const fragment of fragments){
-        if(fragment.kind!=='message')continue
-        fragment.kind='tool-result'
-        if(callKey)fragment.callKey=callKey
+        if(fragment.kind==='message')fragment.kind='tool-result'
+        if(callKey&&fragment.kind==='tool-result')fragment.callKey=callKey
       }
     }
     return {state:'available',record:{
