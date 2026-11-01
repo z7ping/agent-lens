@@ -189,7 +189,8 @@ test('oversized following turn does not discard an earlier complete turn in a ba
       ]
       return {state:'available',observations:obs,
         observationRecordIds:['first','second'],
-        observationCursors:[0,1].map(offset=>({offset,sequence:offset,fileIdentity})),
+        observationCursors:[0,1].map(offset=>({offset,sequence:offset,fileIdentity,
+          boundaryHash:'b'.repeat(64)})),
         evidenceCandidates:[],
         nextCursor:{offset:2,sequence:2,fileIdentity},
         hasMore:true,pendingTail:false,
