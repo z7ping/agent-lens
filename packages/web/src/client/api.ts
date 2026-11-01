@@ -36,6 +36,7 @@ import {
   type NativeSessionSummaryDto,
   type NativeReviewWindowResponseDto,
   type NativeRecordTextFragmentsResponseDto,
+  type NativeRecordMediaChunkResponseDto,
   type NativeOversizedRecordLocateResponseDto,
   type NativeReviewTurnIndexResponseDto,
   type ReviewDetailDirection,
@@ -490,6 +491,22 @@ export class AgentLensApi {
     if(options.limit!==undefined)params.set('limit',String(Math.max(1,Math.min(8,options.limit))))
     return requestJson<NativeRecordTextFragmentsResponseDto>(
       `/api/v1/native-sessions/${encodeURIComponent(id)}/record-fragments?${params}`,
+      options.signal?{signal:options.signal}:{},
+    )
+  }
+
+  /** Catalog-authorized inline image chunk from one verified physical record. */
+  nativeRecordMediaChunk(id:string,options:{
+    cursor:string;expectedSha256:string;imageIndex:number
+    mediaOffset:number;mediaLimit?:number;signal?:AbortSignal
+  }):Promise<NativeRecordMediaChunkResponseDto>{
+    const params=new URLSearchParams({
+      cursor:options.cursor,expectedSha256:options.expectedSha256,
+      imageIndex:String(options.imageIndex),mediaOffset:String(options.mediaOffset),
+    })
+    if(options.mediaLimit!==undefined)params.set('mediaLimit',String(options.mediaLimit))
+    return requestJson<NativeRecordMediaChunkResponseDto>(
+      `/api/v1/native-sessions/${encodeURIComponent(id)}/record-fragments/media?${params}`,
       options.signal?{signal:options.signal}:{},
     )
   }

@@ -157,9 +157,16 @@ export type NativeMetricContributionDto =
  */
 export type NativeOversizedRecordLocateResponseDto =
   | {state:'found';cursor:string;recordSha256:string
-      hasText:boolean;nativeEventId?:string;nextCursor?:string}
+      hasText:boolean;hasMedia?:boolean;nativeEventId?:string;nextCursor?:string}
   | {state:'more';nextCursor:string}
   | {state:'end'}
+  | {state:'pending'|'unavailable'|'drifted'|'unsupported';reason:string}
+
+/** Read-only, Source-verified bounded inline image; never a complete event. */
+export type NativeRecordMediaChunkResponseDto =
+  | {state:'available';coverage:'media-chunk-only';sessionId:string
+      recordSha256:string;contentIndex:number;mimeType:string
+      base64:string;totalBase64Length:number;nextOffset?:number}
   | {state:'pending'|'unavailable'|'drifted'|'unsupported';reason:string}
 
 export type NativeRecordTextFragmentsResponseDto =
@@ -169,7 +176,9 @@ export type NativeRecordTextFragmentsResponseDto =
       kind:'message'|'thinking'|'tool-call'|'tool-result'
       contentIndex?:number;callKey?:string
       redactionApplied?:boolean;suppressed?:boolean;splitScalar?:boolean}>
-    totalTextFragments:number;nextFragmentOffset?:number}
+    totalTextFragments:number;nextFragmentOffset?:number
+    images?:Array<{contentIndex:number;mimeType:string}>
+    imagesTruncated?:boolean}
   | {state:'pending'|'unavailable'|'drifted'|'unsupported';reason:string}
 
 export type NativeReviewWindowResponseDto =

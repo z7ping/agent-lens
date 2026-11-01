@@ -1,18 +1,19 @@
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import type { NativeSessionCatalogStore } from '@agent-lens/core'
-import type { NativeRecordTextFragmentsResponseDto } from '@agent-lens/protocol'
+import type { NativeRecordTextFragmentsResponseDto, NativeRecordMediaChunkResponseDto } from '@agent-lens/protocol'
 import { badRequest, writeJson } from './http-utils'
 import { decodeNativeSessionCursor, type NativeSessionWindowReader } from './native-session-http'
 
-/** Catalog-authorized, sanitized one-record text leaves only. The caller
- * never supplies a filesystem location or a raw SourceRecord.
+/** Catalog-authorized bounded text or inline media leaves. No filesystem
+ * location or original SourceRecord is supplied by the browser.
  */
 export async function handleNativeRecordFragmentsRequest(
   request:IncomingMessage,response:ServerResponse,url:URL,
   reader?:NativeSessionWindowReader,
   catalog?:Pick<NativeSessionCatalogStore,'getByReviewSessionId'>,
 ):Promise<boolean>{
-  const match=url.pathname.match(/^\/api\/v1\/native-sessions\/([^/]+)\/record-fragments$/)
+  const match=url.pathname.match(/^\/api\/v1\/native-sessions\/([^/]+)\/record-fragments(\/media)?$/)
+  const mediaMode=Boolean(match?.[2])
   if(!match)return false
   if(request.method!=='GET'){
     response.setHeader('allow','GET')
@@ -24,7 +25,10 @@ export async function handleNativeRecordFragmentsRequest(
     return true
   }
   const keys=[...url.searchParams.keys()]
-  if(keys.some(x=>!['cursor','expectedSha256','fragmentOffset','limit'].includes(x))
+  const allowedKeys=mediaMode
+    ?['cursor','expectedSha256','imageIndex','mediaOffset','mediaLimit']
+    :['cursor','expectedSha256','fragmentOffset','limit']
+  if(keys.some(x=>!allowedKeys.includes(x))
     ||keys.some(x=>url.searchParams.getAll(x).length!==1))
     throw badRequest('Unsupported record-fragment query parameter')
   const cursor=decodeNativeSessionCursor(url.searchParams.get('cursor'))
@@ -35,10 +39,21 @@ export async function handleNativeRecordFragmentsRequest(
   const fragmentOffset=url.searchParams.has('fragmentOffset')
     ?Number(url.searchParams.get('fragmentOffset')):0
   const limit=url.searchParams.has('limit')?Number(url.searchParams.get('limit')):4
-  if(!Number.isSafeInteger(fragmentOffset)||fragmentOffset<0||fragmentOffset>10_000_000
-    ||!Number.isSafeInteger(limit)||limit<1||limit>8
+  const imageIndex=url.searchParams.has('imageIndex')
+    ?Number(url.searchParams.get('imageIndex')):NaN
+  const mediaOffset=url.searchParams.has('mediaOffset')
+    ?Number(url.searchParams.get('mediaOffset')):0
+  const mediaLimit=url.searchParams.has('mediaLimit')
+    ?Number(url.searchParams.get('mediaLimit')):128*1024
+  if((!mediaMode&&(!Number.isSafeInteger(fragmentOffset)||fragmentOffset<0
+      ||fragmentOffset>10_000_000||!Number.isSafeInteger(limit)||limit<1||limit>8))
     ||(expectedSha256!==undefined&&!/^[0-9a-f]{64}$/.test(expectedSha256))
-    ||(fragmentOffset>0&&!expectedSha256))
+    ||(!mediaMode&&fragmentOffset>0&&!expectedSha256)
+    ||(mediaMode&&(!expectedSha256
+      ||!Number.isSafeInteger(imageIndex)||imageIndex<0||imageIndex>10_000_000
+      ||!Number.isSafeInteger(mediaOffset)||mediaOffset<0||mediaOffset%4!==0
+      ||!Number.isSafeInteger(mediaLimit)||mediaLimit<4
+      ||mediaLimit>128*1024||mediaLimit%4!==0)))
     throw badRequest('Invalid record fragment boundary')
   let id:string
   try{id=decodeURIComponent(match[1]!)}catch{id=''}
@@ -57,12 +72,46 @@ export async function handleNativeRecordFragmentsRequest(
   try{
     const result=await reader.readTextFragments({
       sourceId:entry.sourceId,installationId:entry.installationId,
-      nativeSessionId:entry.nativeSessionId,cursor,fragmentOffset,limit,
+      nativeSessionId:entry.nativeSessionId,cursor,
+      ...(mediaMode?{media:{contentIndex:imageIndex,offset:mediaOffset,limit:mediaLimit}}
+        :{fragmentOffset,limit}),
       signal:abort.signal,
       ...(expectedSha256?{expectedSha256}:{}),
     })
     if(result.state!=='available'){
       writeJson(response,200,result)
+      return true
+    }
+    if(mediaMode){
+      const media=result.record.media
+      if(!media||media.contentIndex!==imageIndex
+        ||result.record.recordSha256!==expectedSha256
+        ||!/^(image\/(png|jpeg|gif|webp))$/.test(media.mimeType)
+        ||!/^[A-Za-z0-9+/=]+$/.test(media.base64)
+        ||media.base64.length>mediaLimit
+        ||media.base64.length%4!==0
+        ||!Number.isSafeInteger(media.totalBase64Length)
+        ||media.totalBase64Length<4||media.totalBase64Length%4!==0
+        ||mediaOffset+media.base64.length>media.totalBase64Length
+        ||(media.nextOffset!==undefined
+          &&media.nextOffset!==mediaOffset+media.base64.length)
+        ||(media.nextOffset===undefined
+          &&mediaOffset+media.base64.length!==media.totalBase64Length)){
+        writeJson(response,200,{state:'unsupported',reason:'native-inline-image-window-invalid'})
+        return true
+      }
+      const dto:NativeRecordMediaChunkResponseDto={
+        state:'available',coverage:'media-chunk-only',sessionId:id,
+        recordSha256:result.record.recordSha256,
+        contentIndex:media.contentIndex,mimeType:media.mimeType,
+        base64:media.base64,totalBase64Length:media.totalBase64Length,
+        ...(media.nextOffset===undefined?{}:{nextOffset:media.nextOffset}),
+      }
+      if(Buffer.byteLength(JSON.stringify(dto),'utf8')>256*1024){
+        writeJson(response,200,{state:'unsupported',reason:'native-media-response-budget'})
+        return true
+      }
+      writeJson(response,200,dto)
       return true
     }
     // Raw text is never emitted from the Source adapter directly: the Reader
@@ -75,6 +124,8 @@ export async function handleNativeRecordFragmentsRequest(
       ...(result.record.role?{role:result.record.role}:{}),
       fragments:result.record.fragments,
       totalTextFragments:result.record.totalTextFragments,
+      ...(result.record.images?{images:result.record.images}:{}),
+      ...(result.record.imagesTruncated?{imagesTruncated:true}:{}),
       ...(result.record.nextFragmentOffset===undefined?{}:{
         nextFragmentOffset:result.record.nextFragmentOffset,
       }),

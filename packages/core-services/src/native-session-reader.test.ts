@@ -530,3 +530,48 @@ test('large split scalar fragments are masked under redacted CapturePolicy',asyn
   }])
   assert.equal(called,false,'raw split token must not be redacted independently')
 })
+
+test('inline image chunks require enabled prompt capture and validated original identities',async()=>{
+  const storage={nativeSessionCatalog:{async get(){return catalog}},
+    repositories:{installations:{async get(){return installation}},
+      hosts:{async get(){return host}}},
+  } as unknown as StorageService
+  let calls=0
+  const source={manifest:{sourceId:'pi',productId:'pi'},
+    async readNativeTextFragments(q:{
+      media?:{contentIndex:number;offset:number;limit:number}
+      expectedSha256?:string
+    }){
+      calls++
+      assert.deepEqual(q.media,{contentIndex:1,offset:0,limit:128*1024})
+      assert.equal(q.expectedSha256,'a'.repeat(64))
+      return {state:'available' as const,record:{
+        offset:70,fileIdentity:'1:9',recordSha256:'a'.repeat(64),
+        role:'user',fragments:[],totalTextFragments:0,
+        media:{contentIndex:1,mimeType:'image/png',base64:'AQID',totalBase64Length:4},
+      }}
+    },
+  } as unknown as SourceDefinition
+  const enabled=new NativeSessionReader(storage,
+    {list:()=>[source]} as unknown as SourceService,{
+      isSourceEnabled:()=>true,isEnabled:()=>true,
+      modeFor:()=> 'redacted',
+    } as unknown as CapturePolicyService)
+  const query={sourceId:'pi',installationId:'install',nativeSessionId:'S1',
+    cursor:{fileIdentity:'1:9',offset:70,sequence:2},
+    expectedSha256:'a'.repeat(64),signal:new AbortController().signal,
+    media:{contentIndex:1,offset:0,limit:128*1024},
+  }
+  const result=await enabled.readTextFragments(query)
+  assert.equal(result.state,'available')
+  if(result.state==='available')assert.equal(result.record.media?.base64,'AQID')
+  assert.equal(calls,1)
+  const disabled=new NativeSessionReader(storage,
+    {list:()=>[source]} as unknown as SourceService,{
+      isSourceEnabled:()=>true,isEnabled:()=>false,
+    } as unknown as CapturePolicyService)
+  assert.deepEqual(await disabled.readTextFragments(query),{
+    state:'unsupported',reason:'native-attachment-capture-disabled',
+  })
+  assert.equal(calls,1,'disabled capture never enters the Source adapter')
+})

@@ -15,6 +15,22 @@ const MAX_FRAGMENT_OFFSET=10_000_000
 const MAX_KEY_BYTES=256
 const MAX_META_BYTES=512
 const MAX_DEPTH=128
+const MAX_MEDIA_CHUNK_CHARS=128*1024
+const MAX_INLINE_IMAGES=8
+const MIME_TYPES=new Set(['image/png','image/jpeg','image/gif','image/webp'])
+
+export interface NativeInlineImageInfo {
+  contentIndex:number
+  mimeType:string
+}
+export interface NativeInlineImageChunk {
+  contentIndex:number
+  mimeType:string
+  /** Strictly bounded base64 characters; never a complete unbounded image. */
+  base64:string
+  totalBase64Length:number
+  nextOffset?:number
+}
 
 export interface NativeJsonlTextFragment {
   /** Ordinal of a bounded, decoded UTF-8 text fragment inside one record. */
@@ -39,13 +55,16 @@ export type NativeJsonlFragmentReadResult =
       nativeEventId?:string;nativeType?:string;role?:string
       fragments:NativeJsonlTextFragment[]
       totalTextFragments:number;nextFragmentOffset?:number
+      images:NativeInlineImageInfo[]
+      imagesTruncated?:boolean
+      media?:NativeInlineImageChunk
     }}
   | {state:'pending'|'unavailable'|'drifted'|'unsupported';reason:string}
 
 type PathKey=string|number
 type Frame={kind:'object'|'array';path:PathKey[];key?:string;next:number}
 type StringKind='id'|'type'|'role'|'text'|'thinking'|'argument'
-  |'blockType'|'blockId'|'resultCallId'|'ignored'
+  |'blockType'|'blockId'|'resultCallId'|'imageMime'|'imageData'|'ignored'
 type FragmentKind=NativeJsonlTextFragment['kind']
 
 function contentIndex(path:readonly PathKey[]):number|undefined{
@@ -65,6 +84,8 @@ function classify(path:readonly PathKey[]):StringKind{
   if(path.length===3)return 'text'
   if(path.length===4&&path[3]==='type')return 'blockType'
   if(path.length===4&&path[3]==='id')return 'blockId'
+  if(path.length===4&&(path[3]==='mimeType'||path[3]==='mime_type'))return 'imageMime'
+  if(path.length===4&&path[3]==='data')return 'imageData'
   if(path.length===4&&path[3]==='thinking')return 'thinking'
   if(path[3]==='text'&&(path.length===4
     ||(path.length===5&&typeof path[4]==='number')))return 'text'
@@ -83,6 +104,8 @@ function classify(path:readonly PathKey[]):StringKind{
 export async function readNativeJsonlTextFragments(input:{
   path:string;allowedRoots:readonly string[];cursor?:NativeSessionCursor
   expectedSha256?:string;fragmentOffset?:number;limit?:number;signal?:AbortSignal
+  /** Internal media path, never supplied as a filesystem reference. */
+  media?:{contentIndex:number;offset:number;limit:number}
 }):Promise<NativeJsonlFragmentReadResult>{
   const fragmentOffset=input.fragmentOffset??0
   const limit=input.limit??8
@@ -90,6 +113,14 @@ export async function readNativeJsonlTextFragments(input:{
     ||fragmentOffset>MAX_FRAGMENT_OFFSET
     ||!Number.isSafeInteger(limit)||limit<1||limit>MAX_FRAGMENT_COUNT)
     return {state:'unsupported',reason:'invalid-fragment-window'}
+  const media=input.media
+  if(media&&(!Number.isSafeInteger(media.contentIndex)||media.contentIndex<0
+    ||media.contentIndex>10_000_000||!Number.isSafeInteger(media.offset)
+    ||media.offset<0||media.offset%4!==0
+    ||!Number.isSafeInteger(media.limit)||media.limit<4
+    ||media.limit>MAX_MEDIA_CHUNK_CHARS||media.limit%4!==0
+    ||(media.offset>0&&!input.expectedSha256)))
+    return {state:'unsupported',reason:'invalid-native-media-window'}
   const scan=await inspectNativeSessionRecordSpan(input)
   if(scan.state!=='available')return scan
   const {span}=scan
@@ -111,7 +142,15 @@ export async function readNativeJsonlTextFragments(input:{
     let nativeType:string|undefined
     let role:string|undefined
     let resultCallId:string|undefined
-    let currentBlock:{index:number;type?:string;id?:string}|undefined
+    let currentBlock:{index:number;type?:string;id?:string;mimeType?:string;hasData?:boolean}|undefined
+    const images:NativeInlineImageInfo[]=[]
+    let imagesTruncated=false
+    let mediaBase64=''
+    let mediaLength=0
+    let mediaPaddingSeen=false
+    let mediaPaddingCount=0
+    let mediaMimeType:string|undefined
+    let mediaFound=false
     let selectedIndex:number|undefined
     let textKind:FragmentKind='message'
     let failed:string|undefined
@@ -204,6 +243,16 @@ export async function readNativeJsonlTextFragments(input:{
           if(!frame){failed='native-record-invalid-json';throw new Error(failed)}
           if(name==='endObject'&&frame.path.length===3&&currentBlock
             &&contentIndex(frame.path)===currentBlock.index){
+            if(currentBlock.type==='image'&&currentBlock.hasData
+              &&currentBlock.mimeType&&MIME_TYPES.has(currentBlock.mimeType)){
+              if(images.length<MAX_INLINE_IMAGES)
+                images.push({contentIndex:currentBlock.index,mimeType:currentBlock.mimeType})
+              else imagesTruncated=true
+              if(media?.contentIndex===currentBlock.index){
+                mediaMimeType=currentBlock.mimeType
+                mediaFound=true
+              }
+            }
             for(const fragment of fragments){
               if(fragment.contentIndex!==currentBlock.index)continue
               if(fragment.kind==='message'&&currentBlock.type==='thinking')
@@ -238,6 +287,10 @@ export async function readNativeJsonlTextFragments(input:{
           const path=nextPath()
           selectedIndex=contentIndex(path)
           stringKind=classify(path)
+          if(media&&selectedIndex===media.contentIndex&&path.length===4
+            &&path[3]==='data')stringKind='imageData'
+          if(media && (stringKind==='text'||stringKind==='thinking'
+            ||stringKind==='argument'))stringKind='ignored'
           // A late/missing type cannot authorize arbitrary tool arguments.
           if(stringKind==='argument'&&currentBlock?.type!=='toolCall')
             stringKind='ignored'
@@ -277,6 +330,10 @@ export async function readNativeJsonlTextFragments(input:{
           else if(stringKind==='resultCallId')resultCallId=meta
           else if(stringKind==='blockType'&&currentBlock)currentBlock.type=meta
           else if(stringKind==='blockId'&&currentBlock)currentBlock.id=meta
+          else if(stringKind==='imageMime'&&currentBlock)
+            currentBlock.mimeType=meta.toLowerCase()
+          else if(stringKind==='imageData'&&currentBlock)
+            currentBlock.hasData=true
           stringKind='ignored'
           return
         case 'stringChunk':{
@@ -290,7 +347,23 @@ export async function readNativeJsonlTextFragments(input:{
             keyBuffer+=text
           }else if(stringKind==='text'||stringKind==='thinking'
             ||stringKind==='argument')writeText(text)
-          else if(stringKind!=='ignored'){
+          else if(stringKind==='imageData'&&media
+            &&selectedIndex===media.contentIndex){
+            // Validate entire original base64 alphabet, not merely the selected
+            // slice, so a later malformed chunk cannot be exposed as an image.
+            if(!/^[A-Za-z0-9+/]*={0,2}$/.test(text)
+              ||(mediaPaddingSeen&&/[^=]/.test(text))){
+              failed='invalid-native-image-base64'
+              throw new Error(failed)
+            }
+            const matches=text.match(/=/g)
+            if(matches){mediaPaddingSeen=true;mediaPaddingCount+=matches.length}
+            const from=Math.max(0,media.offset-mediaLength)
+            const to=Math.min(text.length,media.offset+media.limit-mediaLength)
+            if(to>from)mediaBase64+=text.slice(from,to)
+            mediaLength+=text.length
+          }
+          else if(stringKind!=='ignored'&&stringKind!=='imageData'){
             if(Buffer.byteLength(meta,'utf8')+Buffer.byteLength(text,'utf8')>MAX_META_BYTES){
               failed='native-record-metadata-budget'
               throw new Error(failed)
@@ -355,6 +428,13 @@ export async function readNativeJsonlTextFragments(input:{
       return {state:'drifted',reason:'native-record-boundary-changed'}
     if(fragmentOffset>totalTextFragments)
       return {state:'unsupported',reason:'invalid-fragment-window'}
+    if(media){
+      if(!mediaFound||!mediaMimeType)
+        return {state:'unsupported',reason:'native-inline-image-not-found'}
+      if(mediaLength===0||mediaLength%4!==0||mediaPaddingCount>2
+        ||media.offset>=mediaLength||mediaBase64.length===0)
+        return {state:'unsupported',reason:'invalid-native-image-base64'}
+    }
     // Tool results live in another physical record. Match by exact native
     // ID while only exposing a hashed join key to fragment consumers.
     if(role==='tool'||role==='toolResult'){
@@ -372,7 +452,14 @@ export async function readNativeJsonlTextFragments(input:{
       ...(nativeEventId?{nativeEventId}:{}),
       ...(nativeType?{nativeType}:{}),
       ...(role?{role}:{}),
-      fragments,totalTextFragments,
+      fragments,totalTextFragments,images,
+      ...(imagesTruncated?{imagesTruncated:true}:{}),
+      ...(media&&mediaMimeType?{media:{
+        contentIndex:media.contentIndex,mimeType:mediaMimeType,
+        base64:mediaBase64,totalBase64Length:mediaLength,
+        ...(media.offset+mediaBase64.length<mediaLength
+          ?{nextOffset:media.offset+mediaBase64.length}:{}),
+      }}:{}),
       ...(fragmentOffset+fragments.length<totalTextFragments
         ?{nextFragmentOffset:fragmentOffset+fragments.length}:{}),
     }}

@@ -46,6 +46,11 @@ test('oversized source records use the existing Review disclosure and bounded ve
   assert.match(page,/review\.error\.includes\('native-record-too-large'\)/)
   assert.match(page,/hookApi\.locateOversizedNativeRecord\(id/)
   assert.match(page,/hookApi\.nativeRecordTextFragments\(id/)
+  assert.match(page,/hookApi\.nativeRecordMediaChunk\(id/)
+  assert.match(page,/<ImagePreview src=\{oversized\.mediaDataUrl\}/)
+  assert.match(page,/const maxBase64=8\*1024\*1024/)
+  assert.match(page,/page\.recordSha256!==current\.recordSha256/)
+  assert.match(api,/record-fragments\/media/)
   assert.match(page,/found\.nextCursor\?\{searchCursor:found\.nextCursor\}:\{\}/,
     'a verified following record should remain discoverable without restarting the search')
   assert.match(page,/page\.coverage!=='fragment-only'/)

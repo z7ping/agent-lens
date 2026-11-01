@@ -220,6 +220,8 @@ export interface SourceNativeSessionCursor {
 export interface SourceNativeTextFragmentQuery {
   filePath:string;nativeSessionId:string;cursor:SourceNativeSessionCursor
   expectedSha256?:string;fragmentOffset?:number;limit?:number
+  /** Optional source-authorized inline image window. */
+  media?:{contentIndex:number;offset:number;limit:number}
 }
 export type SourceNativeTextFragmentResult =
   | {state:'available';record:{
@@ -231,6 +233,10 @@ export type SourceNativeTextFragmentResult =
         contentIndex?:number;callKey?:string
         redactionApplied?:boolean;suppressed?:boolean;splitScalar?:boolean}>
       totalTextFragments:number;nextFragmentOffset?:number
+      images?:Array<{contentIndex:number;mimeType:string}>
+      imagesTruncated?:boolean
+      media?:{contentIndex:number;mimeType:string;base64:string
+        totalBase64Length:number;nextOffset?:number}
     }}
   | {state:'pending'|'unavailable'|'drifted'|'unsupported';reason:string}
 
@@ -243,7 +249,7 @@ export interface SourceOversizedRecordQuery {
 }
 export type SourceOversizedRecordResult =
   | {state:'found';cursor:SourceNativeSessionCursor
-      recordSha256:string;hasText:boolean;nativeEventId?:string
+      recordSha256:string;hasText:boolean;hasMedia?:boolean;nativeEventId?:string
       /** Exact next physical record boundary; absent at verified EOF. */
       nextCursor?:SourceNativeSessionCursor}
   | {state:'more';nextCursor:SourceNativeSessionCursor}

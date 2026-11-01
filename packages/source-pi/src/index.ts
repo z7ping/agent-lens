@@ -277,6 +277,7 @@ export const piSourceDefinition: SourceDefinition = {
           cursor:{...startCursor,recordFingerprint:checked.record.sourceLineSha256},
           recordSha256:checked.record.recordSha256,
           hasText:checked.record.totalTextFragments>0,
+          hasMedia:checked.record.images.length>0,
           ...(checked.record.nativeEventId?{nativeEventId:checked.record.nativeEventId}:{}),
           ...(span.nextOffset<original.size?{nextCursor:{
             offset:span.nextOffset,sequence:startCursor.sequence+1,
@@ -302,6 +303,7 @@ export const piSourceDefinition: SourceDefinition = {
       ...(query.expectedSha256?{expectedSha256:query.expectedSha256}:{}),
       ...(query.fragmentOffset===undefined?{}:{fragmentOffset:query.fragmentOffset}),
       ...(query.limit===undefined?{}:{limit:query.limit}),
+      ...(query.media?{media:query.media}:{}),
       signal:ctx.abortSignal,
     })
     if(result.state!=='available')return result
