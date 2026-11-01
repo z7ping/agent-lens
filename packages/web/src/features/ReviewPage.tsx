@@ -744,6 +744,19 @@ export function ReviewPage({ model, embedded = false, latestRequest = 0 }: { mod
                     })}
                     {block.suppressed?' · '+t('local.roundNav.nativeOversizedRedacted'):''}
                   </small>
+                  {block.kind==='tool-call'&&block.fragmentCount===0
+                    &&block.callKey&&!block.suppressed
+                    &&<Button size="small"
+                      disabled={Boolean(oversized.toolLink?.loading||oversized.loading)}
+                      onClick={()=>void findLinkedToolResult({
+                        kind:'tool-call',ordinal:-1,contentIndex:block.contentIndex,
+                        callKey:block.callKey,
+                      })}>
+                      {oversized.toolLink?.loading
+                        &&oversized.toolLink.anchorContentIndex===block.contentIndex
+                        ?t('local.roundNav.querying')
+                        :t('local.roundNav.nativeOversizedFindResult')}
+                    </Button>}
                 </div>)}
               {oversized?.sessionId===review.selectedId&&oversized.contentBlocksTruncated
                 &&<small>{t('local.roundNav.nativeOversizedBlocksTruncated')}</small>}
