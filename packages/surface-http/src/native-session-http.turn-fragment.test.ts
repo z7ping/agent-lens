@@ -119,3 +119,99 @@ test('原生 Review 游标支持来源记录 SHA，但拒绝未知字段及非�
       Buffer.from(JSON.stringify(invalid)).toString('base64url')))
   }
 })
+
+test('oversized next physical record preserves verified same-turn prefix without skipping it',async()=>{
+  const calls:number[]=[]
+  const reader:NativeSessionWindowReader={
+    async read(query){
+      const offset=query.cursor?.offset??0
+      calls.push(offset)
+      if(offset===2)return {state:'unsupported',reason:'native-record-too-large'}
+      if(offset!==0)return {state:'unsupported',reason:'unexpected-native-cursor'}
+      const row:ObservationCandidate={
+        kind:'message.user',sourceSequence:0,capturedAt:timestamp,
+        payload:{text:'verified prompt'},
+      }
+      return {state:'available',observations:[row],
+        observationRecordIds:['record-one'],
+        observationCursors:[{offset:0,sequence:0,fileIdentity}],
+        evidenceCandidates:[],
+        nextCursor:{offset:2,sequence:1,fileIdentity},
+        hasMore:true,pendingTail:false,
+      }
+    },
+  }
+  const server=createServer((request,response)=>{
+    void handleNativeSessionWindowRequest(
+      request,response,new URL(request.url??'/','http://127.0.0.1'),
+      reader,
+    ).catch(error=>{response.statusCode=500;response.end(String(error))})
+  })
+  await new Promise<void>(resolve=>server.listen(0,'127.0.0.1',resolve))
+  try{
+    const addr=server.address()
+    assert.ok(addr&&typeof addr==='object')
+    const base=`http://127.0.0.1:${addr.port}/api/v1/native-sessions/window?sourceId=pi&installationId=inst&nativeSessionId=S&format=review-turns`
+    const response=await fetch(base)
+    assert.equal(response.status,200)
+    const page=await response.json() as NativeReviewWindowDto
+    assert.equal(page.state,'available')
+    assert.equal(page.boundaryIntegrity,'partial')
+    assert.equal(page.turnFragment,'partial')
+    assert.equal(page.hasMore,true)
+    assert.equal(page.interactions.length,1)
+    assert.equal(page.interactions[0]?.nodes[0]?.type,'message')
+    assert.equal(page.interactions[0]?.nodes[0]?.observationIds.length,1)
+    const cursor=decodeNativeSessionCursor(page.nextCursor)
+    assert.equal(cursor?.offset,2,'the original oversized SourceRecord was not skipped')
+    assert.equal(cursor?.turnStart,0,'the partial turn retains its original user boundary')
+    const follow=await (await fetch(`${base}&cursor=${encodeURIComponent(page.nextCursor)}`)).json()
+    assert.deepEqual(follow,{state:'unsupported',reason:'native-record-too-large'},
+      'an unverified record is never rendered as a completed turn')
+    assert.deepEqual(calls,[0,2,2])
+  }finally{
+    await new Promise<void>(resolve=>server.close(()=>resolve()))
+  }
+})
+
+test('oversized following turn does not discard an earlier complete turn in a batched response',async()=>{
+  const reader:NativeSessionWindowReader={
+    async read(query){
+      if(query.cursor?.offset===1)
+        return {state:'unsupported',reason:'native-record-too-large'}
+      const obs:ObservationCandidate[]=[
+        {kind:'message.user',sourceSequence:0,capturedAt:timestamp,payload:{text:'first'}},
+        {kind:'message.user',sourceSequence:1000,capturedAt:timestamp,payload:{text:'second'}},
+      ]
+      return {state:'available',observations:obs,
+        observationRecordIds:['first','second'],
+        observationCursors:[0,1].map(offset=>({offset,sequence:offset,fileIdentity})),
+        evidenceCandidates:[],
+        nextCursor:{offset:2,sequence:2,fileIdentity},
+        hasMore:true,pendingTail:false,
+      }
+    },
+  }
+  const server=createServer((request,response)=>{
+    void handleNativeSessionWindowRequest(request,response,
+      new URL(request.url??'/','http://127.0.0.1'),reader)
+      .catch(error=>{response.statusCode=500;response.end(String(error))})
+  })
+  await new Promise<void>(resolve=>server.listen(0,'127.0.0.1',resolve))
+  try{
+    const addr=server.address()
+    assert.ok(addr&&typeof addr==='object')
+    const url=`http://127.0.0.1:${addr.port}/api/v1/native-sessions/window?sourceId=pi&installationId=inst&nativeSessionId=S&format=review-turns&turnLimit=2`
+    const response=await fetch(url)
+    assert.equal(response.status,200)
+    const result=await response.json() as NativeReviewWindowDto
+    assert.equal(result.state,'available')
+    assert.equal(result.boundaryIntegrity,'complete')
+    assert.equal(result.turnFragment,'complete')
+    assert.deepEqual(result.interactions.map(x=>x.ordinal),[1])
+    assert.equal(decodeNativeSessionCursor(result.nextCursor)?.offset,1)
+    assert.equal(result.hasMore,true)
+  }finally{
+    await new Promise<void>(resolve=>server.close(()=>resolve()))
+  }
+})
