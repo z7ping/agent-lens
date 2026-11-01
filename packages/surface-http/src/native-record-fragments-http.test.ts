@@ -29,7 +29,7 @@ test('record fragment route uses Catalog identity, never accepts paths, and retu
       return {state:'available' as const,record:{
         offset:120,fileIdentity:'device:inode',recordSha256:sha,
         nativeEventId:'native-user',role:'user',
-        fragments:[{ordinal:0,text:'[已脱敏]',redactionApplied:true}],
+        fragments:[{ordinal:0,text:'[已脱敏]',kind:'thinking',contentIndex:3,redactionApplied:true}],
         totalTextFragments:2,nextFragmentOffset:1,
       }}
     },
@@ -61,7 +61,7 @@ test('record fragment route uses Catalog identity, never accepts paths, and retu
     assert.equal(result.coverage,'fragment-only')
     assert.equal(result.sessionId,sessionId)
     assert.equal(result.recordSha256,sha)
-    assert.deepEqual(result.fragments,[{ordinal:0,text:'[已脱敏]',redactionApplied:true}])
+    assert.deepEqual(result.fragments,[{ordinal:0,text:'[已脱敏]',kind:'thinking',contentIndex:3,redactionApplied:true}])
     assert.equal(result.nextFragmentOffset,1)
     assert.equal(JSON.stringify(result).includes('fileIdentity'),false)
     assert.equal(JSON.stringify(result).includes('filePath'),false)
