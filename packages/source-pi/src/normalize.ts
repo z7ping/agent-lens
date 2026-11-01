@@ -13,6 +13,10 @@ interface PiStoredEnvelope {
   entry: Record<string, unknown>
   /** Set only by Source's SHA-verified oversized-media reader, not the raw Pi entry. */
   verifiedLargeImageRecord?: boolean
+  /** Source-only complete semantic proof; the actual body stays in JSONL. */
+  verifiedLargeTextRecord?:{
+    recordSha256:string;totalTextFragments:number
+  }
   session: {
     nativeSessionId: string
     cwd?: string
@@ -158,6 +162,8 @@ export async function normalizePiRecord(
         )
         observations.push(piFactCandidate(record, envelope, fact, 'message.user', {
           text: fact.text,
+          ...(envelope.verifiedLargeTextRecord
+            ?{nativeLazyText:envelope.verifiedLargeTextRecord}:{}),
           ...(normalized.attachments.length ? { attachments: normalized.attachments } : {}),
           ...(normalized.remainder.length ? { nonTextContent: normalized.remainder } : {}),
         }, offset))
@@ -187,6 +193,8 @@ export async function normalizePiRecord(
         )
         observations.push(piFactCandidate(record, envelope, fact, 'message.assistant', {
           text: fact.text,
+          ...(envelope.verifiedLargeTextRecord
+            ?{nativeLazyText:envelope.verifiedLargeTextRecord}:{}),
           ...(fact.content === undefined || normalized.attachments.length ? {} : { content: fact.content }),
           ...(normalized.attachments.length ? { attachments: normalized.attachments } : {}),
           ...(normalized.remainder.length ? { nonTextContent: normalized.remainder } : {}),
