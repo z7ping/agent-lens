@@ -42,7 +42,7 @@ type OversizedFragmentState = {
   totalTextFragments?:number
   nextFragmentOffset?:number
   toolLink?:{
-    callKey:string;anchorOrdinal:number;loading:boolean
+    callKey:string;anchorOrdinal:number;anchorContentIndex?:number;loading:boolean
     scannedRecords:number;scanCursor?:string
     match?:{cursor:string;recordSha256:string
       fragments:VerifiedRecordTextFragment[];nextFragmentOffset?:number
@@ -311,31 +311,39 @@ export function ReviewPage({ model, embedded = false, latestRequest = 0 }: { mod
   }
 
   const findLinkedToolResult = async (fragment:Pick<VerifiedRecordTextFragment,
-    'ordinal'|'kind'|'callKey'|'suppressed'>) => {
+    'ordinal'|'kind'|'callKey'|'suppressed'|'contentIndex'>) => {
     const current=oversized
     const id=review.selectedId
     if(!id||!current||current.sessionId!==id||!current.recordCursor
       ||!current.recordSha256||current.loading||current.locating
       ||current.toolLink?.loading||fragment.kind!=='tool-call'
-      ||!fragment.callKey||fragment.suppressed)return
+      ||!fragment.callKey||fragment.suppressed
+      ||(fragment.ordinal===-1&&!Number.isSafeInteger(fragment.contentIndex))
+      ||fragment.ordinal < -1)return
     oversizedAbortRef.current?.abort()
     const controller=new AbortController()
     oversizedAbortRef.current=controller
     const revision=++oversizedRevisionRef.current
+    const anchorContentIndex=fragment.ordinal===-1
+      ?fragment.contentIndex:undefined
     const earlier=current.toolLink?.callKey===fragment.callKey
       &&current.toolLink.anchorOrdinal===fragment.ordinal
+      &&current.toolLink.anchorContentIndex===anchorContentIndex
       ?current.toolLink:undefined
     const priorScanned=earlier?.scannedRecords??0
     const scanCursor=earlier?.scanCursor
     setOversized({...current,toolLink:{
       callKey:fragment.callKey,anchorOrdinal:fragment.ordinal,
+      ...(anchorContentIndex===undefined?{}:{anchorContentIndex}),
       loading:true,scannedRecords:priorScanned,
       ...(scanCursor?{scanCursor}:{}),
     }})
     try{
       const result=await hookApi.nativeRecordToolLink(id,{
         cursor:current.recordCursor,expectedSha256:current.recordSha256,
-        fragmentOrdinal:fragment.ordinal,callKey:fragment.callKey,
+        ...(anchorContentIndex===undefined
+          ?{fragmentOrdinal:fragment.ordinal}:{contentIndex:anchorContentIndex}),
+        callKey:fragment.callKey,
         ...(scanCursor?{scanCursor}:{}),limit:4,signal:controller.signal,
       })
       if(controller.signal.aborted||oversizedRevisionRef.current!==revision)return
@@ -369,6 +377,7 @@ export function ReviewPage({ model, embedded = false, latestRequest = 0 }: { mod
         &&previous.recordSha256===current.recordSha256
         ?{...previous,toolLink:{
           callKey:fragment.callKey!,anchorOrdinal:fragment.ordinal,
+          ...(anchorContentIndex===undefined?{}:{anchorContentIndex}),
           loading:false,scannedRecords:priorScanned+result.scannedRecords,
           ...(result.nextCursor?{scanCursor:result.nextCursor}:{}),
           ...(match?{match}:{}),
@@ -379,6 +388,7 @@ export function ReviewPage({ model, embedded = false, latestRequest = 0 }: { mod
         &&previous.recordSha256===current.recordSha256
         ?{...previous,toolLink:{
           callKey:fragment.callKey!,anchorOrdinal:fragment.ordinal,
+          ...(anchorContentIndex===undefined?{}:{anchorContentIndex}),
           loading:false,scannedRecords:priorScanned,
           ...(scanCursor?{scanCursor}:{}),
           error:error instanceof Error?error.message:String(error),
@@ -794,6 +804,8 @@ export function ReviewPage({ model, embedded = false, latestRequest = 0 }: { mod
                       onClick={()=>void findLinkedToolResult({
                         ordinal:oversized.toolLink!.anchorOrdinal,
                         kind:'tool-call',callKey:oversized.toolLink!.callKey,
+                        ...(oversized.toolLink!.anchorContentIndex===undefined
+                          ?{}:{contentIndex:oversized.toolLink!.anchorContentIndex}),
                       })}>
                       {t('local.roundNav.nativeOversizedFindResultMore')}
                     </Button>}
