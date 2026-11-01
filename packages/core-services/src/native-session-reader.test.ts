@@ -694,3 +694,74 @@ test('tool result details use the same key-aware policy as tool call arguments',
   assert.equal(JSON.stringify(result).includes('fieldKeys'),false)
   assert.equal(JSON.stringify(result).includes('raw-value'),false)
 })
+
+test('mixed native assistant record applies prompt/tool capture independently and never discloses disabled media',async()=>{
+  const storage={
+    nativeSessionCatalog:{async get(){return catalog}},
+    repositories:{installations:{async get(){return installation}},
+      hosts:{async get(){return host}}},
+  } as unknown as StorageService
+  let nativeRole='assistant'
+  const source={manifest:{sourceId:'pi',productId:'pi'},
+    async readNativeTextFragments(){
+      return {state:'available' as const,record:{
+        offset:70,fileIdentity:'1:9',recordSha256:'a'.repeat(64),
+        role:nativeRole,fragments:[
+          {ordinal:0,kind:'message' as const,text:'assistant body'},
+          {ordinal:1,kind:'thinking' as const,text:'thought'},
+          {ordinal:2,kind:'tool-call' as const,text:'command input',
+            fieldKeys:['arguments','command']},
+          {ordinal:3,kind:'tool-result' as const,text:'tool output'},
+        ],totalTextFragments:4,
+        images:[{contentIndex:0,mimeType:'image/png'}],
+        imagesTruncated:true,
+        media:{contentIndex:0,mimeType:'image/png',base64:'AQID',totalBase64Length:4},
+      }}
+    },
+  } as unknown as SourceDefinition
+  const captured:string[]=[]
+  let prompt=true
+  let tool=false
+  const policy={
+    isSourceEnabled:()=>true,
+    isEnabled:(scope:string)=>scope==='prompt'?prompt:tool,
+    capture(scope:string,value:unknown){
+      captured.push(scope)
+      if(scope==='tool')return {mode:'off' as const,value:null,redactionApplied:true}
+      return {mode:'redacted' as const,value,redactionApplied:false}
+    },
+  } as unknown as CapturePolicyService
+  const reader=new NativeSessionReader(storage,
+    {list:()=>[source]} as unknown as SourceService,policy)
+  const base={
+    sourceId:'pi',installationId:'install',nativeSessionId:'S1',
+    cursor:{offset:70,sequence:2,fileIdentity:'1:9'},
+    signal:new AbortController().signal,
+  }
+  const page=await reader.readTextFragments(base)
+  assert.equal(page.state,'available')
+  if(page.state==='available'){
+    assert.deepEqual(page.record.fragments.map(x=>x.text),
+      ['assistant body','thought','',''])
+    assert.equal(page.record.fragments[2]?.suppressed,true)
+    assert.deepEqual(page.record.images,[{contentIndex:0,mimeType:'image/png'}])
+  }
+  assert.deepEqual(captured,['prompt','prompt','tool','tool'])
+  nativeRole='toolResult'
+  const rejected=await reader.readTextFragments({...base,
+    media:{contentIndex:0,offset:0,limit:128*1024}})
+  assert.deepEqual(rejected,{state:'unsupported',
+    reason:'native-attachment-capture-disabled'})
+  const hidden=await reader.readTextFragments(base)
+  assert.equal(hidden.state,'available')
+  if(hidden.state==='available'){
+    assert.deepEqual(hidden.record.images,[])
+    assert.equal(hidden.record.imagesTruncated,undefined)
+  }
+  tool=true
+  const allowed=await reader.readTextFragments({...base,
+    media:{contentIndex:0,offset:0,limit:128*1024}})
+  assert.equal(allowed.state,'available')
+  if(allowed.state==='available')
+    assert.equal(allowed.record.media?.base64,'AQID')
+})
