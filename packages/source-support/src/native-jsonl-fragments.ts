@@ -195,9 +195,12 @@ export async function readNativeJsonlTextFragments(input:{
         case 'endString':
           if(stringKind==='text'){
             if(pendingHighSurrogate){
-              const last=pendingHighSurrogate
+              const lone=pendingHighSurrogate
               pendingHighSurrogate=''
-              writeText(last)
+              const bytes=Buffer.byteLength(lone,'utf8')
+              if(textBytes+bytes>FRAGMENT_BYTES)flushText()
+              textBuffer+=lone
+              textBytes+=bytes
             }
             flushText()
             if(textPieces>1){
