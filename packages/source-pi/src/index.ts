@@ -248,7 +248,7 @@ async function readPiVerifiedLargeImagePage(
       return {type:'image',mimeType:original.images[0]!.mimeType}
     if(block.kind==='tool-call')
       return {type:'toolCall',id:block.nativeCallId!,name:block.name!,
-        arguments:{}}
+        arguments:block.verifiedArguments!}
     const text=original.fragments.filter(x=>x.contentIndex===block.contentIndex)
       .map(x=>x.text).join('')
     return block.kind==='thinking'?{type:'thinking',thinking:text}
