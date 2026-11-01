@@ -202,7 +202,8 @@ async function readPiVerifiedLargeImagePage(
       fragment.contentIndex===undefined
       ||!blocks.some(block=>block.contentIndex===fragment.contentIndex
         &&(block.kind==='text'&&fragment.kind==='message'
-          ||assistant&&block.kind==='thinking'&&fragment.kind==='thinking')))
+          ||assistant&&block.kind==='thinking'&&fragment.kind==='thinking'
+          ||assistant&&block.kind==='tool-call'&&fragment.kind==='tool-call')))
     ||blocks.some(block=>['text','thinking'].includes(block.kind)
       &&(block.fragmentCount===0
         ||original.fragments.filter(piece=>piece.contentIndex===block.contentIndex)
