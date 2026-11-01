@@ -776,13 +776,14 @@ test('native tool links enforce catalog identity and tool privacy before Source 
   const source={manifest:{sourceId:'pi',productId:'pi'},
     async findNativeToolResult(q:{
       filePath:string;cursor:{offset:number};callKey:string
-      fragmentOrdinal:number;expectedSha256:string
+      fragmentOrdinal?:number;contentIndex?:number;expectedSha256:string
     }){
       calls++
       assert.equal(q.filePath,catalog.filePath)
       assert.equal(q.cursor.offset,70)
       assert.equal(q.callKey,'c'.repeat(64))
-      assert.equal(q.fragmentOrdinal,3)
+      assert.equal(q.fragmentOrdinal,calls===1?3:undefined)
+      assert.equal(q.contentIndex,calls===2?0:undefined)
       assert.equal(q.expectedSha256,'a'.repeat(64))
       return {state:'available' as const,scannedRecords:1,
         match:{cursor:{offset:100,sequence:3,fileIdentity:'1:9',
@@ -804,16 +805,24 @@ test('native tool links enforce catalog identity and tool privacy before Source 
   if(available.state==='available')
     assert.equal(available.match?.recordSha256,'b'.repeat(64))
   assert.equal(calls,1)
+  const block=await reader.findNativeToolResult({
+    ...query,fragmentOrdinal:undefined,contentIndex:0,
+  })
+  assert.equal(block.state,'available')
+  assert.deepEqual(await reader.findNativeToolResult({
+    ...query,contentIndex:0,
+  }),{state:'unsupported',reason:'invalid-native-tool-link-anchor'})
+  assert.equal(calls,2)
   assert.deepEqual(await reader.findNativeToolResult({...query,
     cursor:{...query.cursor,fileIdentity:'other'}}),{
     state:'drifted',reason:'native-catalog-file-identity-changed'})
-  assert.equal(calls,1)
+  assert.equal(calls,2)
   const off=new NativeSessionReader(storage,sources,{
     isSourceEnabled:()=>true,isEnabled:(scope:string)=>scope!=='tool',
   } as unknown as CapturePolicyService)
   assert.deepEqual(await off.findNativeToolResult(query),{
     state:'unsupported',reason:'native-tool-capture-disabled'})
-  assert.equal(calls,1)
+  assert.equal(calls,2)
 })
 
 test('verified native block metadata never bypasses tool and image CapturePolicy',async()=>{
