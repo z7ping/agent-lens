@@ -162,6 +162,13 @@ export type NativeOversizedRecordLocateResponseDto =
   | {state:'end'}
   | {state:'pending'|'unavailable'|'drifted'|'unsupported';reason:string}
 
+/** Read-only, Source-verified bounded inline image; never a complete event. */
+export type NativeRecordMediaChunkResponseDto =
+  | {state:'available';coverage:'media-chunk-only';sessionId:string
+      recordSha256:string;contentIndex:number;mimeType:string
+      base64:string;totalBase64Length:number;nextOffset?:number}
+  | {state:'pending'|'unavailable'|'drifted'|'unsupported';reason:string}
+
 export type NativeRecordTextFragmentsResponseDto =
   | {state:'available';coverage:'fragment-only';sessionId:string
     recordSha256:string;nativeEventId?:string;nativeType?:string;role?:string
