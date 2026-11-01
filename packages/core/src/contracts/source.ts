@@ -247,6 +247,7 @@ export type SourceNativeTextFragmentResult =
         fragmentCount:number;name?:string;callKey?:string
         /** Source-private metadata, removed by Core before HTTP. */
         nativeCallId?:string;emptyArguments?:boolean
+        verifiedArguments?:Record<string,string|number|boolean|null>
         redactionApplied?:boolean;suppressed?:boolean
       }>
       contentBlocksTruncated?:boolean
