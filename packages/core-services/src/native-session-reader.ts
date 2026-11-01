@@ -535,7 +535,7 @@ export class NativeSessionReader {
       // leaking split tokens. Deep parameter structures also fail closed.
       if(fieldKeysTooDeep
         ||fieldKeys?.some(key=>key==='__proto__'||key==='prototype'||key==='constructor')
-        ||fragment.splitScalar){
+        ||(fragment.splitScalar&&!safeSplitScalar)){
         return {...safeFragment,text:'[超长文本片段已脱敏]',
           redactionApplied:true,suppressed:true}
       }
