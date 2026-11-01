@@ -318,6 +318,18 @@ export function normalizePiSessionEntry(
             })
             continue
           }
+          if(block.type==='image'){
+            // Native assistant image blocks are genuine message facts. The
+            // shared attachment projector owns their presentation in Review
+            // and Live; preserve the original content index and ordering.
+            facts.push({
+              ...messageBase,...assistantMeta,
+              id:`${id}:content:${index}`,parentId:id,contentIndex:index,
+              kind:'message',role:'assistant',text:'',
+              content:rawBlock,nonTextContent:[rawBlock],
+            })
+            continue
+          }
           facts.push({
             ...messageBase,
             id: `${id}:content:${index}`,
