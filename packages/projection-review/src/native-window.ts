@@ -163,7 +163,24 @@ export function projectNativeReviewWindow(input: NativeReviewProjectionInput): N
   })
 
   const attachmentCursors = new Map<string, string>()
+  const nativeLazyBodies=new Map<string,{recordSha256:string;totalTextFragments:number}>()
   items.forEach((item, index) => {
+    const payload=item.payload&&typeof item.payload==='object'
+      &&!Array.isArray(item.payload)?item.payload as Record<string,unknown>:{}
+    const ref=payload.nativeLazyText
+    if((item.kind==='message.user'||item.kind==='message.assistant')
+      &&ref&&typeof ref==='object'&&!Array.isArray(ref)){
+      const evidence=ref as Record<string,unknown>
+      if(typeof evidence.recordSha256==='string'
+        &&/^[0-9a-f]{64}$/.test(evidence.recordSha256)
+        &&typeof evidence.totalTextFragments==='number'
+        &&Number.isSafeInteger(evidence.totalTextFragments)
+        &&evidence.totalTextFragments>16&&evidence.totalTextFragments<=10_000_000)
+        nativeLazyBodies.set(item.id,{
+          recordSha256:evidence.recordSha256,
+          totalTextFragments:evidence.totalTextFragments,
+        })
+    }
     const cursor = input.observationCursors?.[index]
     if (cursor && /^native-observation:[0-9a-f]{32}$/.test(item.id)) attachmentCursors.set(item.id, cursor)
   })
@@ -200,6 +217,8 @@ export function projectNativeReviewWindow(input: NativeReviewProjectionInput): N
       nodes: interaction.nodes.map(node => {
         const cursor = node.type === 'message' && node.attachments?.length
           ? attachmentCursors.get(node.id) : undefined
+        const body=node.type==='message'?nativeLazyBodies.get(node.id):undefined
+        const bodyCursor=node.type==='message'?attachmentCursors.get(node.id):undefined
         // A tool result may share the same original SourceRecord provenance
         // as its call. Retain one evidence edge per stable evidence ID.
         const evidence = [...new Map(node.evidence.map(item => [item.id, item])).values()]
@@ -207,6 +226,9 @@ export function projectNativeReviewWindow(input: NativeReviewProjectionInput): N
           ...node,
           evidence,
           ...(cursor ? { nativeAttachmentCursor: cursor } : {}),
+          ...(body&&bodyCursor?{nativeLazyText:{
+            cursor:bodyCursor,...body,
+          }}:{}),
         }
       }),
     })),
