@@ -360,7 +360,7 @@ async function readCompleteNativeTurns(
     // A partial turn is NOT a boundary for the next ordinal.
     if (!value.hasMore || value.turnFragment === 'partial') break
     if (turn === turnLimit - 1) break
-    const cursor = decodeCursor(value.nextCursor)
+    const cursor = decodeNativeSessionCursor(value.nextCursor)
     if (!cursor || cursor.mode !== 'review-turns'
       || cursor.turnOrdinal === undefined
       || cursor.turnOrdinal <= ordinal
@@ -396,7 +396,7 @@ type EncodedNativeCursor = SourceNativeSessionCursor & {
   turnStart?: number
 }
 
-function decodeCursor(value: string | null): EncodedNativeCursor | undefined {
+export function decodeNativeSessionCursor(value: string | null): EncodedNativeCursor | undefined {
   if (value === null) return undefined
   if (!value || value.length > MAX_CURSOR_BYTES || !/^[A-Za-z0-9_-]+$/.test(value)) {
     throw badRequest('Invalid native session cursor')
@@ -407,22 +407,31 @@ function decodeCursor(value: string | null): EncodedNativeCursor | undefined {
       throw badRequest('Invalid native session cursor')
     }
     const cursor = decoded as Record<string, unknown>
-    if (!Number.isSafeInteger(cursor.offset) || (cursor.offset as number) < 0
+    const allowedKeys=new Set([
+      'offset','sequence','fileIdentity','boundaryHash','recordFingerprint',
+      'mode','turnOrdinal','turnStart',
+    ])
+    if (Object.keys(cursor).some(key=>!allowedKeys.has(key))
+      || !Number.isSafeInteger(cursor.offset) || (cursor.offset as number) < 0
       || !Number.isSafeInteger(cursor.sequence) || (cursor.sequence as number) < 0
       || typeof cursor.fileIdentity !== 'string'
       || !cursor.fileIdentity || cursor.fileIdentity.length > 128
-      || (cursor.boundaryHash !== undefined
-        && (typeof cursor.boundaryHash !== 'string'
-          || !/^[0-9a-f]{64}$/.test(cursor.boundaryHash)))
-      || !(Object.keys(cursor).length === (cursor.boundaryHash === undefined ? 3 : 4)
-        || ((Object.keys(cursor).length === (cursor.boundaryHash === undefined ? 5 : 6)
-          || (Object.keys(cursor).length === (cursor.boundaryHash === undefined ? 6 : 7)
-            && Number.isSafeInteger(cursor.turnStart)
-            && (cursor.turnStart as number) >= 0
-            && (cursor.turnStart as number) < (cursor.offset as number)))
-          && cursor.mode === 'review-turns'
-          && Number.isSafeInteger(cursor.turnOrdinal)
-          && (cursor.turnOrdinal as number) >= 1))) {
+      || (cursor.boundaryHash !== undefined && (
+        typeof cursor.boundaryHash !== 'string'
+        || !/^[0-9a-f]{64}$/.test(cursor.boundaryHash)))
+      || (cursor.recordFingerprint !== undefined && (
+        typeof cursor.recordFingerprint !== 'string'
+        || !/^[0-9a-f]{64}$/.test(cursor.recordFingerprint)))
+      || (cursor.mode === undefined
+        ? cursor.turnOrdinal !== undefined || cursor.turnStart !== undefined
+        : cursor.mode !== 'review-turns'
+          || !Number.isSafeInteger(cursor.turnOrdinal)
+          || (cursor.turnOrdinal as number) < 1)
+      || (cursor.turnStart !== undefined && (
+        cursor.mode !== 'review-turns'
+        || !Number.isSafeInteger(cursor.turnStart)
+        || (cursor.turnStart as number) < 0
+        || (cursor.turnStart as number) >= (cursor.offset as number)))) {
       throw badRequest('Invalid native session cursor')
     }
     return {
@@ -430,6 +439,8 @@ function decodeCursor(value: string | null): EncodedNativeCursor | undefined {
       sequence: cursor.sequence as number,
       fileIdentity: cursor.fileIdentity,
       ...(cursor.boundaryHash ? {boundaryHash:cursor.boundaryHash} : {}),
+      ...(cursor.recordFingerprint
+        ? {recordFingerprint:cursor.recordFingerprint as string} : {}),
       ...(cursor.mode === 'review-turns'
         ? { mode: 'review-turns' as const, turnOrdinal: cursor.turnOrdinal as number,
             ...(cursor.turnStart === undefined ? {} : {turnStart:cursor.turnStart as number}) }
@@ -542,7 +553,7 @@ export async function handleNativeSessionAttachmentRequest(
   }
   if ([...url.searchParams.keys()].some(key=>key!=='cursor')
     || url.searchParams.getAll('cursor').length!==1) throw badRequest('Invalid native attachment request')
-  const cursor=decodeCursor(url.searchParams.get('cursor'))
+  const cursor=decodeNativeSessionCursor(url.searchParams.get('cursor'))
   if (!cursor || cursor.mode) throw badRequest('Native attachment requires an original record-start cursor')
   const entry=await catalog.getByReviewSessionId(id)
   if (!entry || entry.locationKind!=='native') {
@@ -677,7 +688,7 @@ export async function handleNativeSessionWindowRequest(
     || (formatValues.length === 1 && !['review', 'review-turns'].includes(formatValues[0]!))) {
     throw badRequest('Unsupported native window format')
   }
-  const cursor = decodeCursor(requestedUrl.searchParams.get('cursor'))
+  const cursor = decodeNativeSessionCursor(requestedUrl.searchParams.get('cursor'))
   const turnMode = formatValues[0] === 'review-turns'
   const turnLimitValues = requestedUrl.searchParams.getAll('turnLimit')
   const turnLimit = turnLimitValues.length === 0 ? 1 : Number(turnLimitValues[0])

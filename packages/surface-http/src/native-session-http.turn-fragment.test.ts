@@ -3,7 +3,7 @@ import test from 'node:test'
 import { createServer } from 'node:http'
 import type { ObservationCandidate } from '@agent-lens/core'
 import type { NativeReviewWindowDto } from '@agent-lens/protocol'
-import { handleNativeSessionWindowRequest, type NativeSessionWindowReader } from './native-session-http'
+import { decodeNativeSessionCursor, encodeNativeSessionCursor, handleNativeSessionWindowRequest, type NativeSessionWindowReader } from './native-session-http'
 
 const timestamp = '2026-10-29T00:00:00Z'
 const fileIdentity = 'fixture:inode'
@@ -97,3 +97,25 @@ for (const byId of [false, true]) {
     }
   })
 }
+
+test('原生 Review 游标支持来源记录 SHA，但拒绝未知字段及非法校验值',()=>{
+  const boundaryHash='a'.repeat(64)
+  const recordFingerprint='b'.repeat(64)
+  const encoded=encodeNativeSessionCursor({
+    offset:123,sequence:7,fileIdentity:'host:inode',
+    boundaryHash,recordFingerprint,mode:'review-turns',turnOrdinal:3,
+  })
+  assert.deepEqual(decodeNativeSessionCursor(encoded),{
+    offset:123,sequence:7,fileIdentity:'host:inode',boundaryHash,
+    recordFingerprint,mode:'review-turns',turnOrdinal:3,
+  })
+  for(const invalid of [
+    {offset:123,sequence:7,fileIdentity:'host:inode',extra:'untrusted'},
+    {offset:123,sequence:7,fileIdentity:'host:inode',recordFingerprint:'bad'},
+    {offset:123,sequence:7,fileIdentity:'host:inode',turnOrdinal:3},
+    {offset:123,sequence:7,fileIdentity:'host:inode',mode:'review-turns'},
+  ]){
+    assert.throws(()=>decodeNativeSessionCursor(
+      Buffer.from(JSON.stringify(invalid)).toString('base64url')))
+  }
+})
