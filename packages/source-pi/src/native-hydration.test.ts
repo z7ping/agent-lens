@@ -183,3 +183,85 @@ test('Pi oversized locator scans resumable physical windows without skipping or 
     assert.equal(extra.state,'drifted')
   }finally{await rm(root,{recursive:true,force:true})}
 })
+
+test('Pi exact native tool link scans following records with SHA-bound call evidence and resumable cursor',async()=>{
+  const root=await mkdtemp(join(tmpdir(),'agent-lens-tool-link-'))
+  const file=join(root,'session.jsonl')
+  const header=JSON.stringify({type:'session',id:'tool-link-native'})
+  const nativeId='call-authentic-1'
+  const call=JSON.stringify({type:'message',id:'assistant-large',
+    message:{role:'assistant',content:[
+      {type:'toolCall',id:nativeId,name:'read',
+        arguments:{note:'x'.repeat(2_200_000)}},
+    ]},
+  })
+  const noise=(id:number)=>JSON.stringify({type:'message',id:'other-'+id,
+    message:{role:'assistant',content:'unrelated'}})
+  const result=JSON.stringify({type:'message',id:'result-native',
+    message:{role:'toolResult',toolCallId:nativeId,
+      content:[{type:'text',text:'verified return'}],details:{status:200}},
+  })
+  const host={id:'host',name:'host',platform:process.platform,arch:process.arch,
+    createdAt:'2026-11-01T00:00:00Z',lastSeenAt:'2026-11-01T00:00:00Z'}
+  const ctx:SourceRawRecoveryContext={host,
+    installation:{id:'pi-link',hostId:'host',productId:'pi',dataRoot:root,
+      firstSeenAt:'2026-11-01T00:00:00Z',lastSeenAt:'2026-11-01T00:00:00Z'},
+    abortSignal:new AbortController().signal,
+    checkpoint:{async get(){return null},
+      async set(){throw Error('read-only')},async clear(){throw Error('read-only')}},
+  }
+  try{
+    await writeFile(file,[header,call,noise(1),noise(2),result].join('\n')+'\n')
+    const located=await piSourceDefinition.locateOversizedRecord!({
+      filePath:file,nativeSessionId:'tool-link-native',limit:4,
+    },ctx)
+    assert.equal(located.state,'found')
+    if(located.state!=='found')return
+    const start=await piSourceDefinition.readNativeTextFragments!({
+      filePath:file,nativeSessionId:'tool-link-native',
+      cursor:located.cursor,expectedSha256:located.recordSha256,
+      fragmentOffset:0,limit:1,
+    },ctx)
+    assert.equal(start.state,'available')
+    if(start.state!=='available')return
+    const callKey=start.record.fragments[0]?.callKey
+    assert.equal(callKey,hash(nativeId))
+    const query={filePath:file,nativeSessionId:'tool-link-native',
+      cursor:located.cursor,expectedSha256:located.recordSha256,
+      fragmentOrdinal:0,callKey:callKey!,limit:2}
+    const find=piSourceDefinition.findNativeToolResult!
+    const first=await find(query,ctx)
+    assert.equal(first.state,'available')
+    if(first.state!=='available')return
+    assert.equal(first.match,undefined)
+    assert.equal(first.scannedRecords,2)
+    assert.ok(first.nextCursor)
+    const second=await find({...query,scanCursor:first.nextCursor},ctx)
+    assert.equal(second.state,'available')
+    if(second.state!=='available')return
+    assert.equal(second.scannedRecords,1)
+    assert.equal(second.match?.recordSha256,hash(result))
+    assert.ok(second.match?.cursor.recordFingerprint)
+    const verified=await piSourceDefinition.readNativeTextFragments!({
+      filePath:file,nativeSessionId:'tool-link-native',
+      cursor:second.match!.cursor,expectedSha256:second.match!.recordSha256,
+      limit:4,
+    },ctx)
+    assert.equal(verified.state,'available')
+    if(verified.state==='available'){
+      assert.equal(verified.record.role,'toolResult')
+      assert.ok(verified.record.fragments.every(x=>x.callKey===callKey))
+    }
+    const wrong=await find({...query,callKey:hash('unknown')},ctx)
+    assert.deepEqual(wrong,{state:'unsupported',
+      reason:'native-tool-call-evidence-mismatch'})
+    const outside=await find({...query,
+      scanCursor:{...first.nextCursor!,offset:located.cursor.offset}},ctx)
+    assert.deepEqual(outside,{state:'unsupported',
+      reason:'native-tool-link-cursor-invalid'})
+    assert.deepEqual(await find({...query,nativeSessionId:'wrong'},ctx),{
+      state:'drifted',reason:'native-session-identity-changed'})
+    assert.equal(JSON.stringify(first).includes('x'.repeat(128)),false)
+    assert.equal(JSON.stringify(second).includes('verified return'),false)
+  }finally{await rm(root,{recursive:true,force:true})}
+})
