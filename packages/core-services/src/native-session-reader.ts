@@ -563,9 +563,13 @@ export class NativeSessionReader {
           ?{suppressed:true}:{}),
       }
     })
-    return {state:'available',record:{...result.record,fragments,
-      images:mediaAllowed?result.record.images:[],
-      ...(mediaAllowed?{}:{imagesTruncated:undefined}),
+    const {images:rawImages,imagesTruncated:rawTruncated,
+      ...verifiedRecord}=result.record
+    return {state:'available',record:{...verifiedRecord,fragments,
+      ...(mediaAllowed
+        ?{...(rawImages?{images:rawImages}:{}),
+          ...(rawTruncated?{imagesTruncated:true}:{})}
+        :{images:[]}),
     }}
   }
 
