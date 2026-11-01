@@ -20,6 +20,9 @@ export interface NativeJsonlTextFragment {
   /** Ordinal of a bounded, decoded UTF-8 text fragment inside one record. */
   ordinal:number
   text:string
+  /** This text leaf spans multiple fragments; policy must not redact them
+   * separately without taking token-boundary context into account. */
+  splitScalar?:boolean
 }
 
 export type NativeJsonlFragmentReadResult =
@@ -95,6 +98,11 @@ export async function readNativeJsonlTextFragments(input:{
     let meta=''
     let textBuffer=''
     let textBytes=0
+    let textPieces=0
+    let currentTextLeaf=0
+    let nextTextLeaf=0
+    const selectedLeafIds:number[]=[]
+    let pendingHighSurrogate=''
     let firstToken=true
     const stack:Frame[]=[]
 
@@ -116,16 +124,26 @@ export async function readNativeJsonlTextFragments(input:{
           throw new Error(failed)
         }
         fragments.push({ordinal,text:textBuffer})
+        selectedLeafIds.push(currentTextLeaf)
         selectedBytes+=textBytes
       }
+      textPieces++
       textBuffer=''
       textBytes=0
     }
     const writeText=(text:string)=>{
+      const combined=pendingHighSurrogate+text
+      pendingHighSurrogate=''
+      // Preserve surrogate pairs even when streamed JSON stringChunk tokens
+      // end after a standalone high surrogate.
+      const last=combined.charCodeAt(combined.length-1)
+      const safe=last>=0xd800&&last<=0xdbff
+        ?(pendingHighSurrogate=combined.slice(-1),combined.slice(0,-1))
+        :combined
       // Token chunks can end between escape sequences or UTF-8 code points;
       // stream-json has already decoded those boundaries. Split only between
       // complete JS code points, never within a surrogate pair.
-      for(const codePoint of text){
+      for(const codePoint of safe){
         const n=Buffer.byteLength(codePoint,'utf8')
         if(textBytes+n>FRAGMENT_BYTES)flushText()
         textBuffer+=codePoint
@@ -171,10 +189,23 @@ export async function readNativeJsonlTextFragments(input:{
         }
         case 'startString':
           stringKind=classify(nextPath())
-          meta='';textBuffer='';textBytes=0
+          meta='';textBuffer='';textBytes=0;pendingHighSurrogate=''
+          if(stringKind==='text'){currentTextLeaf=nextTextLeaf++;textPieces=0}
           return
         case 'endString':
-          if(stringKind==='text')flushText()
+          if(stringKind==='text'){
+            if(pendingHighSurrogate){
+              const last=pendingHighSurrogate
+              pendingHighSurrogate=''
+              writeText(last)
+            }
+            flushText()
+            if(textPieces>1){
+              for(let i=0;i<fragments.length;i++){
+                if(selectedLeafIds[i]===currentTextLeaf)fragments[i]!.splitScalar=true
+              }
+            }
+          }
           else if(stringKind==='id')nativeEventId=meta
           else if(stringKind==='type')nativeType=meta
           else if(stringKind==='role')role=meta
