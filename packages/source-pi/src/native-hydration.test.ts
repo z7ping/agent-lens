@@ -265,3 +265,62 @@ test('Pi exact native tool link scans following records with SHA-bound call evid
     assert.equal(JSON.stringify(second).includes('verified return'),false)
   }finally{await rm(root,{recursive:true,force:true})}
 })
+
+test('Pi links oversized zero-argument native tool blocks by original content[] identity',async()=>{
+  const root=await mkdtemp(join(tmpdir(),'agent-lens-native-empty-call-'))
+  const path=join(root,'session.jsonl')
+  const id='native-zero-arguments'
+  const call=JSON.stringify({type:'message',id:'assistant-big',
+    message:{role:'assistant',content:[
+      {type:'toolCall',id,name:'list_files',arguments:{}},
+      {type:'image',mimeType:'image/png',data:'A'.repeat(2_250_000)},
+    ]}})
+  const response=JSON.stringify({type:'message',id:'result-1',
+    message:{role:'toolResult',toolCallId:id,content:[{type:'text',text:'ok'}]}})
+  const host={id:'host',name:'host',platform:process.platform,arch:process.arch,
+    createdAt:'2026-11-01T00:00:00Z',lastSeenAt:'2026-11-01T00:00:00Z'}
+  const ctx:SourceRawRecoveryContext={host,
+    installation:{id:'pi-zero-arg',hostId:'host',productId:'pi',dataRoot:root,
+      firstSeenAt:'2026-11-01T00:00:00Z',lastSeenAt:'2026-11-01T00:00:00Z'},
+    abortSignal:new AbortController().signal,
+    checkpoint:{async get(){return null},
+      async set(){throw Error('read-only')},async clear(){throw Error('read-only')}},
+  }
+  try{
+    await writeFile(path,[
+      JSON.stringify({type:'session',id:'zero-arg-session'}),call,response,
+    ].join('\n')+'\n')
+    const located=await piSourceDefinition.locateOversizedRecord!({
+      filePath:path,nativeSessionId:'zero-arg-session',limit:3,
+    },ctx)
+    assert.equal(located.state,'found')
+    if(located.state!=='found')return
+    const first=await piSourceDefinition.readNativeTextFragments!({
+      filePath:path,nativeSessionId:'zero-arg-session',
+      cursor:located.cursor,expectedSha256:located.recordSha256,limit:1,
+    },ctx)
+    assert.equal(first.state,'available')
+    if(first.state!=='available')return
+    assert.equal(first.record.totalTextFragments,0)
+    const block=first.record.contentBlocks?.find(x=>x.contentIndex===0)
+    assert.equal(block?.kind,'tool-call')
+    assert.equal(block?.callKey,hash(id))
+    const query={filePath:path,nativeSessionId:'zero-arg-session',
+      cursor:located.cursor,expectedSha256:located.recordSha256,
+      contentIndex:0,callKey:block!.callKey!,limit:3}
+    const find=piSourceDefinition.findNativeToolResult!
+    const linked=await find(query,ctx)
+    assert.equal(linked.state,'available')
+    if(linked.state==='available'){
+      assert.equal(linked.scannedRecords,1)
+      assert.equal(linked.match?.recordSha256,hash(response))
+    }
+    const wrong=await find({...query,contentIndex:1},ctx)
+    assert.deepEqual(wrong,{state:'unsupported',
+      reason:'native-tool-call-evidence-mismatch'})
+    assert.deepEqual(await find({...query,fragmentOrdinal:0},ctx),{
+      state:'unsupported',reason:'invalid-native-tool-link-query'})
+    assert.deepEqual(await find({...query,contentIndex:undefined},ctx),{
+      state:'unsupported',reason:'invalid-native-tool-link-query'})
+  }finally{await rm(root,{recursive:true,force:true})}
+})
