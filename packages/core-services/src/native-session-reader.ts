@@ -574,7 +574,8 @@ export class NativeSessionReader {
     const contentBlocks=result.record.contentBlocks?.flatMap(block=>{
       if(block.kind==='image'&&!mediaAllowed)return []
       const {name,callKey,nativeCallId:_nativeCallId,
-        emptyArguments:_emptyArguments,...safeBlock}=block
+        emptyArguments:_emptyArguments,
+        verifiedArguments:_verifiedArguments,...safeBlock}=block
       if(block.kind!=='tool-call'){
         // No fragment text is emitted here; still mark source lanes hidden by
         // the parent record's verified capture scope as unavailable.
