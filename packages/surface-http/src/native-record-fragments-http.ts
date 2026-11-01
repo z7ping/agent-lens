@@ -115,6 +115,7 @@ export async function handleNativeRecordFragmentsRequest(
       fragments:result.record.fragments,
       totalTextFragments:result.record.totalTextFragments,
       ...(result.record.images?{images:result.record.images}:{}),
+      ...(result.record.imagesTruncated?{imagesTruncated:true}:{}),
       ...(result.record.nextFragmentOffset===undefined?{}:{
         nextFragmentOffset:result.record.nextFragmentOffset,
       }),
