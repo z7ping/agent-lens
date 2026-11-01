@@ -3,6 +3,7 @@ import { AgentScope, agentLabel, sourceDot } from '../components/AgentScope'
 import { AgentLogo } from '../components/AgentLogo'
 import type { LiveMarkdownComposerDraft, LiveMarkdownComposerHandle } from '../components/LiveMarkdownComposer'
 import { TaskSessionComposer } from '../components/TaskSessionComposer'
+import { ImagePreview } from '../components/ImagePreview'
 import { liveComposerDraftKey, readLiveComposerDraft } from '../components/live-composer-session-state'
 import { LocalPathActions } from '../components/LocalPathActions'
 import { VirtualRoundMount } from '../components/VirtualRoundMount'
@@ -30,6 +31,9 @@ type OversizedFragmentState = {
   recordCursor?:string
   recordSha256?:string
   fragments:VerifiedRecordTextFragment[]
+  images:Array<{contentIndex:number;mimeType:string}>
+  mediaIndex?:number
+  mediaDataUrl?:string
   totalTextFragments?:number
   nextFragmentOffset?:number
   locating:boolean
@@ -191,7 +195,7 @@ export function ReviewPage({ model, embedded = false, latestRequest = 0 }: { mod
     let searchCursor=oversized?.sessionId===id?oversized.searchCursor:undefined
     setOversized(previous=>({
       sessionId:id,fragments:previous?.sessionId===id?previous.fragments:[],
-      ...(searchCursor?{searchCursor}:{}),locating:true,loading:false,
+      images:[],...(searchCursor?{searchCursor}:{}),locating:true,loading:false,
     }))
     try{
       // Only explicit user action starts a finite search: max eight Source
@@ -209,7 +213,8 @@ export function ReviewPage({ model, embedded = false, latestRequest = 0 }: { mod
           continue
         }
         if(found.state==='found'){
-          if(!found.hasText)throw new Error('native-oversized-record-no-text')
+          if(!found.hasText&&!found.hasMedia)
+            throw new Error('native-oversized-record-no-visible-content')
           const page=await hookApi.nativeRecordTextFragments(id,{
             cursor:found.cursor,expectedSha256:found.recordSha256,
             fragmentOffset:0,limit:4,signal:controller.signal,
@@ -224,22 +229,23 @@ export function ReviewPage({ model, embedded = false, latestRequest = 0 }: { mod
             recordSha256:found.recordSha256,
             ...(found.nextCursor?{searchCursor:found.nextCursor}:{}),
             fragments:page.fragments,
+            images:page.images??[],
             totalTextFragments:page.totalTextFragments,
             ...(page.nextFragmentOffset===undefined?{}:{
               nextFragmentOffset:page.nextFragmentOffset}),
             locating:false,loading:false})
           return
         }
-        setOversized({sessionId:id,fragments:[],locating:false,loading:false,
+        setOversized({sessionId:id,fragments:[],images:[],locating:false,loading:false,
           ...(found.state==='end'?{error:t('local.roundNav.nativeOversizedNotFound')}
           :{error:found.reason})})
         return
       }
-      setOversized({sessionId:id,searchCursor,fragments:[],
+      setOversized({sessionId:id,searchCursor,fragments:[],images:[],
         locating:false,loading:false})
     }catch(error){
       if(!active())return
-      setOversized({sessionId:id,fragments:[],locating:false,loading:false,
+      setOversized({sessionId:id,fragments:[],images:[],locating:false,loading:false,
         ...(searchCursor?{searchCursor}:{}),
         error:error instanceof Error?error.message:String(error)})
     }
@@ -280,6 +286,66 @@ export function ReviewPage({ model, embedded = false, latestRequest = 0 }: { mod
       if(controller.signal.aborted||oversizedRevisionRef.current!==revision)return
       setOversized({...current,loading:false,
         error:error instanceof Error?error.message:String(error)})
+    }
+  }
+
+  const loadOversizedImage = async (image:{contentIndex:number;mimeType:string}) => {
+    const current=oversized
+    const id=review.selectedId
+    if(!id||!current||current.sessionId!==id||!current.recordCursor
+      ||!current.recordSha256||current.loading||current.locating
+      ||!current.images.some(item=>item.contentIndex===image.contentIndex
+        &&item.mimeType===image.mimeType))return
+    oversizedAbortRef.current?.abort()
+    const controller=new AbortController()
+    oversizedAbortRef.current=controller
+    const revision=++oversizedRevisionRef.current
+    setOversized({...current,loading:true,mediaIndex:image.contentIndex,error:undefined})
+    try{
+      const maxBase64=8*1024*1024
+      let offset=0
+      let base64=''
+      let total=-1
+      for(let n=0;n<64;n++){
+        const page=await hookApi.nativeRecordMediaChunk(id,{
+          cursor:current.recordCursor,expectedSha256:current.recordSha256,
+          imageIndex:image.contentIndex,mediaOffset:offset,
+          mediaLimit:128*1024,signal:controller.signal,
+        })
+        if(controller.signal.aborted||oversizedRevisionRef.current!==revision)return
+        if(page.state!=='available')throw new Error(page.reason)
+        if(page.coverage!=='media-chunk-only'
+          ||page.recordSha256!==current.recordSha256
+          ||page.contentIndex!==image.contentIndex
+          ||page.mimeType!==image.mimeType
+          ||page.base64.length<1||page.base64.length>128*1024
+          ||(total>=0&&page.totalBase64Length!==total)
+          ||page.totalBase64Length>maxBase64
+          ||(page.nextOffset!==undefined&&page.nextOffset!==offset+page.base64.length))
+          throw new Error('native-media-evidence-mismatch')
+        total=page.totalBase64Length
+        base64+=page.base64
+        if(base64.length>maxBase64)throw new Error('native-media-preview-budget')
+        if(page.nextOffset===undefined){
+          if(base64.length!==total)
+            throw new Error('native-media-incomplete')
+          setOversized(previous=>previous?.sessionId===id
+            &&previous.recordSha256===current.recordSha256
+            ?{...previous,loading:false,mediaIndex:image.contentIndex,
+              mediaDataUrl:`data:${image.mimeType};base64,${base64}`}
+            :previous)
+          return
+        }
+        if(page.nextOffset<=offset)throw new Error('native-media-cursor-stalled')
+        offset=page.nextOffset
+      }
+      throw new Error('native-media-preview-budget')
+    }catch(error){
+      if(controller.signal.aborted||oversizedRevisionRef.current!==revision)return
+      setOversized(previous=>previous?.sessionId===id
+        &&previous.recordSha256===current.recordSha256
+        ?{...previous,loading:false,error:error instanceof Error?error.message:String(error)}
+        :previous)
     }
   }
 
@@ -511,6 +577,21 @@ export function ReviewPage({ model, embedded = false, latestRequest = 0 }: { mod
                     {fragment.suppressed? ` · ${t('local.roundNav.nativeOversizedRedacted')}`:''}
                   </small>
                   <pre className="review-oversized-fragment">{fragment.text}</pre>
+                </div>)}
+              {oversized?.sessionId===review.selectedId&&oversized.images.map(image=>
+                <div key={image.contentIndex}>
+                  <small>{t('local.roundNav.nativeOversizedImage',{count:image.contentIndex+1})}
+                    {' · '}{image.mimeType}
+                  </small>
+                  {oversized.mediaIndex===image.contentIndex&&oversized.mediaDataUrl
+                    ?<ImagePreview src={oversized.mediaDataUrl}
+                      alt={t('local.roundNav.nativeOversizedImage',{count:image.contentIndex+1})}/>
+                    :<Button size="small" disabled={oversized.loading||oversized.locating}
+                      onClick={()=>void loadOversizedImage(image)}>
+                      {oversized.loading&&oversized.mediaIndex===image.contentIndex
+                        ?t('local.roundNav.querying')
+                        :t('local.roundNav.nativeOversizedLoadImage')}
+                    </Button>}
                 </div>)}
               {oversized?.sessionId===review.selectedId&&oversized.totalTextFragments!==undefined
                 && <small>{t('local.roundNav.nativeOversizedProgress',{
