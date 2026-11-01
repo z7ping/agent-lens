@@ -668,9 +668,10 @@ export async function handleNativeSessionAttachmentRequest(
     // Source-verified metadata, never copied as base64 into the observation.
     // Reattest this exact original record before granting a lazy media handle.
     // Only a unique Source image can be matched to a unique attachment.
-    const unresolved=items.filter(item=>item.type==='image'&&!item.dataUrl)
-    if(unresolved.length===1 && items.filter(item=>item.type==='image').length===1
-      && sourceCursor.recordFingerprint && reader.readTextFragments){
+    const unresolved=items.map((item,index)=>({item,index}))
+      .filter(({item})=>item.type==='image'&&!item.dataUrl)
+    if(unresolved.length>0 && sourceCursor.recordFingerprint
+      &&reader.readTextFragments){
       const verified=await reader.readTextFragments({
         sourceId:entry.sourceId,installationId:entry.installationId,
         nativeSessionId:entry.nativeSessionId,cursor:sourceCursor,
@@ -680,16 +681,35 @@ export async function handleNativeSessionAttachmentRequest(
         &&verified.record.offset===sourceCursor.offset
         &&verified.record.fileIdentity===sourceCursor.fileIdentity
         &&verified.record.sourceLineSha256===sourceCursor.recordFingerprint
-        &&verified.record.images?.length===1
-        &&verified.record.images[0]?.mimeType===unresolved[0]?.mimeType){
-        const image=verified.record.images[0]!
-        const mediaRef={
-          sessionId:id,
-          cursor:encodeNativeSessionCursor({...sourceCursor,mode:'record-fragments'}),
-          recordSha256:verified.record.recordSha256,
-          contentIndex:image.contentIndex,mimeType:image.mimeType,
+        &&verified.record.images?.length){
+        const nativeImages=verified.record.images
+        const sourceIndexes=new Set<number>()
+        const assignments=unresolved.map(({item,index})=>{
+          const needsExactIndex=nativeImages.length>1||unresolved.length>1
+          const originalIndex=item.nativeContentIndex
+          if(needsExactIndex&&(!Number.isSafeInteger(originalIndex)
+            ||originalIndex===undefined||originalIndex<0))return null
+          const image=originalIndex!==undefined
+            ?nativeImages.find(candidate=>candidate.contentIndex===originalIndex)
+            :nativeImages.length===1?nativeImages[0]:undefined
+          if(!image||image.mimeType!==item.mimeType
+            ||sourceIndexes.has(image.contentIndex))return null
+          sourceIndexes.add(image.contentIndex)
+          return {index,item,image}
+        })
+        // Either ALL unresolved media refs are proven distinct, or none is
+        // signed. A forged/ambiguous index must never be paired by MIME/order.
+        if(assignments.every((value):value is NonNullable<typeof value>=>value!==null)){
+          for(const {index,item,image} of assignments){
+            items[index]={...item,nativeMedia:{
+              sessionId:id,
+              cursor:encodeNativeSessionCursor({...sourceCursor,
+                mode:'record-fragments'}),
+              recordSha256:verified.record.recordSha256,
+              contentIndex:image.contentIndex,mimeType:image.mimeType,
+            }}
+          }
         }
-        items[items.indexOf(unresolved[0]!)]={...unresolved[0]!,nativeMedia:mediaRef}
       }
     }
     writeJson(response,200,{observationId,items})
