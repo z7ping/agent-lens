@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { reviewMessageAttachmentsFromPayload } from './review'
+import { reviewMessageAttachmentsFromPayload, reviewToolResultStatus } from './review'
 
 test('Codex local_image 附件保留图片语义，但不把原生路径作为图片 URL', () => {
   const attachments = reviewMessageAttachmentsFromPayload({
@@ -75,4 +75,20 @@ test('Review attachment metadata projection can omit inline data without losing 
     type: 'image',
     mimeType: 'image/png',
   }])
+})
+
+test('shared Review tool terminal status recognizes common cross-source flags and fails closed on conflicts',()=>{
+  assert.equal(reviewToolResultStatus({success:true}),'success')
+  assert.equal(reviewToolResultStatus({success:false}),'error')
+  assert.equal(reviewToolResultStatus({isError:true}),'error')
+  assert.equal(reviewToolResultStatus({is_error:true}),'error')
+  assert.equal(reviewToolResultStatus({status:'FAILED'}),'error')
+  assert.equal(reviewToolResultStatus({status:'timeout'}),'error')
+  assert.equal(reviewToolResultStatus({status:'success'}),'success')
+  assert.equal(reviewToolResultStatus({isError:false}),'success')
+  assert.equal(reviewToolResultStatus({success:true,isError:true}),'error')
+  assert.equal(reviewToolResultStatus({status:'unknown'}),'unknown')
+  assert.equal(reviewToolResultStatus({status:'running'}),'unknown')
+  assert.equal(reviewToolResultStatus(null),'unknown')
+  assert.equal(reviewToolResultStatus({}), 'unknown')
 })

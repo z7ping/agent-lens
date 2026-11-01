@@ -510,3 +510,34 @@ test('shared native Review projector retains conflicting second tool result and 
   assert.equal(extra.evidence.length,1)
   assert.ok(extra.evidence.every(e=>!tool.evidence.some(t=>t.id===e.id)))
 })
+
+test('native shared projector recognizes result-only error flags without an explicit success field',()=>{
+  const result=projectNativeReviewWindow({
+    ...page,
+    observations:[
+      candidate('message.user',1,{text:'test'}),
+      candidate('tool.call',2,{callId:'flagged',nativeToolName:'shell'}),
+      candidate('tool.result',3,{callId:'flagged',isError:true,output:'denied'}),
+    ],
+    observationRecordIds:['user','call','result'],
+  })
+  const tool=result.interactions[0]?.nodes.find(node=>node.type==='tool')
+  assert.equal(tool?.type,'tool')
+  if(tool?.type==='tool'){
+    assert.equal(tool.status,'error')
+    assert.equal(tool.output,'denied')
+    assert.equal(tool.observationIds.length,2)
+  }
+  const success=projectNativeReviewWindow({
+    ...page,
+    observations:[
+      candidate('message.user',1,{text:'test'}),
+      candidate('tool.call',2,{callId:'status',nativeToolName:'shell'}),
+      candidate('tool.result',3,{callId:'status',status:'success',output:'ok'}),
+    ],
+    observationRecordIds:['user','call','result'],
+  })
+  assert.equal(success.interactions[0]?.nodes.find(node=>node.type==='tool')?.type,'tool')
+  const succeeded=success.interactions[0]?.nodes.find(node=>node.type==='tool')
+  if(succeeded?.type==='tool')assert.equal(succeeded.status,'success')
+})

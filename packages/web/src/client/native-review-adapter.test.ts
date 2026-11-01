@@ -3,7 +3,7 @@ import test from 'node:test'
 import type { AgentLensApi } from './api'
 import type { NativeReviewWindowDto, NativeSessionSummaryDto, ReviewNodeDto } from '@agent-lens/protocol'
 import { AgentLensClientModel } from './model'
-import { nativeReviewTitle, nativeReviewDetail, nativeReviewNextPage, nativeReviewObservedFileChanges, nativeVisibleWindowStatistics } from './native-review-adapter'
+import { nativeReviewTitle, nativeReviewDetail, nativeReviewNextPage, nativeReviewObservedFileChanges, nativeVisibleWindowStatistics, nativeReviewNodeIsFailure } from './native-review-adapter'
 
 const id='native:1234567890abcdef1234567890abcdef'
 const at='2026-10-25T00:00:00Z'
@@ -427,4 +427,22 @@ test('reused native tool call IDs stay unpaired rather than associating with the
     ['unknown','unknown'])
   assert.equal(nodes.find(node=>node.id==='ambiguous-result')?.type,'event')
   assert.equal(nativeVisibleWindowStatistics(merged.interactions).errorCount,1)
+})
+
+test('native Review failure statistics follow shared tool result status semantics',()=>{
+  const turn=page(1,true).interactions[0]!
+  const nodes:ReviewNodeDto[]=[
+    turn.nodes[0]!,{
+      type:'event',id:'flagged-error',at,sourceId:'pi',capturedAt:at,
+      kind:'tool.result',category:'unknown',label:'tool.result',
+      payload:{is_error:true},evidence:[],observationIds:['error'],
+    },{
+      type:'event',id:'flagged-success',at,sourceId:'pi',capturedAt:at,
+      kind:'tool.result',category:'unknown',label:'tool.result',
+      payload:{status:'completed'},evidence:[],observationIds:['success'],
+    },
+  ]
+  assert.equal(nativeReviewNodeIsFailure(nodes[1]!),true)
+  assert.equal(nativeReviewNodeIsFailure(nodes[2]!),false)
+  assert.equal(nativeVisibleWindowStatistics([{...turn,nodes}]).errorCount,1)
 })

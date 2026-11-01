@@ -262,6 +262,22 @@ export interface ReviewEventNodeDto extends ReviewNodeSourceDto {
 
 export type ReviewNodeDto = ReviewMessageNodeDto | ReviewToolNodeDto | ReviewEventNodeDto
 
+/** Source-agnostic terminal result classification used by both native and
+ * persisted Review. Contradictory failure evidence takes precedence over a
+ * success claim; an unrecognized status is never promoted to success. */
+export function reviewToolResultStatus(value: unknown): ReviewToolNodeDto['status'] {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return 'unknown'
+  const result = value as Record<string, unknown>
+  const status = typeof result.status === 'string' ? result.status.trim().toLowerCase() : ''
+  if (result.success === false || result.isError === true
+    || result.is_error === true || status === 'error' || status === 'failed'
+    || status === 'failure' || status === 'timeout') return 'error'
+  if (result.success === true || result.isError === false
+    || result.is_error === false || status === 'success' || status === 'ok'
+    || status === 'completed') return 'success'
+  return 'unknown'
+}
+
 export interface ReviewProcessSummaryDto {
   id: string
   /** Changes whenever the materialized turn facts used by this summary change. */
