@@ -394,11 +394,13 @@ export class NativeSessionReader {
   async findNativeToolResult(query:{
     sourceId:string;installationId:string;nativeSessionId:string
     cursor:SourceNativeSessionCursor;expectedSha256:string
-    fragmentOrdinal:number;callKey:string;limit?:number
+    fragmentOrdinal?:number;contentIndex?:number;callKey:string;limit?:number
     scanCursor?:SourceNativeSessionCursor;signal:AbortSignal
   }):Promise<SourceNativeToolLinkResult>{
     if(!this.capturePolicy.isSourceEnabled(query.sourceId))
       return {state:'unsupported',reason:'source-disabled'}
+    if((query.fragmentOrdinal===undefined)===(query.contentIndex===undefined))
+      return {state:'unsupported',reason:'invalid-native-tool-link-anchor'}
     if(!this.capturePolicy.isEnabled('tool'))
       return {state:'unsupported',reason:'native-tool-capture-disabled'}
     if(!this.storage.nativeSessionCatalog)
@@ -425,7 +427,9 @@ export class NativeSessionReader {
     const result=await source.findNativeToolResult({
       filePath:catalog.filePath,nativeSessionId:catalog.nativeSessionId,
       cursor:query.cursor,expectedSha256:query.expectedSha256,
-      fragmentOrdinal:query.fragmentOrdinal,callKey:query.callKey,
+      ...(query.fragmentOrdinal===undefined?{}:{fragmentOrdinal:query.fragmentOrdinal}),
+      ...(query.contentIndex===undefined?{}:{contentIndex:query.contentIndex}),
+      callKey:query.callKey,
       ...(query.scanCursor?{scanCursor:query.scanCursor}:{}),
       ...(query.limit===undefined?{}:{limit:query.limit}),
     },{
