@@ -460,7 +460,8 @@ export class NativeSessionReader {
       // The shared CapturePolicy knows which object keys (token, password,
       // credentials, etc.) are sensitive. Recreate only the bounded field
       // ancestry, NOT a SourceRecord or the entire tool arguments object.
-      const keys=fragment.kind==='tool-call'?fieldKeys??[]:[]
+      const keys=fragment.kind==='tool-call'||fragment.kind==='tool-result'
+        ?fieldKeys??[]:[]
       const input=keys.reduceRight<unknown>(
         (value,key)=>({[key]:value}),fragment.text)
       const captured=this.capturePolicy.capture(scope,input,{maxText:12_000})
