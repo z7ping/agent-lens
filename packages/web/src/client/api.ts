@@ -36,6 +36,7 @@ import {
   type NativeSessionSummaryDto,
   type NativeReviewWindowResponseDto,
   type NativeRecordTextFragmentsResponseDto,
+  type NativeOversizedRecordLocateResponseDto,
   type NativeReviewTurnIndexResponseDto,
   type ReviewDetailDirection,
   type ReviewDetailFilter,
@@ -459,6 +460,22 @@ export class AgentLensApi {
     return requestJson<NativeReviewWindowResponseDto>(
       `/api/v1/native-sessions/window?${params}`,
       options.signal ? { signal: options.signal } : {},
+    )
+  }
+
+  /** Locate an oversized JSONL record in a bounded metadata-only window.
+   * The server resolves the Catalog path; no physical filenames leave it.
+   */
+  locateOversizedNativeRecord(id:string,options:{
+    cursor?:string;limit?:number;signal?:AbortSignal
+  }={}):Promise<NativeOversizedRecordLocateResponseDto>{
+    const params=new URLSearchParams()
+    if(options.cursor)params.set('cursor',options.cursor)
+    if(options.limit!==undefined)params.set('limit',String(Math.max(1,Math.min(8,options.limit))))
+    const query=params.toString()
+    return requestJson<NativeOversizedRecordLocateResponseDto>(
+      `/api/v1/native-sessions/${encodeURIComponent(id)}/record-fragments/locate${query?`?${query}`:''}`,
+      options.signal?{signal:options.signal}:{},
     )
   }
 

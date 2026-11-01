@@ -11,7 +11,8 @@ import {
   type AgentLensContext,
 } from '@agent-lens/runtime-cordis'
 import { readAuthorizedNativeJsonlEntry, readNativeSessionWindow,
-  readNativeJsonlTextFragments, verifyJsonlLineSha256 } from '@agent-lens/source-support'
+  readNativeJsonlTextFragments, inspectNativeSessionRecordSpan,
+  authorizeNativeSessionPath, verifyJsonlLineSha256 } from '@agent-lens/source-support'
 import { discoverPiAssets, piAssetInternals } from './assets'
 import { PI_PARSER_VERSION, PI_SOURCE_ID } from './constants'
 import { normalizePiRecord } from './normalize'
@@ -229,6 +230,65 @@ export const piSourceDefinition: SourceDefinition = {
       hasMore: page.hasMore,
       pendingTail: page.pendingTail,
     }
+  },
+  async locateOversizedRecord(query,ctx) {
+    const limit=query.limit??8
+    if(!Number.isSafeInteger(limit)||limit<1||limit>8)
+      return {state:'unsupported' as const,reason:'invalid-oversized-search-limit'}
+    ctx.abortSignal.throwIfAborted()
+    const roots=ctx.installation.dataRoot?[ctx.installation.dataRoot]:[]
+    const auth=await authorizeNativeSessionPath(query.filePath,roots)
+    if(auth.state!=='authorized')return auth
+    const header=await readPiSessionMetadata(auth.sourcePath)
+    if(header.nativeSessionId!==query.nativeSessionId)
+      return {state:'drifted' as const,reason:'native-session-identity-changed'}
+    const original=await stat(auth.sourcePath)
+    if(!original.isFile())return {state:'unsupported' as const,reason:'native-source-is-not-a-file'}
+    let cursor=query.cursor
+    let inspectedBytes=0
+    for(let n=0;n<limit;n++){
+      ctx.abortSignal.throwIfAborted()
+      if(cursor && cursor.offset>=original.size)
+        return {state:'end' as const}
+      const inspected=await inspectNativeSessionRecordSpan({
+        path:query.filePath,allowedRoots:roots,
+        ...(cursor?{cursor}:{}),signal:ctx.abortSignal,
+      })
+      if(inspected.state!=='available')return inspected
+      const {span}=inspected
+      const startCursor={
+        offset:span.offset,sequence:cursor?.sequence??0,
+        fileIdentity:span.fileIdentity,boundaryHash:span.boundaryHash,
+      }
+      if(span.oversized){
+        // Do not offer a cursor for malformed JSON or a rewritten source.
+        // This read yields no raw text outside the Source adapter.
+        const checked=await readNativeJsonlTextFragments({
+          path:query.filePath,allowedRoots:roots,cursor:startCursor,
+          expectedSha256:span.sha256,limit:1,signal:ctx.abortSignal,
+        })
+        if(checked.state!=='available')return checked
+        const last=await stat(query.filePath)
+        if(!last.isFile()||last.size!==original.size
+          ||last.mtimeMs!==original.mtimeMs
+          ||last.dev!==original.dev||last.ino!==original.ino)
+          return {state:'drifted' as const,reason:'native-file-changed-after-scan'}
+        return {state:'found' as const,
+          cursor:{...startCursor,recordFingerprint:checked.record.sourceLineSha256},
+          recordSha256:checked.record.recordSha256,
+          hasText:checked.record.totalTextFragments>0,
+          ...(checked.record.nativeEventId?{nativeEventId:checked.record.nativeEventId}:{})
+        }
+      }
+      inspectedBytes+=span.nextOffset-span.offset
+      cursor={offset:span.nextOffset,sequence:startCursor.sequence+1,
+        fileIdentity:span.fileIdentity,boundaryHash:span.endBoundaryHash}
+      if(inspectedBytes>=8*1024*1024)
+        return {state:'more' as const,nextCursor:cursor}
+    }
+    return cursor&&cursor.offset>=original.size
+      ?{state:'end' as const}
+      :{state:'more' as const,nextCursor:cursor!}
   },
   async readNativeTextFragments(query,ctx) {
     const result=await readNativeJsonlTextFragments({
