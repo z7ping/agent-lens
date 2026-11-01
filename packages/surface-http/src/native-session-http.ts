@@ -280,7 +280,17 @@ async function readCompleteNativeTurn(
     }
     previousOffset = current.nextCursor.offset
     const next = await reader.read({ ...query, cursor: current.nextCursor })
-    if (next.state !== 'available') return next
+    if (next.state !== 'available') {
+      // The verified prefix is still useful even when the *next* physical
+      // record exceeds the normal JSONL materialization limit. Preserve the
+      // exact cursor at that unread record and mark this turn incomplete.
+      // Nothing after the oversized record has been observed or skipped.
+      if (next.state === 'unsupported' && next.reason === 'native-record-too-large'
+        && observations.length > 0) {
+        return finish(current.nextCursor, true, true)
+      }
+      return next
+    }
     if (next.nextCursor.fileIdentity !== current.nextCursor.fileIdentity) {
       return { state: 'drifted', reason: 'native-review-file-identity-changed' }
     }
@@ -329,6 +339,7 @@ async function readCompleteNativeTurns(
         'native-review-turn-pending-tail',
         'native-review-turn-exceeds-budget',
         'native-review-request-page-budget',
+        'native-record-too-large',
       ].includes(next.reason)
       if (assembled && incomplete && assembled.hasMore) {
         return {state:'available',dto:assembled}
@@ -373,7 +384,15 @@ async function readCompleteNativeTurns(
     ordinal = cursor.turnOrdinal
     queryAt = { ...query, cursor }
     const incoming = await boundedReader.read(queryAt)
-    if (incoming.state !== 'available') return incoming
+    if (incoming.state !== 'available') {
+      // A subsequent oversized turn cannot erase already proven complete
+      // turns in the HTTP response. The assembled cursor points to the
+      // untouched oversized SourceRecord, not a manufactured next turn.
+      if (incoming.state === 'unsupported'
+        && incoming.reason === 'native-record-too-large'
+        && assembled?.hasMore) return {state:'available',dto:assembled}
+      return incoming
+    }
     if (incoming.nextCursor.fileIdentity !== cursor.fileIdentity) {
       return { state: 'drifted', reason: 'native-review-file-identity-changed' }
     }
