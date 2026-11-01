@@ -75,6 +75,7 @@ export async function handleNativeRecordFragmentsRequest(
       ...(result.record.role?{role:result.record.role}:{}),
       fragments:result.record.fragments,
       totalTextFragments:result.record.totalTextFragments,
+      ...(result.record.images?{images:result.record.images}:{}),
       ...(result.record.nextFragmentOffset===undefined?{}:{
         nextFragmentOffset:result.record.nextFragmentOffset,
       }),
