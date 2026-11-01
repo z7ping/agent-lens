@@ -881,5 +881,6 @@ test('verified native block metadata never bypasses tool and image CapturePolicy
   if(noMedia.state==='available'){
     assert.deepEqual(noMedia.record.images,[])
     assert.equal(noMedia.record.contentBlocks?.some(x=>x.kind==='image'),false)
+    assert.equal(noMedia.record.contentBlocks?.[0]?.suppressed,true)
   }
 })
