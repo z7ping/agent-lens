@@ -187,6 +187,13 @@ export type NativeRecordTextFragmentsResponseDto =
       valueType?:'string'|'number'|'boolean'|'null'
       redactionApplied?:boolean;suppressed?:boolean;splitScalar?:boolean}>
     totalTextFragments:number;nextFragmentOffset?:number
+    /** Sanitized bounded outline of original content[] objects (not events). */
+    contentBlocks?:Array<{
+      contentIndex:number;kind:'text'|'thinking'|'tool-call'|'image'|'other'
+      fragmentCount:number;name?:string;callKey?:string
+      redactionApplied?:boolean;suppressed?:boolean
+    }>
+    contentBlocksTruncated?:boolean
     images?:Array<{contentIndex:number;mimeType:string}>
     imagesTruncated?:boolean}
   | {state:'pending'|'unavailable'|'drifted'|'unsupported';reason:string}
