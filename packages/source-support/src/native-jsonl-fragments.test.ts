@@ -444,7 +444,8 @@ test('oversized Pi JSONL certifies ordered content blocks without reassembling i
       {contentIndex:0,kind:'text',fragmentCount:1},
       {contentIndex:1,kind:'thinking',fragmentCount:1},
       {contentIndex:2,kind:'tool-call',fragmentCount:2,name:'read_file',
-        callKey:createHash('sha256').update(id).digest('hex')},
+        callKey:createHash('sha256').update(id).digest('hex'),
+        nativeCallId:id,verifiedArguments:{path:'README.md',attempts:2}},
       {contentIndex:3,kind:'image',fragmentCount:0},
       {contentIndex:4,kind:'other',fragmentCount:0},
     ])
@@ -496,7 +497,8 @@ test('overlong optional tool display names cannot erase other certified native c
     if(result.state!=='available')return
     assert.deepEqual(result.record.contentBlocks,[
       {contentIndex:0,kind:'tool-call',fragmentCount:1,
-        callKey:createHash('sha256').update('trusted-id').digest('hex')},
+        callKey:createHash('sha256').update('trusted-id').digest('hex'),
+        nativeCallId:'trusted-id',verifiedArguments:{file:'readme'}},
       {contentIndex:1,kind:'text',fragmentCount:1},
     ])
     assert.deepEqual(result.record.fragments.map(x=>x.text),['readme','done'])
@@ -555,7 +557,6 @@ test('native oversized tool arguments preserve exact bounded flat scalar types a
     assert.deepEqual(block?.verifiedArguments,
       {file:'README.md',count:2,enabled:true,optional:null})
     for(const unsupported of [
-      {nested:{path:'README.md'}},{items:['a','b']},
       {deep:'x'.repeat(16_000)},
     ]){
       await writeFile(path,make(unsupported)+'\n')
@@ -566,6 +567,70 @@ test('native oversized tool arguments preserve exact bounded flat scalar types a
       if(result.state==='available')
         assert.equal(result.record.strictLargeAssistantShape,false,
           'nested, arrays and over-budget scalars cannot be considered complete')
+    }
+  }finally{await rm(root,{recursive:true,force:true})}
+})
+
+test('verified original Pi nested tool arguments preserve arrays, nulls and structures within strict budgets',async()=>{
+  const root=await mkdtemp(join(tmpdir(),'agent-lens-native-nested-args-'))
+  const path=join(root,'session.jsonl')
+  try{
+    const args={
+      files:[{path:'README.md',options:{encoding:'utf8',retry:2}},
+        {path:'src/a.ts',flags:[true,false,null]}],
+      filters:{exclude:['node_modules','dist'],limit:12.5},
+      empty:{},emptyList:[],
+    }
+    const input=JSON.stringify({type:'message',id:'nested-original',message:{
+      role:'assistant',content:[
+        {type:'toolCall',id:'call:nested',name:'files',arguments:args},
+        {type:'image',mimeType:'image/png',data:'A'.repeat(2_250_000)},
+      ],
+    }})
+    await writeFile(path,input+'\n')
+    const read=await readNativeJsonlTextFragments({
+      path,allowedRoots:[root],limit:16,
+    })
+    assert.equal(read.state,'available')
+    if(read.state!=='available')return
+    assert.equal(read.record.strictLargeAssistantShape,true)
+    assert.deepEqual(read.record.contentBlocks[0]?.verifiedArguments,args)
+    assert.equal(read.record.contentBlocks[0]?.nativeCallId,'call:nested')
+    assert.equal(read.record.contentBlocks[0]?.fragmentCount,10)
+    assert.equal(JSON.stringify(read.record).includes('A'.repeat(128)),false)
+  }finally{await rm(root,{recursive:true,force:true})}
+})
+
+test('unsafe nested tool arguments fail closed on duplicate keys, prototype keys, nesting and budgets',async()=>{
+  const root=await mkdtemp(join(tmpdir(),'agent-lens-native-nested-invalid-'))
+  const path=join(root,'session.jsonl')
+  try{
+    const image='"type":"image","mimeType":"image/png","data":"'+
+      'A'.repeat(2_250_000)+'"'
+    const wrap=(args:string)=>'{"type":"message","id":"nested-invalid",'+
+      '"message":{"role":"assistant","content":[{"type":"toolCall",'+
+      '"id":"original-id","name":"files","arguments":'+args+
+      '},{'+image+'}]}}'
+    const deeplyNested=Array.from({length:14},()=> '{"child":').join('')+
+      'null'+'}'.repeat(14)
+    const manyNodes=JSON.stringify({values:Array.from({length:300},(_,i)=>i)})
+    const cases=[
+      '{"inner":{"x":1,"x":2}}',
+      '{"inner":{"__proto__":"unsafe"}}',
+      '{"inner":{"constructor":"unsafe"}}',
+      '{"inner":{"prototype":"unsafe"}}',
+      deeplyNested,manyNodes,
+      JSON.stringify({huge:'x'.repeat(12_001)}),
+      '{"value":9007199254740993}',
+    ]
+    for(const [index,args] of cases.entries()){
+      await writeFile(path,wrap(args)+'\n')
+      const value=await readNativeJsonlTextFragments({
+        path,allowedRoots:[root],limit:16,
+      })
+      assert.equal(value.state,'available','case '+index)
+      if(value.state==='available')
+        assert.equal(value.record.strictLargeAssistantShape,false,'case '+index)
     }
   }finally{await rm(root,{recursive:true,force:true})}
 })

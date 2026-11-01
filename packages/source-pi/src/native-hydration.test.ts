@@ -778,3 +778,52 @@ test('a giant Pi assistant image record retains bounded nonempty tool arguments'
     assert.equal(JSON.stringify(oversized.records[0]?.payload).includes('A'.repeat(256)),false)
   }finally{await rm(root,{recursive:true,force:true})}
 })
+
+test('oversized Pi assistant with bounded nested tool arguments reaches the existing normalizer unchanged',async()=>{
+  const root=await mkdtemp(join(tmpdir(),'agent-lens-pi-native-nested-args-'))
+  const file=join(root,'session.jsonl')
+  const header=JSON.stringify({type:'session',id:'nested-args-session'})
+  const argumentsValue={paths:['README.md','src/index.ts'],options:{
+    recursive:true,filters:[{name:'test',enabled:false},
+      {name:'build',enabled:true}],limit:4.5,comment:null,
+  }}
+  const content=JSON.stringify({type:'message',id:'assistant-nested',message:{
+    role:'assistant',content:[
+      {type:'toolCall',id:'native-tool-nested',name:'read',
+        arguments:argumentsValue},
+      {type:'image',mimeType:'image/png',data:'A'.repeat(2_300_000)},
+    ],
+  }})
+  const ts='2026-11-01T00:00:00Z'
+  const host={id:'host',name:'host',platform:process.platform,arch:process.arch,
+    createdAt:ts,lastSeenAt:ts}
+  const installation={id:'nested-source',hostId:'host',productId:'pi',
+    dataRoot:root,firstSeenAt:ts,lastSeenAt:ts}
+  const ctx:SourceRawRecoveryContext={host,installation,
+    abortSignal:new AbortController().signal,
+    checkpoint:{async get(){return null},async set(){throw Error('read-only')},
+      async clear(){throw Error('read-only')}},
+  }
+  try{
+    await writeFile(file,[header,content].join('\n')+'\n')
+    const first=await piSourceDefinition.readNativeSessionPage!({
+      filePath:file,nativeSessionId:'nested-args-session',limit:1},ctx)
+    assert.equal(first.state,'available')
+    if(first.state!=='available')return
+    const oversized=await piSourceDefinition.readNativeSessionPage!({
+      filePath:file,nativeSessionId:'nested-args-session',
+      cursor:first.nextCursor,limit:1},ctx)
+    assert.equal(oversized.state,'available')
+    if(oversized.state!=='available')return
+    assert.equal(oversized.records[0]?.fingerprint,hash(content))
+    assert.ok(JSON.stringify(oversized.records[0]?.payload).length<4096)
+    const normalized=await piSourceDefinition.normalize(oversized.records[0]!,{
+      host,installation,
+    })
+    const call=normalized.observations.find(x=>x.kind==='tool.call')
+    assert.equal(call?.nativeCallId,'native-tool-nested')
+    assert.deepEqual((call?.payload as {input:unknown}).input,argumentsValue)
+    assert.ok(normalized.evidenceCandidates.some(x=>
+      x.sourceRecordId===oversized.records[0]!.id))
+  }finally{await rm(root,{recursive:true,force:true})}
+})
