@@ -159,7 +159,7 @@ function MessageBubble({
       model={thinking}
       meta={<EvidenceBadges evidence={node.evidence} compact/>}
       actions={node.evidence.length > 0 ? <button className="evidence-link" onClick={() => inspect(node)}>{t('local.evidence.allEvidence', { count: node.evidence.length })}</button> : undefined}
-      nested={nestedTools.length > 0 ? <ReviewToolGroupAdapter items={nestedTools} inspect={inspect} expansionStore={expansionStore}/> : undefined}
+      nested={nestedTools.length > 0 ? <ReviewToolGroupAdapter sessionId={sessionId} items={nestedTools} inspect={inspect} expansionStore={expansionStore}/> : undefined}
     />
   }
 
@@ -234,7 +234,10 @@ function reviewToolModel(node: ReviewToolNodeDto): TaskToolModel {
   }
 }
 
-function ReviewToolGroupAdapter({ items, inspect, expansionStore }: { items: ReviewToolNodeDto[]; inspect(node: ReviewNodeDto): void; expansionStore?: Map<string, boolean> | undefined }) {
+function ReviewToolGroupAdapter({sessionId,items,inspect,expansionStore}:{
+  sessionId:string;items:ReviewToolNodeDto[];inspect(node:ReviewNodeDto):void
+  expansionStore?:Map<string,boolean>|undefined
+}) {
   const { t } = useTranslation('task')
   const tools = items.map(reviewToolModel)
   const byId = new Map(items.map(node => [node.id, node] as const))
@@ -252,6 +255,10 @@ function ReviewToolGroupAdapter({ items, inspect, expansionStore }: { items: Rev
     renderMeta={tool => {
       const node = byId.get(tool.id)
       return node ? <EvidenceBadges evidence={node.evidence} compact/> : undefined
+    }}
+    renderDetails={tool=>{
+      const body=byId.get(tool.id)?.nativeLazyResult
+      return body?<NativeToolResultPager sessionId={sessionId} body={body}/>:undefined
     }}
     onToolClick={tool => {
       const node = byId.get(tool.id)
@@ -301,6 +308,7 @@ function reviewProcessTiming(items: ReviewProcessPresentationItem[]): { startedA
 }
 
 export function ReviewProcessGroup({
+  sessionId,
   id,
   items,
   summary,
@@ -313,6 +321,7 @@ export function ReviewProcessGroup({
   onExpandedChange,
   onRetry,
 }: {
+  sessionId:string
   id: string
   items: ReviewProcessPresentationItem[]
   summary?: ReviewProcessSummaryDto
@@ -350,6 +359,9 @@ export function ReviewProcessGroup({
         key: node.id,
         tool: reviewToolModel(node),
         meta: <EvidenceBadges evidence={node.evidence} compact/>,
+        ...(node.nativeLazyResult?{details:
+          <NativeToolResultPager sessionId={sessionId} body={node.nativeLazyResult}/>}
+          :{}),
         onToolClick: () => inspect(node),
       }))]
     }
@@ -626,7 +638,7 @@ export function ReviewRoundAdapter({
       ? entry.items : [])
 
   const renderEntry = (entry: ReviewInteractionPresentationEntry, index: number) => {
-    if (entry.type === 'tool-group') return <ReviewToolGroupAdapter key={`tools-${index}`} items={entry.items} inspect={inspect} expansionStore={expansionStore}/>
+    if (entry.type === 'tool-group') return <ReviewToolGroupAdapter sessionId={sessionId} key={`tools-${index}`} items={entry.items} inspect={inspect} expansionStore={expansionStore}/>
     if (entry.type === 'runtime-event-group') return null
     if (entry.type === 'raw-event-group') {
       if (entry.items.every(isSessionTitleUpdate)) return null
@@ -642,7 +654,7 @@ export function ReviewRoundAdapter({
   }
 
   const processGroup = (effectiveSummary?.itemCount || (effectiveSummary && !['complete', 'available'].includes(effectiveSummary.availability)))
-    ? <ReviewProcessGroup
+    ? <ReviewProcessGroup sessionId={sessionId}
         id={effectiveSummary.id}
         items={processEntry?.items ?? []}
         summary={effectiveSummary}
@@ -656,7 +668,7 @@ export function ReviewRoundAdapter({
         onRetry={requestProcess}
       />
     : processEntry
-      ? <ReviewProcessGroup id={processEntry.id} items={processEntry.items} inspect={inspect} state={resolvedProcessState} showAllEvents={showAllEvents} expansionStore={expansionStore}/>
+      ? <ReviewProcessGroup sessionId={sessionId} id={processEntry.id} items={processEntry.items} inspect={inspect} state={resolvedProcessState} showAllEvents={showAllEvents} expansionStore={expansionStore}/>
       : null
 
   return <TaskReadingRound
