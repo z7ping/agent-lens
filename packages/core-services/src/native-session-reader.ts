@@ -7,6 +7,7 @@ import type {
   SourceCheckpointService,
   NativeSessionCatalogStore,
   SourceNativeSessionCursor,
+  SourceNativeTextFragmentResult,
   SourceService,
   StorageService,
 } from '@agent-lens/core'
@@ -334,6 +335,64 @@ export class NativeSessionReader {
       evidenceCandidates:[],
       nextCursor:page.nextCursor,hasMore:page.hasMore,pendingTail:false,
     }
+  }
+
+  /** Catalog-authorized one-record fragment read. Raw Source leaves are
+   * allowed only inside this trusted boundary; output always uses the shared
+   * prompt/tool CapturePolicy. No event writer or checkpoint is involved.
+   */
+  async readTextFragments(query:{
+    sourceId:string;installationId:string;nativeSessionId:string
+    cursor:SourceNativeSessionCursor;expectedSha256?:string
+    fragmentOffset?:number;limit?:number;signal:AbortSignal
+  }):Promise<SourceNativeTextFragmentResult>{
+    if(!this.capturePolicy.isSourceEnabled(query.sourceId))
+      return {state:'unsupported',reason:'source-disabled'}
+    if(!this.storage.nativeSessionCatalog)
+      return {state:'unsupported',reason:'native-session-catalog-unavailable'}
+    query.signal.throwIfAborted()
+    const catalog=await this.storage.nativeSessionCatalog.get({
+      sourceId:query.sourceId,installationId:query.installationId,
+      nativeSessionId:query.nativeSessionId,locationKind:'native',
+    })
+    if(!catalog)return {state:'unavailable',reason:'native-session-not-indexed'}
+    if(catalog.fileIdentity!==query.cursor.fileIdentity)
+      return {state:'drifted',reason:'native-catalog-file-identity-changed'}
+    const source=this.sources.list().find(x=>x.manifest.sourceId===query.sourceId)
+    if(!source?.readNativeTextFragments)
+      return {state:'unsupported',reason:'native-fragments-unsupported-by-source'}
+    const installation=await this.storage.repositories.installations.get(query.installationId)
+    if(!installation||installation.productId!==source.manifest.productId)
+      return {state:'drifted',reason:'native-installation-identity-changed'}
+    const scoped=await this.sessionRoots(query,installation)
+    if(scoped.state!=='available')return scoped
+    const host=await this.storage.repositories.hosts.get(installation.hostId)
+    if(!host)return {state:'unavailable',reason:'native-source-host-unavailable'}
+    const result=await source.readNativeTextFragments({
+      filePath:catalog.filePath,nativeSessionId:catalog.nativeSessionId,cursor:query.cursor,
+      ...(query.expectedSha256?{expectedSha256:query.expectedSha256}:{}),
+      ...(query.fragmentOffset===undefined?{}:{fragmentOffset:query.fragmentOffset}),
+      ...(query.limit===undefined?{}:{limit:query.limit}),
+    },{
+      host,installation:scoped.installation,
+      ...(scoped.runtimeProfile?{runtimeProfile:scoped.runtimeProfile}:{}),
+      abortSignal:query.signal,checkpoint:readOnlyCheckpoint,
+    })
+    if(result.state!=='available')return result
+    if(result.record.fileIdentity!==catalog.fileIdentity
+      ||result.record.offset!==query.cursor.offset)
+      return {state:'drifted',reason:'native-record-identity-changed'}
+    const scope=result.record.role==='user'?'prompt':'tool'
+    const fragments=result.record.fragments.map(fragment=>{
+      const captured=this.capturePolicy.capture(scope,fragment.text,{maxText:12_000})
+      return {
+        ordinal:fragment.ordinal,
+        text:typeof captured.value==='string'?captured.value:'',
+        ...(captured.redactionApplied?{redactionApplied:true}:{}),
+        ...(captured.mode==='off'?{suppressed:true}:{}),
+      }
+    })
+    return {state:'available',record:{...result.record,fragments}}
   }
 
   async read(query: NativeSessionReadQuery): Promise<NativeSessionReadResult> {
