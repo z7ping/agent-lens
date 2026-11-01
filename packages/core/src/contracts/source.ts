@@ -240,6 +240,8 @@ export type SourceNativeTextFragmentResult =
       contentBlocks?:Array<{
         contentIndex:number;kind:'text'|'thinking'|'tool-call'|'image'|'other'
         fragmentCount:number;name?:string;callKey?:string
+        /** Source-private metadata, removed by Core before HTTP. */
+        nativeCallId?:string;emptyArguments?:boolean
         redactionApplied?:boolean;suppressed?:boolean
       }>
       contentBlocksTruncated?:boolean
