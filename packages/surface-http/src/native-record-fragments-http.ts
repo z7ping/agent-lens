@@ -86,7 +86,17 @@ export async function handleNativeRecordFragmentsRequest(
       const media=result.record.media
       if(!media||media.contentIndex!==imageIndex
         ||result.record.recordSha256!==expectedSha256
-        ||media.base64.length>mediaLimit){
+        ||!/^(image\/(png|jpeg|gif|webp))$/.test(media.mimeType)
+        ||!/^[A-Za-z0-9+/=]+$/.test(media.base64)
+        ||media.base64.length>mediaLimit
+        ||media.base64.length%4!==0
+        ||!Number.isSafeInteger(media.totalBase64Length)
+        ||media.totalBase64Length<4||media.totalBase64Length%4!==0
+        ||mediaOffset+media.base64.length>media.totalBase64Length
+        ||(media.nextOffset!==undefined
+          &&media.nextOffset!==mediaOffset+media.base64.length)
+        ||(media.nextOffset===undefined
+          &&mediaOffset+media.base64.length!==media.totalBase64Length)){
         writeJson(response,200,{state:'unsupported',reason:'native-inline-image-window-invalid'})
         return true
       }
