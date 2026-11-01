@@ -446,3 +446,16 @@ test('native Review failure statistics follow shared tool result status semantic
   assert.equal(nativeReviewNodeIsFailure(nodes[2]!),false)
   assert.equal(nativeVisibleWindowStatistics([{...turn,nodes}]).errorCount,1)
 })
+
+test('native oversized boundary is exposed only as a partial, source-owned fragment locator',()=>{
+  const partial:NativeReviewWindowDto={
+    ...page(1,true),boundaryIntegrity:'partial',turnFragment:'partial',
+    oversizedRecordSearchCursor:'opaque-source-verified-cursor',
+  }
+  const first=nativeReviewDetail(summary,partial)
+  assert.equal(first.nativeTurnIncomplete,true)
+  assert.equal(first.nativeOversizedRecordSearchCursor,'opaque-source-verified-cursor')
+  const next=nativeReviewNextPage(first,page(2,false))
+  assert.equal(next.nativeOversizedRecordSearchCursor,undefined,
+    'a newer complete native page must not retain stale oversized pointers')
+})

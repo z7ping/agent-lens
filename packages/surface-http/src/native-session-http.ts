@@ -117,6 +117,18 @@ type NativeTurnReadResult =
   | { state: 'available'; dto: NativeReviewWindowDto }
   | Extract<NativeSessionReadResult, { state: 'unsupported' | 'unavailable' | 'drifted' }>
 
+/** Only a Source-verified physical line boundary may seed the existing
+ * fragment-only locator. The next record SHA is not known here, so this
+ * cursor is NOT accepted as an already verified text-fragment cursor. */
+function oversizedLocatorCursor(cursor: SourceNativeSessionCursor): string | undefined {
+  if (!cursor.boundaryHash || !/^[0-9a-f]{64}$/.test(cursor.boundaryHash)) return undefined
+  return encodeNativeSessionCursor({
+    offset:cursor.offset,sequence:cursor.sequence,
+    fileIdentity:cursor.fileIdentity,boundaryHash:cursor.boundaryHash,
+    mode:'record-fragments',
+  })
+}
+
 function toolCallId(observation: ObservationCandidate): string | undefined {
   if (observation.nativeCallId) return observation.nativeCallId
   const payload = observation.payload
@@ -158,11 +170,12 @@ async function readCompleteNativeTurn(
 
   const finish = (
     nextCursor: SourceNativeSessionCursor, hasMore: boolean,
-    partial: boolean,
+    partial: boolean, oversizedBlocked = false,
   ): NativeTurnReadResult => {
     if (!sawUser || turnStart === undefined || observations.length === 0) {
       return { state: 'unsupported', reason: 'native-review-no-user-turn' }
     }
+    const oversizedSearchCursor = oversizedBlocked ? oversizedLocatorCursor(nextCursor) : undefined
     const base = projectNativeReviewWindow({
       sourceId: query.sourceId, installationId: query.installationId,
       nativeSessionId: query.nativeSessionId,
@@ -183,6 +196,7 @@ async function readCompleteNativeTurn(
         ...base,
         // A fragment is explicitly incomplete, never a proven finished turn.
         turnFragment: partial ? 'partial' : 'complete',
+        ...(oversizedSearchCursor ? {oversizedRecordSearchCursor:oversizedSearchCursor} : {}),
         nextCursor: encodeNativeSessionCursor({
           ...nextCursor,
           mode: 'review-turns',
@@ -287,7 +301,7 @@ async function readCompleteNativeTurn(
       // Nothing after the oversized record has been observed or skipped.
       if (next.state === 'unsupported' && next.reason === 'native-record-too-large'
         && observations.length > 0) {
-        return finish(current.nextCursor, true, true)
+        return finish(current.nextCursor, true, true, true)
       }
       return next
     }
@@ -390,7 +404,13 @@ async function readCompleteNativeTurns(
       // untouched oversized SourceRecord, not a manufactured next turn.
       if (incoming.state === 'unsupported'
         && incoming.reason === 'native-record-too-large'
-        && assembled?.hasMore) return {state:'available',dto:assembled}
+        && assembled?.hasMore) {
+        const searchCursor=oversizedLocatorCursor(cursor)
+        return {state:'available',dto:{
+          ...assembled,
+          ...(searchCursor?{oversizedRecordSearchCursor:searchCursor}:{}),
+        }}
+      }
       return incoming
     }
     if (incoming.nextCursor.fileIdentity !== cursor.fileIdentity) {

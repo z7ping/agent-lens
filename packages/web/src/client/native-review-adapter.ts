@@ -182,6 +182,8 @@ export function nativeReviewDetail(
     // only visible native observations; the header hides total metrics.
     statisticsCompleteness: 'window',
     ...(window.turnFragment === 'partial' ? {nativeTurnIncomplete:true} : {}),
+    ...(window.oversizedRecordSearchCursor
+      ? {nativeOversizedRecordSearchCursor:window.oversizedRecordSearchCursor} : {}),
     ...(window.hookEventsTruncated || window.hookFactsPartial
       ? {nativeHookEventsTruncated:true} : {}),
     interactions,

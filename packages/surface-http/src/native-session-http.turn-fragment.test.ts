@@ -136,7 +136,7 @@ test('oversized next physical record preserves verified same-turn prefix without
         observationRecordIds:['record-one'],
         observationCursors:[{offset:0,sequence:0,fileIdentity}],
         evidenceCandidates:[],
-        nextCursor:{offset:2,sequence:1,fileIdentity},
+        nextCursor:{offset:2,sequence:1,fileIdentity,boundaryHash:'a'.repeat(64)},
         hasMore:true,pendingTail:false,
       }
     },
@@ -165,6 +165,10 @@ test('oversized next physical record preserves verified same-turn prefix without
     const cursor=decodeNativeSessionCursor(page.nextCursor)
     assert.equal(cursor?.offset,2,'the original oversized SourceRecord was not skipped')
     assert.equal(cursor?.turnStart,0,'the partial turn retains its original user boundary')
+    const fallback=decodeNativeSessionCursor(page.oversizedRecordSearchCursor??null)
+    assert.equal(fallback?.mode,'record-fragments')
+    assert.equal(fallback?.offset,2)
+    assert.equal(fallback?.boundaryHash,'a'.repeat(64))
     const follow=await (await fetch(`${base}&cursor=${encodeURIComponent(page.nextCursor)}`)).json()
     assert.deepEqual(follow,{state:'unsupported',reason:'native-record-too-large'},
       'an unverified record is never rendered as a completed turn')
@@ -185,7 +189,8 @@ test('oversized following turn does not discard an earlier complete turn in a ba
       ]
       return {state:'available',observations:obs,
         observationRecordIds:['first','second'],
-        observationCursors:[0,1].map(offset=>({offset,sequence:offset,fileIdentity})),
+        observationCursors:[0,1].map(offset=>({offset,sequence:offset,fileIdentity,
+          boundaryHash:'b'.repeat(64)})),
         evidenceCandidates:[],
         nextCursor:{offset:2,sequence:2,fileIdentity},
         hasMore:true,pendingTail:false,
@@ -211,6 +216,10 @@ test('oversized following turn does not discard an earlier complete turn in a ba
     assert.deepEqual(result.interactions.map(x=>x.ordinal),[1])
     assert.equal(decodeNativeSessionCursor(result.nextCursor)?.offset,1)
     assert.equal(result.hasMore,true)
+    const blocked=decodeNativeSessionCursor(result.oversizedRecordSearchCursor??null)
+    assert.equal(blocked?.mode,'record-fragments')
+    assert.equal(blocked?.offset,1)
+    assert.equal(blocked?.boundaryHash,'b'.repeat(64))
   }finally{
     await new Promise<void>(resolve=>server.close(()=>resolve()))
   }

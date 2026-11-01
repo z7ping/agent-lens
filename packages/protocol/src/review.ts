@@ -341,6 +341,9 @@ export interface ReviewSessionDetailDto extends ReviewSessionSummaryDto {
   nativeHookEventsTruncated?: boolean
   /** The most recently loaded native turn has more content or an unproven EOF. */
   nativeTurnIncomplete?: boolean
+  /** Opaque record boundary where a complete-turn read was blocked; only
+   * the existing fragment-only fallback may consume this cursor. */
+  nativeOversizedRecordSearchCursor?: string
   interactions: ReviewInteractionDto[]
   interactionIndex?: ReviewInteractionIndexDto[]
   page: ReviewDetailPageDto
