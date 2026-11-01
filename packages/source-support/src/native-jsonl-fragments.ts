@@ -70,6 +70,9 @@ export interface NativeJsonlTextFragment {
   /** This text leaf spans multiple fragments; policy must not redact them
    * separately without taking token-boundary context into account. */
   splitScalar?:boolean
+  /** Source-private proof: all split boundaries separate non-ASCII codepoints.
+   * Hard secret redactors cannot match across those boundaries. */
+  safeSplitScalar?:boolean
 }
 
 export type NativeJsonlFragmentReadResult =
@@ -228,6 +231,7 @@ export async function readNativeJsonlTextFragments(input:{
     let textBuffer=''
     let textBytes=0
     let textPieces=0
+    let scalarSplitSafe=true
     let currentTextLeaf=0
     let nextTextLeaf=0
     const selectedLeafIds:number[]=[]
@@ -355,7 +359,15 @@ export async function readNativeJsonlTextFragments(input:{
       // complete JS code points, never within a surrogate pair.
       for(const codePoint of safe){
         const n=Buffer.byteLength(codePoint,'utf8')
-        if(textBytes+n>FRAGMENT_BYTES)flushText()
+        if(textBytes+n>FRAGMENT_BYTES){
+          const end=[...textBuffer].at(-1)
+          // Conservative: any ASCII/space/control at either edge might be
+          // part of an unbounded secret or path redaction pattern.
+          if(!end||end.codePointAt(0)!>127
+            ||codePoint.codePointAt(0)!>127)
+            scalarSplitSafe=false
+          flushText()
+        }
         textBuffer+=codePoint
         textBytes+=n
       }
@@ -507,6 +519,7 @@ export async function readNativeJsonlTextFragments(input:{
           if(stringKind==='text'||stringKind==='thinking'||stringKind==='argument'
             ||stringKind==='resultField'){
             currentTextLeaf=nextTextLeaf++;textPieces=0
+            scalarSplitSafe=true
           }
           return
         }
@@ -524,7 +537,11 @@ export async function readNativeJsonlTextFragments(input:{
             flushText()
             if(textPieces>1){
               for(let i=0;i<fragments.length;i++){
-                if(selectedLeafIds[i]===currentTextLeaf)fragments[i]!.splitScalar=true
+                if(selectedLeafIds[i]!==currentTextLeaf)continue
+                fragments[i]!.splitScalar=true
+                if(scalarSplitSafe&&textKind==='message'
+                  &&(role==='user'||role==='assistant'))
+                  fragments[i]!.safeSplitScalar=true
               }
             }
           }
