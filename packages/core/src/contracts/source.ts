@@ -233,6 +233,7 @@ export type SourceNativeTextFragmentResult =
         contentIndex?:number;callKey?:string
         /** Trusted Source -> Reader privacy context, forbidden on HTTP DTO. */
         fieldKeys?:string[];fieldKeysTooDeep?:boolean
+        valueType?:'string'|'number'|'boolean'|'null'
         redactionApplied?:boolean;suppressed?:boolean;splitScalar?:boolean}>
       totalTextFragments:number;nextFragmentOffset?:number
       images?:Array<{contentIndex:number;mimeType:string}>
