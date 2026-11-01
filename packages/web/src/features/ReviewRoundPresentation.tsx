@@ -13,12 +13,94 @@ import { projectTaskReading, type TaskReadingFact } from './task-reading-semanti
 import { TaskThinking } from './TaskThinking'
 import { TaskToolGroup, TaskProcessSequence, type TaskToolGroupSequenceEntry } from './TaskToolGroup'
 import { TaskSessionMessage, TaskSessionThinking, TaskSessionProcessText, TaskSessionProcess, taskSessionMessageTime } from './TaskSessionContent'
+import { ToolOutputContent } from './ToolOutputContent'
 import { agentLensI18n } from '../i18n/runtime'
 import { taskUserRequestText, type TaskRoundModel, type TaskThinkingModel, type TaskToolModel } from './task-detail-model'
 import { formatClock, duration, elapsed } from './review-session-format'
 import { brief, EvidenceBadges, sourceEventSummary, toolPresentation, toolOutputText } from './ReviewEvidenceInspector'
 
 const taskFileApi = new AgentLensApi()
+
+type VerifiedNativeBodyRef = NonNullable<ReviewMessageNodeDto['nativeLazyText']>
+
+/** One SHA-bound on-demand text reader for native message and tool-result
+ * facts. The UI keeps only a single 16-fragment page in memory.
+ */
+function useNativeTextWindow(sessionId:string,ref:VerifiedNativeBodyRef|undefined,
+  expectedKind:'message'|'tool-result'){
+  const [page,setPage]=useState<{offset:number;text:string;nextOffset?:number}|null>(null)
+  const [loading,setLoading]=useState(false)
+  const [error,setError]=useState<string|undefined>()
+  const controllerRef=useRef<AbortController|null>(null)
+  useEffect(()=>{
+    controllerRef.current?.abort()
+    setPage(null);setLoading(false);setError(undefined)
+    return ()=>controllerRef.current?.abort()
+  },[sessionId,ref?.cursor,ref?.recordSha256,expectedKind])
+  const load=async(offset:number)=>{
+    if(!ref||loading||offset<0)return
+    controllerRef.current?.abort()
+    const controller=new AbortController()
+    controllerRef.current=controller
+    setLoading(true);setError(undefined)
+    try{
+      const result=await taskFileApi.nativeRecordTextFragments(sessionId,{
+        cursor:ref.cursor,expectedSha256:ref.recordSha256,
+        fragmentOffset:offset,limit:16,signal:controller.signal,
+      })
+      if(controller.signal.aborted)return
+      if(result.state!=='available')throw new Error(result.reason)
+      if(result.coverage!=='fragment-only'||result.sessionId!==sessionId
+        ||result.recordSha256!==ref.recordSha256
+        ||result.totalTextFragments!==ref.totalTextFragments
+        ||!result.fragments.length||result.fragments.length>16
+        ||result.fragments.some((piece,index)=>piece.ordinal!==offset+index
+          ||piece.kind!==expectedKind||piece.contentIndex!==undefined
+          ||piece.suppressed)
+        ||(result.nextFragmentOffset!==undefined
+          &&result.nextFragmentOffset!==offset+result.fragments.length))
+        throw new Error('native-body-evidence-mismatch')
+      setPage({offset,text:result.fragments.map(piece=>piece.text).join(''),
+        ...(result.nextFragmentOffset===undefined?{}:{
+          nextOffset:result.nextFragmentOffset})})
+    }catch(err){
+      if(!controller.signal.aborted)
+        setError(err instanceof Error?err.message:String(err))
+    }finally{
+      if(controllerRef.current===controller){
+        controllerRef.current=null
+        setLoading(false)
+      }
+    }
+  }
+  return {page,loading,error,load}
+}
+
+function NativeToolResultPager({sessionId,body}:{
+  sessionId:string
+  body:NonNullable<ReviewToolNodeDto['nativeLazyResult']>
+}){
+  const {t}=useTranslation('review')
+  const {page,loading,error,load}=useNativeTextWindow(sessionId,body,'tool-result')
+  return <>
+    {page&&<ToolOutputContent text={page.text} highlight={false}/>}
+    {page&&<span>{t('local.roundNav.nativeBodyWindow',{
+      from:page.offset+1,
+      to:Math.min(page.offset+16,body.totalTextFragments),
+      total:body.totalTextFragments,
+    })}</span>}
+    {page&&page.offset>0&&<Button size="small" disabled={loading}
+      onClick={()=>void load(Math.max(0,page.offset-16))}>
+      {t('local.roundNav.nativeBodyPrevious')}
+    </Button>}
+    {(!page||page.nextOffset!==undefined)&&<Button size="small"
+      disabled={loading} onClick={()=>void load(page?.nextOffset??0)}>
+      {loading?t('local.roundNav.querying'):
+        page?t('local.roundNav.nativeBodyNext'):t('local.roundNav.nativeBodyLoad')}
+    </Button>}
+    {error&&<span role="alert">{error}</span>}
+  </>
+}
 
 function MessageBubble({
   sessionId,
@@ -48,60 +130,8 @@ function MessageBubble({
 }) {
   const { t } = useTranslation('review')
   const [attachments, setAttachments] = useState<ReviewMessageAttachmentDto[]>(node.attachments ?? [])
-  const [nativeBody,setNativeBody]=useState<{
-    offset:number;text:string;nextOffset?:number
-  }|null>(null)
-  const [bodyLoading,setBodyLoading]=useState(false)
-  const [bodyError,setBodyError]=useState<string|undefined>()
-  const bodyAbort=useRef<AbortController|null>(null)
-  useEffect(()=>{
-    bodyAbort.current?.abort()
-    setNativeBody(null)
-    setBodyLoading(false)
-    setBodyError(undefined)
-    return ()=>bodyAbort.current?.abort()
-  },[node.id,node.nativeLazyText?.recordSha256])
-  const loadNativeBody=async(offset:number)=>{
-    const verified=node.nativeLazyText
-    if(!verified||bodyLoading||offset<0)return
-    bodyAbort.current?.abort()
-    const controller=new AbortController()
-    bodyAbort.current=controller
-    setBodyLoading(true)
-    setBodyError(undefined)
-    try{
-      const result=await taskFileApi.nativeRecordTextFragments(sessionId,{
-        cursor:verified.cursor,expectedSha256:verified.recordSha256,
-        fragmentOffset:offset,limit:16,signal:controller.signal,
-      })
-      if(controller.signal.aborted)return
-      if(result.state!=='available')throw new Error(result.reason)
-      if(result.coverage!=='fragment-only'
-        ||result.sessionId!==sessionId
-        ||result.recordSha256!==verified.recordSha256
-        ||result.totalTextFragments!==verified.totalTextFragments
-        ||!result.fragments.length||result.fragments.length>16
-        ||result.fragments.some((piece,index)=>piece.ordinal!==offset+index
-          ||piece.kind!=='message'||piece.contentIndex!==undefined
-          ||piece.suppressed)
-        ||(result.nextFragmentOffset!==undefined
-          &&result.nextFragmentOffset!==offset+result.fragments.length))
-        throw new Error('native-body-evidence-mismatch')
-      setNativeBody({
-        offset,text:result.fragments.map(piece=>piece.text).join(''),
-        ...(result.nextFragmentOffset===undefined
-          ?{}:{nextOffset:result.nextFragmentOffset}),
-      })
-    }catch(error){
-      if(!controller.signal.aborted)
-        setBodyError(error instanceof Error?error.message:String(error))
-    }finally{
-      if(bodyAbort.current===controller){
-        bodyAbort.current=null
-        setBodyLoading(false)
-      }
-    }
-  }
+  const {page:nativeBody,loading:bodyLoading,error:bodyError,
+    load:loadNativeBody}=useNativeTextWindow(sessionId,node.nativeLazyText,'message')
 
   useEffect(() => {
     setAttachments(node.attachments ?? [])
