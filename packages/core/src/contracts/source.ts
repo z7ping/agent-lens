@@ -234,6 +234,7 @@ export type SourceNativeTextFragmentResult =
         redactionApplied?:boolean;suppressed?:boolean;splitScalar?:boolean}>
       totalTextFragments:number;nextFragmentOffset?:number
       images?:Array<{contentIndex:number;mimeType:string}>
+      imagesTruncated?:boolean
       media?:{contentIndex:number;mimeType:string;base64:string
         totalBase64Length:number;nextOffset?:number}
     }}
