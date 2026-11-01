@@ -224,7 +224,7 @@ export async function readNativeJsonlTextFragments(input:{
       keys:Set<string>;argumentsEmpty?:boolean
       verifiedArguments?:Record<string,NativeJsonlArgumentValue>
       argumentContainers?:Map<string,Record<string,NativeJsonlArgumentValue>|NativeJsonlArgumentValue[]>
-      argsValid?:boolean;argNodeCount?:number}|undefined
+      argsValid?:boolean;argNodeCount?:number;argBytes?:number}|undefined
     const contentBlocks:NativeJsonlContentBlock[]=[]
     let contentBlocksTruncated=false
     const images:NativeInlineImageInfo[]=[]
@@ -346,13 +346,20 @@ export async function readNativeJsonlTextFragments(input:{
       container=false)=>{
       const block=currentBlock
       if(!block||!isArgumentPath(path)||path.length<5||!block.argsValid)return
+      block.argNodeCount=(block.argNodeCount??0)+1
+      const key=path[path.length-1]
+      block.argBytes=(block.argBytes??0)
+        +Buffer.byteLength(JSON.stringify(value),'utf8')
+        +(typeof key==='string'?Buffer.byteLength(key,'utf8')+4:2)
       if(path.length>4+MAX_TOOL_ARG_DEPTH
-        ||++block.argNodeCount!>MAX_TOOL_ARG_NODES){
+        ||block.argNodeCount>MAX_TOOL_ARG_NODES
+        ||block.argBytes>MAX_TOOL_ARG_BYTES){
         block.argsValid=false
+        block.verifiedArguments=undefined
+        block.argumentContainers?.clear()
         return
       }
       const parent=block.argumentContainers?.get(JSON.stringify(path.slice(0,-1)))
-      const key=path[path.length-1]
       if(!parent||key===undefined){block.argsValid=false;return}
       if(Array.isArray(parent)){
         if(typeof key!=='number'||key!==parent.length){
@@ -469,6 +476,7 @@ export async function readNativeJsonlTextFragments(input:{
             currentBlock.argsValid=name==='startObject'
             currentBlock.argumentsEmpty=true
             currentBlock.argNodeCount=0
+            currentBlock.argBytes=0
             if(name==='startObject'){
               const root:Record<string,NativeJsonlArgumentValue>={}
               currentBlock.verifiedArguments=root
