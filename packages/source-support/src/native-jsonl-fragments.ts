@@ -451,6 +451,13 @@ export async function readNativeJsonlTextFragments(input:{
           }
           else if(stringKind!=='ignored'&&stringKind!=='imageData'){
             if(Buffer.byteLength(meta,'utf8')+Buffer.byteLength(text,'utf8')>MAX_META_BYTES){
+              // Optional tool display names are not identity proofs: discard
+              // an overlong name rather than rejecting a fully valid record.
+              if(stringKind==='blockName'){
+                meta=''
+                stringKind='ignored'
+                return
+              }
               failed='native-record-metadata-budget'
               throw new Error(failed)
             }
