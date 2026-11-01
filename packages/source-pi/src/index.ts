@@ -190,8 +190,9 @@ async function readPiVerifiedLargeImagePage(
         ?!['text','thinking','tool-call','image'].includes(block.kind)
         :block.kind!=='text'&&block.kind!=='image'))
     ||(assistant&&blocks.some(block=>block.kind==='tool-call'
-      &&(!block.emptyArguments||!block.nativeCallId||!block.name
-        ||block.fragmentCount!==0)))
+      &&(!block.nativeCallId||!block.name||!block.verifiedArguments
+        ||block.fragmentCount!==original.fragments.filter(piece=>
+          piece.contentIndex===block.contentIndex).length)))
     ||(assistant&&new Set(blocks.filter(block=>block.kind==='tool-call')
       .map(block=>block.nativeCallId)).size
       !==blocks.filter(block=>block.kind==='tool-call').length)
