@@ -271,7 +271,10 @@ export async function readNativeJsonlTextFragments(input:{
       if(!permittedAssistantPath(result))strictLargeAssistantShape=false
       if(result.length===4&&currentBlock&&result[0]==='message'
         &&result[1]==='content'&&result[2]===currentBlock.index
-        &&typeof result[3]==='string')currentBlock.keys.add(result[3])
+        &&typeof result[3]==='string'){
+        currentBlock.keys.add(result[3])
+        if(result[3]==='arguments')currentBlock.argumentsEmpty=false
+      }
       if(result.length>4&&currentBlock&&(result[3]==='arguments'||result[3]==='args'))
         currentBlock.argumentsEmpty=false
       return result
