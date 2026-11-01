@@ -18,6 +18,7 @@ import { Inspector } from './ReviewEvidenceInspector'
 import { ReviewRoundAdapter, interactionStats } from './ReviewRoundPresentation'
 import { TaskFileChangesDisclosure } from './TaskFileChangesDisclosure'
 import { AgentLensApi } from '../client/api'
+import { loadNativeImagePreview } from '../client/native-media-preview'
 import type { AgentLensClientModel } from '../client/model'
 import type { NativeRecordTextFragmentsResponseDto, ReviewInteractionDto } from '@agent-lens/protocol'
 import { useReviewSession } from './use-review-session'
@@ -464,44 +465,16 @@ export function ReviewPage({ model, embedded = false, latestRequest = 0 }: { mod
     setOversized({...current,loading:true,mediaIndex:image.contentIndex,
       mediaDataUrl:undefined,error:undefined})
     try{
-      const maxBase64=8*1024*1024
-      let offset=0
-      let base64=''
-      let total=-1
-      for(let n=0;n<64;n++){
-        const page=await hookApi.nativeRecordMediaChunk(id,{
-          cursor:current.recordCursor,expectedSha256:current.recordSha256,
-          imageIndex:image.contentIndex,mediaOffset:offset,
-          mediaLimit:128*1024,signal:controller.signal,
-        })
-        if(controller.signal.aborted||oversizedRevisionRef.current!==revision)return
-        if(page.state!=='available')throw new Error(page.reason)
-        if(page.coverage!=='media-chunk-only'
-          ||page.recordSha256!==current.recordSha256
-          ||page.contentIndex!==image.contentIndex
-          ||page.mimeType!==image.mimeType
-          ||page.base64.length<1||page.base64.length>128*1024
-          ||(total>=0&&page.totalBase64Length!==total)
-          ||page.totalBase64Length>maxBase64
-          ||(page.nextOffset!==undefined&&page.nextOffset!==offset+page.base64.length))
-          throw new Error('native-media-evidence-mismatch')
-        total=page.totalBase64Length
-        base64+=page.base64
-        if(base64.length>maxBase64)throw new Error('native-media-preview-budget')
-        if(page.nextOffset===undefined){
-          if(base64.length!==total)
-            throw new Error('native-media-incomplete')
-          setOversized(previous=>previous?.sessionId===id
-            &&previous.recordSha256===current.recordSha256
-            ?{...previous,loading:false,mediaIndex:image.contentIndex,
-              mediaDataUrl:`data:${image.mimeType};base64,${base64}`}
-            :previous)
-          return
-        }
-        if(page.nextOffset<=offset)throw new Error('native-media-cursor-stalled')
-        offset=page.nextOffset
-      }
-      throw new Error('native-media-preview-budget')
+      const dataUrl=await loadNativeImagePreview(hookApi,{
+        sessionId:id,cursor:current.recordCursor,
+        recordSha256:current.recordSha256,
+        contentIndex:image.contentIndex,mimeType:image.mimeType,
+      },controller.signal)
+      if(controller.signal.aborted||oversizedRevisionRef.current!==revision)return
+      setOversized(previous=>previous?.sessionId===id
+        &&previous.recordSha256===current.recordSha256
+        ?{...previous,loading:false,mediaIndex:image.contentIndex,
+          mediaDataUrl:dataUrl}:previous)
     }catch(error){
       if(controller.signal.aborted||oversizedRevisionRef.current!==revision)return
       setOversized(previous=>previous?.sessionId===id
