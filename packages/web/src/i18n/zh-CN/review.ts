@@ -383,6 +383,7 @@ export const chineseReviewMessages: LocaleMessagesDto = {
         nativeOversizedPart: '文本片段 {{count}}',
         nativeOversizedImage: '图片 {{count}}',
         nativeOversizedLoadImage: '按需加载图片（最多 6 MiB）',
+        nativeOversizedImagesTruncated: '仅列出前 8 张图片，更多图片未展开',
         nativeOversizedKindMessage: '消息',
         nativeOversizedKindThinking: '思考',
         nativeOversizedKindToolCall: '工具调用',
