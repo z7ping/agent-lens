@@ -17,6 +17,7 @@ const MAX_META_BYTES=512
 const MAX_DEPTH=128
 const MAX_MEDIA_CHUNK_CHARS=128*1024
 const MAX_INLINE_IMAGES=8
+const MAX_CONTENT_BLOCKS=64
 const MIME_TYPES=new Set(['image/png','image/jpeg','image/gif','image/webp'])
 
 export interface NativeInlineImageInfo {
@@ -30,6 +31,19 @@ export interface NativeInlineImageChunk {
   base64:string
   totalBase64Length:number
   nextOffset?:number
+}
+
+/** One original message.content[] object, certified after its closing JSON token.
+ * Describes Source structure only; NEVER a complete normalized event or turn.
+ * Text and media payload remain in their separately authorized lanes.
+ */
+export interface NativeJsonlContentBlock {
+  contentIndex:number
+  kind:'text'|'thinking'|'tool-call'|'image'|'other'
+  fragmentCount:number
+  /** Native name/ID may be exported only after the central tool CapturePolicy. */
+  name?:string
+  callKey?:string
 }
 
 export interface NativeJsonlTextFragment {
@@ -63,6 +77,7 @@ export type NativeJsonlFragmentReadResult =
       /** Verified result-only native toolCallId hash. Source-private metadata. */
       resultCallKey?:string
       fragments:NativeJsonlTextFragment[]
+      contentBlocks:NativeJsonlContentBlock[];contentBlocksTruncated?:boolean
       totalTextFragments:number;nextFragmentOffset?:number
       images:NativeInlineImageInfo[]
       imagesTruncated?:boolean
@@ -73,7 +88,7 @@ export type NativeJsonlFragmentReadResult =
 type PathKey=string|number
 type Frame={kind:'object'|'array';path:PathKey[];key?:string;next:number}
 type StringKind='id'|'type'|'role'|'text'|'thinking'|'argument'
-  |'blockType'|'blockId'|'resultCallId'|'imageMime'|'imageData'|'resultField'|'ignored'
+  |'blockType'|'blockId'|'blockName'|'resultCallId'|'imageMime'|'imageData'|'resultField'|'ignored'
 type FragmentKind=NativeJsonlTextFragment['kind']
 
 function contentIndex(path:readonly PathKey[]):number|undefined{
@@ -97,6 +112,7 @@ function classify(path:readonly PathKey[]):StringKind{
   if(path.length===3)return 'text'
   if(path.length===4&&path[3]==='type')return 'blockType'
   if(path.length===4&&path[3]==='id')return 'blockId'
+  if(path.length===4&&path[3]==='name')return 'blockName'
   if(path.length===4&&(path[3]==='mimeType'||path[3]==='mime_type'))return 'imageMime'
   if(path.length===4&&path[3]==='data')return 'imageData'
   if(path.length===4&&path[3]==='thinking')return 'thinking'
@@ -155,7 +171,10 @@ export async function readNativeJsonlTextFragments(input:{
     let nativeType:string|undefined
     let role:string|undefined
     let resultCallId:string|undefined
-    let currentBlock:{index:number;type?:string;id?:string;mimeType?:string;hasData?:boolean}|undefined
+    let currentBlock:{index:number;type?:string;id?:string;name?:string
+      mimeType?:string;hasData?:boolean;fragmentCount:number}|undefined
+    const contentBlocks:NativeJsonlContentBlock[]=[]
+    let contentBlocksTruncated=false
     const images:NativeInlineImageInfo[]=[]
     let imagesTruncated=false
     let mediaBase64=''
@@ -211,6 +230,8 @@ export async function readNativeJsonlTextFragments(input:{
     const flushText=()=>{
       // Empty text values are still first-class leaves.
       const ordinal=totalTextFragments++
+      if(currentBlock && selectedIndex===currentBlock.index)
+        currentBlock.fragmentCount++
       if(ordinal>=fragmentOffset && fragments.length<limit){
         if(selectedBytes+textBytes>128*1024){
           failed='native-fragment-output-budget'
@@ -265,7 +286,7 @@ export async function readNativeJsonlTextFragments(input:{
           const path=nextPath()
           if(name==='startObject'&&path.length===3
             &&contentIndex(path)!==undefined)
-            currentBlock={index:path[2] as number}
+            currentBlock={index:path[2] as number,fragmentCount:0}
           if(stack.length>=MAX_DEPTH){
             failed='native-record-depth-budget'
             throw new Error(failed)
@@ -289,6 +310,22 @@ export async function readNativeJsonlTextFragments(input:{
                 mediaFound=true
               }
             }
+            // Only an entirely closed, verified native content object becomes
+            // structural evidence. A malformed/truncated object never escapes.
+            const block=currentBlock
+            const kind:NativeJsonlContentBlock['kind']=
+              block.type==='toolCall'?'tool-call'
+                :block.type==='thinking'?'thinking'
+                  :block.type==='image'?'image'
+                    :block.type==='text'?'text':'other'
+            if(contentBlocks.length<MAX_CONTENT_BLOCKS){
+              contentBlocks.push({
+                contentIndex:block.index,kind,fragmentCount:block.fragmentCount,
+                ...(kind==='tool-call'&&block.name?{name:block.name}:{}),
+                ...(kind==='tool-call'&&block.id
+                  ?{callKey:createHash('sha256').update(block.id).digest('hex')}:{})
+              })
+            }else contentBlocksTruncated=true
             for(const fragment of fragments){
               if(fragment.contentIndex!==currentBlock.index)continue
               if(fragment.kind==='message'&&currentBlock.type==='thinking')
@@ -378,6 +415,7 @@ export async function readNativeJsonlTextFragments(input:{
           else if(stringKind==='resultCallId')resultCallId=meta
           else if(stringKind==='blockType'&&currentBlock)currentBlock.type=meta
           else if(stringKind==='blockId'&&currentBlock)currentBlock.id=meta
+          else if(stringKind==='blockName'&&currentBlock)currentBlock.name=meta
           else if(stringKind==='imageMime'&&currentBlock)
             currentBlock.mimeType=meta.toLowerCase()
           else if(stringKind==='imageData'&&currentBlock)
@@ -413,6 +451,13 @@ export async function readNativeJsonlTextFragments(input:{
           }
           else if(stringKind!=='ignored'&&stringKind!=='imageData'){
             if(Buffer.byteLength(meta,'utf8')+Buffer.byteLength(text,'utf8')>MAX_META_BYTES){
+              // Optional tool display names are not identity proofs: discard
+              // an overlong name rather than rejecting a fully valid record.
+              if(stringKind==='blockName'){
+                meta=''
+                stringKind='ignored'
+                return
+              }
               failed='native-record-metadata-budget'
               throw new Error(failed)
             }
@@ -537,7 +582,8 @@ export async function readNativeJsonlTextFragments(input:{
       ...(role?{role}:{}),
       ...((role==='tool'||role==='toolResult')&&resultCallId
         ?{resultCallKey:createHash('sha256').update(resultCallId).digest('hex')}:{}),
-      fragments,totalTextFragments,images,
+      fragments,totalTextFragments,images,contentBlocks,
+      ...(contentBlocksTruncated?{contentBlocksTruncated:true}:{}),
       ...(imagesTruncated?{imagesTruncated:true}:{}),
       ...(media&&mediaMimeType?{media:{
         contentIndex:media.contentIndex,mimeType:mediaMimeType,

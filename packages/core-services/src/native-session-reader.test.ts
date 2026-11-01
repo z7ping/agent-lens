@@ -815,3 +815,72 @@ test('native tool links enforce catalog identity and tool privacy before Source 
     state:'unsupported',reason:'native-tool-capture-disabled'})
   assert.equal(calls,1)
 })
+
+test('verified native block metadata never bypasses tool and image CapturePolicy',async()=>{
+  const storage={
+    nativeSessionCatalog:{async get(){return catalog}},
+    repositories:{installations:{async get(){return installation}},
+      hosts:{async get(){return host}}},
+  } as unknown as StorageService
+  const source={manifest:{sourceId:'pi',productId:'pi'},
+    async readNativeTextFragments(){
+      return {state:'available' as const,record:{
+        offset:70,fileIdentity:'1:9',recordSha256:'a'.repeat(64),
+        role:'assistant',
+        fragments:[],totalTextFragments:0,
+        images:[{contentIndex:2,mimeType:'image/png'}],
+        contentBlocks:[
+          {contentIndex:0,kind:'text' as const,fragmentCount:1},
+          {contentIndex:1,kind:'tool-call' as const,fragmentCount:0,
+            name:'secret-command',callKey:'c'.repeat(64)},
+          {contentIndex:2,kind:'image' as const,fragmentCount:0},
+        ],
+      }}
+    },
+  } as unknown as SourceDefinition
+  let prompt=true
+  let tool=false
+  let redactToolName=false
+  const policy={
+    isSourceEnabled:()=>true,
+    isEnabled:(scope:string)=>scope==='prompt'?prompt:tool,
+    capture(scope:string,value:unknown){
+      if(scope==='tool'&&redactToolName)
+        return {mode:'redacted' as const,value:'[masked]',redactionApplied:true}
+      return {mode:'redacted' as const,value,redactionApplied:false}
+    },
+  } as unknown as CapturePolicyService
+  const reader=new NativeSessionReader(storage,
+    {list:()=>[source]} as unknown as SourceService,policy)
+  const query={sourceId:'pi',installationId:'install',nativeSessionId:'S1',
+    cursor:{offset:70,sequence:2,fileIdentity:'1:9'},
+    signal:new AbortController().signal}
+  const disabled=await reader.readTextFragments(query)
+  assert.equal(disabled.state,'available')
+  if(disabled.state==='available'){
+    assert.deepEqual(disabled.record.contentBlocks,[
+      {contentIndex:0,kind:'text',fragmentCount:1},
+      {contentIndex:1,kind:'tool-call',fragmentCount:0,suppressed:true},
+      {contentIndex:2,kind:'image',fragmentCount:0},
+    ])
+    assert.equal(JSON.stringify(disabled.record).includes('secret-command'),false)
+    assert.equal(JSON.stringify(disabled.record).includes('c'.repeat(64)),false)
+  }
+  tool=true
+  redactToolName=true
+  const redacted=await reader.readTextFragments(query)
+  assert.equal(redacted.state,'available')
+  if(redacted.state==='available'){
+    assert.equal(redacted.record.contentBlocks?.[1]?.name,'[masked]')
+    assert.equal(redacted.record.contentBlocks?.[1]?.redactionApplied,true)
+    assert.equal(redacted.record.contentBlocks?.[1]?.callKey,'c'.repeat(64))
+  }
+  prompt=false
+  const noMedia=await reader.readTextFragments(query)
+  assert.equal(noMedia.state,'available')
+  if(noMedia.state==='available'){
+    assert.deepEqual(noMedia.record.images,[])
+    assert.equal(noMedia.record.contentBlocks?.some(x=>x.kind==='image'),false)
+    assert.equal(noMedia.record.contentBlocks?.[0]?.suppressed,true)
+  }
+})

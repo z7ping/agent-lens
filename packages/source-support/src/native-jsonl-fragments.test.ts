@@ -417,3 +417,89 @@ test('unverified role ordering cannot promote arbitrary details to tool result e
     }
   }finally{await rm(root,{recursive:true,force:true})}
 })
+
+test('oversized Pi JSONL certifies ordered content blocks without reassembling images or creating events',async()=>{
+  const root=await mkdtemp(join(tmpdir(),'agent-lens-native-content-outline-'))
+  const path=join(root,'session.jsonl')
+  try{
+    const id='call-native-block-1'
+    const data='A'.repeat(2_300_000)
+    const body=JSON.stringify({id:'message-native-1',type:'message',
+      message:{role:'assistant',content:[
+        {type:'text',text:'first'},
+        {type:'thinking',thinking:'plan'},
+        {type:'toolCall',id,name:'read_file',arguments:{path:'README.md',attempts:2}},
+        {type:'image',mimeType:'image/png',data},
+        {type:'custom',payload:{flag:true}},
+      ]},
+    })
+    assert.ok(Buffer.byteLength(body)>2*1024*1024)
+    await writeFile(path,body+'\n')
+    const first=await readNativeJsonlTextFragments({path,allowedRoots:[root],
+      fragmentOffset:0,limit:1})
+    assert.equal(first.state,'available')
+    if(first.state!=='available')return
+    assert.equal(first.record.nativeEventId,'message-native-1')
+    assert.deepEqual(first.record.contentBlocks,[
+      {contentIndex:0,kind:'text',fragmentCount:1},
+      {contentIndex:1,kind:'thinking',fragmentCount:1},
+      {contentIndex:2,kind:'tool-call',fragmentCount:2,name:'read_file',
+        callKey:createHash('sha256').update(id).digest('hex')},
+      {contentIndex:3,kind:'image',fragmentCount:0},
+      {contentIndex:4,kind:'other',fragmentCount:0},
+    ])
+    assert.equal(first.record.contentBlocksTruncated,undefined)
+    assert.equal(first.record.fragments.length,1)
+    assert.ok(first.record.images.some(item=>item.contentIndex===3))
+    assert.equal(JSON.stringify(first.record).includes(data.slice(0,256)),false)
+    const next=await readNativeJsonlTextFragments({path,allowedRoots:[root],
+      fragmentOffset:1,limit:2,expectedSha256:first.record.recordSha256})
+    assert.equal(next.state,'available')
+    if(next.state==='available'){
+      assert.deepEqual(next.record.contentBlocks,first.record.contentBlocks,
+        'block identities are independent of text window offset')
+      assert.deepEqual(next.record.fragments.map(item=>item.ordinal),[1,2])
+    }
+  }finally{await rm(root,{recursive:true,force:true})}
+})
+
+test('native content outline is bounded to 64 verified blocks and does not claim full coverage',async()=>{
+  const root=await mkdtemp(join(tmpdir(),'agent-lens-native-outline-budget-'))
+  const path=join(root,'session.jsonl')
+  try{
+    const content=Array.from({length:71},(_,i)=>({type:'text',text:'part'+i}))
+    await writeFile(path,JSON.stringify({type:'message',message:{
+      role:'assistant',content,
+    }})+'\n')
+    const result=await readNativeJsonlTextFragments({path,allowedRoots:[root],limit:2})
+    assert.equal(result.state,'available')
+    if(result.state!=='available')return
+    assert.equal(result.record.contentBlocks.length,64)
+    assert.equal(result.record.contentBlocksTruncated,true)
+    assert.equal(result.record.contentBlocks[0]?.contentIndex,0)
+    assert.equal(result.record.contentBlocks[63]?.contentIndex,63)
+    assert.equal(result.record.totalTextFragments,71,
+      'bounded metadata does not silently drop Source text facts')
+  }finally{await rm(root,{recursive:true,force:true})}
+})
+
+test('overlong optional tool display names cannot erase other certified native content',async()=>{
+  const root=await mkdtemp(join(tmpdir(),'agent-lens-native-optional-name-'))
+  const path=join(root,'session.jsonl')
+  try{
+    const source=JSON.stringify({type:'message',message:{role:'assistant',
+      content:[{type:'toolCall',id:'trusted-id',name:'n'.repeat(1200),
+        arguments:{file:'readme'}},{type:'text',text:'done'}]}})
+    await writeFile(path,source+'\n')
+    const result=await readNativeJsonlTextFragments({path,allowedRoots:[root]})
+    assert.equal(result.state,'available')
+    if(result.state!=='available')return
+    assert.deepEqual(result.record.contentBlocks,[
+      {contentIndex:0,kind:'tool-call',fragmentCount:1,
+        callKey:createHash('sha256').update('trusted-id').digest('hex')},
+      {contentIndex:1,kind:'text',fragmentCount:1},
+    ])
+    assert.deepEqual(result.record.fragments.map(x=>x.text),['readme','done'])
+    assert.equal(JSON.stringify(result.record).includes('n'.repeat(512)),false)
+  }finally{await rm(root,{recursive:true,force:true})}
+})

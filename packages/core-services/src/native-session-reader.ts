@@ -563,9 +563,34 @@ export class NativeSessionReader {
           ?{suppressed:true}:{}),
       }
     })
+    // Source metadata is trusted for structure, not for privacy. The same
+    // prompt/tool CapturePolicy that governs fragments must govern block names
+    // and native correlation keys before anything reaches the HTTP DTO.
+    const contentBlocks=result.record.contentBlocks?.flatMap(block=>{
+      if(block.kind==='image'&&!mediaAllowed)return []
+      const {name,callKey,...safeBlock}=block
+      if(block.kind!=='tool-call'){
+        // No fragment text is emitted here; still mark source lanes hidden by
+        // the parent record's verified capture scope as unavailable.
+        return [this.capturePolicy.isEnabled(roleScope)?safeBlock
+          :{...safeBlock,suppressed:true}]
+      }
+      if(!this.capturePolicy.isEnabled('tool'))
+        return [{...safeBlock,suppressed:true}]
+      const captured=this.capturePolicy.capture('tool',name??'',{maxText:512})
+      if(captured.mode==='off')return [{...safeBlock,suppressed:true}]
+      return [{...safeBlock,
+        ...(typeof captured.value==='string'&&captured.value
+          ?{name:captured.value}:{}),
+        ...(callKey?{callKey}:{}),
+        ...(captured.redactionApplied?{redactionApplied:true}:{})}]
+    })
     const {images:rawImages,imagesTruncated:rawTruncated,
+      contentBlocks:rawBlocks,contentBlocksTruncated:rawBlockTruncation,
       ...verifiedRecord}=result.record
     return {state:'available',record:{...verifiedRecord,fragments,
+      ...(contentBlocks?{contentBlocks}:{}),
+      ...(rawBlockTruncation?{contentBlocksTruncated:true}:{}),
       ...(mediaAllowed
         ?{...(rawImages?{images:rawImages}:{}),
           ...(rawTruncated?{imagesTruncated:true}:{})}

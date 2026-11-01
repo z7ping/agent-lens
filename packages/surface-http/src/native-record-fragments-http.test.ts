@@ -32,6 +32,10 @@ test('record fragment route uses Catalog identity, never accepts paths, and retu
         fragments:[{ordinal:0,text:'[已脱敏]',kind:'thinking',contentIndex:3,
           fieldKeys:['arguments','password'],redactionApplied:true}],
         totalTextFragments:2,nextFragmentOffset:1,
+        contentBlocks:[{contentIndex:3,kind:'tool-call',fragmentCount:1,
+          name:'safe-tool',callKey:'d'.repeat(64),
+          fieldKeys:['credentials','password']}],
+        contentBlocksTruncated:true,
       }}
     },
   } as unknown as NativeSessionWindowReader
@@ -64,6 +68,11 @@ test('record fragment route uses Catalog identity, never accepts paths, and retu
     assert.equal(result.recordSha256,sha)
     assert.deepEqual(result.fragments,[{ordinal:0,text:'[已脱敏]',kind:'thinking',contentIndex:3,redactionApplied:true}])
     assert.equal(result.nextFragmentOffset,1)
+    assert.deepEqual(result.contentBlocks,[{
+      contentIndex:3,kind:'tool-call',fragmentCount:1,
+      name:'safe-tool',callKey:'d'.repeat(64),
+    }])
+    assert.equal(result.contentBlocksTruncated,true)
     assert.equal(JSON.stringify(result).includes('fileIdentity'),false)
     assert.equal(JSON.stringify(result).includes('filePath'),false)
     assert.equal(JSON.stringify(result).includes('fieldKeys'),false)

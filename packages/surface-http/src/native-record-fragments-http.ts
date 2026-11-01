@@ -186,6 +186,17 @@ export async function handleNativeRecordFragmentsRequest(
         ...(fragment.splitScalar?{splitScalar:true}:{}),
       })),
       totalTextFragments:result.record.totalTextFragments,
+      // Explicit block whitelist. Never serialize Source-private argument
+      // ancestry or unfiltered native tool names/IDs.
+      ...(result.record.contentBlocks?{contentBlocks:result.record.contentBlocks.map(block=>({
+        contentIndex:block.contentIndex,kind:block.kind,
+        fragmentCount:block.fragmentCount,
+        ...(block.name?{name:block.name}:{}),
+        ...(block.callKey?{callKey:block.callKey}:{}),
+        ...(block.redactionApplied?{redactionApplied:true}:{}),
+        ...(block.suppressed?{suppressed:true}:{}),
+      }))}:{}),
+      ...(result.record.contentBlocksTruncated?{contentBlocksTruncated:true}:{}),
       ...(result.record.images?{images:result.record.images}:{}),
       ...(result.record.imagesTruncated?{imagesTruncated:true}:{}),
       ...(result.record.nextFragmentOffset===undefined?{}:{
