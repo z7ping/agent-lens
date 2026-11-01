@@ -212,6 +212,9 @@ export interface NativeReviewWindowDto {
   pagingUnit?: 'interaction'
   /** A bounded fragment of a single semantic turn; partial never proves completion. */
   turnFragment?: 'partial' | 'complete' | undefined
+  /** Source-verified boundary of a blocked oversized physical record, for
+   * on-demand fragment-only recovery. Never a completed logical turn. */
+  oversizedRecordSearchCursor?: string
   observationCount: number
   /** File mutation evidence from the returned complete user-turn window only. */
   observedFileChanges?: TaskFileChangeDto[]
