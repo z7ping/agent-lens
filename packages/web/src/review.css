@@ -193,3 +193,13 @@
 @media (prefers-reduced-motion: reduce) {
   .session-relationship-tree-chevron { transition: none; }
 }
+
+/* Keep recovered text in the existing Review disclosure layout; bounded to
+ * the currently mounted fragment window rather than expanding a whole record. */
+.review-oversized-fragment {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  max-height: 14rem;
+  overflow: auto;
+  font: inherit;
+}
