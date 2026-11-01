@@ -182,7 +182,9 @@ export async function normalizePiRecord(
       }
 
       if (fact.role === 'assistant') {
-        const normalized = normalizedMessageAttachments(fact.nonTextContent)
+        const normalized = normalizedMessageAttachments(
+          fact.nonTextContent,envelope.verifiedLargeImageRecord === true,
+        )
         observations.push(piFactCandidate(record, envelope, fact, 'message.assistant', {
           text: fact.text,
           ...(fact.content === undefined || normalized.attachments.length ? {} : { content: fact.content }),
