@@ -74,6 +74,9 @@ export type NativeJsonlFragmentReadResult =
       /** SHA-256 excluding an optional CRLF record delimiter. */
       sourceLineSha256:string
       nativeEventId?:string;nativeType?:string;role?:string
+      nativeTimestamp?:string;nativeParentId?:string
+      /** All value paths match the narrow Pi image-user semantic schema. */
+      strictImageUserShape:boolean
       /** Verified result-only native toolCallId hash. Source-private metadata. */
       resultCallKey?:string
       fragments:NativeJsonlTextFragment[]
@@ -87,7 +90,7 @@ export type NativeJsonlFragmentReadResult =
 
 type PathKey=string|number
 type Frame={kind:'object'|'array';path:PathKey[];key?:string;next:number}
-type StringKind='id'|'type'|'role'|'text'|'thinking'|'argument'
+type StringKind='id'|'type'|'role'|'timestamp'|'parentId'|'text'|'thinking'|'argument'
   |'blockType'|'blockId'|'blockName'|'resultCallId'|'imageMime'|'imageData'|'resultField'|'ignored'
 type FragmentKind=NativeJsonlTextFragment['kind']
 
@@ -99,6 +102,8 @@ function contentIndex(path:readonly PathKey[]):number|undefined{
 function classify(path:readonly PathKey[]):StringKind{
   if(path.length===1&&path[0]==='id')return 'id'
   if(path.length===1&&path[0]==='type')return 'type'
+  if(path.length===1&&path[0]==='timestamp')return 'timestamp'
+  if(path.length===1&&path[0]==='parentId')return 'parentId'
   if(path.length===2&&path[0]==='message'&&path[1]==='role')return 'role'
   if(path.length===2&&path[0]==='message'&&path[1]==='toolCallId')return 'resultCallId'
   // Source-level details remain partial evidence, never a normalized result.
@@ -169,6 +174,9 @@ export async function readNativeJsonlTextFragments(input:{
     let selectedBytes=0
     let nativeEventId:string|undefined
     let nativeType:string|undefined
+    let nativeTimestamp:string|undefined
+    let nativeParentId:string|undefined
+    let strictImageUserShape=true
     let role:string|undefined
     let resultCallId:string|undefined
     let currentBlock:{index:number;type?:string;id?:string;name?:string
@@ -205,13 +213,29 @@ export async function readNativeJsonlTextFragments(input:{
     let firstToken=true
     const stack:Frame[]=[]
 
+    const permittedImageUserPath=(path:readonly PathKey[]):boolean=>{
+      if(path.length===0)return true
+      if(path.length===1)return typeof path[0]==='string'
+        &&['type','id','parentId','timestamp','message'].includes(path[0])
+      if(path[0]!=='message')return false
+      if(path.length===2)return path[1]==='role'||path[1]==='content'
+      if(path[1]!=='content'||typeof path[2]!=='number')return false
+      if(path.length===3)return true
+      if(path.length===4)return typeof path[3]==='string'
+        &&['type','text','mimeType','mime_type','data'].includes(path[3])
+      return false
+    }
     const nextPath=():PathKey[]=>{
       const frame=stack.at(-1)
       if(!frame)return []
-      if(frame.kind==='array')return [...frame.path,frame.next++]
-      if(frame.key===undefined)throw new Error('invalid-source-json-structure')
-      const result=[...frame.path,frame.key]
-      frame.key=undefined
+      let result:PathKey[]
+      if(frame.kind==='array')result=[...frame.path,frame.next++]
+      else{
+        if(frame.key===undefined)throw new Error('invalid-source-json-structure')
+        result=[...frame.path,frame.key]
+        frame.key=undefined
+      }
+      if(!permittedImageUserPath(result))strictImageUserShape=false
       return result
     }
     const toolFieldContext=(path:readonly PathKey[])=>{
@@ -411,6 +435,8 @@ export async function readNativeJsonlTextFragments(input:{
           }
           else if(stringKind==='id')nativeEventId=meta
           else if(stringKind==='type')nativeType=meta
+          else if(stringKind==='timestamp')nativeTimestamp=meta
+          else if(stringKind==='parentId')nativeParentId=meta
           else if(stringKind==='role')role=meta
           else if(stringKind==='resultCallId')resultCallId=meta
           else if(stringKind==='blockType'&&currentBlock)currentBlock.type=meta
@@ -467,6 +493,8 @@ export async function readNativeJsonlTextFragments(input:{
         }
         case 'startNumber':{
           const path=nextPath()
+          if(path.length===1&&['type','id','parentId','timestamp'].includes(String(path[0])))
+            strictImageUserShape=false
           activeNumber=toolFieldContext(path)
           if(activeNumber){
             valueType='number'
@@ -579,6 +607,9 @@ export async function readNativeJsonlTextFragments(input:{
       recordSha256:span.sha256,sourceLineSha256:lineSha.digest('hex'),
       ...(nativeEventId?{nativeEventId}:{}),
       ...(nativeType?{nativeType}:{}),
+      ...(nativeTimestamp?{nativeTimestamp}:{}),
+      ...(nativeParentId?{nativeParentId}:{}),
+      strictImageUserShape,
       ...(role?{role}:{}),
       ...((role==='tool'||role==='toolResult')&&resultCallId
         ?{resultCallKey:createHash('sha256').update(resultCallId).digest('hex')}:{}),

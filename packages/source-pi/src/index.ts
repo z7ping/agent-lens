@@ -5,6 +5,7 @@ import type {
   ObservationCapability,
   SourceDefinition,
   SourcePluginManifest,
+  SourceRecord,
 } from '@agent-lens/core'
 import {
   defineAgentLensPlugin,
@@ -126,6 +127,132 @@ const jsonlRawRecovery: NonNullable<SourceDefinition['rawRecovery']> = {
   },
 }
 
+/** Narrow, evidence-complete recovery for an oversized Pi user message
+ * whose size comes from ONE inline image. Every text leaf must fit in the
+ * bounded fragment window. Image bytes remain lazy in the original Source.
+ * Unsupported shapes never advance the Review cursor.
+ */
+async function readPiVerifiedLargeUserImagePage(
+  query:Parameters<NonNullable<SourceDefinition['readNativeSessionPage']>>[0],
+  ctx:Parameters<NonNullable<SourceDefinition['readNativeSessionPage']>>[1],
+):ReturnType<NonNullable<SourceDefinition['readNativeSessionPage']>>{
+  const roots=ctx.installation.dataRoot?[ctx.installation.dataRoot]:[]
+  const scan=await inspectNativeSessionRecordSpan({
+    path:query.filePath,allowedRoots:roots,
+    ...(query.cursor?{cursor:query.cursor}:{}),
+    signal:ctx.abortSignal,
+  })
+  if(scan.state!=='available')
+    return {state:scan.state==='pending'?'unsupported':scan.state,
+      reason:scan.state==='pending'?'native-record-pending-tail':scan.reason}
+  if(!scan.span.oversized)
+    return {state:'unsupported',reason:'native-large-record-not-oversized'}
+  const read=await readNativeJsonlTextFragments({
+    path:query.filePath,allowedRoots:roots,
+    ...(query.cursor?{cursor:query.cursor}:{}),
+    expectedSha256:scan.span.sha256,fragmentOffset:0,limit:16,
+    signal:ctx.abortSignal,
+  })
+  if(read.state!=='available')
+    return {state:read.state==='pending'?'unsupported':read.state,
+      reason:read.state==='pending'?'native-record-pending-tail':read.reason}
+  const original=read.record
+  if(query.cursor?.recordFingerprint
+    &&query.cursor.recordFingerprint!==original.sourceLineSha256)
+    return {state:'drifted',reason:'native-record-fingerprint-changed'}
+  const blocks=original.contentBlocks
+  const imageBlocks=blocks.filter(block=>block.kind==='image')
+  if(!original.strictImageUserShape
+    ||original.nativeType!=='message'||original.role!=='user'
+    ||!original.nativeEventId||original.recordSha256!==scan.span.sha256
+    ||original.fileIdentity!==scan.span.fileIdentity
+    ||original.contentBlocksTruncated||original.imagesTruncated
+    ||imageBlocks.length!==1||original.images.length!==1
+    ||original.images[0]?.contentIndex!==imageBlocks[0]?.contentIndex
+    ||blocks.length===0||blocks.length>64
+    ||blocks.some((block,index)=>block.contentIndex!==index
+      ||(block.kind!=='text'&&block.kind!=='image'))
+    ||original.totalTextFragments!==original.fragments.length
+    ||original.totalTextFragments>16
+    ||original.fragments.some(fragment=>fragment.kind!=='message'
+      ||fragment.contentIndex===undefined
+      ||!blocks.some(block=>block.contentIndex===fragment.contentIndex
+        &&block.kind==='text'))
+    ||blocks.some(block=>block.kind==='text'&&block.fragmentCount===0
+      ||original.fragments.filter(piece=>piece.contentIndex===block.contentIndex).length!==block.fragmentCount))
+    return {state:'unsupported',reason:'native-record-too-large'}
+
+  // Reuse the existing image validator; a MIME label and a JSON string by
+  // themselves do not prove the original base64 image payload is well formed.
+  const image=imageBlocks[0]!
+  const media=await readNativeJsonlTextFragments({
+    path:query.filePath,allowedRoots:roots,
+    ...(query.cursor?{cursor:query.cursor}:{}),
+    expectedSha256:scan.span.sha256,fragmentOffset:0,limit:1,
+    media:{contentIndex:image.contentIndex,offset:0,limit:4},
+    signal:ctx.abortSignal,
+  })
+  if(media.state!=='available'){
+    if(media.state==='drifted'||media.state==='unavailable')return media
+    return {state:'unsupported',reason:'native-record-too-large'}
+  }
+  if(media.record.recordSha256!==scan.span.sha256)
+    return {state:'drifted',reason:'native-record-hash-changed'}
+  if(media.record.media?.contentIndex!==image.contentIndex)
+    return {state:'unsupported',reason:'native-record-too-large'}
+
+  const auth=await authorizeNativeSessionPath(query.filePath,roots)
+  if(auth.state!=='authorized')return auth
+  const before=await stat(auth.sourcePath)
+  if(!before.isFile()||`${before.dev}:${before.ino}`!==scan.span.fileIdentity)
+    return {state:'drifted',reason:'native-file-identity-changed'}
+  const session=await readPiSessionMetadata(auth.sourcePath)
+  if(session.nativeSessionId!==query.nativeSessionId)
+    return {state:'drifted',reason:'native-session-identity-changed'}
+  const after=await stat(auth.sourcePath)
+  if(!after.isFile()||after.dev!==before.dev||after.ino!==before.ino
+    ||after.size!==before.size||after.mtimeMs!==before.mtimeMs)
+    return {state:'drifted',reason:'native-file-changed-after-semantic-scan'}
+  const content=blocks.map(block=>block.kind==='text'
+    ?{type:'text',text:original.fragments.filter(x=>x.contentIndex===block.contentIndex)
+      .map(x=>x.text).join('')}
+    :{type:'image',mimeType:original.images[0]!.mimeType})
+  const start=scan.span.offset
+  const sequence=(query.cursor?.sequence??0)+1
+  const recordHash=createHash('sha256')
+    .update(`${query.filePath}|${start}|${original.sourceLineSha256}`)
+    .digest('hex').slice(0,32)
+  const timestamp=original.nativeTimestamp
+    &&Number.isFinite(Date.parse(original.nativeTimestamp))
+    ?new Date(original.nativeTimestamp).toISOString():undefined
+  const entry={
+    type:'message',id:original.nativeEventId,
+    ...(original.nativeParentId?{parentId:original.nativeParentId}:{}),
+    ...(timestamp?{timestamp}:{}),
+    message:{role:'user',content},
+  }
+  const record:SourceRecord={
+    id:`pi-record-${recordHash}`,sourceId:PI_SOURCE_ID,
+    installationId:ctx.installation.id,
+    sourceSessionNativeId:session.nativeSessionId,nativeType:'history/message',
+    nativeId:original.nativeEventId,sourceSequence:sequence*1000,
+    ...(timestamp?{occurredAt:timestamp}:{}),
+    capturedAt:new Date().toISOString(),
+    locator:{kind:'file',path:query.filePath,offset:start},
+    fingerprint:original.sourceLineSha256,parserVersion:PI_PARSER_VERSION,
+    // The proof lives OUTSIDE the untrusted original native entry.
+    payload:{entry,session,verifiedLargeImageRecord:true},
+  }
+  return {state:'available',records:[record],
+    recordCursors:[{offset:start,sequence:sequence-1,
+      fileIdentity:scan.span.fileIdentity,
+      boundaryHash:scan.span.boundaryHash,
+      recordFingerprint:original.sourceLineSha256}],
+    nextCursor:{offset:scan.span.nextOffset,sequence,
+      fileIdentity:scan.span.fileIdentity,boundaryHash:scan.span.endBoundaryHash},
+    hasMore:after.size>scan.span.nextOffset,pendingTail:false}
+}
+
 export const piSourceDefinition: SourceDefinition = {
   manifest: piManifest,
   detect: detectPi,
@@ -173,7 +300,12 @@ export const piSourceDefinition: SourceDefinition = {
       ...(query.limit === undefined ? {} : { limit: query.limit }),
       signal: ctx.abortSignal,
     })
-    if (page.state !== 'available') return page
+    if (page.state !== 'available') {
+      if(page.state==='unsupported'&&page.reason==='native-record-too-large'
+        &&query.limit===1)
+        return readPiVerifiedLargeUserImagePage(query,ctx)
+      return page
+    }
     ctx.abortSignal.throwIfAborted()
     const session = await readPiSessionMetadata(query.filePath)
     if (session.nativeSessionId !== query.nativeSessionId) {

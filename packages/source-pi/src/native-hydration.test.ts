@@ -324,3 +324,123 @@ test('Pi links oversized zero-argument native tool blocks by original content[] 
       state:'unsupported',reason:'invalid-native-tool-link-query'})
   }finally{await rm(root,{recursive:true,force:true})}
 })
+
+test('oversized Pi image user message joins canonical native TaskSurface with complete text and lazy image evidence',async()=>{
+  const root=await mkdtemp(join(tmpdir(),'agent-lens-pi-large-user-image-'))
+  const file=join(root,'session.jsonl')
+  const header=JSON.stringify({type:'session',id:'large-image-turn',cwd:'/project'})
+  const timestamp='2026-11-01T11:22:33.000Z'
+  const giant=JSON.stringify({type:'message',id:'native-image-user',timestamp,
+    parentId:'parent-user',message:{role:'user',content:[
+      {type:'text',text:'First line'},
+      {type:'image',mimeType:'image/png',data:'A'.repeat(2_300_000)},
+      {type:'text',text:'Last line'},
+    ]}})
+  const next=JSON.stringify({type:'message',id:'assistant-reply',message:{
+    role:'assistant',content:[{type:'text',text:'Acknowledged'}],
+  }})
+  const host={id:'host',name:'host',platform:process.platform,arch:process.arch,
+    createdAt:timestamp,lastSeenAt:timestamp}
+  const installation={id:'pi-large-image',hostId:'host',productId:'pi',dataRoot:root,
+    firstSeenAt:timestamp,lastSeenAt:timestamp}
+  const ctx:SourceRawRecoveryContext={host,installation,
+    abortSignal:new AbortController().signal,
+    checkpoint:{async get(){return null},
+      async set(){throw Error('read-only')},async clear(){throw Error('read-only')}},
+  }
+  try{
+    await writeFile(file,[header,giant,next].join('\n')+'\n')
+    assert.ok(Buffer.byteLength(giant)>2*1024*1024)
+    const read=piSourceDefinition.readNativeSessionPage!
+    const first=await read({filePath:file,nativeSessionId:'large-image-turn',limit:1},ctx)
+    assert.equal(first.state,'available')
+    if(first.state!=='available')return
+    assert.equal(first.records.length,1)
+    const recovered=await read({filePath:file,nativeSessionId:'large-image-turn',
+      cursor:first.nextCursor,limit:1},ctx)
+    assert.equal(recovered.state,'available')
+    if(recovered.state!=='available')return
+    assert.equal(recovered.records.length,1)
+    const record=recovered.records[0]!
+    assert.equal(record.nativeId,'native-image-user')
+    assert.equal(record.sourceSequence,2000)
+    assert.equal(record.fingerprint,hash(giant))
+    assert.equal(record.occurredAt,timestamp)
+    assert.equal(recovered.recordCursors?.[0]?.offset,first.nextCursor.offset)
+    assert.equal(recovered.recordCursors?.[0]?.recordFingerprint,hash(giant))
+    assert.equal(recovered.nextCursor.sequence,2)
+    assert.equal(recovered.hasMore,true)
+    assert.ok(JSON.stringify(record.payload).length<2048,
+      'source-normalized image metadata must not retain the giant base64')
+    const normalized=await piSourceDefinition.normalize(record,{host,installation})
+    const message=normalized.observations.find(x=>x.kind==='message.user')
+    assert.ok(message)
+    const payload=message?.payload as {text?:string;attachments?:Array<{
+      type:string;mimeType:string;data?:string}>}
+    assert.equal(payload.text,'First line\n\nLast line')
+    assert.deepEqual(payload.attachments,[{type:'image',mimeType:'image/png'}])
+    assert.ok(normalized.evidenceCandidates.some(x=>x.sourceRecordId===record.id))
+    const following=await read({filePath:file,nativeSessionId:'large-image-turn',
+      cursor:recovered.nextCursor,limit:1},ctx)
+    assert.equal(following.state,'available')
+    if(following.state==='available')
+      assert.equal(following.records[0]?.nativeId,'assistant-reply')
+    // An actual overlong user text is NOT promoted to a fabricated complete
+    // message; the original record stays eligible for fragment-only fallback.
+    const longText=JSON.stringify({type:'message',id:'too-much-text',
+      message:{role:'user',content:'T'.repeat(2_300_000)}})
+    await writeFile(file,[header,longText].join('\n')+'\n')
+    const ret=await read({filePath:file,nativeSessionId:'large-image-turn',
+      cursor:{offset:Buffer.byteLength(header+'\n'),sequence:1,
+        fileIdentity:`${(await stat(file)).dev}:${(await stat(file)).ino}`},
+      limit:1},ctx)
+    assert.deepEqual(ret,{state:'unsupported',
+      reason:'native-record-too-large'})
+    const extra=JSON.stringify({type:'message',id:'extra-fields',
+      message:{role:'user',content:[
+        {type:'text',text:'verified text'},
+        {type:'image',mimeType:'image/png',data:'A'.repeat(2_300_000)},
+      ],toolContext:{unparsed:'must-not-disappear'}},
+    })
+    await writeFile(file,[header,extra].join('\n')+'\n')
+    const notComplete=await read({filePath:file,nativeSessionId:'large-image-turn',
+      cursor:{offset:Buffer.byteLength(header+'\n'),sequence:1,
+        fileIdentity:`${(await stat(file)).dev}:${(await stat(file)).ino}`},
+      limit:1},ctx)
+    assert.deepEqual(notComplete,{state:'unsupported',
+      reason:'native-record-too-large'},
+      'unrecognized source semantics cannot silently disappear from formal Review')
+  }finally{await rm(root,{recursive:true,force:true})}
+})
+
+test('Pi oversized user image with invalid native base64 remains unsupported',async()=>{
+  const root=await mkdtemp(join(tmpdir(),'agent-lens-pi-invalid-large-image-'))
+  const file=join(root,'session.jsonl')
+  const header=JSON.stringify({type:'session',id:'invalid-large-image'})
+  const giant=JSON.stringify({type:'message',id:'bad-image',message:{
+    role:'user',content:[{type:'image',mimeType:'image/png',
+      data:'A'.repeat(2_300_000-1)+'$'}],
+  }})
+  const timestamp='2026-11-01T00:00:00Z'
+  const host={id:'host',name:'host',platform:process.platform,arch:process.arch,
+    createdAt:timestamp,lastSeenAt:timestamp}
+  const installation={id:'pi-invalid-image',hostId:'host',productId:'pi',dataRoot:root,
+    firstSeenAt:timestamp,lastSeenAt:timestamp}
+  const ctx:SourceRawRecoveryContext={host,installation,
+    abortSignal:new AbortController().signal,
+    checkpoint:{async get(){return null},
+      async set(){throw Error('read-only')},async clear(){throw Error('read-only')}},
+  }
+  try{
+    await writeFile(file,[header,giant].join('\n')+'\n')
+    const first=await piSourceDefinition.readNativeSessionPage!({
+      filePath:file,nativeSessionId:'invalid-large-image',limit:1},ctx)
+    assert.equal(first.state,'available')
+    if(first.state!=='available')return
+    const result=await piSourceDefinition.readNativeSessionPage!({
+      filePath:file,nativeSessionId:'invalid-large-image',
+      cursor:first.nextCursor,limit:1},ctx)
+    assert.deepEqual(result,{state:'unsupported',
+      reason:'native-record-too-large'})
+  }finally{await rm(root,{recursive:true,force:true})}
+})
