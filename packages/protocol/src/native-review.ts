@@ -157,7 +157,7 @@ export type NativeMetricContributionDto =
  */
 export type NativeOversizedRecordLocateResponseDto =
   | {state:'found';cursor:string;recordSha256:string
-      hasText:boolean;nativeEventId?:string;nextCursor?:string}
+      hasText:boolean;hasMedia?:boolean;nativeEventId?:string;nextCursor?:string}
   | {state:'more';nextCursor:string}
   | {state:'end'}
   | {state:'pending'|'unavailable'|'drifted'|'unsupported';reason:string}
@@ -169,7 +169,8 @@ export type NativeRecordTextFragmentsResponseDto =
       kind:'message'|'thinking'|'tool-call'|'tool-result'
       contentIndex?:number;callKey?:string
       redactionApplied?:boolean;suppressed?:boolean;splitScalar?:boolean}>
-    totalTextFragments:number;nextFragmentOffset?:number}
+    totalTextFragments:number;nextFragmentOffset?:number
+    images?:Array<{contentIndex:number;mimeType:string}>}
   | {state:'pending'|'unavailable'|'drifted'|'unsupported';reason:string}
 
 export type NativeReviewWindowResponseDto =
