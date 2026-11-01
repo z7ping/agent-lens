@@ -498,6 +498,8 @@ export async function readNativeJsonlTextFragments(input:{
               strictLargeAssistantShape=false
             if(currentBlock.keys.has('arguments')
               &&(!currentBlock.argsValid||!currentBlock.flatArguments
+                ||Object.keys(currentBlock.flatArguments).length
+                  !==(currentBlock.argFieldCount??0)
                 ||Buffer.byteLength(JSON.stringify(currentBlock.flatArguments),'utf8')>12_000))
               strictLargeAssistantShape=false
             // Only an entirely closed, verified native content object becomes
