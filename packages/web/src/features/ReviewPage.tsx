@@ -502,6 +502,11 @@ export function ReviewPage({ model, embedded = false, latestRequest = 0 }: { mod
               {oversized?.sessionId===review.selectedId
                 && oversized.fragments.map(fragment=><div key={fragment.ordinal}>
                   <small>{t('local.roundNav.nativeOversizedPart',{count:fragment.ordinal+1})}
+                    {' · '}
+                    {fragment.kind==='thinking'?t('local.roundNav.nativeOversizedKindThinking')
+                      :fragment.kind==='tool-call'?t('local.roundNav.nativeOversizedKindToolCall')
+                      :fragment.kind==='tool-result'?t('local.roundNav.nativeOversizedKindToolResult')
+                      :t('local.roundNav.nativeOversizedKindMessage')}
                     {fragment.suppressed? ` · ${t('local.roundNav.nativeOversizedRedacted')}`:''}
                   </small>
                   <pre className="review-oversized-fragment">{fragment.text}</pre>

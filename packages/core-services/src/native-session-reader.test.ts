@@ -454,7 +454,7 @@ test('large native record fragments require Source identity and parent CapturePo
       return {state:'available' as const,record:{
         offset:70,fileIdentity:'1:9',recordSha256:'a'.repeat(64),
         role:'user',
-        fragments:[{ordinal:0,text:'sensitive-source-string'}],
+        fragments:[{ordinal:0,text:'sensitive-source-string',kind:'message'}],
         totalTextFragments:1,
       }}
     },
@@ -478,7 +478,7 @@ test('large native record fragments require Source identity and parent CapturePo
   assert.equal(result.state,'available')
   if(result.state==='available'){
     assert.deepEqual(result.record.fragments,[
-      {ordinal:0,text:'[已脱敏]',redactionApplied:true},
+      {ordinal:0,text:'[已脱敏]',kind:'message',redactionApplied:true},
     ])
     assert.equal(JSON.stringify(result).includes('sensitive-source-string'),false)
   }
@@ -507,7 +507,7 @@ test('large split scalar fragments are masked under redacted CapturePolicy',asyn
       return {state:'available' as const,record:{
         offset:0,fileIdentity:'1:9',recordSha256:'a'.repeat(64),
         role:'user',
-        fragments:[{ordinal:0,text:'sk-sensitive-long-token-part',splitScalar:true}],
+        fragments:[{ordinal:0,text:'sk-sensitive-long-token-part',kind:'thinking',contentIndex:0,splitScalar:true}],
         totalTextFragments:2,nextFragmentOffset:1,
       }}
     },
@@ -525,7 +525,7 @@ test('large split scalar fragments are masked under redacted CapturePolicy',asyn
   })
   assert.equal(value.state,'available')
   if(value.state==='available')assert.deepEqual(value.record.fragments,[{
-    ordinal:0,text:'[超长文本片段已脱敏]',
+    ordinal:0,text:'[超长文本片段已脱敏]',kind:'thinking',contentIndex:0,
     splitScalar:true,redactionApplied:true,suppressed:true,
   }])
   assert.equal(called,false,'raw split token must not be redacted independently')

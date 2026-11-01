@@ -20,6 +20,12 @@ export interface NativeJsonlTextFragment {
   /** Ordinal of a bounded, decoded UTF-8 text fragment inside one record. */
   ordinal:number
   text:string
+  /** Source-verified semantic lane; fragments are never complete events. */
+  kind:'message'|'thinking'|'tool-call'|'tool-result'
+  /** Native content[] index, not a synthetic turn. */
+  contentIndex?:number
+  /** SHA-256 of bounded native tool ID, without disclosing the raw ID. */
+  callKey?:string
   /** This text leaf spans multiple fragments; policy must not redact them
    * separately without taking token-boundary context into account. */
   splitScalar?:boolean
@@ -38,19 +44,33 @@ export type NativeJsonlFragmentReadResult =
 
 type PathKey=string|number
 type Frame={kind:'object'|'array';path:PathKey[];key?:string;next:number}
-type StringKind='id'|'type'|'role'|'text'|'ignored'
+type StringKind='id'|'type'|'role'|'text'|'thinking'|'argument'
+  |'blockType'|'blockId'|'resultCallId'|'ignored'
+type FragmentKind=NativeJsonlTextFragment['kind']
+
+function contentIndex(path:readonly PathKey[]):number|undefined{
+  return path[0]==='message'&&path[1]==='content'
+    &&typeof path[2]==='number'?path[2]:undefined
+}
 
 function classify(path:readonly PathKey[]):StringKind{
   if(path.length===1&&path[0]==='id')return 'id'
   if(path.length===1&&path[0]==='type')return 'type'
   if(path.length===2&&path[0]==='message'&&path[1]==='role')return 'role'
-  // Pi user/assistant text can be a plain string, a content[].text field,
-  // or a sequence of content[].text[] pieces. Never expose image/base64.
+  if(path.length===2&&path[0]==='message'&&path[1]==='toolCallId')return 'resultCallId'
+  // Scalar and typed message content; media/base64 stays outside this lane.
   if(path.length===2&&path[0]==='message'&&path[1]==='content')return 'text'
-  if(path.length>=4&&path.length<=5
-    &&path[0]==='message'&&path[1]==='content'
-    &&typeof path[2]==='number'&&path[3]==='text'
-    &&(path.length===4||typeof path[4]==='number'))return 'text'
+  const index=contentIndex(path)
+  if(index===undefined)return 'ignored'
+  if(path.length===3)return 'text'
+  if(path.length===4&&path[3]==='type')return 'blockType'
+  if(path.length===4&&path[3]==='id')return 'blockId'
+  if(path.length===4&&path[3]==='thinking')return 'thinking'
+  if(path[3]==='text'&&(path.length===4
+    ||(path.length===5&&typeof path[4]==='number')))return 'text'
+  // Only known toolCall blocks may yield nested argument strings.
+  if(path.length>=4&&(path[3]==='arguments'||path[3]==='args')
+    &&!path.some(key=>key==='data'||key==='base64'||key==='image'))return 'argument'
   return 'ignored'
 }
 
@@ -90,6 +110,10 @@ export async function readNativeJsonlTextFragments(input:{
     let nativeEventId:string|undefined
     let nativeType:string|undefined
     let role:string|undefined
+    let resultCallId:string|undefined
+    let currentBlock:{index:number;type?:string;id?:string}|undefined
+    let selectedIndex:number|undefined
+    let textKind:FragmentKind='message'
     let failed:string|undefined
     let inKey=false
     let keyBuffer=''
@@ -123,7 +147,8 @@ export async function readNativeJsonlTextFragments(input:{
           failed='native-fragment-output-budget'
           throw new Error(failed)
         }
-        fragments.push({ordinal,text:textBuffer})
+        fragments.push({ordinal,text:textBuffer,kind:textKind,
+          ...(selectedIndex===undefined?{}:{contentIndex:selectedIndex})})
         selectedLeafIds.push(currentTextLeaf)
         selectedBytes+=textBytes
       }
@@ -163,6 +188,9 @@ export async function readNativeJsonlTextFragments(input:{
         case 'startObject':
         case 'startArray':{
           const path=nextPath()
+          if(name==='startObject'&&path.length===3
+            &&contentIndex(path)!==undefined)
+            currentBlock={index:path[2] as number}
           if(stack.length>=MAX_DEPTH){
             failed='native-record-depth-budget'
             throw new Error(failed)
@@ -171,10 +199,29 @@ export async function readNativeJsonlTextFragments(input:{
           return
         }
         case 'endObject':
-        case 'endArray':
-          if(!stack.length){failed='native-record-invalid-json';throw new Error(failed)}
+        case 'endArray':{
+          const frame=stack.at(-1)
+          if(!frame){failed='native-record-invalid-json';throw new Error(failed)}
+          if(name==='endObject'&&frame.path.length===3&&currentBlock
+            &&contentIndex(frame.path)===currentBlock.index){
+            for(const fragment of fragments){
+              if(fragment.contentIndex!==currentBlock.index)continue
+              if(fragment.kind==='message'&&currentBlock.type==='thinking')
+                fragment.kind='thinking'
+              if(fragment.kind==='message'&&currentBlock.type
+                &&currentBlock.type!=='text'&&currentBlock.type!=='thinking'){
+                failed='native-record-unverified-content-block'
+                throw new Error(failed)
+              }
+              if(fragment.kind==='tool-call'&&currentBlock.type==='toolCall'
+                &&currentBlock.id)
+                fragment.callKey=createHash('sha256').update(currentBlock.id).digest('hex')
+            }
+            currentBlock=undefined
+          }
           stack.pop()
           return
+        }
         case 'startKey':
           inKey=true;keyBuffer='';keyBytes=0
           return
@@ -187,13 +234,28 @@ export async function readNativeJsonlTextFragments(input:{
           current.key=keyBuffer
           return
         }
-        case 'startString':
-          stringKind=classify(nextPath())
+        case 'startString':{
+          const path=nextPath()
+          selectedIndex=contentIndex(path)
+          stringKind=classify(path)
+          // A late/missing type cannot authorize arbitrary tool arguments.
+          if(stringKind==='argument'&&currentBlock?.type!=='toolCall')
+            stringKind='ignored'
+          if(stringKind==='thinking'&&currentBlock?.type!=='thinking')
+            stringKind='ignored'
+          if(stringKind==='text'&&currentBlock?.type
+            &&currentBlock.type!=='text'&&currentBlock.type!=='thinking')
+            stringKind='ignored'
+          textKind=stringKind==='thinking'?'thinking'
+            :stringKind==='argument'?'tool-call':'message'
           meta='';textBuffer='';textBytes=0;pendingHighSurrogate=''
-          if(stringKind==='text'){currentTextLeaf=nextTextLeaf++;textPieces=0}
+          if(stringKind==='text'||stringKind==='thinking'||stringKind==='argument'){
+            currentTextLeaf=nextTextLeaf++;textPieces=0
+          }
           return
+        }
         case 'endString':
-          if(stringKind==='text'){
+          if(stringKind==='text'||stringKind==='thinking'||stringKind==='argument'){
             if(pendingHighSurrogate){
               const lone=pendingHighSurrogate
               pendingHighSurrogate=''
@@ -212,6 +274,9 @@ export async function readNativeJsonlTextFragments(input:{
           else if(stringKind==='id')nativeEventId=meta
           else if(stringKind==='type')nativeType=meta
           else if(stringKind==='role')role=meta
+          else if(stringKind==='resultCallId')resultCallId=meta
+          else if(stringKind==='blockType'&&currentBlock)currentBlock.type=meta
+          else if(stringKind==='blockId'&&currentBlock)currentBlock.id=meta
           stringKind='ignored'
           return
         case 'stringChunk':{
@@ -223,7 +288,8 @@ export async function readNativeJsonlTextFragments(input:{
               throw new Error(failed)
             }
             keyBuffer+=text
-          }else if(stringKind==='text')writeText(text)
+          }else if(stringKind==='text'||stringKind==='thinking'
+            ||stringKind==='argument')writeText(text)
           else if(stringKind!=='ignored'){
             if(Buffer.byteLength(meta,'utf8')+Buffer.byteLength(text,'utf8')>MAX_META_BYTES){
               failed='native-record-metadata-budget'
@@ -289,6 +355,17 @@ export async function readNativeJsonlTextFragments(input:{
       return {state:'drifted',reason:'native-record-boundary-changed'}
     if(fragmentOffset>totalTextFragments)
       return {state:'unsupported',reason:'invalid-fragment-window'}
+    // Tool results live in another physical record. Match by exact native
+    // ID while only exposing a hashed join key to fragment consumers.
+    if(role==='tool'||role==='toolResult'){
+      const callKey=resultCallId
+        ?createHash('sha256').update(resultCallId).digest('hex'):undefined
+      for(const fragment of fragments){
+        if(fragment.kind!=='message')continue
+        fragment.kind='tool-result'
+        if(callKey)fragment.callKey=callKey
+      }
+    }
     return {state:'available',record:{
       offset:span.offset,fileIdentity:span.fileIdentity,
       recordSha256:span.sha256,sourceLineSha256:lineSha.digest('hex'),
