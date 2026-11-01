@@ -74,6 +74,7 @@ export type NativeJsonlFragmentReadResult =
       /** SHA-256 excluding an optional CRLF record delimiter. */
       sourceLineSha256:string
       nativeEventId?:string;nativeType?:string;role?:string
+      nativeTimestamp?:string;nativeParentId?:string
       /** Verified result-only native toolCallId hash. Source-private metadata. */
       resultCallKey?:string
       fragments:NativeJsonlTextFragment[]
@@ -87,7 +88,7 @@ export type NativeJsonlFragmentReadResult =
 
 type PathKey=string|number
 type Frame={kind:'object'|'array';path:PathKey[];key?:string;next:number}
-type StringKind='id'|'type'|'role'|'text'|'thinking'|'argument'
+type StringKind='id'|'type'|'role'|'timestamp'|'parentId'|'text'|'thinking'|'argument'
   |'blockType'|'blockId'|'blockName'|'resultCallId'|'imageMime'|'imageData'|'resultField'|'ignored'
 type FragmentKind=NativeJsonlTextFragment['kind']
 
@@ -99,6 +100,8 @@ function contentIndex(path:readonly PathKey[]):number|undefined{
 function classify(path:readonly PathKey[]):StringKind{
   if(path.length===1&&path[0]==='id')return 'id'
   if(path.length===1&&path[0]==='type')return 'type'
+  if(path.length===1&&path[0]==='timestamp')return 'timestamp'
+  if(path.length===1&&path[0]==='parentId')return 'parentId'
   if(path.length===2&&path[0]==='message'&&path[1]==='role')return 'role'
   if(path.length===2&&path[0]==='message'&&path[1]==='toolCallId')return 'resultCallId'
   // Source-level details remain partial evidence, never a normalized result.
@@ -169,6 +172,8 @@ export async function readNativeJsonlTextFragments(input:{
     let selectedBytes=0
     let nativeEventId:string|undefined
     let nativeType:string|undefined
+    let nativeTimestamp:string|undefined
+    let nativeParentId:string|undefined
     let role:string|undefined
     let resultCallId:string|undefined
     let currentBlock:{index:number;type?:string;id?:string;name?:string
@@ -411,6 +416,8 @@ export async function readNativeJsonlTextFragments(input:{
           }
           else if(stringKind==='id')nativeEventId=meta
           else if(stringKind==='type')nativeType=meta
+          else if(stringKind==='timestamp')nativeTimestamp=meta
+          else if(stringKind==='parentId')nativeParentId=meta
           else if(stringKind==='role')role=meta
           else if(stringKind==='resultCallId')resultCallId=meta
           else if(stringKind==='blockType'&&currentBlock)currentBlock.type=meta
@@ -579,6 +586,8 @@ export async function readNativeJsonlTextFragments(input:{
       recordSha256:span.sha256,sourceLineSha256:lineSha.digest('hex'),
       ...(nativeEventId?{nativeEventId}:{}),
       ...(nativeType?{nativeType}:{}),
+      ...(nativeTimestamp?{nativeTimestamp}:{}),
+      ...(nativeParentId?{nativeParentId}:{}),
       ...(role?{role}:{}),
       ...((role==='tool'||role==='toolResult')&&resultCallId
         ?{resultCallKey:createHash('sha256').update(resultCallId).digest('hex')}:{}),
