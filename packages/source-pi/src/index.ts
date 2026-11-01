@@ -161,6 +161,7 @@ async function readPiVerifiedLargeImagePage(
     return {state:'drifted',reason:'native-record-fingerprint-changed'}
   const blocks=original.contentBlocks
   const imageBlocks=blocks.filter(block=>block.kind==='image')
+  const verifiedImages=new Map(original.images.map(info=>[info.contentIndex,info]))
   const assistant=original.role==='assistant'
   const toolResult=original.role==='tool'||original.role==='toolResult'
   const scalar=(toolResult?original.strictLargeToolResultShape
@@ -182,8 +183,10 @@ async function readPiVerifiedLargeImagePage(
     ||!original.nativeEventId||original.recordSha256!==scan.span.sha256
     ||original.fileIdentity!==scan.span.fileIdentity
     ||original.contentBlocksTruncated||original.imagesTruncated
-    ||imageBlocks.length!==1||original.images.length!==1
-    ||original.images[0]?.contentIndex!==imageBlocks[0]?.contentIndex
+    ||imageBlocks.length<1||imageBlocks.length>4
+    ||original.images.length!==imageBlocks.length
+    ||imageBlocks.some(block=>!verifiedImages.has(block.contentIndex)
+      ||!verifiedImages.get(block.contentIndex)?.mimeType)
     ||blocks.length===0||blocks.length>64
     ||blocks.some((block,index)=>block.contentIndex!==index
       ||(assistant
@@ -213,22 +216,27 @@ async function readPiVerifiedLargeImagePage(
   // Reuse the existing image validator; a MIME label and a JSON string by
   // themselves do not prove the original base64 image payload is well formed.
   if(!scalar){
-    const image=imageBlocks[0]!
-    const media=await readNativeJsonlTextFragments({
-      path:query.filePath,allowedRoots:roots,
-      ...(query.cursor?{cursor:query.cursor}:{}),
-      expectedSha256:scan.span.sha256,fragmentOffset:0,limit:1,
-      media:{contentIndex:image.contentIndex,offset:0,limit:4},
-      signal:ctx.abortSignal,
-    })
-    if(media.state!=='available'){
-      if(media.state==='drifted'||media.state==='unavailable')return media
-      return {state:'unsupported',reason:'native-record-too-large'}
+    // Each original media payload must be independently verified; same-MIME
+    // pictures remain distinct by original content[] ordinal, never order-
+    // guessed by the client. Four images cap repeated streaming passes.
+    for(const image of imageBlocks){
+      const media=await readNativeJsonlTextFragments({
+        path:query.filePath,allowedRoots:roots,
+        ...(query.cursor?{cursor:query.cursor}:{}),
+        expectedSha256:scan.span.sha256,fragmentOffset:0,limit:1,
+        media:{contentIndex:image.contentIndex,offset:0,limit:4},
+        signal:ctx.abortSignal,
+      })
+      if(media.state!=='available'){
+        if(media.state==='drifted'||media.state==='unavailable')return media
+        return {state:'unsupported' as const,reason:'native-record-too-large'}
+      }
+      if(media.record.recordSha256!==scan.span.sha256)
+        return {state:'drifted' as const,reason:'native-record-hash-changed'}
+      if(media.record.media?.contentIndex!==image.contentIndex
+        ||media.record.media.mimeType!==verifiedImages.get(image.contentIndex)?.mimeType)
+        return {state:'unsupported' as const,reason:'native-record-too-large'}
     }
-    if(media.record.recordSha256!==scan.span.sha256)
-      return {state:'drifted',reason:'native-record-hash-changed'}
-    if(media.record.media?.contentIndex!==image.contentIndex)
-      return {state:'unsupported',reason:'native-record-too-large'}
   }
 
   const auth=await authorizeNativeSessionPath(query.filePath,roots)
@@ -245,7 +253,8 @@ async function readPiVerifiedLargeImagePage(
     return {state:'drifted',reason:'native-file-changed-after-semantic-scan'}
   const content=scalar?'':blocks.map(block=>{
     if(block.kind==='image')
-      return {type:'image',mimeType:original.images[0]!.mimeType}
+      return {type:'image',mimeType:verifiedImages.get(block.contentIndex)!.mimeType,
+        nativeContentIndex:block.contentIndex}
     if(block.kind==='tool-call')
       return {type:'toolCall',id:block.nativeCallId!,name:block.name!,
         arguments:block.verifiedArguments!}
