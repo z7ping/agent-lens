@@ -12,7 +12,7 @@ import {
 } from '@agent-lens/runtime-cordis'
 import { readAuthorizedNativeJsonlEntry, readNativeSessionWindow,
   readNativeJsonlTextFragments, inspectNativeSessionRecordSpan,
-  verifyJsonlLineSha256 } from '@agent-lens/source-support'
+  authorizeNativeSessionPath, verifyJsonlLineSha256 } from '@agent-lens/source-support'
 import { discoverPiAssets, piAssetInternals } from './assets'
 import { PI_PARSER_VERSION, PI_SOURCE_ID } from './constants'
 import { normalizePiRecord } from './normalize'
@@ -236,11 +236,13 @@ export const piSourceDefinition: SourceDefinition = {
     if(!Number.isSafeInteger(limit)||limit<1||limit>8)
       return {state:'unsupported' as const,reason:'invalid-oversized-search-limit'}
     ctx.abortSignal.throwIfAborted()
-    const header=await readPiSessionMetadata(query.filePath)
+    const roots=ctx.installation.dataRoot?[ctx.installation.dataRoot]:[]
+    const auth=await authorizeNativeSessionPath(query.filePath,roots)
+    if(auth.state!=='authorized')return auth
+    const header=await readPiSessionMetadata(auth.sourcePath)
     if(header.nativeSessionId!==query.nativeSessionId)
       return {state:'drifted' as const,reason:'native-session-identity-changed'}
-    const roots=ctx.installation.dataRoot?[ctx.installation.dataRoot]:[]
-    const original=await stat(query.filePath)
+    const original=await stat(auth.sourcePath)
     if(!original.isFile())return {state:'unsupported' as const,reason:'native-source-is-not-a-file'}
     let cursor=query.cursor
     let inspectedBytes=0
