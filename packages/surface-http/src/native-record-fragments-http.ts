@@ -122,7 +122,16 @@ export async function handleNativeRecordFragmentsRequest(
       ...(result.record.nativeEventId?{nativeEventId:result.record.nativeEventId}:{}),
       ...(result.record.nativeType?{nativeType:result.record.nativeType}:{}),
       ...(result.record.role?{role:result.record.role}:{}),
-      fragments:result.record.fragments,
+      // Explicit DTO whitelist: Source/Reader may carry private policy
+      // context, which must never be spread into a browser response.
+      fragments:result.record.fragments.map(fragment=>({
+        ordinal:fragment.ordinal,text:fragment.text,kind:fragment.kind,
+        ...(fragment.contentIndex===undefined?{}:{contentIndex:fragment.contentIndex}),
+        ...(fragment.callKey?{callKey:fragment.callKey}:{}),
+        ...(fragment.redactionApplied?{redactionApplied:true}:{}),
+        ...(fragment.suppressed?{suppressed:true}:{}),
+        ...(fragment.splitScalar?{splitScalar:true}:{}),
+      })),
       totalTextFragments:result.record.totalTextFragments,
       ...(result.record.images?{images:result.record.images}:{}),
       ...(result.record.imagesTruncated?{imagesTruncated:true}:{}),
