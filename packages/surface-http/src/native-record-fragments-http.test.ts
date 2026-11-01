@@ -1,0 +1,75 @@
+import assert from 'node:assert/strict'
+import test from 'node:test'
+import { createServer } from 'node:http'
+import type { NativeSessionCatalogStore } from '@agent-lens/core'
+import type { NativeSessionWindowReader } from './native-session-http'
+import { encodeNativeSessionCursor } from './native-session-http'
+import { handleNativeRecordFragmentsRequest } from './native-record-fragments-http'
+
+test('record fragment route uses Catalog identity, never accepts paths, and returns sanitized fragment-only DTO',async()=>{
+  const sessionId='native:'+'f'.repeat(32)
+  const sha='a'.repeat(64)
+  const cursor=encodeNativeSessionCursor({
+    offset:120,sequence:2,fileIdentity:'device:inode',
+    recordFingerprint:'b'.repeat(64),
+    mode:'review-turns',turnOrdinal:1,
+  })
+  let calls=0
+  const reader={
+    async read(){return {state:'unsupported' as const,reason:'unused'}},
+    async readTextFragments(query:{
+      sourceId:string;installationId:string;nativeSessionId:string
+      cursor:{offset:number};fragmentOffset?:number;expectedSha256?:string
+    }){
+      calls++
+      assert.deepEqual([
+        query.sourceId,query.installationId,query.nativeSessionId,query.cursor.offset,
+      ],['pi','install','native-S',120])
+      assert.equal(query.fragmentOffset,0)
+      return {state:'available' as const,record:{
+        offset:120,fileIdentity:'device:inode',recordSha256:sha,
+        nativeEventId:'native-user',role:'user',
+        fragments:[{ordinal:0,text:'[已脱敏]',redactionApplied:true}],
+        totalTextFragments:2,nextFragmentOffset:1,
+      }}
+    },
+  } as unknown as NativeSessionWindowReader
+  const catalog={
+    async getByReviewSessionId(id:string){
+      assert.equal(id,sessionId)
+      return {sourceId:'pi',installationId:'install',
+        nativeSessionId:'native-S',locationKind:'native'}
+    },
+  } as unknown as Pick<NativeSessionCatalogStore,'getByReviewSessionId'>
+  const server=createServer(async(req,res)=>{
+    try{
+      const url=new URL(req.url??'/', 'http://127.0.0.1')
+      if(!await handleNativeRecordFragmentsRequest(req,res,url,reader,catalog)){
+        res.statusCode=404;res.end()
+      }
+    }catch(error){res.statusCode=400;res.end(error instanceof Error?error.message:'invalid')}
+  })
+  await new Promise<void>(resolve=>server.listen(0,'127.0.0.1',resolve))
+  try{
+    const address=server.address()
+    assert.ok(address&&typeof address==='object')
+    const base=`http://127.0.0.1:${address.port}/api/v1/native-sessions/${encodeURIComponent(sessionId)}/record-fragments`
+    const valid=await fetch(`${base}?cursor=${cursor}`)
+    assert.equal(valid.status,200)
+    const result=await valid.json() as Record<string,unknown>
+    assert.equal(result.state,'available')
+    assert.equal(result.coverage,'fragment-only')
+    assert.equal(result.sessionId,sessionId)
+    assert.equal(result.recordSha256,sha)
+    assert.deepEqual(result.fragments,[{ordinal:0,text:'[已脱敏]',redactionApplied:true}])
+    assert.equal(result.nextFragmentOffset,1)
+    assert.equal(JSON.stringify(result).includes('fileIdentity'),false)
+    assert.equal(JSON.stringify(result).includes('filePath'),false)
+    assert.equal(calls,1)
+    assert.equal((await fetch(`${base}?cursor=${cursor}&path=/etc/passwd`)).status,400)
+    assert.equal((await fetch(`${base}?cursor=${cursor}&fragmentOffset=1`)).status,400)
+    assert.equal(calls,1,'invalid selectors are rejected before invoking Source')
+    assert.equal((await fetch(`${base}?cursor=${cursor}&fragmentOffset=1&expectedSha256=${sha}`)).status,200)
+    assert.equal(calls,2)
+  }finally{await new Promise<void>(resolve=>server.close(()=>resolve()))}
+})
