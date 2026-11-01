@@ -609,6 +609,10 @@ export async function readNativeJsonlTextFragments(input:{
         case 'trueValue':
         case 'falseValue':{
           const path=nextPath()
+          if(path.length===1&&['type','id','parentId','timestamp'].includes(String(path[0]))
+            ||path.length===2&&path[0]==='message'
+              &&['role','provider','model','stopReason','errorMessage'].includes(String(path[1])))
+            strictLargeAssistantShape=false
           if(toolFieldContext(path)){
             valueType=name==='nullValue'?'null':'boolean'
             currentTextLeaf=nextTextLeaf++
