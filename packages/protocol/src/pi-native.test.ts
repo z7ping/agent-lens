@@ -53,8 +53,9 @@ test('Pi Native Normalizer preserves assistant content block order, ids, indexes
   assert.deepEqual(tool.input, { command: 'git status' })
 
   const nonText = facts[5]
-  assert.ok(nonText?.kind === 'unknown')
-  assert.deepEqual(nonText.payload, { type: 'image', mimeType: 'image/png', data: 'safe-placeholder' })
+  assert.ok(nonText?.kind === 'message')
+  assert.equal(nonText.role, 'assistant')
+  assert.deepEqual(nonText.nonTextContent, [{ type: 'image', mimeType: 'image/png', data: 'safe-placeholder' }])
 
   const usage = facts[6]
   assert.ok(usage?.kind === 'usage')

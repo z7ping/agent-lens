@@ -127,12 +127,11 @@ const jsonlRawRecovery: NonNullable<SourceDefinition['rawRecovery']> = {
   },
 }
 
-/** Narrow, evidence-complete recovery for an oversized Pi user message
- * whose size comes from ONE inline image. Every text leaf must fit in the
- * bounded fragment window. Image bytes remain lazy in the original Source.
- * Unsupported shapes never advance the Review cursor.
+/** Evidence-complete recovery only when ONE huge inline image makes a Pi
+ * user/assistant record oversized and all semantic text/Thinking and tool
+ * arguments fit the bounded Source window. Never invent missing fields.
  */
-async function readPiVerifiedLargeUserImagePage(
+async function readPiVerifiedLargeImagePage(
   query:Parameters<NonNullable<SourceDefinition['readNativeSessionPage']>>[0],
   ctx:Parameters<NonNullable<SourceDefinition['readNativeSessionPage']>>[1],
 ):ReturnType<NonNullable<SourceDefinition['readNativeSessionPage']>>{
@@ -162,8 +161,10 @@ async function readPiVerifiedLargeUserImagePage(
     return {state:'drifted',reason:'native-record-fingerprint-changed'}
   const blocks=original.contentBlocks
   const imageBlocks=blocks.filter(block=>block.kind==='image')
-  if(!original.strictImageUserShape
-    ||original.nativeType!=='message'||original.role!=='user'
+  const assistant=original.role==='assistant'
+  if(!(assistant?original.strictLargeAssistantShape:original.strictImageUserShape)
+    ||original.nativeType!=='message'
+    ||(original.role!=='user'&&!assistant)
     ||!original.nativeEventId||original.recordSha256!==scan.span.sha256
     ||original.fileIdentity!==scan.span.fileIdentity
     ||original.contentBlocksTruncated||original.imagesTruncated
@@ -171,15 +172,26 @@ async function readPiVerifiedLargeUserImagePage(
     ||original.images[0]?.contentIndex!==imageBlocks[0]?.contentIndex
     ||blocks.length===0||blocks.length>64
     ||blocks.some((block,index)=>block.contentIndex!==index
-      ||(block.kind!=='text'&&block.kind!=='image'))
+      ||(assistant
+        ?!['text','thinking','tool-call','image'].includes(block.kind)
+        :block.kind!=='text'&&block.kind!=='image'))
+    ||(assistant&&blocks.some(block=>block.kind==='tool-call'
+      &&(!block.emptyArguments||!block.nativeCallId||!block.name
+        ||block.fragmentCount!==0)))
+    ||(assistant&&new Set(blocks.filter(block=>block.kind==='tool-call')
+      .map(block=>block.nativeCallId)).size
+      !==blocks.filter(block=>block.kind==='tool-call').length)
     ||original.totalTextFragments!==original.fragments.length
     ||original.totalTextFragments>16
-    ||original.fragments.some(fragment=>fragment.kind!=='message'
-      ||fragment.contentIndex===undefined
+    ||original.fragments.some(fragment=>
+      fragment.contentIndex===undefined
       ||!blocks.some(block=>block.contentIndex===fragment.contentIndex
-        &&block.kind==='text'))
-    ||blocks.some(block=>block.kind==='text'&&block.fragmentCount===0
-      ||original.fragments.filter(piece=>piece.contentIndex===block.contentIndex).length!==block.fragmentCount))
+        &&(block.kind==='text'&&fragment.kind==='message'
+          ||assistant&&block.kind==='thinking'&&fragment.kind==='thinking')))
+    ||blocks.some(block=>['text','thinking'].includes(block.kind)
+      &&(block.fragmentCount===0
+        ||original.fragments.filter(piece=>piece.contentIndex===block.contentIndex)
+          .length!==block.fragmentCount)))
     return {state:'unsupported',reason:'native-record-too-large'}
 
   // Reuse the existing image validator; a MIME label and a JSON string by
@@ -213,10 +225,17 @@ async function readPiVerifiedLargeUserImagePage(
   if(!after.isFile()||after.dev!==before.dev||after.ino!==before.ino
     ||after.size!==before.size||after.mtimeMs!==before.mtimeMs)
     return {state:'drifted',reason:'native-file-changed-after-semantic-scan'}
-  const content=blocks.map(block=>block.kind==='text'
-    ?{type:'text',text:original.fragments.filter(x=>x.contentIndex===block.contentIndex)
-      .map(x=>x.text).join('')}
-    :{type:'image',mimeType:original.images[0]!.mimeType})
+  const content=blocks.map(block=>{
+    if(block.kind==='image')
+      return {type:'image',mimeType:original.images[0]!.mimeType}
+    if(block.kind==='tool-call')
+      return {type:'toolCall',id:block.nativeCallId!,name:block.name!,
+        arguments:{}}
+    const text=original.fragments.filter(x=>x.contentIndex===block.contentIndex)
+      .map(x=>x.text).join('')
+    return block.kind==='thinking'?{type:'thinking',thinking:text}
+      :{type:'text',text}
+  })
   const start=scan.span.offset
   const sequence=(query.cursor?.sequence??0)+1
   const recordHash=createHash('sha256')
@@ -229,7 +248,8 @@ async function readPiVerifiedLargeUserImagePage(
     type:'message',id:original.nativeEventId,
     ...(original.nativeParentId?{parentId:original.nativeParentId}:{}),
     ...(timestamp?{timestamp}:{}),
-    message:{role:'user',content},
+    message:{role:original.role,content,
+      ...(assistant?original.assistantMeta??{}:{})},
   }
   const record:SourceRecord={
     id:`pi-record-${recordHash}`,sourceId:PI_SOURCE_ID,
@@ -303,7 +323,7 @@ export const piSourceDefinition: SourceDefinition = {
     if (page.state !== 'available') {
       if(page.state==='unsupported'&&page.reason==='native-record-too-large'
         &&query.limit===1)
-        return readPiVerifiedLargeUserImagePage(query,ctx)
+        return readPiVerifiedLargeImagePage(query,ctx)
       return page
     }
     ctx.abortSignal.throwIfAborted()

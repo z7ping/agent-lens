@@ -44,6 +44,10 @@ export interface NativeJsonlContentBlock {
   /** Native name/ID may be exported only after the central tool CapturePolicy. */
   name?:string
   callKey?:string
+  /** Source-private original ID; NEVER returned from public fragment HTTP. */
+  nativeCallId?:string
+  /** Tool arguments are proven absent or an empty JSON object. */
+  emptyArguments?:boolean
 }
 
 export interface NativeJsonlTextFragment {
@@ -77,6 +81,11 @@ export type NativeJsonlFragmentReadResult =
       nativeTimestamp?:string;nativeParentId?:string
       /** All value paths match the narrow Pi image-user semantic schema. */
       strictImageUserShape:boolean
+      /** Stream-verified assistant text/thinking/empty-tool/media shape. */
+      strictLargeAssistantShape:boolean
+      assistantMeta?:{
+        provider?:string;model?:string;stopReason?:string;errorMessage?:string
+      }
       /** Verified result-only native toolCallId hash. Source-private metadata. */
       resultCallKey?:string
       fragments:NativeJsonlTextFragment[]
@@ -90,7 +99,7 @@ export type NativeJsonlFragmentReadResult =
 
 type PathKey=string|number
 type Frame={kind:'object'|'array';path:PathKey[];key?:string;next:number}
-type StringKind='id'|'type'|'role'|'timestamp'|'parentId'|'text'|'thinking'|'argument'
+type StringKind='id'|'type'|'role'|'timestamp'|'parentId'|'provider'|'model'|'stopReason'|'errorMessage'|'text'|'thinking'|'argument'
   |'blockType'|'blockId'|'blockName'|'resultCallId'|'imageMime'|'imageData'|'resultField'|'ignored'
 type FragmentKind=NativeJsonlTextFragment['kind']
 
@@ -105,6 +114,9 @@ function classify(path:readonly PathKey[]):StringKind{
   if(path.length===1&&path[0]==='timestamp')return 'timestamp'
   if(path.length===1&&path[0]==='parentId')return 'parentId'
   if(path.length===2&&path[0]==='message'&&path[1]==='role')return 'role'
+  if(path.length===2&&path[0]==='message'
+    &&['provider','model','stopReason','errorMessage'].includes(String(path[1])))
+    return path[1] as StringKind
   if(path.length===2&&path[0]==='message'&&path[1]==='toolCallId')return 'resultCallId'
   // Source-level details remain partial evidence, never a normalized result.
   if(path.length>=2&&path[0]==='message'&&path[1]==='details'
@@ -177,10 +189,16 @@ export async function readNativeJsonlTextFragments(input:{
     let nativeTimestamp:string|undefined
     let nativeParentId:string|undefined
     let strictImageUserShape=true
+    let strictLargeAssistantShape=true
+    const seenSourcePaths=new Set<string>()
+    const assistantMeta:{
+      provider?:string;model?:string;stopReason?:string;errorMessage?:string
+    }={}
     let role:string|undefined
     let resultCallId:string|undefined
     let currentBlock:{index:number;type?:string;id?:string;name?:string
-      mimeType?:string;hasData?:boolean;fragmentCount:number}|undefined
+      mimeType?:string;hasData?:boolean;fragmentCount:number
+      keys:Set<string>;argumentsEmpty?:boolean}|undefined
     const contentBlocks:NativeJsonlContentBlock[]=[]
     let contentBlocksTruncated=false
     const images:NativeInlineImageInfo[]=[]
@@ -225,6 +243,21 @@ export async function readNativeJsonlTextFragments(input:{
         &&['type','text','mimeType','mime_type','data'].includes(path[3])
       return false
     }
+    const permittedAssistantPath=(path:readonly PathKey[]):boolean=>{
+      if(path.length===0)return true
+      if(path.length===1)return typeof path[0]==='string'
+        &&['type','id','parentId','timestamp','message'].includes(path[0])
+      if(path[0]!=='message')return false
+      if(path.length===2)return typeof path[1]==='string'
+        &&['role','content','provider','model','stopReason','errorMessage'].includes(path[1])
+      if(path[1]!=='content'||typeof path[2]!=='number')return false
+      if(path.length===3)return true
+      if(path.length===4)return typeof path[3]==='string'
+        &&['type','text','thinking','id','name','arguments',
+          'mimeType','mime_type','data'].includes(path[3])
+      // An assistant tool's complete JSON arguments may only be {}.
+      return false
+    }
     const nextPath=():PathKey[]=>{
       const frame=stack.at(-1)
       if(!frame)return []
@@ -236,6 +269,24 @@ export async function readNativeJsonlTextFragments(input:{
         frame.key=undefined
       }
       if(!permittedImageUserPath(result))strictImageUserShape=false
+      if(!permittedAssistantPath(result))strictLargeAssistantShape=false
+      // JSON permits repeated object keys, but a projected Source fact cannot
+      // silently choose a different occurrence or conflate two call IDs.
+      if(frame.kind==='object'&&result.length<=4){
+        const key=JSON.stringify(result)
+        if(seenSourcePaths.has(key)){
+          strictImageUserShape=false
+          strictLargeAssistantShape=false
+        }else seenSourcePaths.add(key)
+      }
+      if(result.length===4&&currentBlock&&result[0]==='message'
+        &&result[1]==='content'&&result[2]===currentBlock.index
+        &&typeof result[3]==='string'){
+        currentBlock.keys.add(result[3])
+        if(result[3]==='arguments')currentBlock.argumentsEmpty=false
+      }
+      if(result.length>4&&currentBlock&&(result[3]==='arguments'||result[3]==='args'))
+        currentBlock.argumentsEmpty=false
       return result
     }
     const toolFieldContext=(path:readonly PathKey[])=>{
@@ -308,9 +359,18 @@ export async function readNativeJsonlTextFragments(input:{
         case 'startObject':
         case 'startArray':{
           const path=nextPath()
+          if(path.length===2&&path[0]==='message'
+            &&['role','provider','model','stopReason','errorMessage'].includes(String(path[1]))){
+            strictLargeAssistantShape=false
+          }
           if(name==='startObject'&&path.length===3
             &&contentIndex(path)!==undefined)
-            currentBlock={index:path[2] as number,fragmentCount:0}
+            currentBlock={index:path[2] as number,fragmentCount:0,
+              keys:new Set<string>()}
+          if(name==='startObject'&&path.length===4&&currentBlock
+            &&path[3]==='arguments')currentBlock.argumentsEmpty=true
+          if(name==='startArray'&&path.length===4&&currentBlock
+            &&path[3]==='arguments')currentBlock.argumentsEmpty=false
           if(stack.length>=MAX_DEPTH){
             failed='native-record-depth-budget'
             throw new Error(failed)
@@ -334,6 +394,19 @@ export async function readNativeJsonlTextFragments(input:{
                 mediaFound=true
               }
             }
+            // Check the exact per-block field set. Accepting a known type
+            // while silently discarding another native field would fabricate
+            // completeness in the shared TaskSurface.
+            const permittedKeys=currentBlock.type==='toolCall'
+              ?['type','id','name','arguments']
+              :currentBlock.type==='image'
+                ?['type','mimeType','mime_type','data']
+                :currentBlock.type==='thinking'
+                  ?['type','thinking','text']
+                  :currentBlock.type==='text'
+                    ?['type','text']:['type']
+            if([...currentBlock.keys].some(key=>!permittedKeys.includes(key)))
+              strictLargeAssistantShape=false
             // Only an entirely closed, verified native content object becomes
             // structural evidence. A malformed/truncated object never escapes.
             const block=currentBlock
@@ -347,7 +420,10 @@ export async function readNativeJsonlTextFragments(input:{
                 contentIndex:block.index,kind,fragmentCount:block.fragmentCount,
                 ...(kind==='tool-call'&&block.name?{name:block.name}:{}),
                 ...(kind==='tool-call'&&block.id
-                  ?{callKey:createHash('sha256').update(block.id).digest('hex')}:{})
+                  ?{callKey:createHash('sha256').update(block.id).digest('hex'),
+                    nativeCallId:block.id}:{}),
+                ...(kind==='tool-call'&&block.argumentsEmpty!==false
+                  ?{emptyArguments:true}:{})
               })
             }else contentBlocksTruncated=true
             for(const fragment of fragments){
@@ -438,6 +514,10 @@ export async function readNativeJsonlTextFragments(input:{
           else if(stringKind==='timestamp')nativeTimestamp=meta
           else if(stringKind==='parentId')nativeParentId=meta
           else if(stringKind==='role')role=meta
+          else if(stringKind==='provider')assistantMeta.provider=meta
+          else if(stringKind==='model')assistantMeta.model=meta
+          else if(stringKind==='stopReason')assistantMeta.stopReason=meta
+          else if(stringKind==='errorMessage')assistantMeta.errorMessage=meta
           else if(stringKind==='resultCallId')resultCallId=meta
           else if(stringKind==='blockType'&&currentBlock)currentBlock.type=meta
           else if(stringKind==='blockId'&&currentBlock)currentBlock.id=meta
@@ -495,6 +575,10 @@ export async function readNativeJsonlTextFragments(input:{
           const path=nextPath()
           if(path.length===1&&['type','id','parentId','timestamp'].includes(String(path[0])))
             strictImageUserShape=false
+          if(path.length===1&&['type','id','parentId','timestamp'].includes(String(path[0]))
+            ||path.length===2&&path[0]==='message'
+              &&['role','provider','model','stopReason','errorMessage'].includes(String(path[1])))
+            strictLargeAssistantShape=false
           activeNumber=toolFieldContext(path)
           if(activeNumber){
             valueType='number'
@@ -525,6 +609,10 @@ export async function readNativeJsonlTextFragments(input:{
         case 'trueValue':
         case 'falseValue':{
           const path=nextPath()
+          if(path.length===1&&['type','id','parentId','timestamp'].includes(String(path[0]))
+            ||path.length===2&&path[0]==='message'
+              &&['role','provider','model','stopReason','errorMessage'].includes(String(path[1])))
+            strictLargeAssistantShape=false
           if(toolFieldContext(path)){
             valueType=name==='nullValue'?'null':'boolean'
             currentTextLeaf=nextTextLeaf++
@@ -609,7 +697,8 @@ export async function readNativeJsonlTextFragments(input:{
       ...(nativeType?{nativeType}:{}),
       ...(nativeTimestamp?{nativeTimestamp}:{}),
       ...(nativeParentId?{nativeParentId}:{}),
-      strictImageUserShape,
+      strictImageUserShape,strictLargeAssistantShape,
+      ...(Object.keys(assistantMeta).length?{assistantMeta}:{}),
       ...(role?{role}:{}),
       ...((role==='tool'||role==='toolResult')&&resultCallId
         ?{resultCallKey:createHash('sha256').update(resultCallId).digest('hex')}:{}),
