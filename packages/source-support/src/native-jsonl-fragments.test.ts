@@ -212,3 +212,72 @@ test('unknown and late tool argument types are not exposed as verified tool evid
     }
   }finally{await rm(root,{recursive:true,force:true})}
 })
+
+test('large Pi inline image is indexed without materialization and paged by bounded verified base64',async()=>{
+  const root=await mkdtemp(join(tmpdir(),'agent-lens-inline-image-'))
+  const path=join(root,'session.jsonl')
+  try{
+    const data='AQID'.repeat(900000)
+    const record=JSON.stringify({id:'image-original',type:'message',
+      message:{role:'user',content:[
+        {type:'text',text:'before'},
+        {data,mimeType:'image/png',type:'image'},
+      ]},
+    })
+    assert.ok(Buffer.byteLength(record)>2*1024*1024)
+    await writeFile(path,record+'\n')
+    const text=await readNativeJsonlTextFragments({path,allowedRoots:[root],limit:2})
+    assert.equal(text.state,'available')
+    if(text.state!=='available')return
+    assert.deepEqual(text.record.images,[{contentIndex:1,mimeType:'image/png'}])
+    assert.deepEqual(text.record.fragments.map(x=>x.text),['before'])
+    assert.equal(JSON.stringify(text.record).includes(data.slice(0,200)),false)
+    const media=await readNativeJsonlTextFragments({
+      path,allowedRoots:[root],expectedSha256:text.record.recordSha256,
+      media:{contentIndex:1,offset:0,limit:128*1024},
+    })
+    assert.equal(media.state,'available')
+    if(media.state!=='available')return
+    assert.equal(media.record.media?.base64,data.slice(0,128*1024))
+    assert.equal(media.record.media?.totalBase64Length,data.length)
+    assert.equal(media.record.media?.nextOffset,128*1024)
+    assert.equal(media.record.fragments.length,0)
+    const tail=await readNativeJsonlTextFragments({
+      path,allowedRoots:[root],expectedSha256:text.record.recordSha256,
+      media:{contentIndex:1,offset:128*1024,limit:128*1024},
+    })
+    assert.equal(tail.state,'available')
+    if(tail.state==='available')
+      assert.equal(tail.record.media?.base64,data.slice(128*1024,256*1024))
+    assert.deepEqual(await readNativeJsonlTextFragments({
+      path,allowedRoots:[root],media:{contentIndex:1,offset:4,limit:4},
+    }),{state:'unsupported',reason:'invalid-native-media-window'})
+  }finally{await rm(root,{recursive:true,force:true})}
+})
+
+test('inline media rejects untrusted MIME, invalid base64 and unauthorized image selectors',async()=>{
+  const root=await mkdtemp(join(tmpdir(),'agent-lens-inline-image-invalid-'))
+  const path=join(root,'session.jsonl')
+  try{
+    await writeFile(path,JSON.stringify({type:'message',message:{role:'user',content:[
+      {type:'image',mimeType:'image/svg+xml',data:'PHN2Zz4='},
+      {type:'image',mimeType:'image/png',data:'not:base64'},
+      {type:'text',text:'safe'},
+    ]}})+'\n')
+    const text=await readNativeJsonlTextFragments({path,allowedRoots:[root]})
+    assert.equal(text.state,'available')
+    if(text.state!=='available')return
+    assert.deepEqual(text.record.images,[{contentIndex:1,mimeType:'image/png'}])
+    assert.deepEqual(text.record.fragments.map(x=>x.text),['safe'])
+    const failed=await readNativeJsonlTextFragments({
+      path,allowedRoots:[root],expectedSha256:text.record.recordSha256,
+      media:{contentIndex:1,offset:0,limit:128},
+    })
+    assert.deepEqual(failed,{state:'unsupported',reason:'invalid-native-image-base64'})
+    const wrongType=await readNativeJsonlTextFragments({
+      path,allowedRoots:[root],expectedSha256:text.record.recordSha256,
+      media:{contentIndex:0,offset:0,limit:128},
+    })
+    assert.deepEqual(wrongType,{state:'unsupported',reason:'native-inline-image-not-found'})
+  }finally{await rm(root,{recursive:true,force:true})}
+})
