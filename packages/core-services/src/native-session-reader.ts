@@ -399,7 +399,10 @@ export class NativeSessionReader {
   }):Promise<SourceNativeTextFragmentResult>{
     if(!this.capturePolicy.isSourceEnabled(query.sourceId))
       return {state:'unsupported',reason:'source-disabled'}
-    if(query.media&&!this.capturePolicy.isEnabled('prompt'))
+    // The record's native role is only known after the Source has verified
+    // the original bytes. When every media scope is off, fail before IO.
+    if(query.media&&!this.capturePolicy.isEnabled('prompt')
+      &&!this.capturePolicy.isEnabled('tool'))
       return {state:'unsupported',reason:'native-attachment-capture-disabled'}
     if(!this.storage.nativeSessionCatalog)
       return {state:'unsupported',reason:'native-session-catalog-unavailable'}
@@ -442,8 +445,22 @@ export class NativeSessionReader {
       ||(result.record.media.nextOffset!==undefined
         &&result.record.media.nextOffset<=query.media.offset)))
       return {state:'unsupported',reason:'native-inline-image-window-invalid'}
-    const scope=result.record.role==='user'?'prompt':'tool'
+    const roleScope=result.record.role==='tool'||result.record.role==='toolResult'
+      ? 'tool' as const : 'prompt' as const
+    // An image is not a text fragment: there is no per-block tool/prompt
+    // classification. Only an attested native record role may authorize raw
+    // base64 and image metadata.
+    const mediaAllowed=Boolean(result.record.role)
+      &&this.capturePolicy.isEnabled(roleScope)
+    if(query.media&&!mediaAllowed)
+      return {state:'unsupported',reason:'native-attachment-capture-disabled'}
     const fragments=result.record.fragments.map(fragment=>{
+      // Mixed assistant records contain both prompt text and tool arguments.
+      // Privacy scopes follow the Source-verified fragment kind, not the role
+      // of its parent physical record.
+      const scope=fragment.kind==='tool-call'||fragment.kind==='tool-result'
+        ? 'tool' as const : result.record.role==='tool'||result.record.role==='toolResult'
+          ? 'tool' as const : 'prompt' as const
       // Trusted source field ancestry is for CapturePolicy only. Never send
       // credential-containing parameter names across the HTTP boundary.
       const {fieldKeys,fieldKeysTooDeep,...publicFragment}=fragment
@@ -486,7 +503,10 @@ export class NativeSessionReader {
           ?{suppressed:true}:{}),
       }
     })
-    return {state:'available',record:{...result.record,fragments}}
+    return {state:'available',record:{...result.record,fragments,
+      images:mediaAllowed?result.record.images:[],
+      ...(mediaAllowed?{}:{imagesTruncated:undefined}),
+    }}
   }
 
   async read(query: NativeSessionReadQuery): Promise<NativeSessionReadResult> {
