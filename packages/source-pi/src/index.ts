@@ -159,7 +159,8 @@ async function readPiVerifiedLargeUserImagePage(
   const original=read.record
   const blocks=original.contentBlocks
   const imageBlocks=blocks.filter(block=>block.kind==='image')
-  if(original.nativeType!=='message'||original.role!=='user'
+  if(!original.strictImageUserShape
+    ||original.nativeType!=='message'||original.role!=='user'
     ||!original.nativeEventId||original.recordSha256!==scan.span.sha256
     ||original.fileIdentity!==scan.span.fileIdentity
     ||original.contentBlocksTruncated||original.imagesTruncated
@@ -217,6 +218,8 @@ async function readPiVerifiedLargeUserImagePage(
     .update(`${query.filePath}|${start}|${original.sourceLineSha256}`)
     .digest('hex').slice(0,32)
   const timestamp=original.nativeTimestamp
+    &&Number.isFinite(Date.parse(original.nativeTimestamp))
+    ?new Date(original.nativeTimestamp).toISOString():undefined
   const entry={
     type:'message',id:original.nativeEventId,
     ...(original.nativeParentId?{parentId:original.nativeParentId}:{}),
