@@ -381,6 +381,8 @@ export const englishReviewMessages: LocaleMessagesDto = {
         nativeOversizedMore: 'Load more fragments',
         nativeOversizedRedacted: 'Hidden by privacy policy',
         nativeOversizedPart: 'Text fragment {{count}}',
+        nativeOversizedImage: 'Image {{count}}',
+        nativeOversizedLoadImage: 'Load image on demand (up to 6 MiB)',
         nativeOversizedKindMessage: 'Message',
         nativeOversizedKindThinking: 'Thinking',
         nativeOversizedKindToolCall: 'Tool call',
