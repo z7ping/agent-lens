@@ -29,7 +29,8 @@ test('record fragment route uses Catalog identity, never accepts paths, and retu
       return {state:'available' as const,record:{
         offset:120,fileIdentity:'device:inode',recordSha256:sha,
         nativeEventId:'native-user',role:'user',
-        fragments:[{ordinal:0,text:'[已脱敏]',kind:'thinking',contentIndex:3,redactionApplied:true}],
+        fragments:[{ordinal:0,text:'[已脱敏]',kind:'thinking',contentIndex:3,
+          fieldKeys:['arguments','password'],redactionApplied:true}],
         totalTextFragments:2,nextFragmentOffset:1,
       }}
     },
@@ -65,6 +66,8 @@ test('record fragment route uses Catalog identity, never accepts paths, and retu
     assert.equal(result.nextFragmentOffset,1)
     assert.equal(JSON.stringify(result).includes('fileIdentity'),false)
     assert.equal(JSON.stringify(result).includes('filePath'),false)
+    assert.equal(JSON.stringify(result).includes('fieldKeys'),false)
+    assert.equal(JSON.stringify(result).includes('password'),false)
     assert.equal(calls,1)
     assert.equal((await fetch(`${base}?cursor=${cursor}&path=/etc/passwd`)).status,400)
     assert.equal((await fetch(`${base}?cursor=${cursor}&fragmentOffset=1`)).status,400)
