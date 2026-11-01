@@ -75,6 +75,8 @@ export type NativeJsonlFragmentReadResult =
       sourceLineSha256:string
       nativeEventId?:string;nativeType?:string;role?:string
       nativeTimestamp?:string;nativeParentId?:string
+      /** All value paths match the narrow Pi image-user semantic schema. */
+      strictImageUserShape:boolean
       /** Verified result-only native toolCallId hash. Source-private metadata. */
       resultCallKey?:string
       fragments:NativeJsonlTextFragment[]
@@ -174,6 +176,7 @@ export async function readNativeJsonlTextFragments(input:{
     let nativeType:string|undefined
     let nativeTimestamp:string|undefined
     let nativeParentId:string|undefined
+    let strictImageUserShape=true
     let role:string|undefined
     let resultCallId:string|undefined
     let currentBlock:{index:number;type?:string;id?:string;name?:string
@@ -210,13 +213,29 @@ export async function readNativeJsonlTextFragments(input:{
     let firstToken=true
     const stack:Frame[]=[]
 
+    const permittedImageUserPath=(path:readonly PathKey[]):boolean=>{
+      if(path.length===0)return true
+      if(path.length===1)return typeof path[0]==='string'
+        &&['type','id','parentId','timestamp','message'].includes(path[0])
+      if(path[0]!=='message')return false
+      if(path.length===2)return path[1]==='role'||path[1]==='content'
+      if(path[1]!=='content'||typeof path[2]!=='number')return false
+      if(path.length===3)return true
+      if(path.length===4)return typeof path[3]==='string'
+        &&['type','text','mimeType','mime_type','data'].includes(path[3])
+      return false
+    }
     const nextPath=():PathKey[]=>{
       const frame=stack.at(-1)
       if(!frame)return []
-      if(frame.kind==='array')return [...frame.path,frame.next++]
-      if(frame.key===undefined)throw new Error('invalid-source-json-structure')
-      const result=[...frame.path,frame.key]
-      frame.key=undefined
+      let result:PathKey[]
+      if(frame.kind==='array')result=[...frame.path,frame.next++]
+      else{
+        if(frame.key===undefined)throw new Error('invalid-source-json-structure')
+        result=[...frame.path,frame.key]
+        frame.key=undefined
+      }
+      if(!permittedImageUserPath(result))strictImageUserShape=false
       return result
     }
     const toolFieldContext=(path:readonly PathKey[])=>{
@@ -588,6 +607,7 @@ export async function readNativeJsonlTextFragments(input:{
       ...(nativeType?{nativeType}:{}),
       ...(nativeTimestamp?{nativeTimestamp}:{}),
       ...(nativeParentId?{nativeParentId}:{}),
+      strictImageUserShape,
       ...(role?{role}:{}),
       ...((role==='tool'||role==='toolResult')&&resultCallId
         ?{resultCallKey:createHash('sha256').update(resultCallId).digest('hex')}:{}),
