@@ -299,7 +299,8 @@ export function ReviewPage({ model, embedded = false, latestRequest = 0 }: { mod
     }
   }
 
-  const findLinkedToolResult = async (fragment:VerifiedRecordTextFragment) => {
+  const findLinkedToolResult = async (fragment:Pick<VerifiedRecordTextFragment,
+    'ordinal'|'kind'|'callKey'|'suppressed'>) => {
     const current=oversized
     const id=review.selectedId
     if(!id||!current||current.sessionId!==id||!current.recordCursor
@@ -759,10 +760,11 @@ export function ReviewPage({ model, embedded = false, latestRequest = 0 }: { mod
                       :null}
                   {oversized.toolLink.scanCursor&&!oversized.toolLink.loading
                     &&!oversized.toolLink.match
-                    &&oversized.fragments.some(piece=>piece.ordinal===oversized.toolLink!.anchorOrdinal)
                     &&<Button size="small"
-                      onClick={()=>void findLinkedToolResult(
-                        oversized.fragments.find(piece=>piece.ordinal===oversized.toolLink!.anchorOrdinal)!)}>
+                      onClick={()=>void findLinkedToolResult({
+                        ordinal:oversized.toolLink!.anchorOrdinal,
+                        kind:'tool-call',callKey:oversized.toolLink!.callKey,
+                      })}>
                       {t('local.roundNav.nativeOversizedFindResultMore')}
                     </Button>}
                 </div>}
