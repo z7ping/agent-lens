@@ -5,6 +5,7 @@ import {
   type ReviewInteractionDto,
   type ReviewMessageNodeDto,
   reviewMessageAttachmentsFromPayload,
+  reviewToolResultStatus,
   type ReviewNodeDto,
   type ReviewNodeSourceDto,
   type ReviewToolNodeDto,
@@ -252,7 +253,7 @@ export function buildNodes(items: TimelineItemDto[], registry = new ToolRegistra
       if (linked && !settledToolIds.has(linked.id)) {
         settledToolIds.add(linked.id)
         linked.endedAt = item.effectiveAt
-        linked.status = payload.success === false ? 'error' : payload.success === true ? 'success' : 'unknown'
+        linked.status = reviewToolResultStatus(payload)
         const duration = payload.durationMs ?? payload.duration_ms
         if (typeof duration === 'number' && Number.isFinite(duration) && duration >= 0) linked.durationMs = duration
         if (payload.output !== undefined) linked.output = payload.output
