@@ -85,7 +85,7 @@ export async function handleNativeRecordFragmentsRequest(
   response.once('close',close)
   try{
     if(linkMode){
-      const found=await reader.findNativeToolResult!({
+      const found=await reader!.findNativeToolResult!({
         sourceId:entry.sourceId,installationId:entry.installationId,
         nativeSessionId:entry.nativeSessionId,cursor,
         expectedSha256:expectedSha256!,fragmentOrdinal,callKey,
@@ -110,7 +110,7 @@ export async function handleNativeRecordFragmentsRequest(
       writeJson(response,200,dto)
       return true
     }
-    const result=await reader.readTextFragments!({
+    const result=await reader!.readTextFragments!({
       sourceId:entry.sourceId,installationId:entry.installationId,
       nativeSessionId:entry.nativeSessionId,cursor,
       ...(mediaMode?{media:{contentIndex:imageIndex,offset:mediaOffset,limit:mediaLimit}}
