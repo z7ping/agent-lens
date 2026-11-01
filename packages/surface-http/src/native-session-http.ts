@@ -699,8 +699,10 @@ export async function handleNativeSessionAttachmentRequest(
         })
         // Either ALL unresolved media refs are proven distinct, or none is
         // signed. A forged/ambiguous index must never be paired by MIME/order.
-        if(assignments.every((value):value is NonNullable<typeof value>=>value!==null)){
-          for(const {index,item,image} of assignments){
+        if(assignments.every(value=>value!==null)){
+          for(const match of assignments){
+            if(!match)continue
+            const {index,item,image}=match
             items[index]={...item,nativeMedia:{
               sessionId:id,
               cursor:encodeNativeSessionCursor({...sourceCursor,
