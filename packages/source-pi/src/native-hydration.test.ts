@@ -396,6 +396,20 @@ test('oversized Pi image user message joins canonical native TaskSurface with co
       limit:1},ctx)
     assert.deepEqual(ret,{state:'unsupported',
       reason:'native-record-too-large'})
+    const extra=JSON.stringify({type:'message',id:'extra-fields',
+      message:{role:'user',content:[
+        {type:'text',text:'verified text'},
+        {type:'image',mimeType:'image/png',data:'A'.repeat(2_300_000)},
+      ],toolContext:{unparsed:'must-not-disappear'}},
+    })
+    await writeFile(file,[header,extra].join('\n')+'\n')
+    const notComplete=await read({filePath:file,nativeSessionId:'large-image-turn',
+      cursor:{offset:Buffer.byteLength(header+'\n'),sequence:1,
+        fileIdentity:`${(await stat(file)).dev}:${(await stat(file)).ino}`},
+      limit:1},ctx)
+    assert.deepEqual(notComplete,{state:'unsupported',
+      reason:'native-record-too-large'},
+      'unrecognized source semantics cannot silently disappear from formal Review')
   }finally{await rm(root,{recursive:true,force:true})}
 })
 
