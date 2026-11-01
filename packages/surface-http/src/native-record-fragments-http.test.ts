@@ -25,7 +25,7 @@ test('record fragment route uses Catalog identity, never accepts paths, and retu
       assert.deepEqual([
         query.sourceId,query.installationId,query.nativeSessionId,query.cursor.offset,
       ],['pi','install','native-S',120])
-      assert.equal(query.fragmentOffset,0)
+      assert.equal(query.fragmentOffset,query.expectedSha256?1:0)
       return {state:'available' as const,record:{
         offset:120,fileIdentity:'device:inode',recordSha256:sha,
         nativeEventId:'native-user',role:'user',
