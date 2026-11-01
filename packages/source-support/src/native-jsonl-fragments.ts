@@ -363,8 +363,8 @@ export async function readNativeJsonlTextFragments(input:{
           const end=[...textBuffer].at(-1)
           // Conservative: any ASCII/space/control at either edge might be
           // part of an unbounded secret or path redaction pattern.
-          if(!end||end.codePointAt(0)!>127
-            ||codePoint.codePointAt(0)!>127)
+          if(!end||(end.codePointAt(0)??0)<=127
+            ||(codePoint.codePointAt(0)??0)<=127)
             scalarSplitSafe=false
           flushText()
         }
