@@ -530,3 +530,42 @@ test('a giant scalar has safe split proof only across non-ASCII boundaries',asyn
         'an ASCII credential crossing the fragment boundary is never independently disclosed')
   }finally{await rm(root,{recursive:true,force:true})}
 })
+
+test('native oversized tool arguments preserve exact bounded flat scalar types and reject nesting',async()=>{
+  const root=await mkdtemp(join(tmpdir(),'agent-lens-verified-flat-args-'))
+  const path=join(root,'session.jsonl')
+  try{
+    const make=(args:unknown)=>JSON.stringify({type:'message',id:'assistant-with-args',
+      message:{role:'assistant',content:[
+        {type:'toolCall',id:'authentic-call',name:'read',
+          arguments:args},
+        {type:'image',mimeType:'image/png',data:'A'.repeat(2_250_000)},
+      ]},
+    })
+    await writeFile(path,make({file:'README.md',count:2,enabled:true,
+      optional:null})+'\n')
+    const verified=await readNativeJsonlTextFragments({
+      path,allowedRoots:[root],limit:8,
+    })
+    assert.equal(verified.state,'available')
+    if(verified.state!=='available')return
+    assert.equal(verified.record.strictLargeAssistantShape,true)
+    const block=verified.record.contentBlocks[0]
+    assert.equal(block?.nativeCallId,'authentic-call')
+    assert.deepEqual(block?.verifiedArguments,
+      {file:'README.md',count:2,enabled:true,optional:null})
+    for(const unsupported of [
+      {nested:{path:'README.md'}},{items:['a','b']},
+      {deep:'x'.repeat(16_000)},
+    ]){
+      await writeFile(path,make(unsupported)+'\n')
+      const result=await readNativeJsonlTextFragments({
+        path,allowedRoots:[root],limit:8,
+      })
+      assert.equal(result.state,'available')
+      if(result.state==='available')
+        assert.equal(result.record.strictLargeAssistantShape,false,
+          'nested, arrays and over-budget scalars cannot be considered complete')
+    }
+  }finally{await rm(root,{recursive:true,force:true})}
+})
