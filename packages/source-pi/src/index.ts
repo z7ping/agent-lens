@@ -157,6 +157,9 @@ async function readPiVerifiedLargeUserImagePage(
     return {state:read.state==='pending'?'unsupported':read.state,
       reason:read.state==='pending'?'native-record-pending-tail':read.reason}
   const original=read.record
+  if(query.cursor?.recordFingerprint
+    &&query.cursor.recordFingerprint!==original.sourceLineSha256)
+    return {state:'drifted',reason:'native-record-fingerprint-changed'}
   const blocks=original.contentBlocks
   const imageBlocks=blocks.filter(block=>block.kind==='image')
   if(!original.strictImageUserShape
