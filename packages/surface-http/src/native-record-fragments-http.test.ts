@@ -172,13 +172,14 @@ test('tool link route reattests native anchor, exposes only opaque matching resu
     async read(){return {state:'unsupported' as const,reason:'unused'}},
     async findNativeToolResult(q:{
       sourceId:string;cursor:{offset:number};expectedSha256:string
-      fragmentOrdinal:number;callKey:string;limit:number
+      fragmentOrdinal?:number;contentIndex?:number;callKey:string;limit:number
     }){
       calls++
       assert.equal(q.sourceId,'pi')
       assert.equal(q.cursor.offset,100)
       assert.equal(q.expectedSha256,sha)
-      assert.equal(q.fragmentOrdinal,3)
+      assert.equal(q.fragmentOrdinal,calls===1?3:undefined)
+      assert.equal(q.contentIndex,calls===2?0:undefined)
       assert.equal(q.callKey,callKey)
       assert.equal(q.limit,4)
       return {state:'available' as const,scannedRecords:2,
@@ -221,5 +222,17 @@ test('tool link route reattests native anchor, exposes only opaque matching resu
     assert.equal((await fetch(`${base}?${params}&fragmentOrdinal=4`)).status,400)
     assert.equal((await fetch(`${base}?${params}&callKey=nope`)).status,400)
     assert.equal(calls,1)
+    const blockParams=`cursor=${cursor}&expectedSha256=${sha}&contentIndex=0&callKey=${callKey}`
+    const blockResponse=await fetch(`${base}?${blockParams}`)
+    assert.equal(blockResponse.status,200)
+    const blockResult=await blockResponse.json() as Record<string,unknown>
+    assert.equal(blockResult.state,'available')
+    assert.equal(blockResult.coverage,'tool-link-only')
+    assert.equal(calls,2)
+    assert.equal((await fetch(`${base}?${blockParams}&fragmentOrdinal=0`)).status,400)
+    assert.equal((await fetch(`${base}?cursor=${cursor}&expectedSha256=${sha}&callKey=${callKey}`)).status,400)
+    assert.equal((await fetch(`${base}?${blockParams}&contentIndex=-1`)).status,400)
+    assert.equal((await fetch(`${base}?${blockParams}&contentIndex=1`)).status,400)
+    assert.equal(calls,2)
   }finally{await new Promise<void>(resolve=>server.close(()=>resolve()))}
 })
