@@ -224,3 +224,101 @@ test('oversized following turn does not discard an earlier complete turn in a ba
     await new Promise<void>(resolve=>server.close(()=>resolve()))
   }
 })
+
+test('oversized record inside the first multi-record window retries one record and keeps the verified prefix',async()=>{
+  const reads:Array<[number,number]>=[]
+  const reader:NativeSessionWindowReader={
+    async read(query){
+      const offset=query.cursor?.offset??0
+      const limit=query.limit??8
+      reads.push([offset,limit])
+      // The first wide read spans a small user record and one oversized line.
+      if(limit>1||offset===1)return {state:'unsupported',reason:'native-record-too-large'}
+      if(offset!==0)return {state:'unsupported',reason:'unexpected-cursor'}
+      return {
+        state:'available',observations:[{
+          kind:'message.user' as const,sourceSequence:0,capturedAt:timestamp,
+          payload:{text:'verified prompt'},
+        }],
+        observationRecordIds:['verified-user-record'],
+        observationCursors:[{offset:0,sequence:0,fileIdentity,
+          boundaryHash:'a'.repeat(64)}],
+        evidenceCandidates:[],nextCursor:{offset:1,sequence:1,fileIdentity,
+          boundaryHash:'b'.repeat(64)},
+        hasMore:true,pendingTail:false,
+      }
+    },
+  }
+  const server=createServer((request,response)=>{
+    void handleNativeSessionWindowRequest(request,response,
+      new URL(request.url??'/','http://127.0.0.1'),reader)
+      .catch(error=>{response.statusCode=500;response.end(String(error))})
+  })
+  await new Promise<void>(resolve=>server.listen(0,'127.0.0.1',resolve))
+  try{
+    const addr=server.address()
+    assert.ok(addr&&typeof addr==='object')
+    const base=`http://127.0.0.1:${addr.port}/api/v1/native-sessions/window?sourceId=pi&installationId=inst&nativeSessionId=S&format=review-turns`
+    const res=await fetch(base)
+    assert.equal(res.status,200)
+    const dto=await res.json() as NativeReviewWindowDto
+    assert.equal(dto.state,'available')
+    assert.equal(dto.turnFragment,'partial')
+    assert.equal(dto.boundaryIntegrity,'partial')
+    assert.equal(dto.interactions.length,1)
+    assert.equal(dto.interactions[0]?.nodes[0]?.type,'message')
+    assert.equal(decodeNativeSessionCursor(dto.nextCursor)?.offset,1)
+    const locator=decodeNativeSessionCursor(dto.oversizedRecordSearchCursor??null)
+    assert.equal(locator?.offset,1)
+    assert.equal(locator?.mode,'record-fragments')
+    assert.deepEqual(reads,[[0,8],[0,1],[1,1]])
+  }finally{
+    await new Promise<void>(resolve=>server.close(()=>resolve()))
+  }
+})
+
+test('a giant record in a subsequent wide page narrows to one SourceRecord before declaring an incomplete turn',async()=>{
+  const reads:Array<[number,number]>=[]
+  const reader:NativeSessionWindowReader={
+    async read(query){
+      const offset=query.cursor?.offset??0
+      const limit=query.limit??8
+      reads.push([offset,limit])
+      if(offset>=2 || (offset===1 && limit>1))
+        return {state:'unsupported',reason:'native-record-too-large'}
+      const obs:ObservationCandidate=offset===0
+        ?{kind:'message.user',capturedAt:timestamp,sourceSequence:0,payload:{text:'prompt'}}
+        :{kind:'message.assistant',capturedAt:timestamp,sourceSequence:1000,payload:{text:'reply'}}
+      return {state:'available',observations:[obs],
+        observationRecordIds:['record-'+offset],
+        observationCursors:[{offset,sequence:offset,fileIdentity,
+          boundaryHash:'c'.repeat(64)}],
+        evidenceCandidates:[],
+        nextCursor:{offset:offset+1,sequence:offset+1,fileIdentity,
+          boundaryHash:'d'.repeat(64)},
+        hasMore:true,pendingTail:false,
+      }
+    },
+  }
+  const server=createServer((request,response)=>{
+    void handleNativeSessionWindowRequest(request,response,
+      new URL(request.url??'/','http://127.0.0.1'),reader)
+      .catch(error=>{response.statusCode=500;response.end(String(error))})
+  })
+  await new Promise<void>(resolve=>server.listen(0,'127.0.0.1',resolve))
+  try{
+    const addr=server.address()
+    assert.ok(addr&&typeof addr==='object')
+    const base=`http://127.0.0.1:${addr.port}/api/v1/native-sessions/window?sourceId=pi&installationId=inst&nativeSessionId=S&format=review-turns`
+    const res=await fetch(base)
+    assert.equal(res.status,200)
+    const dto=await res.json() as NativeReviewWindowDto
+    assert.equal(dto.turnFragment,'partial')
+    assert.deepEqual(dto.interactions[0]?.nodes.filter(x=>x.type==='message').map(x=>x.role),
+      ['user','assistant'])
+    assert.equal(decodeNativeSessionCursor(dto.nextCursor)?.offset,2)
+    assert.deepEqual(reads,[[0,8],[1,8],[1,1],[2,1]])
+  }finally{
+    await new Promise<void>(resolve=>server.close(()=>resolve()))
+  }
+})

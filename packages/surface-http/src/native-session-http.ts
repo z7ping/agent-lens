@@ -160,6 +160,9 @@ async function readCompleteNativeTurn(
   let current = initial
   let pages = 0
   let bytes = 0
+  // Retry only when a multi-record read crosses an oversized physical line.
+  // Once narrowed, keep one-record reads for the remainder of this request.
+  let singleRecordMode = query.limit === 1
   let previousOffset = query.cursor?.offset ?? 0
   // An incomplete turn continues at an exact Source-owned record cursor.
   // It is still ONE logical turn even if the next fragment has no user message.
@@ -293,7 +296,15 @@ async function readCompleteNativeTurn(
       return { state: 'unsupported', reason: 'native-review-cursor-not-advancing' }
     }
     previousOffset = current.nextCursor.offset
-    const next = await reader.read({ ...query, cursor: current.nextCursor })
+    let next = await reader.read({
+      ...query,cursor:current.nextCursor,
+      ...(singleRecordMode?{limit:1}:{}),
+    })
+    if(next.state==='unsupported'&&next.reason==='native-record-too-large'
+      &&!singleRecordMode){
+      singleRecordMode=true
+      next=await reader.read({...query,cursor:current.nextCursor,limit:1})
+    }
     if (next.state !== 'available') {
       // The verified prefix is still useful even when the *next* physical
       // record exceeds the normal JSONL materialization limit. Preserve the
@@ -397,7 +408,12 @@ async function readCompleteNativeTurns(
     }
     ordinal = cursor.turnOrdinal
     queryAt = { ...query, cursor }
-    const incoming = await boundedReader.read(queryAt)
+    let incoming = await boundedReader.read(queryAt)
+    if(incoming.state==='unsupported'&&incoming.reason==='native-record-too-large'
+      &&queryAt.limit!==1){
+      queryAt={...queryAt,limit:1}
+      incoming=await boundedReader.read(queryAt)
+    }
     if (incoming.state !== 'available') {
       // A subsequent oversized turn cannot erase already proven complete
       // turns in the HTTP response. The assembled cursor points to the
@@ -762,10 +778,19 @@ export async function handleNativeSessionWindowRequest(
       ...(cursor ? { cursor } : {}),
       signal: abort.signal,
     }
-    const first = await reader.read(readQuery)
+    let first = await reader.read(readQuery)
+    let reviewQuery = readQuery
+    if(turnMode&&first.state==='unsupported'
+      &&first.reason==='native-record-too-large'&&limit>1){
+      // If a giant record is *later* in the first native page, the ordinary
+      // reader has no usable prefix. A one-record retry recovers the preceding
+      // facts without skipping or interpreting any part of the giant record.
+      reviewQuery={...readQuery,limit:1}
+      first=await reader.read(reviewQuery)
+    }
     if (turnMode) {
       const complete = first.state === 'available'
-        ? await readCompleteNativeTurns(reader, readQuery, first, cursor?.turnOrdinal ?? 1, turnLimit)
+        ? await readCompleteNativeTurns(reader, reviewQuery, first, cursor?.turnOrdinal ?? 1, turnLimit)
         : first
       if (abort.signal.aborted || response.destroyed) return true
       if (complete.state !== 'available') {
