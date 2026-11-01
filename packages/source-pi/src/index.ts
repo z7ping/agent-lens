@@ -162,8 +162,13 @@ async function readPiVerifiedLargeImagePage(
   const blocks=original.contentBlocks
   const imageBlocks=blocks.filter(block=>block.kind==='image')
   const assistant=original.role==='assistant'
-  const scalar=original.strictLargeScalarShape&&original.scalarContentVerified
-    &&(original.role==='user'||assistant)
+  const toolResult=original.role==='tool'||original.role==='toolResult'
+  const scalar=(toolResult?original.strictLargeToolResultShape
+    :original.strictLargeScalarShape)&&original.scalarContentVerified
+    &&(original.role==='user'||assistant
+      ||toolResult&&Boolean(original.nativeResultCallId)
+        &&Boolean(original.nativeResultToolName)
+        &&original.nativeResultIsError!==undefined)
     &&original.nativeType==='message'&&Boolean(original.nativeEventId)
     &&original.recordSha256===scan.span.sha256
     &&original.fileIdentity===scan.span.fileIdentity
@@ -260,7 +265,12 @@ async function readPiVerifiedLargeImagePage(
     ...(original.nativeParentId?{parentId:original.nativeParentId}:{}),
     ...(timestamp?{timestamp}:{}),
     message:{role:original.role,content,
-      ...(assistant?original.assistantMeta??{}:{})},
+      ...(assistant?original.assistantMeta??{}:{}),
+      ...(scalar&&toolResult?{
+        toolCallId:original.nativeResultCallId!,
+        toolName:original.nativeResultToolName!,
+        isError:original.nativeResultIsError!,
+      }:{})},
   }
   const record:SourceRecord={
     id:`pi-record-${recordHash}`,sourceId:PI_SOURCE_ID,
