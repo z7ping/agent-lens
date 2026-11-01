@@ -453,7 +453,7 @@ export async function readNativeJsonlTextFragments(input:{
           if(name==='startObject'&&path.length===4&&currentBlock
             &&path[3]==='arguments'){
             currentBlock.argumentsEmpty=true
-            currentBlock.flatArguments=Object.create(null) as Record<string,string|number|boolean|null>
+            currentBlock.flatArguments={}
             currentBlock.argsValid=true
           }
           if(name==='startArray'&&path.length===4&&currentBlock
