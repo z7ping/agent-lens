@@ -482,3 +482,24 @@ test('native content outline is bounded to 64 verified blocks and does not claim
       'bounded metadata does not silently drop Source text facts')
   }finally{await rm(root,{recursive:true,force:true})}
 })
+
+test('overlong optional tool display names cannot erase other certified native content',async()=>{
+  const root=await mkdtemp(join(tmpdir(),'agent-lens-native-optional-name-'))
+  const path=join(root,'session.jsonl')
+  try{
+    const source=JSON.stringify({type:'message',message:{role:'assistant',
+      content:[{type:'toolCall',id:'trusted-id',name:'n'.repeat(1200),
+        arguments:{file:'readme'}},{type:'text',text:'done'}]}})
+    await writeFile(path,source+'\n')
+    const result=await readNativeJsonlTextFragments({path,allowedRoots:[root]})
+    assert.equal(result.state,'available')
+    if(result.state!=='available')return
+    assert.deepEqual(result.record.contentBlocks,[
+      {contentIndex:0,kind:'tool-call',fragmentCount:1,
+        callKey:createHash('sha256').update('trusted-id').digest('hex')},
+      {contentIndex:1,kind:'text',fragmentCount:1},
+    ])
+    assert.deepEqual(result.record.fragments.map(x=>x.text),['readme','done'])
+    assert.equal(JSON.stringify(result.record).includes('n'.repeat(512)),false)
+  }finally{await rm(root,{recursive:true,force:true})}
+})
