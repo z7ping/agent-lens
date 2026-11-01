@@ -176,7 +176,7 @@ async function readPiVerifiedLargeUserImagePage(
         &&block.kind==='text'))
     ||blocks.some(block=>block.kind==='text'&&block.fragmentCount===0
       ||original.fragments.filter(piece=>piece.contentIndex===block.contentIndex).length!==block.fragmentCount))
-    return {state:'unsupported',reason:'native-large-record-semantic-boundary-unproven'}
+    return {state:'unsupported',reason:'native-record-too-large'}
 
   // Reuse the existing image validator; a MIME label and a JSON string by
   // themselves do not prove the original base64 image payload is well formed.
@@ -191,7 +191,7 @@ async function readPiVerifiedLargeUserImagePage(
   if(media.state!=='available'||media.record.recordSha256!==scan.span.sha256
     ||media.record.media?.contentIndex!==image.contentIndex)
     return {state:media.state==='drifted'?'drifted':'unsupported',
-      reason:'native-large-image-verification-unavailable'}
+      reason:'native-record-too-large'}
 
   const auth=await authorizeNativeSessionPath(query.filePath,roots)
   if(auth.state!=='authorized')return auth
