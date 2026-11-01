@@ -457,3 +457,56 @@ test('separate Hook originals with equal kind, time and payload remain distinct 
   })
   assert.deepEqual(repeated.interactions,result.interactions,'reopening one source record is idempotent')
 })
+
+test('shared native Review projector rejects ambiguous duplicate call IDs instead of inventing a pairing',()=>{
+  const projected=projectNativeReviewWindow({
+    ...page,
+    observations:[
+      candidate('message.user',1,{text:'verify'}),
+      candidate('tool.call',2,{callId:'reused',nativeToolName:'read'}),
+      candidate('tool.call',3,{callId:'reused',nativeToolName:'write'}),
+      candidate('tool.result',4,{callId:'reused',success:false,output:'failure'}),
+    ],
+    observationRecordIds:['user','call-a','call-b','result'],
+  })
+  const nodes=projected.interactions[0]!.nodes
+  const tools=nodes.filter(node=>node.type==='tool')
+  assert.equal(tools.length,2)
+  assert.deepEqual(tools.map(node=>node.status),['unknown','unknown'])
+  assert.deepEqual(tools.map(node=>node.observationIds.length),[1,1])
+  const result=nodes.find(node=>node.type==='event'&&node.kind==='tool.result')
+  assert.equal(result?.type,'event')
+  assert.deepEqual(result?.observationIds.length,1)
+})
+
+test('shared native Review projector retains conflicting second tool result and distinct Source evidence',()=>{
+  const observations=[
+    candidate('message.user',1,{text:'verify'}),
+    candidate('tool.call',2,{callId:'one',nativeToolName:'shell'}),
+    candidate('tool.result',3,{callId:'one',success:true,output:'passed'}),
+    candidate('tool.result',4,{callId:'one',success:false,output:'contradiction'}),
+  ]
+  const result=projectNativeReviewWindow({
+    ...page,observations,
+    observationRecordIds:['user','call','first-result','second-result'],
+    evidenceCandidates:['call','first-result','second-result'].map(sourceRecordId=>({
+      sourceRecordId,capturedAt:at,captureMethod:'native-log' as const,
+      derivation:'reported' as const,confidenceHint:'exact' as const,
+    })),
+  })
+  const nodes=result.interactions[0]!.nodes
+  const tool=nodes.find(node=>node.type==='tool')
+  assert.equal(tool?.type,'tool')
+  if(tool?.type!=='tool')return
+  assert.equal(tool.status,'success')
+  assert.equal(tool.output,'passed')
+  assert.deepEqual(tool.observationIds.length,2)
+  assert.equal(tool.evidence.length,2,'only the call and first result belong to the settled tool')
+  const extra=nodes.find(node=>node.type==='event'&&node.kind==='tool.result')
+  assert.equal(extra?.type,'event')
+  if(extra?.type!=='event')return
+  assert.equal(extra.payload && typeof extra.payload==='object'&&!Array.isArray(extra.payload)
+    ?extra.payload.success:undefined,false)
+  assert.equal(extra.evidence.length,1)
+  assert.ok(extra.evidence.every(e=>!tool.evidence.some(t=>t.id===e.id)))
+})
