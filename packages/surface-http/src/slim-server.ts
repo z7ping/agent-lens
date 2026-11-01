@@ -12,6 +12,7 @@ import {
   type RunningHttpSurface,
 } from './server-contract'
 import { handleNativeSessionCatalogRequest } from './native-session-catalog-http'
+import { handleNativeRecordFragmentsRequest } from './native-record-fragments-http'
 import { NativeReviewTurnIndex, handleNativeReviewTurnIndexRequest,
   type NativeTurnIndexCheckpointStore } from './native-review-turn-index-http'
 import {
@@ -174,6 +175,8 @@ export async function startNativeOnlyHttpSurface(
       if(await handleNativeSessionAttachmentRequest(
         request,response,url,options.reader,storage.nativeSessionCatalog))return
       if(await handleNativeSessionHookRequest(
+        request,response,url,options.reader,storage.nativeSessionCatalog))return
+      if(await handleNativeRecordFragmentsRequest(
         request,response,url,options.reader,storage.nativeSessionCatalog))return
       if(await handleNativeSessionWindowRequest(
         request,response,url,options.reader,storage.nativeSessionCatalog))return

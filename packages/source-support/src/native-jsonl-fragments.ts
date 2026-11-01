@@ -27,6 +27,8 @@ export type NativeJsonlFragmentReadResult =
         offset: number
         fileIdentity: string
         recordSha256: string
+        /** SHA of JSON record bytes excluding optional CR delimiter. */
+        sourceLineSha256: string
         nativeEventId?: string
         nativeType?: string
         role?: string
@@ -130,6 +132,7 @@ export async function readNativeJsonlTextFragments(input: {
     }
 
     const hash=createHash('sha256')
+    const lineHash=createHash('sha256')
     let consumed=0
     try {
       while(consumed<span.rawByteLength){
@@ -140,6 +143,9 @@ export async function readNativeJsonlTextFragments(input: {
         if(bytesRead!==take)return {state:'drifted',reason:'native-record-changed-during-scan'}
         const data=chunk.subarray(0,bytesRead)
         hash.update(data)
+        const lastChunk=consumed+bytesRead===span.rawByteLength
+        lineHash.update(lastChunk&&data.at(-1)===0x0d
+          ?data.subarray(0,-1):data)
         parser.write(data)
         consumed+=bytesRead
       }
@@ -165,6 +171,7 @@ export async function readNativeJsonlTextFragments(input: {
       return {state:'drifted',reason:'native-record-boundary-changed'}
     return {state:'available',record:{
       offset:span.offset,fileIdentity:span.fileIdentity,recordSha256:span.sha256,
+      sourceLineSha256:lineHash.digest('hex'),
       ...(nativeEventId?{nativeEventId}:{}),
       ...(nativeType?{nativeType}:{}),
       ...(role?{role}:{}),
