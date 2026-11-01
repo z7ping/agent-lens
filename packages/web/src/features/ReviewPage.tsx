@@ -881,6 +881,7 @@ export function ReviewPage({ model, embedded = false, latestRequest = 0 }: { mod
                     }}
                     inspect={setInspect}
                     loadAttachments={model.reviewAttachments}
+                    loadImage={model.reviewAttachmentImage}
                     loadProcess={model.reviewProcessDetail}
                     expansionStore={roundExpansionRef.current}
                     showAllEvents={showAllEvents}
@@ -925,6 +926,7 @@ export function ReviewPage({ model, embedded = false, latestRequest = 0 }: { mod
                   onShowAllEvents={toggleEventVisibility}
                   inspect={setInspect}
                   loadAttachments={model.reviewAttachments}
+                    loadImage={model.reviewAttachmentImage}
                   loadProcess={model.reviewProcessDetail}
                   onForkAt={detailLiveInteraction?.canForkAt ? nativeEventId => { void forkReviewAt(nativeEventId) } : undefined}
                   forkPending={Boolean(historyInteractionPending)}
