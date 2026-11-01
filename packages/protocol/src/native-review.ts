@@ -155,7 +155,7 @@ export type NativeMetricContributionDto =
 export type NativeRecordTextFragmentsResponseDto =
   | {state:'available';coverage:'fragment-only';sessionId:string
     recordSha256:string;nativeEventId?:string;nativeType?:string;role?:string
-    fragments:Array<{ordinal:number;text:string;redactionApplied?:boolean;suppressed?:boolean}>
+    fragments:Array<{ordinal:number;text:string;redactionApplied?:boolean;suppressed?:boolean;splitScalar?:boolean}>
     totalTextFragments:number;nextFragmentOffset?:number}
   | {state:'pending'|'unavailable'|'drifted'|'unsupported';reason:string}
 

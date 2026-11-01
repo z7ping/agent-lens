@@ -384,10 +384,19 @@ export class NativeSessionReader {
       return {state:'drifted',reason:'native-record-identity-changed'}
     const scope=result.record.role==='user'?'prompt':'tool'
     const fragments=result.record.fragments.map(fragment=>{
+      // A token spanning two pages cannot be safely redacted by applying the
+      // regex policy independently to each arbitrary substring. For default
+      // redacted/off modes suppress the piece; explicit full mode still passes
+      // through the existing CapturePolicy hard-redaction path.
+      if(fragment.splitScalar&&this.capturePolicy.modeFor(scope)!=='full'){
+        return {ordinal:fragment.ordinal,text:'[超长文本片段已脱敏]',
+          splitScalar:true,redactionApplied:true,suppressed:true}
+      }
       const captured=this.capturePolicy.capture(scope,fragment.text,{maxText:12_000})
       return {
         ordinal:fragment.ordinal,
         text:typeof captured.value==='string'?captured.value:'',
+        ...(fragment.splitScalar?{splitScalar:true}:{}),
         ...(captured.redactionApplied?{redactionApplied:true}:{}),
         ...(captured.mode==='off'?{suppressed:true}:{}),
       }
