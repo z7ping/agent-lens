@@ -248,6 +248,10 @@ export interface ReviewToolNodeDto extends ReviewNodeSourceDto {
   /** Canonical registration fact supporting attribution, when available. */
   registrationObservationId?: string
   status: 'running' | 'success' | 'error' | 'unknown'
+  /** Original giant result is completely verified but available by pages. */
+  nativeLazyResult?:{
+    cursor:string;recordSha256:string;totalTextFragments:number
+  }
   startedAt: string
   endedAt?: string
   durationMs?: number
