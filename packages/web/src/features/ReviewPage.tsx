@@ -202,6 +202,11 @@ export function ReviewPage({ model, embedded = false, latestRequest = 0 }: { mod
     const active=()=>!controller.signal.aborted
       &&oversizedRevisionRef.current===revision
     let searchCursor=oversized?.sessionId===id?oversized.searchCursor:undefined
+    // A partial TaskSurface turn already knows the exact physical boundary.
+    // Start the Source locator there instead of rescanning the full session.
+    if(!searchCursor && !(oversized?.sessionId===id&&oversized.recordCursor)
+      &&detail?.id===id&&detail.nativeOversizedRecordSearchCursor)
+      searchCursor=detail.nativeOversizedRecordSearchCursor
     setOversized(previous=>({
       sessionId:id,fragments:previous?.sessionId===id?previous.fragments:[],
       images:[],...(searchCursor?{searchCursor}:{}),locating:true,loading:false,
@@ -699,8 +704,10 @@ export function ReviewPage({ model, embedded = false, latestRequest = 0 }: { mod
           onKeyDownCapture={noteReaderUserIntent}
         >
           {review.error && <div className="page-error">{review.error}</div>}
-          {review.error&&review.selectedId?.startsWith('native:')
-            &&review.error.includes('native-record-too-large')
+          {review.selectedId?.startsWith('native:')
+            &&(review.error?.includes('native-record-too-large')
+              ||(detail?.id===review.selectedId
+                &&Boolean(detail.nativeOversizedRecordSearchCursor)))
             && <Disclosure
               summary={t('local.roundNav.nativeOversizedTitle')}
               summaryMeta={t('local.roundNav.nativeOversizedHint')}
