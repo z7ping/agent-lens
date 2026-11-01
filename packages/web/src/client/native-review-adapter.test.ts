@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import type { AgentLensApi } from './api'
-import type { NativeReviewWindowDto, NativeSessionSummaryDto } from '@agent-lens/protocol'
+import type { NativeReviewWindowDto, NativeSessionSummaryDto, ReviewNodeDto } from '@agent-lens/protocol'
 import { AgentLensClientModel } from './model'
 import { nativeReviewTitle, nativeReviewDetail, nativeReviewNextPage, nativeReviewObservedFileChanges, nativeVisibleWindowStatistics } from './native-review-adapter'
 
@@ -362,4 +362,69 @@ test('indexed native Review opens the last window and jumps by ordinal without p
       'index:tail','review:cursor-8','review:first',
     ])
   }finally{model.stop()}
+})
+
+test('cross-page native tool result keeps first terminal evidence and exposes conflicting follow-up',()=>{
+  const turn=page(1,true).interactions[0]!
+  const call:ReviewNodeDto={
+    type:'tool',id:'call-one',at,sourceId:'pi',capturedAt:at,
+    name:'run',callId:'native-one',status:'unknown',startedAt:at,
+    payload:{},evidence:[],observationIds:['call-observation'],
+  }
+  const result=(id:string,success:boolean,output:string):ReviewNodeDto=>({
+    type:'event',id,at,sourceId:'pi',capturedAt:at,
+    nativeCallId:'native-one',kind:'tool.result',category:'unknown',
+    label:'tool.result',payload:{success,output},
+    evidence:[],observationIds:[id],
+  })
+  const window=(nodes:ReviewNodeDto[],complete:boolean):NativeReviewWindowDto=>({
+    ...page(1,!complete),
+    ...(complete?{turnFragment:'complete' as const,boundaryIntegrity:'complete' as const}
+      :{turnFragment:'partial' as const,boundaryIntegrity:'partial' as const}),
+    interactions:[{...turn,id:'same-native-turn',nodes}],
+  })
+  const first=nativeReviewDetail(summary,window([turn.nodes[0]!,call],false))
+  const settled=nativeReviewNextPage(first,window([result('result-one',true,'ok')],false))
+  assert.equal(settled.interactions[0]?.nodes.length,2)
+  const duplicated=nativeReviewNextPage(settled,
+    window([result('result-two',false,'different')],true))
+  const nodes=duplicated.interactions[0]!.nodes
+  const tool=nodes.find(node=>node.type==='tool')
+  assert.equal(tool?.type,'tool')
+  if(tool?.type!=='tool')return
+  assert.equal(tool.status,'success')
+  assert.equal(tool.output,'ok')
+  assert.deepEqual(tool.observationIds,['call-observation','result-one'])
+  assert.equal(nodes.find(node=>node.id==='result-two')?.type,'event')
+  assert.equal(nativeVisibleWindowStatistics(duplicated.interactions).errorCount,1,
+    'a contradictory second native result must remain visible as independent failure evidence')
+})
+
+test('reused native tool call IDs stay unpaired rather than associating with the wrong tool',()=>{
+  const turn=page(1,true).interactions[0]!
+  const call=(id:string):ReviewNodeDto=>({
+    type:'tool',id,at,sourceId:'pi',capturedAt:at,
+    name:id,callId:'recycled-call',status:'unknown',startedAt:at,
+    payload:{},evidence:[],observationIds:[id],
+  })
+  const first:NativeReviewWindowDto={
+    ...page(1,true),boundaryIntegrity:'partial',turnFragment:'partial',
+    interactions:[{...turn,id:'same-native-turn',
+      nodes:[turn.nodes[0]!,call('first-call'),call('second-call')]}],
+  }
+  const second:NativeReviewWindowDto={
+    ...page(1,false),turnFragment:'complete',
+    interactions:[{...turn,id:'same-native-turn',nodes:[{
+      type:'event',id:'ambiguous-result',at,sourceId:'pi',capturedAt:at,
+      nativeCallId:'recycled-call',kind:'tool.result',category:'unknown',
+      label:'tool.result',payload:{success:false,output:'ambiguous'},
+      evidence:[],observationIds:['ambiguous-result'],
+    }]}],
+  }
+  const merged=nativeReviewNextPage(nativeReviewDetail(summary,first),second)
+  const nodes=merged.interactions[0]!.nodes
+  assert.deepEqual(nodes.filter(node=>node.type==='tool').map(node=>node.status),
+    ['unknown','unknown'])
+  assert.equal(nodes.find(node=>node.id==='ambiguous-result')?.type,'event')
+  assert.equal(nativeVisibleWindowStatistics(merged.interactions).errorCount,1)
 })
