@@ -234,6 +234,8 @@ export async function normalizePiRecord(
         nativeToolName: fact.name,
         success: fact.success,
         output: fact.output,
+        ...(envelope.verifiedLargeTextRecord
+          ?{nativeLazyText:envelope.verifiedLargeTextRecord}:{}),
         ...(fact.details === undefined ? {} : { details: fact.details }),
       }, offset, { ...(fact.callId ? { nativeCallId: fact.callId } : {}) }))
       return
