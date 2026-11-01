@@ -393,6 +393,7 @@ export const chineseReviewMessages: LocaleMessagesDto = {
         nativeOversizedLinkedScan: '已检查 {{count}} 条后续原生记录',
         nativeOversizedLinkedVerified: '原生调用 ID 已验证匹配（仅片段证据）',
         nativeOversizedLinkedPartial: '工具结果仍有更多片段，可从原生记录继续读取',
+        nativeOversizedLinkedMore: '继续加载关联结果片段',
         nativeOversizedLinkedMissing: '当前范围未发现已验证的关联结果',
         nativeOversizedProgress: '当前显示 {{visible}} / {{total}} 个已验证片段',
         nativeHookEvidenceHint: '按来源归档查看，事件可能同时出现在上方轮次中；未确认完整采集',
