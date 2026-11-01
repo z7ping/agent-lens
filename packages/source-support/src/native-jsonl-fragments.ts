@@ -722,7 +722,9 @@ export async function readNativeJsonlTextFragments(input:{
           if(activeNumber){
             if(currentArgumentKey){
               const value=Number(textBuffer)
-              if(Number.isFinite(value))setFlatArgument(currentArgumentKey,value)
+              if(Number.isFinite(value)
+                &&(!/^-?\d+$/.test(textBuffer)||Number.isSafeInteger(value)))
+                setFlatArgument(currentArgumentKey,value)
               else currentBlock!.argsValid=false
             }
             flushText()
