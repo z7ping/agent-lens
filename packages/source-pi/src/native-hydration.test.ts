@@ -395,7 +395,7 @@ test('oversized Pi image user message joins canonical native TaskSurface with co
         fileIdentity:`${(await stat(file)).dev}:${(await stat(file)).ino}`},
       limit:1},ctx)
     assert.deepEqual(ret,{state:'unsupported',
-      reason:'native-large-record-semantic-boundary-unproven'})
+      reason:'native-record-too-large'})
   }finally{await rm(root,{recursive:true,force:true})}
 })
 
@@ -427,6 +427,6 @@ test('Pi oversized user image with invalid native base64 remains unsupported',as
       filePath:file,nativeSessionId:'invalid-large-image',
       cursor:first.nextCursor,limit:1},ctx)
     assert.deepEqual(result,{state:'unsupported',
-      reason:'native-large-image-verification-unavailable'})
+      reason:'native-record-too-large'})
   }finally{await rm(root,{recursive:true,force:true})}
 })
