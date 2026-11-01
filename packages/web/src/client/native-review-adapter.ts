@@ -69,8 +69,24 @@ function mergeNativeTurn(previous: ReviewInteractionDto, incoming: ReviewInterac
   const nodes: ReviewNodeDto[] = []
   const seen = new Set<string>()
   const tools = new Map<string, ReviewToolNodeDto>()
+  const settledToolIds = new Set<string>()
   const scoped = (sourceId: string, callId: string) => JSON.stringify([sourceId, callId])
-  for (const raw of [...previous.nodes, ...incoming.nodes]) {
+  const allNodes = [...previous.nodes, ...incoming.nodes]
+  // A call ID may be recycled within one turn. Deduplicate overlapping pages
+  // by observation ID first; if two distinct calls claim the same source ID,
+  // the native source has NOT proved which call owns a result.
+  const callOwner = new Map<string, string>()
+  const ambiguousCalls = new Set<string>()
+  const uniqueCalls = new Set<string>()
+  for (const node of allNodes) {
+    if (node.type !== 'tool' || !node.callId || uniqueCalls.has(node.id)) continue
+    uniqueCalls.add(node.id)
+    const key = scoped(node.sourceId, node.callId)
+    const owner = callOwner.get(key)
+    if (owner && owner !== node.id) ambiguousCalls.add(key)
+    else callOwner.set(key, node.id)
+  }
+  for (const raw of allNodes) {
     if (seen.has(raw.id)) continue
     seen.add(raw.id)
     const node: ReviewNodeDto = { ...raw, evidence: [...raw.evidence], observationIds: [...raw.observationIds] }
@@ -79,8 +95,12 @@ function mergeNativeTurn(previous: ReviewInteractionDto, incoming: ReviewInterac
         ? node.payload : {}
       const callId = node.nativeCallId ?? (['callId','call_id','toolUseId','tool_use_id']
         .map(key => payload[key]).find(value => typeof value === 'string' && value) as string | undefined)
-      const linked = callId ? tools.get(scoped(node.sourceId, callId)) : undefined
-      if (linked) {
+      const key = callId ? scoped(node.sourceId, callId) : undefined
+      const linked = key && !ambiguousCalls.has(key) ? tools.get(key) : undefined
+      // A second, distinct terminal observation must remain visible evidence,
+      // not silently overwrite the first result or append extra evidence to it.
+      if (linked && !settledToolIds.has(linked.id)) {
+        settledToolIds.add(linked.id)
         linked.endedAt = node.at
         linked.status = payload.success === false ? 'error' : payload.success === true ? 'success' : 'unknown'
         const duration = payload.durationMs ?? payload.duration_ms
@@ -91,7 +111,12 @@ function mergeNativeTurn(previous: ReviewInteractionDto, incoming: ReviewInterac
         continue
       }
     }
-    if (node.type === 'tool' && node.callId) tools.set(scoped(node.sourceId, node.callId), node)
+    if (node.type === 'tool' && node.callId) {
+      const key = scoped(node.sourceId, node.callId)
+      if (!ambiguousCalls.has(key)) tools.set(key, node)
+      if (node.endedAt || node.status === 'success' || node.status === 'error')
+        settledToolIds.add(node.id)
+    }
     nodes.push(node)
   }
   const omitted = (previous.omittedNodeCount ?? 0) + Math.max(0, nodes.length - MAX_NATIVE_TURN_NODES)
