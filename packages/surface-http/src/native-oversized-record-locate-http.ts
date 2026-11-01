@@ -59,6 +59,7 @@ export async function handleNativeOversizedRecordLocateRequest(
       state:'found',cursor:encodeNativeSessionCursor({
         ...result.cursor,mode:'record-fragments',
       }),recordSha256:result.recordSha256,hasText:result.hasText,
+      ...(result.hasMedia?{hasMedia:true}:{}),
       ...(result.nativeEventId?{nativeEventId:result.nativeEventId}:{}),
       ...(result.nextCursor?{nextCursor:encodeNativeSessionCursor({
         ...result.nextCursor,mode:'record-fragments',
