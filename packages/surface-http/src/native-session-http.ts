@@ -677,6 +677,8 @@ export async function handleNativeSessionAttachmentRequest(
         fragmentOffset:0,limit:1,signal,
       })
       if(verified.state==='available'
+        &&verified.record.offset===sourceCursor.offset
+        &&verified.record.fileIdentity===sourceCursor.fileIdentity
         &&verified.record.sourceLineSha256===sourceCursor.recordFingerprint
         &&verified.record.images?.length===1
         &&verified.record.images[0]?.mimeType===unresolved[0]?.mimeType){
