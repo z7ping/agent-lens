@@ -306,3 +306,56 @@ test('tool argument fragments retain private nested field ancestry without expos
     ])
   }finally{await rm(root,{recursive:true,force:true})}
 })
+
+test('Pi typed tool scalar leaves preserve numeric precision, booleans and null order',async()=>{
+  const root=await mkdtemp(join(tmpdir(),'agent-lens-tool-native-scalars-'))
+  const path=join(root,'session.jsonl')
+  try{
+    const record=JSON.stringify({type:'message',message:{role:'assistant',content:[
+      {type:'toolCall',id:'call-typed',name:'test',arguments:{
+        retries:42,enabled:true,disabled:false,unset:null,
+        ratio:1.25e-7,nested:[1,false,null,'tail'],
+      }},
+      {type:'text',text:'done'},
+    ]}})
+    await writeFile(path,record+'\n')
+    const result=await readNativeJsonlTextFragments({path,allowedRoots:[root],limit:16})
+    assert.equal(result.state,'available')
+    if(result.state!=='available')return
+    const pieces=result.record.fragments
+    assert.deepEqual(pieces.map(x=>x.text),
+      ['42','true','false','null','1.25e-7','1','false','null','tail','done'])
+    assert.deepEqual(pieces.map(x=>x.valueType),[
+      'number','boolean','boolean','null','number',
+      'number','boolean','null','string',undefined,
+    ])
+    assert.deepEqual(pieces.map(x=>x.kind),[
+      ...Array.from({length:9},()=> 'tool-call'),'message',
+    ])
+    assert.deepEqual(pieces[0]?.fieldKeys,['arguments','retries'])
+    assert.deepEqual(pieces[5]?.fieldKeys,['arguments','nested'])
+    assert.deepEqual(pieces[8]?.fieldKeys,['arguments','nested'])
+    assert.ok(pieces.slice(0,9).every(x=>x.callKey===pieces[0]?.callKey))
+    assert.equal(result.record.totalTextFragments,10)
+    const next=await readNativeJsonlTextFragments({
+      path,allowedRoots:[root],fragmentOffset:4,limit:3,
+      expectedSha256:result.record.recordSha256,
+    })
+    assert.equal(next.state,'available')
+    if(next.state==='available')
+      assert.deepEqual(next.record.fragments.map(x=>x.ordinal),[4,5,6])
+  }finally{await rm(root,{recursive:true,force:true})}
+})
+
+test('overlong Pi tool numeric literals are rejected without materializing a huge scalar',async()=>{
+  const root=await mkdtemp(join(tmpdir(),'agent-lens-tool-native-number-bound-'))
+  const path=join(root,'session.jsonl')
+  try{
+    const record='{"type":"message","message":{"role":"assistant","content":['
+      +'{"type":"toolCall","arguments":{"count":'+('9'.repeat(400))+'}}]}}'
+    await writeFile(path,record+'\n')
+    assert.deepEqual(await readNativeJsonlTextFragments({path,allowedRoots:[root]}),{
+      state:'unsupported',reason:'native-tool-number-budget',
+    })
+  }finally{await rm(root,{recursive:true,force:true})}
+})

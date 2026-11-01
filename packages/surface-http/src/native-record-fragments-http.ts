@@ -128,6 +128,7 @@ export async function handleNativeRecordFragmentsRequest(
         ordinal:fragment.ordinal,text:fragment.text,kind:fragment.kind,
         ...(fragment.contentIndex===undefined?{}:{contentIndex:fragment.contentIndex}),
         ...(fragment.callKey?{callKey:fragment.callKey}:{}),
+        ...(fragment.valueType?{valueType:fragment.valueType}:{}),
         ...(fragment.redactionApplied?{redactionApplied:true}:{}),
         ...(fragment.suppressed?{suppressed:true}:{}),
         ...(fragment.splitScalar?{splitScalar:true}:{}),
