@@ -8,6 +8,7 @@ import type {
   NativeSessionCatalogStore,
   SourceNativeSessionCursor,
   SourceNativeTextFragmentResult,
+  SourceOversizedRecordResult,
   SourceService,
   StorageService,
 } from '@agent-lens/core'
@@ -335,6 +336,52 @@ export class NativeSessionReader {
       evidenceCandidates:[],
       nextCursor:page.nextCursor,hasMore:page.hasMore,pendingTail:false,
     }
+  }
+
+  /** Bounded search for one oversized record's verified physical cursor.
+   * Source-specific formats are interpreted only by its adapter. Never
+   * advance normal Review/History cursors or claim a full semantic turn.
+   */
+  async locateOversizedRecord(query:{
+    sourceId:string;installationId:string;nativeSessionId:string
+    cursor?:SourceNativeSessionCursor;limit?:number;signal:AbortSignal
+  }):Promise<SourceOversizedRecordResult>{
+    if(!this.capturePolicy.isSourceEnabled(query.sourceId))
+      return {state:'unsupported',reason:'source-disabled'}
+    if(!this.storage.nativeSessionCatalog)
+      return {state:'unsupported',reason:'native-session-catalog-unavailable'}
+    query.signal.throwIfAborted()
+    const catalog=await this.storage.nativeSessionCatalog.get({
+      sourceId:query.sourceId,installationId:query.installationId,
+      nativeSessionId:query.nativeSessionId,locationKind:'native',
+    })
+    if(!catalog)return {state:'unavailable',reason:'native-session-not-indexed'}
+    if(query.cursor&&query.cursor.fileIdentity!==catalog.fileIdentity)
+      return {state:'drifted',reason:'native-catalog-file-identity-changed'}
+    const source=this.sources.list().find(x=>x.manifest.sourceId===query.sourceId)
+    if(!source?.locateOversizedRecord)
+      return {state:'unsupported',reason:'native-oversized-locator-unsupported-by-source'}
+    const installation=await this.storage.repositories.installations.get(query.installationId)
+    if(!installation||installation.productId!==source.manifest.productId)
+      return {state:'drifted',reason:'native-installation-identity-changed'}
+    const scoped=await this.sessionRoots(query,installation)
+    if(scoped.state!=='available')return scoped
+    const host=await this.storage.repositories.hosts.get(installation.hostId)
+    if(!host)return {state:'unavailable',reason:'native-source-host-unavailable'}
+    const found=await source.locateOversizedRecord({
+      filePath:catalog.filePath,nativeSessionId:catalog.nativeSessionId,
+      ...(query.cursor?{cursor:query.cursor}:{}),
+      ...(query.limit===undefined?{}:{limit:query.limit}),
+    },{
+      host,installation:scoped.installation,
+      ...(scoped.runtimeProfile?{runtimeProfile:scoped.runtimeProfile}:{}),
+      abortSignal:query.signal,checkpoint:readOnlyCheckpoint,
+    })
+    if(found.state==='found'&&found.cursor.fileIdentity!==catalog.fileIdentity)
+      return {state:'drifted',reason:'native-record-identity-changed'}
+    if(found.state==='more'&&found.nextCursor.fileIdentity!==catalog.fileIdentity)
+      return {state:'drifted',reason:'native-record-identity-changed'}
+    return found
   }
 
   /** Catalog-authorized one-record fragment read. Raw Source leaves are

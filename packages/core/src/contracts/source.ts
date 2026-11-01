@@ -231,6 +231,20 @@ export type SourceNativeTextFragmentResult =
     }}
   | {state:'pending'|'unavailable'|'drifted'|'unsupported';reason:string}
 
+/** Source-owned metadata-only search for an oversized physical record.
+ * No event skipping, turn identity inference or raw text is permitted.
+ */
+export interface SourceOversizedRecordQuery {
+  filePath:string;nativeSessionId:string;cursor?:SourceNativeSessionCursor
+  limit?:number
+}
+export type SourceOversizedRecordResult =
+  | {state:'found';cursor:SourceNativeSessionCursor
+      recordSha256:string;hasText:boolean;nativeEventId?:string}
+  | {state:'more';nextCursor:SourceNativeSessionCursor}
+  | {state:'end'}
+  | {state:'pending'|'unavailable'|'drifted'|'unsupported';reason:string}
+
 export interface SourceNativeSessionPageQuery {
   filePath: string
   nativeSessionId: string
@@ -263,6 +277,8 @@ export interface SourceDefinition {
   readNativeSessionPage?(query: SourceNativeSessionPageQuery, ctx: SourceExecutionContext): Promise<SourceNativeSessionPageResult>
   /** Optional Source-native record fragment reader; no implicit full turn. */
   readNativeTextFragments?(query: SourceNativeTextFragmentQuery, ctx: SourceExecutionContext): Promise<SourceNativeTextFragmentResult>
+  /** Optional bounded locator for a later fragment-only (not complete-turn) view. */
+  locateOversizedRecord?(query:SourceOversizedRecordQuery,ctx:SourceExecutionContext):Promise<SourceOversizedRecordResult>
   /** Explicit attestation that all durable per-session history and runtime facts
    * can be reconstructed from the original source store. Defaults to false.
    * Sources with transient runtime-hook-only facts must not set this until a
