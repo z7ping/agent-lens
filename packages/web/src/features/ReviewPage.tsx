@@ -300,7 +300,8 @@ export function ReviewPage({ model, embedded = false, latestRequest = 0 }: { mod
     const controller=new AbortController()
     oversizedAbortRef.current=controller
     const revision=++oversizedRevisionRef.current
-    setOversized({...current,loading:true,mediaIndex:image.contentIndex,error:undefined})
+    setOversized({...current,loading:true,mediaIndex:image.contentIndex,
+      mediaDataUrl:undefined,error:undefined})
     try{
       const maxBase64=8*1024*1024
       let offset=0
