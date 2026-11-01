@@ -84,6 +84,7 @@ function classify(path:readonly PathKey[]):StringKind{
   if(path.length===4&&path[3]==='type')return 'blockType'
   if(path.length===4&&path[3]==='id')return 'blockId'
   if(path.length===4&&(path[3]==='mimeType'||path[3]==='mime_type'))return 'imageMime'
+  if(path.length===4&&path[3]==='data')return 'imageData'
   if(path.length===4&&path[3]==='thinking')return 'thinking'
   if(path[3]==='text'&&(path.length===4
     ||(path.length===5&&typeof path[4]==='number')))return 'text'
@@ -343,10 +344,11 @@ export async function readNativeJsonlTextFragments(input:{
             keyBuffer+=text
           }else if(stringKind==='text'||stringKind==='thinking'
             ||stringKind==='argument')writeText(text)
-          else if(stringKind==='imageData'&&media){
+          else if(stringKind==='imageData'&&media
+            &&selectedIndex===media.contentIndex){
             // Validate entire original base64 alphabet, not merely the selected
             // slice, so a later malformed chunk cannot be exposed as an image.
-            if(!/^[A-Za-z0-9+/=]*$/.test(text)
+            if(!/^[A-Za-z0-9+/]*={0,2}$/.test(text)
               ||(mediaPaddingSeen&&/[^=]/.test(text))){
               failed='invalid-native-image-base64'
               throw new Error(failed)
@@ -358,7 +360,7 @@ export async function readNativeJsonlTextFragments(input:{
             if(to>from)mediaBase64+=text.slice(from,to)
             mediaLength+=text.length
           }
-          else if(stringKind!=='ignored'){
+          else if(stringKind!=='ignored'&&stringKind!=='imageData'){
             if(Buffer.byteLength(meta,'utf8')+Buffer.byteLength(text,'utf8')>MAX_META_BYTES){
               failed='native-record-metadata-budget'
               throw new Error(failed)
