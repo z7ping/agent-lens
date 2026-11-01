@@ -74,3 +74,13 @@ test('native oversized call and result linking reuses catalog-scoped fragment AP
   assert.match(api,/record-fragments\/link/)
   assert.equal((page.match(/<TaskSurface\b/g)??[]).length,1)
 })
+
+test('partial native TaskSurface keeps its content while locating the exact oversized record',()=>{
+  assert.match(page,/detail\?\.id===review\.selectedId/)
+  assert.match(page,/detail\.nativeOversizedRecordSearchCursor/)
+  assert.match(page,/searchCursor=detail\.nativeOversizedRecordSearchCursor/)
+  assert.match(page,/hookApi\.locateOversizedNativeRecord\(id/)
+  assert.match(page,/summary=\{t\('local\.roundNav\.nativeOversizedTitle'\)\}/)
+  assert.equal((page.match(/<TaskSurface\b/g)??[]).length,1,
+    'the fallback must reuse the existing shared TaskSurface')
+})
