@@ -733,3 +733,48 @@ test('giant Pi toolResult with missing isError or unknown details remains fragme
     }
   }finally{await rm(root,{recursive:true,force:true})}
 })
+
+test('a giant Pi assistant image record retains bounded nonempty tool arguments',async()=>{
+  const root=await mkdtemp(join(tmpdir(),'agent-lens-pi-native-flat-args-'))
+  const file=join(root,'session.jsonl')
+  const header=JSON.stringify({type:'session',id:'native-flat-args'})
+  const content=JSON.stringify({type:'message',id:'assistant-flat',message:{
+    role:'assistant',content:[
+      {type:'toolCall',id:'real-call',name:'read',
+        arguments:{path:'README.md',count:2,recursive:true,optional:null}},
+      {type:'image',mimeType:'image/png',data:'A'.repeat(2_300_000)},
+    ],
+  }})
+  const ts='2026-11-01T00:00:00Z'
+  const host={id:'host',name:'host',platform:process.platform,arch:process.arch,
+    createdAt:ts,lastSeenAt:ts}
+  const installation={id:'flat-args',hostId:'host',productId:'pi',
+    dataRoot:root,firstSeenAt:ts,lastSeenAt:ts}
+  const ctx:SourceRawRecoveryContext={host,installation,
+    abortSignal:new AbortController().signal,
+    checkpoint:{async get(){return null},async set(){throw Error('read-only')},
+      async clear(){throw Error('read-only')}},
+  }
+  try{
+    await writeFile(file,[header,content].join('\n')+'\n')
+    const first=await piSourceDefinition.readNativeSessionPage!({
+      filePath:file,nativeSessionId:'native-flat-args',limit:1},ctx)
+    assert.equal(first.state,'available')
+    if(first.state!=='available')return
+    const oversized=await piSourceDefinition.readNativeSessionPage!({
+      filePath:file,nativeSessionId:'native-flat-args',
+      cursor:first.nextCursor,limit:1},ctx)
+    assert.equal(oversized.state,'available')
+    if(oversized.state!=='available')return
+    assert.equal(oversized.records[0]?.fingerprint,hash(content))
+    const normalized=await piSourceDefinition.normalize(oversized.records[0]!,{
+      host,installation,
+    })
+    const call=normalized.observations.find(x=>x.kind==='tool.call')
+    assert.equal(call?.nativeCallId,'real-call')
+    assert.deepEqual((call?.payload as {input:unknown}).input,
+      {path:'README.md',count:2,recursive:true,optional:null})
+    assert.ok(JSON.stringify(oversized.records[0]?.payload).length<4096)
+    assert.equal(JSON.stringify(oversized.records[0]?.payload).includes('A'.repeat(256)),false)
+  }finally{await rm(root,{recursive:true,force:true})}
+})
