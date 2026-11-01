@@ -563,7 +563,8 @@ export async function readNativeJsonlTextFragments(input:{
                 if(selectedLeafIds[i]!==currentTextLeaf)continue
                 fragments[i]!.splitScalar=true
                 if(scalarSplitSafe&&textKind==='message'
-                  &&(role==='user'||role==='assistant'))
+                  &&(role==='user'||role==='assistant'
+                    ||role==='tool'||role==='toolResult'))
                   fragments[i]!.safeSplitScalar=true
               }
             }
