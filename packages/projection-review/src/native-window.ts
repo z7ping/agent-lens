@@ -164,11 +164,13 @@ export function projectNativeReviewWindow(input: NativeReviewProjectionInput): N
 
   const attachmentCursors = new Map<string, string>()
   const nativeLazyBodies=new Map<string,{recordSha256:string;totalTextFragments:number}>()
+  const nativeLazyResults=new Map<string,{recordSha256:string;totalTextFragments:number}>()
   items.forEach((item, index) => {
     const payload=item.payload&&typeof item.payload==='object'
       &&!Array.isArray(item.payload)?item.payload as Record<string,unknown>:{}
     const ref=payload.nativeLazyText
-    if((item.kind==='message.user'||item.kind==='message.assistant')
+    if((item.kind==='message.user'||item.kind==='message.assistant'
+      ||item.kind==='tool.result')
       &&ref&&typeof ref==='object'&&!Array.isArray(ref)){
       const evidence=ref as Record<string,unknown>
       if(typeof evidence.recordSha256==='string'
@@ -176,7 +178,7 @@ export function projectNativeReviewWindow(input: NativeReviewProjectionInput): N
         &&typeof evidence.totalTextFragments==='number'
         &&Number.isSafeInteger(evidence.totalTextFragments)
         &&evidence.totalTextFragments>16&&evidence.totalTextFragments<=10_000_000)
-        nativeLazyBodies.set(item.id,{
+        (item.kind==='tool.result'?nativeLazyResults:nativeLazyBodies).set(item.id,{
           recordSha256:evidence.recordSha256,
           totalTextFragments:evidence.totalTextFragments,
         })
@@ -219,6 +221,11 @@ export function projectNativeReviewWindow(input: NativeReviewProjectionInput): N
           ? attachmentCursors.get(node.id) : undefined
         const body=node.type==='message'?nativeLazyBodies.get(node.id):undefined
         const bodyCursor=node.type==='message'?attachmentCursors.get(node.id):undefined
+        const resultObservation=node.type==='tool'
+          ?node.observationIds.filter(id=>nativeLazyResults.has(id)):undefined
+        const resultId=resultObservation?.length===1?resultObservation[0]:undefined
+        const resultBody=resultId?nativeLazyResults.get(resultId):undefined
+        const resultCursor=resultId?attachmentCursors.get(resultId):undefined
         // A tool result may share the same original SourceRecord provenance
         // as its call. Retain one evidence edge per stable evidence ID.
         const evidence = [...new Map(node.evidence.map(item => [item.id, item])).values()]
@@ -228,6 +235,9 @@ export function projectNativeReviewWindow(input: NativeReviewProjectionInput): N
           ...(cursor ? { nativeAttachmentCursor: cursor } : {}),
           ...(body&&bodyCursor?{nativeLazyText:{
             cursor:bodyCursor,...body,
+          }}:{}),
+          ...(resultBody&&resultCursor?{nativeLazyResult:{
+            cursor:resultCursor,...resultBody,
           }}:{}),
         }
       }),
