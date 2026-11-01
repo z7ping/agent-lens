@@ -10,6 +10,7 @@ import { badRequest, writeJson } from './http-utils'
 export interface NativeSessionWindowReader {
   read(query: NativeSessionReadQuery): Promise<NativeSessionReadResult>
   readTextFragments?: NativeSessionReader['readTextFragments']
+  locateOversizedRecord?: NativeSessionReader['locateOversizedRecord']
   /** Source-authorized, one-record native media hydration (never public raw DTO). */
   readUnpersistedMediaPage?(query: NativeSessionReadQuery): Promise<NativeSessionReadResult>
   readArchivedHooks?(query: {
@@ -391,7 +392,7 @@ function identifier(params: URLSearchParams, key: string): string {
 }
 
 type EncodedNativeCursor = SourceNativeSessionCursor & {
-  mode?: 'review-turns'
+  mode?: 'review-turns'|'record-fragments'
   turnOrdinal?: number
   /** Anchor for a continued single-turn fragment; absent for exact next-turn cursors. */
   turnStart?: number
@@ -425,9 +426,12 @@ export function decodeNativeSessionCursor(value: string | null): EncodedNativeCu
         || !/^[0-9a-f]{64}$/.test(cursor.recordFingerprint)))
       || (cursor.mode === undefined
         ? cursor.turnOrdinal !== undefined || cursor.turnStart !== undefined
-        : cursor.mode !== 'review-turns'
-          || !Number.isSafeInteger(cursor.turnOrdinal)
-          || (cursor.turnOrdinal as number) < 1)
+        : cursor.mode === 'record-fragments'
+          ? cursor.turnOrdinal !== undefined || cursor.turnStart !== undefined
+            || cursor.boundaryHash===undefined
+          : cursor.mode !== 'review-turns'
+            || !Number.isSafeInteger(cursor.turnOrdinal)
+            || (cursor.turnOrdinal as number) < 1)
       || (cursor.turnStart !== undefined && (
         cursor.mode !== 'review-turns'
         || !Number.isSafeInteger(cursor.turnStart)
@@ -445,7 +449,7 @@ export function decodeNativeSessionCursor(value: string | null): EncodedNativeCu
       ...(cursor.mode === 'review-turns'
         ? { mode: 'review-turns' as const, turnOrdinal: cursor.turnOrdinal as number,
             ...(cursor.turnStart === undefined ? {} : {turnStart:cursor.turnStart as number}) }
-        : {}),
+        : cursor.mode==='record-fragments'?{mode:'record-fragments' as const}:{}),
     }
   } catch {
     throw badRequest('Invalid native session cursor')
@@ -699,7 +703,8 @@ export async function handleNativeSessionWindowRequest(
     throw badRequest('Invalid native complete-turn request limit')
   }
   if ((turnMode && cursor && cursor.mode !== 'review-turns')
-    || (!turnMode && cursor?.mode === 'review-turns')) {
+    || (!turnMode && cursor?.mode === 'review-turns')
+    || cursor?.mode==='record-fragments') {
     throw badRequest('Native session cursor does not match the requested format')
   }
 
