@@ -309,7 +309,7 @@ test('a giant record in a subsequent wide page narrows to one SourceRecord befor
   try{
     const addr=server.address()
     assert.ok(addr&&typeof addr==='object')
-    const base=`http://127.0.0.1:${addr.port}/api/v1/native-sessions/window?sourceId=pi&installationId=inst&nativeSessionId=S&format=review-turns&limit=1`
+    const base=`http://127.0.0.1:${addr.port}/api/v1/native-sessions/window?sourceId=pi&installationId=inst&nativeSessionId=S&format=review-turns`
     const res=await fetch(base)
     assert.equal(res.status,200)
     const dto=await res.json() as NativeReviewWindowDto
@@ -317,7 +317,7 @@ test('a giant record in a subsequent wide page narrows to one SourceRecord befor
     assert.deepEqual(dto.interactions[0]?.nodes.filter(x=>x.type==='message').map(x=>x.role),
       ['user','assistant'])
     assert.equal(decodeNativeSessionCursor(dto.nextCursor)?.offset,2)
-    assert.deepEqual(reads,[[0,1],[1,1],[2,1]])
+    assert.deepEqual(reads,[[0,8],[1,8],[1,1],[2,1]])
   }finally{
     await new Promise<void>(resolve=>server.close(()=>resolve()))
   }
