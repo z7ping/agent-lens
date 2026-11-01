@@ -841,7 +841,8 @@ test('verified native block metadata never bypasses tool and image CapturePolicy
         contentBlocks:[
           {contentIndex:0,kind:'text' as const,fragmentCount:1},
           {contentIndex:1,kind:'tool-call' as const,fragmentCount:0,
-            name:'secret-command',callKey:'c'.repeat(64)},
+            name:'secret-command',callKey:'c'.repeat(64),
+            verifiedArguments:{password:'secret-value',count:2}},
           {contentIndex:2,kind:'image' as const,fragmentCount:0},
         ],
       }}
@@ -873,6 +874,8 @@ test('verified native block metadata never bypasses tool and image CapturePolicy
       {contentIndex:2,kind:'image',fragmentCount:0},
     ])
     assert.equal(JSON.stringify(disabled.record).includes('secret-command'),false)
+    assert.equal(JSON.stringify(disabled.record).includes('secret-value'),false)
+    assert.equal(JSON.stringify(disabled.record).includes('verifiedArguments'),false)
     assert.equal(JSON.stringify(disabled.record).includes('c'.repeat(64)),false)
   }
   tool=true

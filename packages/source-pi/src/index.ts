@@ -190,8 +190,9 @@ async function readPiVerifiedLargeImagePage(
         ?!['text','thinking','tool-call','image'].includes(block.kind)
         :block.kind!=='text'&&block.kind!=='image'))
     ||(assistant&&blocks.some(block=>block.kind==='tool-call'
-      &&(!block.emptyArguments||!block.nativeCallId||!block.name
-        ||block.fragmentCount!==0)))
+      &&(!block.nativeCallId||!block.name||!block.verifiedArguments
+        ||block.fragmentCount!==original.fragments.filter(piece=>
+          piece.contentIndex===block.contentIndex).length)))
     ||(assistant&&new Set(blocks.filter(block=>block.kind==='tool-call')
       .map(block=>block.nativeCallId)).size
       !==blocks.filter(block=>block.kind==='tool-call').length)
@@ -201,7 +202,8 @@ async function readPiVerifiedLargeImagePage(
       fragment.contentIndex===undefined
       ||!blocks.some(block=>block.contentIndex===fragment.contentIndex
         &&(block.kind==='text'&&fragment.kind==='message'
-          ||assistant&&block.kind==='thinking'&&fragment.kind==='thinking')))
+          ||assistant&&block.kind==='thinking'&&fragment.kind==='thinking'
+          ||assistant&&block.kind==='tool-call'&&fragment.kind==='tool-call')))
     ||blocks.some(block=>['text','thinking'].includes(block.kind)
       &&(block.fragmentCount===0
         ||original.fragments.filter(piece=>piece.contentIndex===block.contentIndex)
@@ -246,7 +248,7 @@ async function readPiVerifiedLargeImagePage(
       return {type:'image',mimeType:original.images[0]!.mimeType}
     if(block.kind==='tool-call')
       return {type:'toolCall',id:block.nativeCallId!,name:block.name!,
-        arguments:{}}
+        arguments:block.verifiedArguments!}
     const text=original.fragments.filter(x=>x.contentIndex===block.contentIndex)
       .map(x=>x.text).join('')
     return block.kind==='thinking'?{type:'thinking',thinking:text}
