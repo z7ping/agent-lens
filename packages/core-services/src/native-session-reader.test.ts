@@ -765,3 +765,53 @@ test('mixed native assistant record applies prompt/tool capture independently an
   if(allowed.state==='available')
     assert.equal(allowed.record.media?.base64,'AQID')
 })
+
+test('native tool links enforce catalog identity and tool privacy before Source access',async()=>{
+  const storage={
+    nativeSessionCatalog:{async get(){return catalog}},
+    repositories:{installations:{async get(){return installation}},
+      hosts:{async get(){return host}}},
+  } as unknown as StorageService
+  let calls=0
+  const source={manifest:{sourceId:'pi',productId:'pi'},
+    async findNativeToolResult(q:{
+      filePath:string;cursor:{offset:number};callKey:string
+      fragmentOrdinal:number;expectedSha256:string
+    }){
+      calls++
+      assert.equal(q.filePath,catalog.filePath)
+      assert.equal(q.cursor.offset,70)
+      assert.equal(q.callKey,'c'.repeat(64))
+      assert.equal(q.fragmentOrdinal,3)
+      assert.equal(q.expectedSha256,'a'.repeat(64))
+      return {state:'available' as const,scannedRecords:1,
+        match:{cursor:{offset:100,sequence:3,fileIdentity:'1:9',
+          recordFingerprint:'d'.repeat(64)},
+          recordSha256:'b'.repeat(64)}}
+    },
+  } as unknown as SourceDefinition
+  const query={sourceId:'pi',installationId:'install',nativeSessionId:'S1',
+    cursor:{offset:70,sequence:2,fileIdentity:'1:9'},
+    fragmentOrdinal:3,expectedSha256:'a'.repeat(64),callKey:'c'.repeat(64),
+    signal:new AbortController().signal,
+  }
+  const sources={list:()=>[source]} as unknown as SourceService
+  const reader=new NativeSessionReader(storage,sources,{
+    isSourceEnabled:()=>true,isEnabled:()=>true,
+  } as unknown as CapturePolicyService)
+  const available=await reader.findNativeToolResult(query)
+  assert.equal(available.state,'available')
+  if(available.state==='available')
+    assert.equal(available.match?.recordSha256,'b'.repeat(64))
+  assert.equal(calls,1)
+  assert.deepEqual(await reader.findNativeToolResult({...query,
+    cursor:{...query.cursor,fileIdentity:'other'}}),{
+    state:'drifted',reason:'native-catalog-file-identity-changed'})
+  assert.equal(calls,1)
+  const off=new NativeSessionReader(storage,sources,{
+    isSourceEnabled:()=>true,isEnabled:(scope:string)=>scope!=='tool',
+  } as unknown as CapturePolicyService)
+  assert.deepEqual(await off.findNativeToolResult(query),{
+    state:'unsupported',reason:'native-tool-capture-disabled'})
+  assert.equal(calls,1)
+})
