@@ -175,7 +175,7 @@ async function readPiVerifiedLargeImagePage(
     &&original.fileIdentity===scan.span.fileIdentity
     &&blocks.length===0&&original.images.length===0
     &&original.totalTextFragments>16&&original.fragments.length===16
-    &&original.fragments.every(piece=>piece.kind==='message'
+    &&original.fragments.every(piece=>piece.kind===(toolResult?'tool-result':'message')
       &&piece.contentIndex===undefined)
   if(!scalar && (!(assistant?original.strictLargeAssistantShape:original.strictImageUserShape)
     ||original.nativeType!=='message'

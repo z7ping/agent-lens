@@ -70,7 +70,10 @@ export async function handleNativeRecordFragmentsRequest(
         ||scanCursor.fileIdentity!==cursor.fileIdentity
         ||scanCursor.offset<=cursor.offset))))
     ||(!mediaMode&&!linkMode&&(!Number.isSafeInteger(fragmentOffset)||fragmentOffset<0
-      ||fragmentOffset>10_000_000||!Number.isSafeInteger(limit)||limit<1||limit>8))
+      ||fragmentOffset>10_000_000||!Number.isSafeInteger(limit)||limit<1
+      // Regular fragment-only disclosures stay at 8. Only a SHA-bound
+      // SourceRecord-start cursor used by formal TaskSurface pages may read 16.
+      ||limit>(structuralBodyCursor?16:8)))
     ||(expectedSha256!==undefined&&!/^[0-9a-f]{64}$/.test(expectedSha256))
     ||(!mediaMode&&!linkMode&&fragmentOffset>0&&!expectedSha256)
     ||(mediaMode&&(!expectedSha256

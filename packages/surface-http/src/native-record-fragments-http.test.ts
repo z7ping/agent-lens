@@ -236,3 +236,59 @@ test('tool link route reattests native anchor, exposes only opaque matching resu
     assert.equal(calls,2)
   }finally{await new Promise<void>(resolve=>server.close(()=>resolve()))}
 })
+
+test('only SHA-bound formal native body cursors accept 16 text fragments, not ordinary disclosures',async()=>{
+  const sessionId='native:'+'e'.repeat(32)
+  const sha='a'.repeat(64)
+  const anchor={offset:42,sequence:3,fileIdentity:'10:20',
+    boundaryHash:'c'.repeat(64),recordFingerprint:'b'.repeat(64)}
+  const nativeCursor=encodeNativeSessionCursor(anchor)
+  const ordinaryCursor=encodeNativeSessionCursor({...anchor,
+    mode:'record-fragments' as const})
+  let calls=0
+  const reader={
+    async read(){return {state:'unsupported' as const,reason:'unused'}},
+    async readTextFragments(q:{limit?:number;expectedSha256?:string}){
+      calls++
+      assert.equal(q.limit,16)
+      assert.equal(q.expectedSha256,sha)
+      return {state:'available' as const,record:{
+        offset:42,fileIdentity:'10:20',recordSha256:sha,role:'user',
+        fragments:Array.from({length:16},(_,ordinal)=>({
+          ordinal,kind:'message' as const,text:'中文',
+        })),totalTextFragments:30,nextFragmentOffset:16,
+      }}
+    },
+  } as unknown as NativeSessionWindowReader
+  const catalog={async getByReviewSessionId(){return {
+    sourceId:'pi',installationId:'install',nativeSessionId:'native-S',
+    locationKind:'native',
+  }}} as unknown as Pick<NativeSessionCatalogStore,'getByReviewSessionId'>
+  const server=createServer(async(req,res)=>{
+    try{
+      if(!await handleNativeRecordFragmentsRequest(req,res,
+        new URL(req.url??'/','http://127.0.0.1'),reader,catalog)){
+        res.statusCode=404;res.end()
+      }
+    }catch(error){
+      res.statusCode=400;res.end(error instanceof Error?error.message:String(error))
+    }
+  })
+  await new Promise<void>(resolve=>server.listen(0,'127.0.0.1',resolve))
+  try{
+    const address=server.address()
+    assert.ok(address&&typeof address==='object')
+    const base=`http://127.0.0.1:${address.port}/api/v1/native-sessions/${sessionId}/record-fragments`
+    const valid=await fetch(`${base}?cursor=${encodeURIComponent(nativeCursor)}&expectedSha256=${sha}&limit=16`)
+    assert.equal(valid.status,200)
+    const dto=await valid.json() as {state:string;fragments:Array<{ordinal:number}>;nextFragmentOffset:number}
+    assert.equal(dto.state,'available')
+    assert.equal(dto.fragments.length,16)
+    assert.equal(dto.nextFragmentOffset,16)
+    assert.equal(calls,1)
+    assert.equal((await fetch(`${base}?cursor=${encodeURIComponent(ordinaryCursor)}&expectedSha256=${sha}&limit=16`)).status,400)
+    assert.equal((await fetch(`${base}?cursor=${encodeURIComponent(nativeCursor)}&expectedSha256=${sha}&limit=17`)).status,400)
+    assert.equal((await fetch(`${base}?cursor=${encodeURIComponent(nativeCursor)}&limit=16`)).status,400)
+    assert.equal(calls,1)
+  }finally{await new Promise<void>(resolve=>server.close(()=>resolve()))}
+})
