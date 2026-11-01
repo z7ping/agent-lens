@@ -297,9 +297,14 @@ export const piSourceDefinition: SourceDefinition = {
   },
   async findNativeToolResult(query,ctx) {
     const limit=query.limit??4
+    const leafAnchor=query.fragmentOrdinal!==undefined
+    const blockAnchor=query.contentIndex!==undefined
     if(!Number.isSafeInteger(limit)||limit<1||limit>4
-      ||!Number.isSafeInteger(query.fragmentOrdinal)||query.fragmentOrdinal<0
-      ||query.fragmentOrdinal>10_000_000
+      ||leafAnchor===blockAnchor
+      ||(leafAnchor&&(!Number.isSafeInteger(query.fragmentOrdinal)
+        ||query.fragmentOrdinal!<0||query.fragmentOrdinal!>10_000_000))
+      ||(blockAnchor&&(!Number.isSafeInteger(query.contentIndex)
+        ||query.contentIndex!<0||query.contentIndex!>10_000_000))
       ||!/^[0-9a-f]{64}$/.test(query.expectedSha256)
       ||!/^[0-9a-f]{64}$/.test(query.callKey))
       return {state:'unsupported' as const,reason:'invalid-native-tool-link-query'}
@@ -313,20 +318,27 @@ export const piSourceDefinition: SourceDefinition = {
     const original=await stat(auth.sourcePath)
     if(!original.isFile())
       return {state:'unsupported' as const,reason:'native-source-is-not-a-file'}
-    // Each query reattests the exact original tool-call leaf, including after
-    // a resumed scan. An arbitrary hash without proof cannot enumerate results.
+    // Every resumed scan reattests its original native call anchor. A text
+    // leaf and a content[] object are distinct forms of exact Source proof;
+    // neither the caller's hash nor tool name alone authorizes the lookup.
     const anchor=await readNativeJsonlTextFragments({
       path:query.filePath,allowedRoots:roots,cursor:query.cursor,
-      expectedSha256:query.expectedSha256,fragmentOffset:query.fragmentOrdinal,
+      expectedSha256:query.expectedSha256,
+      fragmentOffset:query.fragmentOrdinal??0,
       limit:1,signal:ctx.abortSignal,
     })
     if(anchor.state!=='available')return anchor
     const leaf=anchor.record.fragments[0]
+    const block=anchor.record.contentBlocks.find(item=>
+      item.contentIndex===query.contentIndex)
+    const anchored=leafAnchor
+      ?leaf?.ordinal===query.fragmentOrdinal&&leaf.kind==='tool-call'
+        &&leaf.callKey===query.callKey
+      :block?.kind==='tool-call'&&block.callKey===query.callKey
     if(anchor.record.recordSha256!==query.expectedSha256
       ||(query.cursor.recordFingerprint
         &&anchor.record.sourceLineSha256!==query.cursor.recordFingerprint)
-      ||leaf?.ordinal!==query.fragmentOrdinal||leaf.kind!=='tool-call'
-      ||leaf.callKey!==query.callKey)
+      ||!anchored)
       return {state:'unsupported' as const,reason:'native-tool-call-evidence-mismatch'}
     const start=await inspectNativeSessionRecordSpan({
       path:query.filePath,allowedRoots:roots,cursor:query.cursor,
