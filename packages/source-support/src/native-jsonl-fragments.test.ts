@@ -503,3 +503,30 @@ test('overlong optional tool display names cannot erase other certified native c
     assert.equal(JSON.stringify(result.record).includes('n'.repeat(512)),false)
   }finally{await rm(root,{recursive:true,force:true})}
 })
+
+test('a giant scalar has safe split proof only across non-ASCII boundaries',async()=>{
+  const root=await mkdtemp(join(tmpdir(),'agent-lens-native-safe-boundary-'))
+  const path=join(root,'session.jsonl')
+  try{
+    await writeFile(path,JSON.stringify({type:'message',id:'unicode',message:{
+      role:'user',content:'中文🚀'.repeat(200_000),
+    }})+'\n')
+    const safe=await readNativeJsonlTextFragments({path,allowedRoots:[root],limit:3})
+    assert.equal(safe.state,'available')
+    if(safe.state!=='available')return
+    assert.equal(safe.record.strictLargeScalarShape,true)
+    assert.equal(safe.record.scalarContentVerified,true)
+    assert.ok(safe.record.totalTextFragments>16)
+    assert.ok(safe.record.fragments.every(piece=>
+      piece.splitScalar===true&&piece.safeSplitScalar===true))
+    await writeFile(path,JSON.stringify({type:'message',id:'ascii',message:{
+      role:'user',content:'Bearer '+('secret'.repeat(400_000)),
+    }})+'\n')
+    const unsafe=await readNativeJsonlTextFragments({path,allowedRoots:[root],limit:3})
+    assert.equal(unsafe.state,'available')
+    if(unsafe.state==='available')
+      assert.ok(unsafe.record.fragments.every(piece=>
+        piece.splitScalar===true&&piece.safeSplitScalar!==true),
+        'an ASCII credential crossing the fragment boundary is never independently disclosed')
+  }finally{await rm(root,{recursive:true,force:true})}
+})
