@@ -195,7 +195,11 @@ export function buildNodes(items: TimelineItemDto[], registry = new ToolRegistra
         ? JSON.stringify([item.installationId, item.sourceId, item.sourceSessionId, item.nativeEventId, node.role])
         : undefined
       const existing = messageKey ? messagesByNativeId.get(messageKey) : undefined
-      if (existing && existing.text === node.text) {
+      // Equal empty text does not prove duplicate media. In particular two
+      // assistant content[] image blocks share the same nativeEventId/role
+      // but carry distinct nativeContentIndex attachments and must not merge.
+      if (existing && existing.text === node.text
+        && !existing.attachments?.length && !node.attachments?.length) {
         existing.observationIds = [...new Set([...existing.observationIds, ...node.observationIds])]
         existing.evidence = [...new Map([...existing.evidence, ...node.evidence].map(entry => [entry.id, entry])).values()]
         continue
