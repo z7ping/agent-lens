@@ -1,5 +1,6 @@
 import {
   AGENT_LENS_PROTOCOL_VERSION,
+  reviewToolResultStatus,
   type TaskFileChangesResponseDto,
   type NativeReviewWindowDto,
   type NativeSessionSummaryDto,
@@ -27,7 +28,7 @@ export function nativeReviewNodeIsFailure(node: ReviewNodeDto): boolean {
   if(node.type==='tool')return node.status==='error'
   if(node.type!=='event'||!node.payload||typeof node.payload!=='object'||Array.isArray(node.payload))return false
   const payload=node.payload
-  if(node.kind==='tool.result')return payload.success===false||payload.status==='error'||payload.isError===true
+  if(node.kind==='tool.result')return reviewToolResultStatus(payload)==='error'
   if(node.kind!=='session.lifecycle')return false
   const action=payload.event??payload.action
   return action==='turn.error'||action==='assistant.error'||action==='turn.failed'
@@ -102,7 +103,7 @@ function mergeNativeTurn(previous: ReviewInteractionDto, incoming: ReviewInterac
       if (linked && !settledToolIds.has(linked.id)) {
         settledToolIds.add(linked.id)
         linked.endedAt = node.at
-        linked.status = payload.success === false ? 'error' : payload.success === true ? 'success' : 'unknown'
+        linked.status = reviewToolResultStatus(payload)
         const duration = payload.durationMs ?? payload.duration_ms
         if (typeof duration === 'number' && Number.isFinite(duration) && duration >= 0) linked.durationMs = duration
         linked.output = payload.output ?? payload.result ?? node.payload
