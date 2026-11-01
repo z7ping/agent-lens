@@ -241,6 +241,11 @@ export const piSourceDefinition: SourceDefinition = {
       signal:ctx.abortSignal,
     })
     if(result.state!=='available')return result
+    // Review index cursor must still point to this exact physical Source
+    // record, even after an in-place rewrite with restored stat metadata.
+    if(query.cursor.recordFingerprint
+      &&result.record.sourceLineSha256!==query.cursor.recordFingerprint)
+      return {state:'drifted',reason:'native-record-fingerprint-changed'}
     ctx.abortSignal.throwIfAborted()
     const session=await readPiSessionMetadata(query.filePath)
     if(session.nativeSessionId!==query.nativeSessionId)

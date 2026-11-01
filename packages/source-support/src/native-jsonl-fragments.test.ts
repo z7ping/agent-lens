@@ -27,6 +27,9 @@ test('a 3MiB Pi JSONL record is verified and paged without materializing the who
     assert.equal(first.record.nativeType,'message')
     assert.equal(first.record.role,'user')
     assert.equal(first.record.recordSha256,sha)
+    assert.equal(first.record.sourceLineSha256,
+      createHash('sha256').update(physical).digest('hex'),
+      'CRLF terminator must not change the Source cursor fingerprint')
     assert.deepEqual(first.record.fragments.map(x=>x.ordinal),[0,1])
     assert.equal(first.record.fragments[0]?.text,parts[0]?.text)
     assert.equal(first.record.totalTextFragments,64)
