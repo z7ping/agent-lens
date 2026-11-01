@@ -302,9 +302,9 @@ export const piSourceDefinition: SourceDefinition = {
     if(!Number.isSafeInteger(limit)||limit<1||limit>4
       ||leafAnchor===blockAnchor
       ||(leafAnchor&&(!Number.isSafeInteger(query.fragmentOrdinal)
-        ||query.fragmentOrdinal!<0||query.fragmentOrdinal!>10_000_000))
+        ||query.fragmentOrdinal! < 0||query.fragmentOrdinal! > 10_000_000))
       ||(blockAnchor&&(!Number.isSafeInteger(query.contentIndex)
-        ||query.contentIndex!<0||query.contentIndex!>10_000_000))
+        ||query.contentIndex! < 0||query.contentIndex! > 10_000_000))
       ||!/^[0-9a-f]{64}$/.test(query.expectedSha256)
       ||!/^[0-9a-f]{64}$/.test(query.callKey))
       return {state:'unsupported' as const,reason:'invalid-native-tool-link-query'}
@@ -335,6 +335,13 @@ export const piSourceDefinition: SourceDefinition = {
       ?leaf?.ordinal===query.fragmentOrdinal&&leaf.kind==='tool-call'
         &&leaf.callKey===query.callKey
       :block?.kind==='tool-call'&&block.callKey===query.callKey
+    // One native call ID must not silently identify multiple tools inside
+    // the original oversized record. A truncated block outline cannot prove
+    // uniqueness; fall back to unpaired Source evidence rather than guessing.
+    const matchingBlocks=anchor.record.contentBlocks.filter(item=>
+      item.kind==='tool-call'&&item.callKey===query.callKey)
+    if(anchor.record.contentBlocksTruncated||matchingBlocks.length>1)
+      return {state:'unsupported' as const,reason:'ambiguous-native-tool-call-evidence'}
     if(anchor.record.recordSha256!==query.expectedSha256
       ||(query.cursor.recordFingerprint
         &&anchor.record.sourceLineSha256!==query.cursor.recordFingerprint)
