@@ -395,9 +395,12 @@ export class NativeSessionReader {
     sourceId:string;installationId:string;nativeSessionId:string
     cursor:SourceNativeSessionCursor;expectedSha256?:string
     fragmentOffset?:number;limit?:number;signal:AbortSignal
+    media?:{contentIndex:number;offset:number;limit:number}
   }):Promise<SourceNativeTextFragmentResult>{
     if(!this.capturePolicy.isSourceEnabled(query.sourceId))
       return {state:'unsupported',reason:'source-disabled'}
+    if(query.media&&!this.capturePolicy.isEnabled('prompt'))
+      return {state:'unsupported',reason:'native-attachment-capture-disabled'}
     if(!this.storage.nativeSessionCatalog)
       return {state:'unsupported',reason:'native-session-catalog-unavailable'}
     query.signal.throwIfAborted()
@@ -423,6 +426,7 @@ export class NativeSessionReader {
       ...(query.expectedSha256?{expectedSha256:query.expectedSha256}:{}),
       ...(query.fragmentOffset===undefined?{}:{fragmentOffset:query.fragmentOffset}),
       ...(query.limit===undefined?{}:{limit:query.limit}),
+      ...(query.media?{media:query.media}:{}),
     },{
       host,installation:scoped.installation,
       ...(scoped.runtimeProfile?{runtimeProfile:scoped.runtimeProfile}:{}),
@@ -432,6 +436,12 @@ export class NativeSessionReader {
     if(result.record.fileIdentity!==catalog.fileIdentity
       ||result.record.offset!==query.cursor.offset)
       return {state:'drifted',reason:'native-record-identity-changed'}
+    if(query.media&&(!result.record.media
+      ||result.record.media.contentIndex!==query.media.contentIndex
+      ||result.record.media.base64.length>query.media.limit
+      ||(result.record.media.nextOffset!==undefined
+        &&result.record.media.nextOffset<=query.media.offset)))
+      return {state:'unsupported',reason:'native-inline-image-window-invalid'}
     const scope=result.record.role==='user'?'prompt':'tool'
     const fragments=result.record.fragments.map(fragment=>{
       // A token spanning two pages cannot be safely redacted by applying the
