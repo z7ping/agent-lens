@@ -341,6 +341,20 @@ export async function readNativeJsonlTextFragments(input:{
       }
       return result
     }
+    const flatArgumentKey=(path:readonly PathKey[]):string|undefined=>
+      path.length===5&&path[0]==='message'&&path[1]==='content'
+      &&currentBlock&&path[2]===currentBlock.index
+      &&path[3]==='arguments'&&typeof path[4]==='string'
+        ?path[4]:undefined
+    const setFlatArgument=(key:string|undefined,value:string|number|boolean|null)=>{
+      if(!key||!currentBlock?.flatArguments||!currentBlock.argsValid)return
+      if(['__proto__','prototype','constructor'].includes(key)
+        ||Object.hasOwn(currentBlock.flatArguments,key)){
+        currentBlock.argsValid=false
+        return
+      }
+      currentBlock.flatArguments[key]=value
+    }
     const toolFieldContext=(path:readonly PathKey[])=>{
       const fieldType=classify(path)
       const argument=fieldType==='argument'&&currentBlock?.type==='toolCall'
@@ -540,6 +554,9 @@ export async function readNativeJsonlTextFragments(input:{
         case 'startString':{
           const path=nextPath()
           selectedIndex=contentIndex(path)
+          currentArgumentKey=flatArgumentKey(path)
+          if(currentArgumentKey&&currentBlock?.type!=='toolCall')
+            currentBlock!.argsValid=false
           if(path.length===2&&path[0]==='message'&&path[1]==='content')
             scalarContentVerified=true
           stringKind=classify(path)
@@ -586,6 +603,11 @@ export async function readNativeJsonlTextFragments(input:{
               textBuffer+=lone
               textBytes+=bytes
             }
+            if(currentArgumentKey){
+              if(textPieces!==0||(textKind!=='tool-call'))
+                currentBlock!.argsValid=false
+              else setFlatArgument(currentArgumentKey,textBuffer)
+            }
             flushText()
             if(textPieces>1){
               for(let i=0;i<fragments.length;i++){
@@ -616,6 +638,7 @@ export async function readNativeJsonlTextFragments(input:{
             currentBlock.mimeType=meta.toLowerCase()
           else if(stringKind==='imageData'&&currentBlock)
             currentBlock.hasData=true
+          currentArgumentKey=undefined
           stringKind='ignored'
           return
         case 'stringChunk':{
@@ -672,6 +695,7 @@ export async function readNativeJsonlTextFragments(input:{
             strictLargeScalarShape=false
             strictLargeToolResultShape=false
           }
+          currentArgumentKey=flatArgumentKey(path)
           activeNumber=toolFieldContext(path)
           if(activeNumber){
             valueType='number'
@@ -694,9 +718,15 @@ export async function readNativeJsonlTextFragments(input:{
           return
         case 'endNumber':
           if(activeNumber){
+            if(currentArgumentKey){
+              const value=Number(textBuffer)
+              if(Number.isFinite(value))setFlatArgument(currentArgumentKey,value)
+              else currentBlock!.argsValid=false
+            }
             flushText()
             activeNumber=false
           }
+          currentArgumentKey=undefined
           return
         case 'nullValue':
         case 'trueValue':
@@ -712,6 +742,9 @@ export async function readNativeJsonlTextFragments(input:{
           if(path.length===2&&path[0]==='message'&&path[1]==='isError'
             &&(name==='trueValue'||name==='falseValue'))
             nativeResultIsError=name==='trueValue'
+          if(flatArgumentKey(path))
+            setFlatArgument(flatArgumentKey(path),name==='nullValue'
+              ?null:name==='trueValue')
           if(toolFieldContext(path)){
             valueType=name==='nullValue'?'null':'boolean'
             currentTextLeaf=nextTextLeaf++
