@@ -466,8 +466,15 @@ export class NativeSessionReader {
       const captured=this.capturePolicy.capture(scope,input,{maxText:12_000})
       let value:unknown=captured.value
       for(const key of keys){
-        value=value&&typeof value==='object'&&!Array.isArray(value)
-          ?(value as Record<string,unknown>)[key]:undefined
+        if(value&&typeof value==='object'&&!Array.isArray(value)){
+          value=(value as Record<string,unknown>)[key]
+        }else{
+          // CapturePolicy may redact a sensitive ancestor (credentials) as
+          // one marker, rather than retaining its nested object shape.
+          value=captured.redactionApplied&&typeof value==='string'
+            ?value:undefined
+          break
+        }
       }
       const text=typeof value==='string'?value:''
       return {
