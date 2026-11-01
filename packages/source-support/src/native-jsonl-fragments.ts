@@ -48,6 +48,8 @@ export interface NativeJsonlContentBlock {
   nativeCallId?:string
   /** Tool arguments are proven absent or an empty JSON object. */
   emptyArguments?:boolean
+  /** Source-private, strictly bounded flat JSON object with certified types. */
+  verifiedArguments?:Record<string,string|number|boolean|null>
 }
 
 export interface NativeJsonlTextFragment {
@@ -212,7 +214,9 @@ export async function readNativeJsonlTextFragments(input:{
     let resultCallId:string|undefined
     let currentBlock:{index:number;type?:string;id?:string;name?:string
       mimeType?:string;hasData?:boolean;fragmentCount:number
-      keys:Set<string>;argumentsEmpty?:boolean}|undefined
+      keys:Set<string>;argumentsEmpty?:boolean
+      flatArguments?:Record<string,string|number|boolean|null>
+      argsValid?:boolean;argFieldCount?:number}|undefined
     const contentBlocks:NativeJsonlContentBlock[]=[]
     let contentBlocksTruncated=false
     const images:NativeInlineImageInfo[]=[]
@@ -227,6 +231,7 @@ export async function readNativeJsonlTextFragments(input:{
     let textKind:FragmentKind='message'
     let valueType:NativeJsonlTextFragment['valueType']
     let activeNumber=false
+    let currentArgumentKey:string|undefined
     let argumentKeys:string[]|undefined
     let argumentKeysTooDeep=false
     let failed:string|undefined
@@ -270,8 +275,10 @@ export async function readNativeJsonlTextFragments(input:{
       if(path.length===4)return typeof path[3]==='string'
         &&['type','text','thinking','id','name','arguments',
           'mimeType','mime_type','data'].includes(path[3])
-      // An assistant tool's complete JSON arguments may only be {}.
-      return false
+      // Flat JSON arguments are reconstructed after all original tokens
+      // have been validated; arrays and nested objects remain unsupported.
+      return path.length===5&&path[3]==='arguments'
+        &&typeof path[4]==='string'
     }
     const permittedScalarPath=(path:readonly PathKey[]):boolean=>{
       if(path.length===0)return true
@@ -320,8 +327,18 @@ export async function readNativeJsonlTextFragments(input:{
         currentBlock.keys.add(result[3])
         if(result[3]==='arguments')currentBlock.argumentsEmpty=false
       }
-      if(result.length>4&&currentBlock&&(result[3]==='arguments'||result[3]==='args'))
+      if(result.length>4&&currentBlock&&(result[3]==='arguments'||result[3]==='args')){
         currentBlock.argumentsEmpty=false
+        if(result.length!==5||typeof result[4]!=='string'
+          ||['__proto__','prototype','constructor'].includes(result[4])
+          ||!currentBlock.flatArguments
+          ||Object.hasOwn(currentBlock.flatArguments,result[4])){
+          currentBlock.argsValid=false
+        }else{
+          currentBlock.argFieldCount=(currentBlock.argFieldCount??0)+1
+          if(currentBlock.argFieldCount>64)currentBlock.argsValid=false
+        }
+      }
       return result
     }
     const toolFieldContext=(path:readonly PathKey[])=>{
@@ -420,9 +437,15 @@ export async function readNativeJsonlTextFragments(input:{
             currentBlock={index:path[2] as number,fragmentCount:0,
               keys:new Set<string>()}
           if(name==='startObject'&&path.length===4&&currentBlock
-            &&path[3]==='arguments')currentBlock.argumentsEmpty=true
+            &&path[3]==='arguments'){
+            currentBlock.argumentsEmpty=true
+            currentBlock.flatArguments=Object.create(null) as Record<string,string|number|boolean|null>
+            currentBlock.argsValid=true
+          }
           if(name==='startArray'&&path.length===4&&currentBlock
-            &&path[3]==='arguments')currentBlock.argumentsEmpty=false
+            &&path[3]==='arguments')currentBlock.argsValid=false
+          if(path.length===5&&path[3]==='arguments')
+            strictLargeAssistantShape=false
           if(stack.length>=MAX_DEPTH){
             failed='native-record-depth-budget'
             throw new Error(failed)
@@ -459,6 +482,10 @@ export async function readNativeJsonlTextFragments(input:{
                     ?['type','text']:['type']
             if([...currentBlock.keys].some(key=>!permittedKeys.includes(key)))
               strictLargeAssistantShape=false
+            if(currentBlock.keys.has('arguments')
+              &&(!currentBlock.argsValid||!currentBlock.flatArguments
+                ||Buffer.byteLength(JSON.stringify(currentBlock.flatArguments),'utf8')>12_000))
+              strictLargeAssistantShape=false
             // Only an entirely closed, verified native content object becomes
             // structural evidence. A malformed/truncated object never escapes.
             const block=currentBlock
@@ -475,7 +502,9 @@ export async function readNativeJsonlTextFragments(input:{
                   ?{callKey:createHash('sha256').update(block.id).digest('hex'),
                     nativeCallId:block.id}:{}),
                 ...(kind==='tool-call'&&block.argumentsEmpty!==false
-                  ?{emptyArguments:true}:{})
+                  ?{emptyArguments:true}:{}),
+                ...(kind==='tool-call'&&block.argsValid&&block.flatArguments
+                  ?{verifiedArguments:block.flatArguments}:{})
               })
             }else contentBlocksTruncated=true
             for(const fragment of fragments){
