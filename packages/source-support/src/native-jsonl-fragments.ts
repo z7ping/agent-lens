@@ -190,6 +190,7 @@ export async function readNativeJsonlTextFragments(input:{
     let nativeParentId:string|undefined
     let strictImageUserShape=true
     let strictLargeAssistantShape=true
+    const seenSourcePaths=new Set<string>()
     const assistantMeta:{
       provider?:string;model?:string;stopReason?:string;errorMessage?:string
     }={}
@@ -269,6 +270,15 @@ export async function readNativeJsonlTextFragments(input:{
       }
       if(!permittedImageUserPath(result))strictImageUserShape=false
       if(!permittedAssistantPath(result))strictLargeAssistantShape=false
+      // JSON permits repeated object keys, but a projected Source fact cannot
+      // silently choose a different occurrence or conflate two call IDs.
+      if(frame.kind==='object'&&result.length<=4){
+        const key=JSON.stringify(result)
+        if(seenSourcePaths.has(key)){
+          strictImageUserShape=false
+          strictLargeAssistantShape=false
+        }else seenSourcePaths.add(key)
+      }
       if(result.length===4&&currentBlock&&result[0]==='message'
         &&result[1]==='content'&&result[2]===currentBlock.index
         &&typeof result[3]==='string'){
@@ -349,6 +359,10 @@ export async function readNativeJsonlTextFragments(input:{
         case 'startObject':
         case 'startArray':{
           const path=nextPath()
+          if(path.length===2&&path[0]==='message'
+            &&['role','provider','model','stopReason','errorMessage'].includes(String(path[1]))){
+            strictLargeAssistantShape=false
+          }
           if(name==='startObject'&&path.length===3
             &&contentIndex(path)!==undefined)
             currentBlock={index:path[2] as number,fragmentCount:0,
@@ -561,6 +575,10 @@ export async function readNativeJsonlTextFragments(input:{
           const path=nextPath()
           if(path.length===1&&['type','id','parentId','timestamp'].includes(String(path[0])))
             strictImageUserShape=false
+          if(path.length===1&&['type','id','parentId','timestamp'].includes(String(path[0]))
+            ||path.length===2&&path[0]==='message'
+              &&['role','provider','model','stopReason','errorMessage'].includes(String(path[1])))
+            strictLargeAssistantShape=false
           activeNumber=toolFieldContext(path)
           if(activeNumber){
             valueType='number'
