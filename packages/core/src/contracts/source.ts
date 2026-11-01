@@ -234,7 +234,9 @@ export type SourceNativeTextFragmentResult =
         /** Trusted Source -> Reader privacy context, forbidden on HTTP DTO. */
         fieldKeys?:string[];fieldKeysTooDeep?:boolean
         valueType?:'string'|'number'|'boolean'|'null'
-        redactionApplied?:boolean;suppressed?:boolean;splitScalar?:boolean}>
+        redactionApplied?:boolean;suppressed?:boolean;splitScalar?:boolean
+        /** Source-only proof of safe secret-redaction boundary. */
+        safeSplitScalar?:boolean}>
       totalTextFragments:number;nextFragmentOffset?:number
       /** Verified message.content[] object outline, never a complete event. */
       contentBlocks?:Array<{
