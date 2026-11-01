@@ -56,6 +56,7 @@ export type NativeJsonlFragmentReadResult =
       fragments:NativeJsonlTextFragment[]
       totalTextFragments:number;nextFragmentOffset?:number
       images:NativeInlineImageInfo[]
+      imagesTruncated?:boolean
       media?:NativeInlineImageChunk
     }}
   | {state:'pending'|'unavailable'|'drifted'|'unsupported';reason:string}
@@ -143,6 +144,7 @@ export async function readNativeJsonlTextFragments(input:{
     let resultCallId:string|undefined
     let currentBlock:{index:number;type?:string;id?:string;mimeType?:string;hasData?:boolean}|undefined
     const images:NativeInlineImageInfo[]=[]
+    let imagesTruncated=false
     let mediaBase64=''
     let mediaLength=0
     let mediaPaddingSeen=false
@@ -245,6 +247,7 @@ export async function readNativeJsonlTextFragments(input:{
               &&currentBlock.mimeType&&MIME_TYPES.has(currentBlock.mimeType)){
               if(images.length<MAX_INLINE_IMAGES)
                 images.push({contentIndex:currentBlock.index,mimeType:currentBlock.mimeType})
+              else imagesTruncated=true
               if(media?.contentIndex===currentBlock.index){
                 mediaMimeType=currentBlock.mimeType
                 mediaFound=true
@@ -450,6 +453,7 @@ export async function readNativeJsonlTextFragments(input:{
       ...(nativeType?{nativeType}:{}),
       ...(role?{role}:{}),
       fragments,totalTextFragments,images,
+      ...(imagesTruncated?{imagesTruncated:true}:{}),
       ...(media&&mediaMimeType?{media:{
         contentIndex:media.contentIndex,mimeType:mediaMimeType,
         base64:mediaBase64,totalBase64Length:mediaLength,
