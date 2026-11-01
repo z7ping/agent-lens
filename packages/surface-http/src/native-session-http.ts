@@ -1,5 +1,5 @@
 import type { IncomingMessage, ServerResponse } from 'node:http'
-import type { NativeSessionReadQuery, NativeSessionReadResult } from '@agent-lens/core-services'
+import type { NativeSessionReadQuery, NativeSessionReadResult, NativeSessionReader } from '@agent-lens/core-services'
 import type { EvidenceCandidate, NativeSessionCatalogStore, ObservationCandidate, SourceNativeSessionCursor } from '@agent-lens/core'
 import { reviewMessageAttachmentsFromPayload, type NativeReviewWindowDto } from '@agent-lens/protocol'
 
@@ -9,6 +9,7 @@ import { badRequest, writeJson } from './http-utils'
 
 export interface NativeSessionWindowReader {
   read(query: NativeSessionReadQuery): Promise<NativeSessionReadResult>
+  readTextFragments?: NativeSessionReader['readTextFragments']
   /** Source-authorized, one-record native media hydration (never public raw DTO). */
   readUnpersistedMediaPage?(query: NativeSessionReadQuery): Promise<NativeSessionReadResult>
   readArchivedHooks?(query: {

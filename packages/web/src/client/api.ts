@@ -35,6 +35,7 @@ import {
   type NativeSessionCatalogResponseDto,
   type NativeSessionSummaryDto,
   type NativeReviewWindowResponseDto,
+  type NativeRecordTextFragmentsResponseDto,
   type NativeReviewTurnIndexResponseDto,
   type ReviewDetailDirection,
   type ReviewDetailFilter,
@@ -458,6 +459,21 @@ export class AgentLensApi {
     return requestJson<NativeReviewWindowResponseDto>(
       `/api/v1/native-sessions/window?${params}`,
       options.signal ? { signal: options.signal } : {},
+    )
+  }
+
+  /** Verify and read one sanitized record-fragment page; never full Review. */
+  nativeRecordTextFragments(id:string,options:{
+    cursor:string;expectedSha256?:string;fragmentOffset?:number
+    limit?:number;signal?:AbortSignal
+  }):Promise<NativeRecordTextFragmentsResponseDto>{
+    const params=new URLSearchParams({cursor:options.cursor})
+    if(options.expectedSha256)params.set('expectedSha256',options.expectedSha256)
+    if(options.fragmentOffset!==undefined)params.set('fragmentOffset',String(options.fragmentOffset))
+    if(options.limit!==undefined)params.set('limit',String(Math.max(1,Math.min(8,options.limit))))
+    return requestJson<NativeRecordTextFragmentsResponseDto>(
+      `/api/v1/native-sessions/${encodeURIComponent(id)}/record-fragments?${params}`,
+      options.signal?{signal:options.signal}:{},
     )
   }
 
