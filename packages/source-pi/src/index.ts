@@ -10,7 +10,8 @@ import {
   defineAgentLensPlugin,
   type AgentLensContext,
 } from '@agent-lens/runtime-cordis'
-import { readAuthorizedNativeJsonlEntry, readNativeSessionWindow, verifyJsonlLineSha256 } from '@agent-lens/source-support'
+import { readAuthorizedNativeJsonlEntry, readNativeSessionWindow,
+  readNativeJsonlTextFragments, verifyJsonlLineSha256 } from '@agent-lens/source-support'
 import { discoverPiAssets, piAssetInternals } from './assets'
 import { PI_PARSER_VERSION, PI_SOURCE_ID } from './constants'
 import { normalizePiRecord } from './normalize'
@@ -228,6 +229,26 @@ export const piSourceDefinition: SourceDefinition = {
       hasMore: page.hasMore,
       pendingTail: page.pendingTail,
     }
+  },
+  async readNativeTextFragments(query,ctx) {
+    const result=await readNativeJsonlTextFragments({
+      path:query.filePath,
+      allowedRoots:ctx.installation.dataRoot?[ctx.installation.dataRoot]:[],
+      cursor:query.cursor,
+      ...(query.expectedSha256?{expectedSha256:query.expectedSha256}:{}),
+      ...(query.fragmentOffset===undefined?{}:{fragmentOffset:query.fragmentOffset}),
+      ...(query.limit===undefined?{}:{limit:query.limit}),
+      signal:ctx.abortSignal,
+    })
+    if(result.state!=='available')return result
+    ctx.abortSignal.throwIfAborted()
+    const session=await readPiSessionMetadata(query.filePath)
+    if(session.nativeSessionId!==query.nativeSessionId)
+      return {state:'drifted',reason:'native-session-identity-changed'}
+    const current=await stat(query.filePath)
+    if(!current.isFile()||`${current.dev}:${current.ino}`!==result.record.fileIdentity)
+      return {state:'drifted',reason:'native-file-identity-changed'}
+    return result
   },
   discoverAssets: discoverPiAssets,
   ingestHistory: ingestPiHistory,

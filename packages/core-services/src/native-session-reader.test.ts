@@ -436,3 +436,62 @@ test('native reader uses persisted Slim profile roots across Worker, Hook and me
     state:'unavailable',reason:'native-runtime-profile-missing',
   })
 })
+
+test('large native record fragments require Source identity and parent CapturePolicy before returning text',async()=>{
+  const storage={
+    nativeSessionCatalog:{async get(){return catalog}},
+    repositories:{installations:{async get(){return installation}},hosts:{async get(){return host}}},
+  } as unknown as StorageService
+  let readCount=0
+  const source={manifest:{sourceId:'pi',productId:'pi'},
+    async readNativeTextFragments(q:{filePath:string;nativeSessionId:string;cursor:{offset:number}},
+      ctx:{checkpoint:{set(key:string,value:unknown):Promise<void>}}){
+      readCount++
+      assert.equal(q.filePath,catalog.filePath)
+      assert.equal(q.nativeSessionId,catalog.nativeSessionId)
+      assert.equal(q.cursor.offset,70)
+      await assert.rejects(ctx.checkpoint.set('cannot-write',123))
+      return {state:'available' as const,record:{
+        offset:70,fileIdentity:'1:9',recordSha256:'a'.repeat(64),
+        role:'user',
+        fragments:[{ordinal:0,text:'sensitive-source-string'}],
+        totalTextFragments:1,
+      }}
+    },
+  } as unknown as SourceDefinition
+  let sanitized=0
+  const policy={
+    isSourceEnabled:()=>true,
+    capture(_scope:string, text:string){
+      sanitized++
+      assert.equal(_scope,'prompt')
+      assert.equal(text,'sensitive-source-string')
+      return {value:'[已脱敏]',mode:'redacted',redactionApplied:true}
+    },
+  } as unknown as CapturePolicyService
+  const reader=new NativeSessionReader(storage,
+    {list:()=>[source]} as unknown as SourceService,policy)
+  const baseQuery={sourceId:'pi',installationId:'install',nativeSessionId:'S1',
+    cursor:{fileIdentity:'1:9',offset:70,sequence:2},
+    signal:new AbortController().signal}
+  const result=await reader.readTextFragments(baseQuery)
+  assert.equal(result.state,'available')
+  if(result.state==='available'){
+    assert.deepEqual(result.record.fragments,[
+      {ordinal:0,text:'[已脱敏]',redactionApplied:true},
+    ])
+    assert.equal(JSON.stringify(result).includes('sensitive-source-string'),false)
+  }
+  assert.equal(readCount,1)
+  assert.equal(sanitized,1)
+  assert.deepEqual(await reader.readTextFragments({...baseQuery,
+    cursor:{...baseQuery.cursor,fileIdentity:'different'}}),{
+    state:'drifted',reason:'native-catalog-file-identity-changed',
+  })
+  assert.equal(readCount,1)
+  const disabled=new NativeSessionReader(storage,{list:()=>[source]} as unknown as SourceService,
+    {isSourceEnabled:()=>false} as unknown as CapturePolicyService)
+  assert.deepEqual(await disabled.readTextFragments(baseQuery),{
+    state:'unsupported',reason:'source-disabled',
+  })
+})
