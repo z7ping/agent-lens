@@ -493,6 +493,8 @@ export async function readNativeJsonlTextFragments(input:{
         }
         case 'startNumber':{
           const path=nextPath()
+          if(path.length===1&&['type','id','parentId','timestamp'].includes(String(path[0])))
+            strictImageUserShape=false
           activeNumber=toolFieldContext(path)
           if(activeNumber){
             valueType='number'
