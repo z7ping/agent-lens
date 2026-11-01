@@ -4,7 +4,7 @@ import type { ReviewEventNodeDto, ReviewInteractionDto, ReviewMessageAttachmentD
 import { agentLabel } from '../components/AgentScope'
 import { AgentLensApi } from '../client/api'
 import { TaskFileChangesDisclosure } from './TaskFileChangesDisclosure'
-import { IconButton, UiIcon } from '../components/ui'
+import { Button, IconButton, UiIcon } from '../components/ui'
 import { projectReviewInteractionPresentation, projectReviewInteractionToolStats, projectReviewMessageModelLabels, type ReviewInteractionPresentationEntry, type ReviewProcessPresentationItem } from './review-interaction-presentation'
 import { isConsolidatedFileChangeEvent, isFailedLifecycleEvent, isSessionTitleUpdate, reviewEventLabel } from './review-event-presentation'
 import { TaskEvent } from './TaskEvent'
@@ -21,6 +21,7 @@ import { brief, EvidenceBadges, sourceEventSummary, toolPresentation, toolOutput
 const taskFileApi = new AgentLensApi()
 
 function MessageBubble({
+  sessionId,
   node,
   inspect,
   loadAttachments,
@@ -32,6 +33,7 @@ function MessageBubble({
   onForkAt,
   forkPending = false,
 }: {
+  sessionId:string
   node: ReviewMessageNodeDto
   inspect(node: ReviewNodeDto): void
   loadAttachments(observationId: string): Promise<ReviewMessageAttachmentDto[]>
@@ -46,6 +48,60 @@ function MessageBubble({
 }) {
   const { t } = useTranslation('review')
   const [attachments, setAttachments] = useState<ReviewMessageAttachmentDto[]>(node.attachments ?? [])
+  const [nativeBody,setNativeBody]=useState<{
+    offset:number;text:string;nextOffset?:number
+  }|null>(null)
+  const [bodyLoading,setBodyLoading]=useState(false)
+  const [bodyError,setBodyError]=useState<string|undefined>()
+  const bodyAbort=useRef<AbortController|null>(null)
+  useEffect(()=>{
+    bodyAbort.current?.abort()
+    setNativeBody(null)
+    setBodyLoading(false)
+    setBodyError(undefined)
+    return ()=>bodyAbort.current?.abort()
+  },[node.id,node.nativeLazyText?.recordSha256])
+  const loadNativeBody=async(offset:number)=>{
+    const verified=node.nativeLazyText
+    if(!verified||bodyLoading||offset<0)return
+    bodyAbort.current?.abort()
+    const controller=new AbortController()
+    bodyAbort.current=controller
+    setBodyLoading(true)
+    setBodyError(undefined)
+    try{
+      const result=await taskFileApi.nativeRecordTextFragments(sessionId,{
+        cursor:verified.cursor,expectedSha256:verified.recordSha256,
+        fragmentOffset:offset,limit:16,signal:controller.signal,
+      })
+      if(controller.signal.aborted)return
+      if(result.state!=='available')throw new Error(result.reason)
+      if(result.coverage!=='fragment-only'
+        ||result.sessionId!==sessionId
+        ||result.recordSha256!==verified.recordSha256
+        ||result.totalTextFragments!==verified.totalTextFragments
+        ||!result.fragments.length||result.fragments.length>16
+        ||result.fragments.some((piece,index)=>piece.ordinal!==offset+index
+          ||piece.kind!=='message'||piece.contentIndex!==undefined
+          ||piece.suppressed)
+        ||(result.nextFragmentOffset!==undefined
+          &&result.nextFragmentOffset!==offset+result.fragments.length))
+        throw new Error('native-body-evidence-mismatch')
+      setNativeBody({
+        offset,text:result.fragments.map(piece=>piece.text).join(''),
+        ...(result.nextFragmentOffset===undefined
+          ?{}:{nextOffset:result.nextFragmentOffset}),
+      })
+    }catch(error){
+      if(!controller.signal.aborted)
+        setBodyError(error instanceof Error?error.message:String(error))
+    }finally{
+      if(bodyAbort.current===controller){
+        bodyAbort.current=null
+        setBodyLoading(false)
+      }
+    }
+  }
 
   useEffect(() => {
     setAttachments(node.attachments ?? [])
@@ -80,7 +136,9 @@ function MessageBubble({
   const messageTime = taskSessionMessageTime(node.at)
   return <TaskSessionMessage
     role={node.role === 'user' ? 'user' : 'assistant'}
-    text={node.role === 'user' ? taskUserRequestText(node.text) : node.text}
+    text={node.nativeLazyText
+      ?nativeBody?.text??t('local.roundNav.nativeBodyLazy')
+      :node.role === 'user' ? taskUserRequestText(node.text) : node.text}
     attachments={attachments}
     {...(loadImage?{loadImage:(attachment:ReviewMessageAttachmentDto,signal:AbortSignal)=>
       loadImage(node.id,attachment,signal)}:{})}
@@ -91,7 +149,27 @@ function MessageBubble({
       ...(node.evidence.length > 0 ? { evidence: <EvidenceBadges evidence={node.evidence}/> } : {}),
     }}
     showContentActions={node.role === 'assistant' && showContentActions}
-    actions={node.evidence.length > 0 || (showContentActions && node.role === 'assistant' && node.nativeEventId && onForkAt) ? <>
+    actions={Boolean(node.nativeLazyText)||node.evidence.length > 0 || (showContentActions && node.role === 'assistant' && node.nativeEventId && onForkAt) ? <>
+      {node.nativeLazyText&&<>
+        {nativeBody&&<span>{t('local.roundNav.nativeBodyWindow',{
+          from:nativeBody.offset+1,
+          to:Math.min(nativeBody.offset+16,node.nativeLazyText.totalTextFragments),
+          total:node.nativeLazyText.totalTextFragments,
+        })}</span>}
+        {nativeBody&&nativeBody.offset>0&&<Button size="small"
+          disabled={bodyLoading}
+          onClick={()=>void loadNativeBody(Math.max(0,nativeBody.offset-16))}>
+          {t('local.roundNav.nativeBodyPrevious')}
+        </Button>}
+        {(!nativeBody||nativeBody.nextOffset!==undefined)&&<Button size="small"
+          disabled={bodyLoading}
+          onClick={()=>void loadNativeBody(nativeBody?.nextOffset??0)}>
+          {bodyLoading?t('local.roundNav.querying')
+            :nativeBody?t('local.roundNav.nativeBodyNext')
+              :t('local.roundNav.nativeBodyLoad')}
+        </Button>}
+        {bodyError&&<span role="alert">{bodyError}</span>}
+      </>
       {node.evidence.length > 0 && <button onClick={() => inspect(node)}>{t('local.evidence.evidenceDetail', { count: node.evidence.length })}</button>}
       {showContentActions && node.role === 'assistant' && node.nativeEventId && onForkAt && <IconButton
         size="small"
@@ -524,8 +602,8 @@ export function ReviewRoundAdapter({
       if (entry.items.every(isSessionTitleUpdate)) return null
       return showAllEvents ? <RawEventGroup key={`raw-${index}`} items={entry.items} inspect={inspect}/> : null
     }
-    if (entry.type === 'reasoning') return <MessageBubble key={entry.node.id} node={entry.node} nestedTools={entry.tools} inspect={inspect} loadAttachments={loadAttachments} loadImage={loadImage} expansionStore={expansionStore}/>
-    if (entry.type === 'message') return <MessageBubble key={entry.node.id} node={entry.node} inspect={inspect} loadAttachments={loadAttachments} loadImage={loadImage} modelLabel={modelLabels.get(entry.node.id)} showContentActions={entry.node.id === lastAssistantId} onForkAt={onForkAt} forkPending={forkPending}/>
+    if (entry.type === 'reasoning') return <MessageBubble key={entry.node.id} sessionId={sessionId} node={entry.node} nestedTools={entry.tools} inspect={inspect} loadAttachments={loadAttachments} loadImage={loadImage} expansionStore={expansionStore}/>
+    if (entry.type === 'message') return <MessageBubble key={entry.node.id} sessionId={sessionId} node={entry.node} inspect={inspect} loadAttachments={loadAttachments} loadImage={loadImage} modelLabel={modelLabels.get(entry.node.id)} showContentActions={entry.node.id === lastAssistantId} onForkAt={onForkAt} forkPending={forkPending}/>
     if (entry.type === 'event') {
       if (isConsolidatedEvent(entry.node)) return null
       return <EventRow key={entry.node.id} event={entry.node} inspect={inspect}/>
