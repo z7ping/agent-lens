@@ -68,6 +68,9 @@ export const chineseTaskMessages: LocaleMessagesDto = {
       copied: '已复制',
       copyFailed: '复制失败',
       imageAttachment: '图片附件',
+      loadImage: '加载图片',
+      loadingImage: '加载中…',
+      loadImageFailed: '图片加载失败，请重试',
       fileAttachment: '文件附件',
     },
     surface: {
