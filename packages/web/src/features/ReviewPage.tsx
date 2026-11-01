@@ -411,9 +411,11 @@ export function ReviewPage({ model, embedded = false, latestRequest = 0 }: { mod
         &&previous.toolLink.callKey===link.callKey
         &&previous.toolLink.anchorOrdinal===link.anchorOrdinal
         ?{...previous,toolLink:{...link,loading:false,
-          match:{...match,
+          match:{cursor:match.cursor,recordSha256:match.recordSha256,
+            totalTextFragments:match.totalTextFragments,
             fragments:[...match.fragments,...page.fragments].slice(-16),
-            nextFragmentOffset:page.nextFragmentOffset}}}:previous)
+            ...(page.nextFragmentOffset===undefined?{}:{
+              nextFragmentOffset:page.nextFragmentOffset})}}}:previous)
     }catch(error){
       if(controller.signal.aborted||oversizedRevisionRef.current!==revision)return
       setOversized(previous=>previous?.sessionId===id
