@@ -13,12 +13,94 @@ import { projectTaskReading, type TaskReadingFact } from './task-reading-semanti
 import { TaskThinking } from './TaskThinking'
 import { TaskToolGroup, TaskProcessSequence, type TaskToolGroupSequenceEntry } from './TaskToolGroup'
 import { TaskSessionMessage, TaskSessionThinking, TaskSessionProcessText, TaskSessionProcess, taskSessionMessageTime } from './TaskSessionContent'
+import { ToolOutputContent } from './ToolOutputContent'
 import { agentLensI18n } from '../i18n/runtime'
 import { taskUserRequestText, type TaskRoundModel, type TaskThinkingModel, type TaskToolModel } from './task-detail-model'
 import { formatClock, duration, elapsed } from './review-session-format'
 import { brief, EvidenceBadges, sourceEventSummary, toolPresentation, toolOutputText } from './ReviewEvidenceInspector'
 
 const taskFileApi = new AgentLensApi()
+
+type VerifiedNativeBodyRef = NonNullable<ReviewMessageNodeDto['nativeLazyText']>
+
+/** One SHA-bound on-demand text reader for native message and tool-result
+ * facts. The UI keeps only a single 16-fragment page in memory.
+ */
+function useNativeTextWindow(sessionId:string,ref:VerifiedNativeBodyRef|undefined,
+  expectedKind:'message'|'tool-result'){
+  const [page,setPage]=useState<{offset:number;text:string;nextOffset?:number}|null>(null)
+  const [loading,setLoading]=useState(false)
+  const [error,setError]=useState<string|undefined>()
+  const controllerRef=useRef<AbortController|null>(null)
+  useEffect(()=>{
+    controllerRef.current?.abort()
+    setPage(null);setLoading(false);setError(undefined)
+    return ()=>controllerRef.current?.abort()
+  },[sessionId,ref?.cursor,ref?.recordSha256,expectedKind])
+  const load=async(offset:number)=>{
+    if(!ref||loading||offset<0)return
+    controllerRef.current?.abort()
+    const controller=new AbortController()
+    controllerRef.current=controller
+    setLoading(true);setError(undefined)
+    try{
+      const result=await taskFileApi.nativeRecordTextFragments(sessionId,{
+        cursor:ref.cursor,expectedSha256:ref.recordSha256,
+        fragmentOffset:offset,limit:16,signal:controller.signal,
+      })
+      if(controller.signal.aborted)return
+      if(result.state!=='available')throw new Error(result.reason)
+      if(result.coverage!=='fragment-only'||result.sessionId!==sessionId
+        ||result.recordSha256!==ref.recordSha256
+        ||result.totalTextFragments!==ref.totalTextFragments
+        ||!result.fragments.length||result.fragments.length>16
+        ||result.fragments.some((piece,index)=>piece.ordinal!==offset+index
+          ||piece.kind!==expectedKind||piece.contentIndex!==undefined
+          ||piece.suppressed)
+        ||(result.nextFragmentOffset!==undefined
+          &&result.nextFragmentOffset!==offset+result.fragments.length))
+        throw new Error('native-body-evidence-mismatch')
+      setPage({offset,text:result.fragments.map(piece=>piece.text).join(''),
+        ...(result.nextFragmentOffset===undefined?{}:{
+          nextOffset:result.nextFragmentOffset})})
+    }catch(err){
+      if(!controller.signal.aborted)
+        setError(err instanceof Error?err.message:String(err))
+    }finally{
+      if(controllerRef.current===controller){
+        controllerRef.current=null
+        setLoading(false)
+      }
+    }
+  }
+  return {page,loading,error,load}
+}
+
+function NativeToolResultPager({sessionId,body}:{
+  sessionId:string
+  body:NonNullable<ReviewToolNodeDto['nativeLazyResult']>
+}){
+  const {t}=useTranslation('review')
+  const {page,loading,error,load}=useNativeTextWindow(sessionId,body,'tool-result')
+  return <>
+    {page&&<ToolOutputContent text={page.text} highlight={false}/>}
+    {page&&<span>{t('local.roundNav.nativeBodyWindow',{
+      from:page.offset+1,
+      to:Math.min(page.offset+16,body.totalTextFragments),
+      total:body.totalTextFragments,
+    })}</span>}
+    {page&&page.offset>0&&<Button size="small" disabled={loading}
+      onClick={()=>void load(Math.max(0,page.offset-16))}>
+      {t('local.roundNav.nativeBodyPrevious')}
+    </Button>}
+    {(!page||page.nextOffset!==undefined)&&<Button size="small"
+      disabled={loading} onClick={()=>void load(page?.nextOffset??0)}>
+      {loading?t('local.roundNav.querying'):
+        page?t('local.roundNav.nativeBodyNext'):t('local.roundNav.nativeBodyLoad')}
+    </Button>}
+    {error&&<span role="alert">{error}</span>}
+  </>
+}
 
 function MessageBubble({
   sessionId,
@@ -48,60 +130,8 @@ function MessageBubble({
 }) {
   const { t } = useTranslation('review')
   const [attachments, setAttachments] = useState<ReviewMessageAttachmentDto[]>(node.attachments ?? [])
-  const [nativeBody,setNativeBody]=useState<{
-    offset:number;text:string;nextOffset?:number
-  }|null>(null)
-  const [bodyLoading,setBodyLoading]=useState(false)
-  const [bodyError,setBodyError]=useState<string|undefined>()
-  const bodyAbort=useRef<AbortController|null>(null)
-  useEffect(()=>{
-    bodyAbort.current?.abort()
-    setNativeBody(null)
-    setBodyLoading(false)
-    setBodyError(undefined)
-    return ()=>bodyAbort.current?.abort()
-  },[node.id,node.nativeLazyText?.recordSha256])
-  const loadNativeBody=async(offset:number)=>{
-    const verified=node.nativeLazyText
-    if(!verified||bodyLoading||offset<0)return
-    bodyAbort.current?.abort()
-    const controller=new AbortController()
-    bodyAbort.current=controller
-    setBodyLoading(true)
-    setBodyError(undefined)
-    try{
-      const result=await taskFileApi.nativeRecordTextFragments(sessionId,{
-        cursor:verified.cursor,expectedSha256:verified.recordSha256,
-        fragmentOffset:offset,limit:16,signal:controller.signal,
-      })
-      if(controller.signal.aborted)return
-      if(result.state!=='available')throw new Error(result.reason)
-      if(result.coverage!=='fragment-only'
-        ||result.sessionId!==sessionId
-        ||result.recordSha256!==verified.recordSha256
-        ||result.totalTextFragments!==verified.totalTextFragments
-        ||!result.fragments.length||result.fragments.length>16
-        ||result.fragments.some((piece,index)=>piece.ordinal!==offset+index
-          ||piece.kind!=='message'||piece.contentIndex!==undefined
-          ||piece.suppressed)
-        ||(result.nextFragmentOffset!==undefined
-          &&result.nextFragmentOffset!==offset+result.fragments.length))
-        throw new Error('native-body-evidence-mismatch')
-      setNativeBody({
-        offset,text:result.fragments.map(piece=>piece.text).join(''),
-        ...(result.nextFragmentOffset===undefined
-          ?{}:{nextOffset:result.nextFragmentOffset}),
-      })
-    }catch(error){
-      if(!controller.signal.aborted)
-        setBodyError(error instanceof Error?error.message:String(error))
-    }finally{
-      if(bodyAbort.current===controller){
-        bodyAbort.current=null
-        setBodyLoading(false)
-      }
-    }
-  }
+  const {page:nativeBody,loading:bodyLoading,error:bodyError,
+    load:loadNativeBody}=useNativeTextWindow(sessionId,node.nativeLazyText,'message')
 
   useEffect(() => {
     setAttachments(node.attachments ?? [])
@@ -129,7 +159,7 @@ function MessageBubble({
       model={thinking}
       meta={<EvidenceBadges evidence={node.evidence} compact/>}
       actions={node.evidence.length > 0 ? <button className="evidence-link" onClick={() => inspect(node)}>{t('local.evidence.allEvidence', { count: node.evidence.length })}</button> : undefined}
-      nested={nestedTools.length > 0 ? <ReviewToolGroupAdapter items={nestedTools} inspect={inspect} expansionStore={expansionStore}/> : undefined}
+      nested={nestedTools.length > 0 ? <ReviewToolGroupAdapter sessionId={sessionId} items={nestedTools} inspect={inspect} expansionStore={expansionStore}/> : undefined}
     />
   }
 
@@ -204,7 +234,10 @@ function reviewToolModel(node: ReviewToolNodeDto): TaskToolModel {
   }
 }
 
-function ReviewToolGroupAdapter({ items, inspect, expansionStore }: { items: ReviewToolNodeDto[]; inspect(node: ReviewNodeDto): void; expansionStore?: Map<string, boolean> | undefined }) {
+function ReviewToolGroupAdapter({sessionId,items,inspect,expansionStore}:{
+  sessionId:string;items:ReviewToolNodeDto[];inspect(node:ReviewNodeDto):void
+  expansionStore?:Map<string,boolean>|undefined
+}) {
   const { t } = useTranslation('task')
   const tools = items.map(reviewToolModel)
   const byId = new Map(items.map(node => [node.id, node] as const))
@@ -222,6 +255,10 @@ function ReviewToolGroupAdapter({ items, inspect, expansionStore }: { items: Rev
     renderMeta={tool => {
       const node = byId.get(tool.id)
       return node ? <EvidenceBadges evidence={node.evidence} compact/> : undefined
+    }}
+    renderDetails={tool=>{
+      const body=byId.get(tool.id)?.nativeLazyResult
+      return body?<NativeToolResultPager sessionId={sessionId} body={body}/>:undefined
     }}
     onToolClick={tool => {
       const node = byId.get(tool.id)
@@ -271,6 +308,7 @@ function reviewProcessTiming(items: ReviewProcessPresentationItem[]): { startedA
 }
 
 export function ReviewProcessGroup({
+  sessionId,
   id,
   items,
   summary,
@@ -283,6 +321,7 @@ export function ReviewProcessGroup({
   onExpandedChange,
   onRetry,
 }: {
+  sessionId:string
   id: string
   items: ReviewProcessPresentationItem[]
   summary?: ReviewProcessSummaryDto
@@ -320,6 +359,9 @@ export function ReviewProcessGroup({
         key: node.id,
         tool: reviewToolModel(node),
         meta: <EvidenceBadges evidence={node.evidence} compact/>,
+        ...(node.nativeLazyResult?{details:
+          <NativeToolResultPager sessionId={sessionId} body={node.nativeLazyResult}/>}
+          :{}),
         onToolClick: () => inspect(node),
       }))]
     }
@@ -596,7 +638,7 @@ export function ReviewRoundAdapter({
       ? entry.items : [])
 
   const renderEntry = (entry: ReviewInteractionPresentationEntry, index: number) => {
-    if (entry.type === 'tool-group') return <ReviewToolGroupAdapter key={`tools-${index}`} items={entry.items} inspect={inspect} expansionStore={expansionStore}/>
+    if (entry.type === 'tool-group') return <ReviewToolGroupAdapter sessionId={sessionId} key={`tools-${index}`} items={entry.items} inspect={inspect} expansionStore={expansionStore}/>
     if (entry.type === 'runtime-event-group') return null
     if (entry.type === 'raw-event-group') {
       if (entry.items.every(isSessionTitleUpdate)) return null
@@ -612,7 +654,7 @@ export function ReviewRoundAdapter({
   }
 
   const processGroup = (effectiveSummary?.itemCount || (effectiveSummary && !['complete', 'available'].includes(effectiveSummary.availability)))
-    ? <ReviewProcessGroup
+    ? <ReviewProcessGroup sessionId={sessionId}
         id={effectiveSummary.id}
         items={processEntry?.items ?? []}
         summary={effectiveSummary}
@@ -626,7 +668,7 @@ export function ReviewRoundAdapter({
         onRetry={requestProcess}
       />
     : processEntry
-      ? <ReviewProcessGroup id={processEntry.id} items={processEntry.items} inspect={inspect} state={resolvedProcessState} showAllEvents={showAllEvents} expansionStore={expansionStore}/>
+      ? <ReviewProcessGroup sessionId={sessionId} id={processEntry.id} items={processEntry.items} inspect={inspect} state={resolvedProcessState} showAllEvents={showAllEvents} expansionStore={expansionStore}/>
       : null
 
   return <TaskReadingRound

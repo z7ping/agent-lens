@@ -228,6 +228,9 @@ export type SourceNativeTextFragmentResult =
       offset:number;fileIdentity:string;recordSha256:string
       sourceLineSha256?:string
       nativeEventId?:string;nativeType?:string;role?:string
+      /** Source-private: Core strips these before HTTP. */
+      nativeResultCallId?:string;nativeResultToolName?:string
+      nativeResultIsError?:boolean
       fragments:Array<{ordinal:number;text:string
         kind:'message'|'thinking'|'tool-call'|'tool-result'
         contentIndex?:number;callKey?:string

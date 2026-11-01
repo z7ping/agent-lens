@@ -593,6 +593,9 @@ export class NativeSessionReader {
     })
     const {images:rawImages,imagesTruncated:rawTruncated,
       contentBlocks:rawBlocks,contentBlocksTruncated:rawBlockTruncation,
+      nativeResultCallId:_nativeResultCallId,
+      nativeResultToolName:_nativeResultToolName,
+      nativeResultIsError:_nativeResultIsError,
       ...verifiedRecord}=result.record
     return {state:'available',record:{...verifiedRecord,fragments,
       ...(contentBlocks?{contentBlocks}:{}),
