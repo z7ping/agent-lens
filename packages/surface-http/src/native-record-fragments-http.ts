@@ -95,6 +95,18 @@ export async function handleNativeRecordFragmentsRequest(
         writeJson(response,200,found)
         return true
       }
+      if(!Number.isSafeInteger(found.scannedRecords)
+        ||found.scannedRecords<0||found.scannedRecords>limit
+        ||(found.match&&(!/^[0-9a-f]{64}$/.test(found.match.recordSha256)
+          ||found.match.cursor.fileIdentity!==cursor.fileIdentity
+          ||found.match.cursor.offset<=cursor.offset
+          ||!/^[0-9a-f]{64}$/.test(found.match.cursor.recordFingerprint??'')))
+        ||(found.nextCursor&&(found.match
+          ||found.nextCursor.fileIdentity!==cursor.fileIdentity
+          ||found.nextCursor.offset<=cursor.offset))){
+        writeJson(response,200,{state:'unsupported',reason:'native-tool-link-evidence-invalid'})
+        return true
+      }
       const dto:NativeRecordToolLinkResponseDto={
         state:'available',coverage:'tool-link-only',sessionId:id,
         scannedRecords:found.scannedRecords,
