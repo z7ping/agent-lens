@@ -5,7 +5,7 @@ import type {
   ObservationCapability,
   SourceDefinition,
   SourcePluginManifest,
-  type SourceRecord,
+  SourceRecord,
 } from '@agent-lens/core'
 import {
   defineAgentLensPlugin,
