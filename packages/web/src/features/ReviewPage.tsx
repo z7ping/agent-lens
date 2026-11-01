@@ -37,6 +37,14 @@ type OversizedFragmentState = {
   mediaDataUrl?:string
   totalTextFragments?:number
   nextFragmentOffset?:number
+  toolLink?:{
+    callKey:string;anchorOrdinal:number;loading:boolean
+    scannedRecords:number;scanCursor?:string
+    match?:{cursor:string;recordSha256:string
+      fragments:VerifiedRecordTextFragment[];nextFragmentOffset?:number
+      totalTextFragments:number}
+    error?:string
+  }
   locating:boolean
   loading:boolean
   error?:string
@@ -288,6 +296,136 @@ export function ReviewPage({ model, embedded = false, latestRequest = 0 }: { mod
       if(controller.signal.aborted||oversizedRevisionRef.current!==revision)return
       setOversized({...current,loading:false,
         error:error instanceof Error?error.message:String(error)})
+    }
+  }
+
+  const findLinkedToolResult = async (fragment:Pick<VerifiedRecordTextFragment,
+    'ordinal'|'kind'|'callKey'|'suppressed'>) => {
+    const current=oversized
+    const id=review.selectedId
+    if(!id||!current||current.sessionId!==id||!current.recordCursor
+      ||!current.recordSha256||current.loading||current.locating
+      ||current.toolLink?.loading||fragment.kind!=='tool-call'
+      ||!fragment.callKey||fragment.suppressed)return
+    oversizedAbortRef.current?.abort()
+    const controller=new AbortController()
+    oversizedAbortRef.current=controller
+    const revision=++oversizedRevisionRef.current
+    const earlier=current.toolLink?.callKey===fragment.callKey
+      &&current.toolLink.anchorOrdinal===fragment.ordinal
+      ?current.toolLink:undefined
+    const priorScanned=earlier?.scannedRecords??0
+    const scanCursor=earlier?.scanCursor
+    setOversized({...current,toolLink:{
+      callKey:fragment.callKey,anchorOrdinal:fragment.ordinal,
+      loading:true,scannedRecords:priorScanned,
+      ...(scanCursor?{scanCursor}:{}),
+    }})
+    try{
+      const result=await hookApi.nativeRecordToolLink(id,{
+        cursor:current.recordCursor,expectedSha256:current.recordSha256,
+        fragmentOrdinal:fragment.ordinal,callKey:fragment.callKey,
+        ...(scanCursor?{scanCursor}:{}),limit:4,signal:controller.signal,
+      })
+      if(controller.signal.aborted||oversizedRevisionRef.current!==revision)return
+      if(result.state!=='available')throw new Error(result.reason)
+      if(result.coverage!=='tool-link-only'||result.sessionId!==id
+        ||result.scannedRecords<0||result.scannedRecords>4
+        ||(result.match&&result.nextCursor))
+        throw new Error('native-tool-link-evidence-mismatch')
+      let match:NonNullable<OversizedFragmentState['toolLink']>['match']|undefined
+      if(result.match){
+        const page=await hookApi.nativeRecordTextFragments(id,{
+          cursor:result.match.cursor,expectedSha256:result.match.recordSha256,
+          limit:4,signal:controller.signal,
+        })
+        if(controller.signal.aborted||oversizedRevisionRef.current!==revision)return
+        if(page.state!=='available')throw new Error(page.reason)
+        if(page.coverage!=='fragment-only'
+          ||page.recordSha256!==result.match.recordSha256
+          ||(page.role!=='tool'&&page.role!=='toolResult')
+          ||page.fragments.some((item,index)=>item.ordinal!==index
+            ||item.kind!=='tool-result'
+            ||(item.callKey!==undefined&&item.callKey!==fragment.callKey)))
+          throw new Error('native-tool-link-result-mismatch')
+        match={cursor:result.match.cursor,recordSha256:result.match.recordSha256,
+          fragments:page.fragments,totalTextFragments:page.totalTextFragments,
+          ...(page.nextFragmentOffset===undefined?{}:{
+            nextFragmentOffset:page.nextFragmentOffset}),
+        }
+      }
+      setOversized(previous=>previous?.sessionId===id
+        &&previous.recordSha256===current.recordSha256
+        ?{...previous,toolLink:{
+          callKey:fragment.callKey!,anchorOrdinal:fragment.ordinal,
+          loading:false,scannedRecords:priorScanned+result.scannedRecords,
+          ...(result.nextCursor?{scanCursor:result.nextCursor}:{}),
+          ...(match?{match}:{}),
+        }}:previous)
+    }catch(error){
+      if(controller.signal.aborted||oversizedRevisionRef.current!==revision)return
+      setOversized(previous=>previous?.sessionId===id
+        &&previous.recordSha256===current.recordSha256
+        ?{...previous,toolLink:{
+          callKey:fragment.callKey!,anchorOrdinal:fragment.ordinal,
+          loading:false,scannedRecords:priorScanned,
+          ...(scanCursor?{scanCursor}:{}),
+          error:error instanceof Error?error.message:String(error),
+        }}:previous)
+    }
+  }
+
+  const loadNextLinkedToolFragments = async () => {
+    const current=oversized
+    const id=review.selectedId
+    const link=current?.toolLink
+    const match=link?.match
+    if(!id||!current||current.sessionId!==id||!link||!match
+      ||match.nextFragmentOffset===undefined||link.loading
+      ||current.loading||current.locating)return
+    oversizedAbortRef.current?.abort()
+    const controller=new AbortController()
+    oversizedAbortRef.current=controller
+    const revision=++oversizedRevisionRef.current
+    const offset=match.nextFragmentOffset
+    setOversized({...current,toolLink:{...link,loading:true}})
+    try{
+      const page=await hookApi.nativeRecordTextFragments(id,{
+        cursor:match.cursor,expectedSha256:match.recordSha256,
+        fragmentOffset:offset,limit:4,signal:controller.signal,
+      })
+      if(controller.signal.aborted||oversizedRevisionRef.current!==revision)return
+      if(page.state!=='available')throw new Error(page.reason)
+      if(page.coverage!=='fragment-only'
+        ||page.recordSha256!==match.recordSha256
+        ||page.totalTextFragments!==match.totalTextFragments
+        ||!page.fragments.length
+        ||page.fragments.some((item,index)=>item.ordinal!==offset+index
+          ||item.kind!=='tool-result'
+          ||(item.callKey!==undefined&&item.callKey!==link.callKey))
+        ||(page.nextFragmentOffset!==undefined
+          &&page.nextFragmentOffset<=offset))
+        throw new Error('native-tool-link-result-mismatch')
+      setOversized(previous=>previous?.sessionId===id
+        &&previous.recordSha256===current.recordSha256
+        &&previous.toolLink?.match?.recordSha256===match.recordSha256
+        &&previous.toolLink.callKey===link.callKey
+        &&previous.toolLink.anchorOrdinal===link.anchorOrdinal
+        ?{...previous,toolLink:{...link,loading:false,
+          match:{cursor:match.cursor,recordSha256:match.recordSha256,
+            totalTextFragments:match.totalTextFragments,
+            fragments:[...match.fragments,...page.fragments].slice(-16),
+            ...(page.nextFragmentOffset===undefined?{}:{
+              nextFragmentOffset:page.nextFragmentOffset})}}}:previous)
+    }catch(error){
+      if(controller.signal.aborted||oversizedRevisionRef.current!==revision)return
+      setOversized(previous=>previous?.sessionId===id
+        &&previous.recordSha256===current.recordSha256
+        &&previous.toolLink?.match?.recordSha256===match.recordSha256
+        &&previous.toolLink.callKey===link.callKey
+        &&previous.toolLink.anchorOrdinal===link.anchorOrdinal
+        ?{...previous,toolLink:{...link,loading:false,
+          error:error instanceof Error?error.message:String(error)}}:previous)
     }
   }
 
@@ -580,7 +718,56 @@ export function ReviewPage({ model, embedded = false, latestRequest = 0 }: { mod
                     {fragment.suppressed? ` · ${t('local.roundNav.nativeOversizedRedacted')}`:''}
                   </small>
                   <pre className="review-oversized-fragment">{fragment.text}</pre>
+                  {fragment.kind==='tool-call'&&fragment.callKey&&!fragment.suppressed
+                    &&oversized.fragments.find(item=>item.kind==='tool-call'
+                      &&item.callKey===fragment.callKey)?.ordinal===fragment.ordinal
+                    &&<Button size="small"
+                      disabled={Boolean(oversized.toolLink?.loading||oversized.loading)}
+                      onClick={()=>void findLinkedToolResult(fragment)}>
+                      {oversized.toolLink?.loading
+                        &&oversized.toolLink.callKey===fragment.callKey
+                        ?t('local.roundNav.querying')
+                        :t('local.roundNav.nativeOversizedFindResult')}
+                    </Button>}
                 </div>)}
+              {oversized?.sessionId===review.selectedId&&oversized.toolLink
+                &&<div>
+                  <small>{t('local.roundNav.nativeOversizedLinkedScan',{
+                    count:oversized.toolLink.scannedRecords,
+                  })}</small>
+                  {oversized.toolLink.error&&<div className="page-error" role="alert">
+                    {oversized.toolLink.error}</div>}
+                  {oversized.toolLink.match
+                    ?<>
+                      <small>{t('local.roundNav.nativeOversizedLinkedVerified')}</small>
+                      {oversized.toolLink.match.fragments.map(piece=>
+                        <div key={piece.ordinal}>
+                          <small>{t('local.roundNav.nativeOversizedPart',{
+                            count:piece.ordinal+1,
+                          })}</small>
+                          <pre className="review-oversized-fragment">{piece.text}</pre>
+                        </div>)}
+                      {oversized.toolLink.match.nextFragmentOffset!==undefined
+                        &&<Button size="small"
+                          disabled={oversized.toolLink.loading}
+                          onClick={()=>void loadNextLinkedToolFragments()}>
+                          {oversized.toolLink.loading?t('local.roundNav.querying')
+                            :t('local.roundNav.nativeOversizedLinkedMore')}
+                        </Button>}
+                    </>
+                    :!oversized.toolLink.loading&&!oversized.toolLink.error
+                      ?<small>{t('local.roundNav.nativeOversizedLinkedMissing')}</small>
+                      :null}
+                  {oversized.toolLink.scanCursor&&!oversized.toolLink.loading
+                    &&!oversized.toolLink.match
+                    &&<Button size="small"
+                      onClick={()=>void findLinkedToolResult({
+                        ordinal:oversized.toolLink!.anchorOrdinal,
+                        kind:'tool-call',callKey:oversized.toolLink!.callKey,
+                      })}>
+                      {t('local.roundNav.nativeOversizedFindResultMore')}
+                    </Button>}
+                </div>}
               {oversized?.sessionId===review.selectedId&&oversized.images.map(image=>
                 <div key={image.contentIndex}>
                   <small>{t('local.roundNav.nativeOversizedImage',{count:image.contentIndex+1})}

@@ -295,6 +295,94 @@ export const piSourceDefinition: SourceDefinition = {
       ?{state:'end' as const}
       :{state:'more' as const,nextCursor:cursor!}
   },
+  async findNativeToolResult(query,ctx) {
+    const limit=query.limit??4
+    if(!Number.isSafeInteger(limit)||limit<1||limit>4
+      ||!Number.isSafeInteger(query.fragmentOrdinal)||query.fragmentOrdinal<0
+      ||query.fragmentOrdinal>10_000_000
+      ||!/^[0-9a-f]{64}$/.test(query.expectedSha256)
+      ||!/^[0-9a-f]{64}$/.test(query.callKey))
+      return {state:'unsupported' as const,reason:'invalid-native-tool-link-query'}
+    ctx.abortSignal.throwIfAborted()
+    const roots=ctx.installation.dataRoot?[ctx.installation.dataRoot]:[]
+    const auth=await authorizeNativeSessionPath(query.filePath,roots)
+    if(auth.state!=='authorized')return auth
+    const header=await readPiSessionMetadata(auth.sourcePath)
+    if(header.nativeSessionId!==query.nativeSessionId)
+      return {state:'drifted' as const,reason:'native-session-identity-changed'}
+    const original=await stat(auth.sourcePath)
+    if(!original.isFile())
+      return {state:'unsupported' as const,reason:'native-source-is-not-a-file'}
+    // Each query reattests the exact original tool-call leaf, including after
+    // a resumed scan. An arbitrary hash without proof cannot enumerate results.
+    const anchor=await readNativeJsonlTextFragments({
+      path:query.filePath,allowedRoots:roots,cursor:query.cursor,
+      expectedSha256:query.expectedSha256,fragmentOffset:query.fragmentOrdinal,
+      limit:1,signal:ctx.abortSignal,
+    })
+    if(anchor.state!=='available')return anchor
+    const leaf=anchor.record.fragments[0]
+    if(anchor.record.recordSha256!==query.expectedSha256
+      ||(query.cursor.recordFingerprint
+        &&anchor.record.sourceLineSha256!==query.cursor.recordFingerprint)
+      ||leaf?.ordinal!==query.fragmentOrdinal||leaf.kind!=='tool-call'
+      ||leaf.callKey!==query.callKey)
+      return {state:'unsupported' as const,reason:'native-tool-call-evidence-mismatch'}
+    const start=await inspectNativeSessionRecordSpan({
+      path:query.filePath,allowedRoots:roots,cursor:query.cursor,
+      signal:ctx.abortSignal,
+    })
+    if(start.state!=='available')return start
+    const firstNext=start.span.nextOffset
+    let cursor=query.scanCursor??{
+      offset:firstNext,sequence:query.cursor.sequence+1,
+      fileIdentity:start.span.fileIdentity,boundaryHash:start.span.endBoundaryHash,
+    }
+    if(cursor.offset<firstNext
+      ||cursor.fileIdentity!==start.span.fileIdentity)
+      return {state:'unsupported' as const,reason:'native-tool-link-cursor-invalid'}
+    let scannedRecords=0
+    let match:undefined|{cursor:typeof cursor;recordSha256:string}
+    const checkUnchanged=async()=>{
+      const now=await stat(auth.sourcePath)
+      return now.isFile()&&now.size===original.size&&now.mtimeMs===original.mtimeMs
+        &&now.dev===original.dev&&now.ino===original.ino
+    }
+    for(;scannedRecords<limit&&cursor.offset<original.size;scannedRecords++){
+      ctx.abortSignal.throwIfAborted()
+      const inspected=await inspectNativeSessionRecordSpan({
+        path:query.filePath,allowedRoots:roots,cursor,signal:ctx.abortSignal,
+      })
+      if(inspected.state!=='available')return inspected
+      const record=await readNativeJsonlTextFragments({
+        path:query.filePath,allowedRoots:roots,cursor,
+        expectedSha256:inspected.span.sha256,fragmentOffset:0,limit:1,
+        signal:ctx.abortSignal,
+      })
+      if(record.state!=='available')return record
+      if(record.record.recordSha256!==inspected.span.sha256
+        ||(cursor.recordFingerprint
+          &&record.record.sourceLineSha256!==cursor.recordFingerprint))
+        return {state:'drifted' as const,reason:'native-tool-link-record-changed'}
+      if(record.record.resultCallKey===query.callKey){
+        match={cursor:{...cursor,
+          recordFingerprint:record.record.sourceLineSha256},
+          recordSha256:record.record.recordSha256}
+        scannedRecords++
+        break
+      }
+      if(inspected.span.nextOffset<=cursor.offset)
+        return {state:'unsupported' as const,reason:'native-tool-link-stalled'}
+      cursor={offset:inspected.span.nextOffset,sequence:cursor.sequence+1,
+        fileIdentity:inspected.span.fileIdentity,
+        boundaryHash:inspected.span.endBoundaryHash}
+    }
+    if(!await checkUnchanged())
+      return {state:'drifted' as const,reason:'native-file-changed-after-scan'}
+    return {state:'available' as const,scannedRecords,
+      ...(match?{match}:{...(cursor.offset<original.size?{nextCursor:cursor}:{})}),
+    }
+  },
   async readNativeTextFragments(query,ctx) {
     const result=await readNativeJsonlTextFragments({
       path:query.filePath,

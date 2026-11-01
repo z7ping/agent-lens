@@ -259,6 +259,21 @@ export type SourceOversizedRecordResult =
   | {state:'end'}
   | {state:'pending'|'unavailable'|'drifted'|'unsupported';reason:string}
 
+/** Bounded Source-native correlation. The anchor is an original, SHA-bound
+ * tool-call fragment; matches are exact toolCallId identities in subsequent
+ * original physical records. This never creates a complete tool event. */
+export interface SourceNativeToolLinkQuery {
+  filePath:string;nativeSessionId:string
+  cursor:SourceNativeSessionCursor;expectedSha256:string
+  fragmentOrdinal:number;callKey:string;limit?:number
+  scanCursor?:SourceNativeSessionCursor
+}
+export type SourceNativeToolLinkResult =
+  | {state:'available';scannedRecords:number
+      match?:{cursor:SourceNativeSessionCursor;recordSha256:string}
+      nextCursor?:SourceNativeSessionCursor}
+  | {state:'pending'|'unavailable'|'drifted'|'unsupported';reason:string}
+
 export interface SourceNativeSessionPageQuery {
   filePath: string
   nativeSessionId: string
@@ -293,6 +308,8 @@ export interface SourceDefinition {
   readNativeTextFragments?(query: SourceNativeTextFragmentQuery, ctx: SourceExecutionContext): Promise<SourceNativeTextFragmentResult>
   /** Optional bounded locator for a later fragment-only (not complete-turn) view. */
   locateOversizedRecord?(query:SourceOversizedRecordQuery,ctx:SourceExecutionContext):Promise<SourceOversizedRecordResult>
+  /** Exact same-Source call/result correlation without synthesizing full turns. */
+  findNativeToolResult?(query:SourceNativeToolLinkQuery,ctx:SourceExecutionContext):Promise<SourceNativeToolLinkResult>
   /** Explicit attestation that all durable per-session history and runtime facts
    * can be reconstructed from the original source store. Defaults to false.
    * Sources with transient runtime-hook-only facts must not set this until a

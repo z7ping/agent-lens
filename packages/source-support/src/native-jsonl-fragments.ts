@@ -60,6 +60,8 @@ export type NativeJsonlFragmentReadResult =
       /** SHA-256 excluding an optional CRLF record delimiter. */
       sourceLineSha256:string
       nativeEventId?:string;nativeType?:string;role?:string
+      /** Verified result-only native toolCallId hash. Source-private metadata. */
+      resultCallKey?:string
       fragments:NativeJsonlTextFragment[]
       totalTextFragments:number;nextFragmentOffset?:number
       images:NativeInlineImageInfo[]
@@ -533,6 +535,8 @@ export async function readNativeJsonlTextFragments(input:{
       ...(nativeEventId?{nativeEventId}:{}),
       ...(nativeType?{nativeType}:{}),
       ...(role?{role}:{}),
+      ...((role==='tool'||role==='toolResult')&&resultCallId
+        ?{resultCallKey:createHash('sha256').update(resultCallId).digest('hex')}:{}),
       fragments,totalTextFragments,images,
       ...(imagesTruncated?{imagesTruncated:true}:{}),
       ...(media&&mediaMimeType?{media:{

@@ -1,8 +1,8 @@
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import type { NativeSessionCatalogStore } from '@agent-lens/core'
-import type { NativeRecordTextFragmentsResponseDto, NativeRecordMediaChunkResponseDto } from '@agent-lens/protocol'
+import type { NativeRecordTextFragmentsResponseDto, NativeRecordMediaChunkResponseDto, NativeRecordToolLinkResponseDto } from '@agent-lens/protocol'
 import { badRequest, writeJson } from './http-utils'
-import { decodeNativeSessionCursor, type NativeSessionWindowReader } from './native-session-http'
+import { decodeNativeSessionCursor, encodeNativeSessionCursor, type NativeSessionWindowReader } from './native-session-http'
 
 /** Catalog-authorized bounded text or inline media leaves. No filesystem
  * location or original SourceRecord is supplied by the browser.
@@ -12,30 +12,36 @@ export async function handleNativeRecordFragmentsRequest(
   reader?:NativeSessionWindowReader,
   catalog?:Pick<NativeSessionCatalogStore,'getByReviewSessionId'>,
 ):Promise<boolean>{
-  const match=url.pathname.match(/^\/api\/v1\/native-sessions\/([^/]+)\/record-fragments(\/media)?$/)
-  const mediaMode=Boolean(match?.[2])
+  const match=url.pathname.match(/^\/api\/v1\/native-sessions\/([^/]+)\/record-fragments(\/media|\/link)?$/)
+  const mediaMode=match?.[2]==='/media'
+  const linkMode=match?.[2]==='/link'
   if(!match)return false
   if(request.method!=='GET'){
     response.setHeader('allow','GET')
     writeJson(response,405,{error:'method_not_allowed'})
     return true
   }
-  if(!reader?.readTextFragments||!catalog){
+  if(!(linkMode?reader?.findNativeToolResult:reader?.readTextFragments)||!catalog){
     writeJson(response,503,{state:'unavailable',reason:'native-record-fragments-unavailable'})
     return true
   }
   const keys=[...url.searchParams.keys()]
-  const allowedKeys=mediaMode
-    ?['cursor','expectedSha256','imageIndex','mediaOffset','mediaLimit']
-    :['cursor','expectedSha256','fragmentOffset','limit']
+  const allowedKeys=linkMode
+    ?['cursor','expectedSha256','fragmentOrdinal','callKey','scanCursor','limit']
+    :mediaMode?['cursor','expectedSha256','imageIndex','mediaOffset','mediaLimit']
+      :['cursor','expectedSha256','fragmentOffset','limit']
   if(keys.some(x=>!allowedKeys.includes(x))
     ||keys.some(x=>url.searchParams.getAll(x).length!==1))
     throw badRequest('Unsupported record-fragment query parameter')
   const cursor=decodeNativeSessionCursor(url.searchParams.get('cursor'))
   if(!cursor||!['review-turns','record-fragments'].includes(cursor.mode??'')
-    ||!cursor.recordFingerprint)
+    ||!cursor.recordFingerprint||(linkMode&&cursor.mode!=='record-fragments'))
     throw badRequest('Verified Review turn cursor required')
   const expectedSha256=url.searchParams.get('expectedSha256')??undefined
+  const callKey=url.searchParams.get('callKey')??''
+  const fragmentOrdinal=Number(url.searchParams.get('fragmentOrdinal'))
+  const scanCursor=linkMode
+    ?decodeNativeSessionCursor(url.searchParams.get('scanCursor')):undefined
   const fragmentOffset=url.searchParams.has('fragmentOffset')
     ?Number(url.searchParams.get('fragmentOffset')):0
   const limit=url.searchParams.has('limit')?Number(url.searchParams.get('limit')):4
@@ -45,10 +51,18 @@ export async function handleNativeRecordFragmentsRequest(
     ?Number(url.searchParams.get('mediaOffset')):0
   const mediaLimit=url.searchParams.has('mediaLimit')
     ?Number(url.searchParams.get('mediaLimit')):128*1024
-  if((!mediaMode&&(!Number.isSafeInteger(fragmentOffset)||fragmentOffset<0
+  if((linkMode&&(!expectedSha256||!/^[0-9a-f]{64}$/.test(callKey)
+      ||!url.searchParams.has('fragmentOrdinal')
+      ||!Number.isSafeInteger(fragmentOrdinal)||fragmentOrdinal<0
+      ||fragmentOrdinal>10_000_000||!Number.isSafeInteger(limit)
+      ||limit<1||limit>4
+      ||(scanCursor&&(scanCursor.mode!=='record-fragments'
+        ||scanCursor.fileIdentity!==cursor.fileIdentity
+        ||scanCursor.offset<=cursor.offset))))
+    ||(!mediaMode&&!linkMode&&(!Number.isSafeInteger(fragmentOffset)||fragmentOffset<0
       ||fragmentOffset>10_000_000||!Number.isSafeInteger(limit)||limit<1||limit>8))
     ||(expectedSha256!==undefined&&!/^[0-9a-f]{64}$/.test(expectedSha256))
-    ||(!mediaMode&&fragmentOffset>0&&!expectedSha256)
+    ||(!mediaMode&&!linkMode&&fragmentOffset>0&&!expectedSha256)
     ||(mediaMode&&(!expectedSha256
       ||!Number.isSafeInteger(imageIndex)||imageIndex<0||imageIndex>10_000_000
       ||!Number.isSafeInteger(mediaOffset)||mediaOffset<0||mediaOffset%4!==0
@@ -70,7 +84,45 @@ export async function handleNativeRecordFragmentsRequest(
   const close=()=>{if(!response.writableEnded)abort.abort()}
   response.once('close',close)
   try{
-    const result=await reader.readTextFragments({
+    if(linkMode){
+      const found=await reader!.findNativeToolResult!({
+        sourceId:entry.sourceId,installationId:entry.installationId,
+        nativeSessionId:entry.nativeSessionId,cursor,
+        expectedSha256:expectedSha256!,fragmentOrdinal,callKey,
+        ...(scanCursor?{scanCursor}:{}),limit,signal:abort.signal,
+      })
+      if(found.state!=='available'){
+        writeJson(response,200,found)
+        return true
+      }
+      if(!Number.isSafeInteger(found.scannedRecords)
+        ||found.scannedRecords<0||found.scannedRecords>limit
+        ||(found.match&&(!/^[0-9a-f]{64}$/.test(found.match.recordSha256)
+          ||found.match.cursor.fileIdentity!==cursor.fileIdentity
+          ||found.match.cursor.offset<=cursor.offset
+          ||!/^[0-9a-f]{64}$/.test(found.match.cursor.recordFingerprint??'')))
+        ||(found.nextCursor&&(found.match
+          ||found.nextCursor.fileIdentity!==cursor.fileIdentity
+          ||found.nextCursor.offset<=cursor.offset))){
+        writeJson(response,200,{state:'unsupported',reason:'native-tool-link-evidence-invalid'})
+        return true
+      }
+      const dto:NativeRecordToolLinkResponseDto={
+        state:'available',coverage:'tool-link-only',sessionId:id,
+        scannedRecords:found.scannedRecords,
+        ...(found.match?{match:{
+          cursor:encodeNativeSessionCursor({...found.match.cursor,
+            mode:'record-fragments'}),
+          recordSha256:found.match.recordSha256,
+        }}:{}),
+        ...(found.nextCursor?{nextCursor:encodeNativeSessionCursor({
+          ...found.nextCursor,mode:'record-fragments',
+        })}:{}),
+      }
+      writeJson(response,200,dto)
+      return true
+    }
+    const result=await reader!.readTextFragments!({
       sourceId:entry.sourceId,installationId:entry.installationId,
       nativeSessionId:entry.nativeSessionId,cursor,
       ...(mediaMode?{media:{contentIndex:imageIndex,offset:mediaOffset,limit:mediaLimit}}

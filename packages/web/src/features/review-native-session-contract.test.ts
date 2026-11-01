@@ -62,3 +62,15 @@ test('oversized source records use the existing Review disclosure and bounded ve
   assert.equal((page.match(/<TaskSurface\b/g)??[]).length,1,
     'the fallback must not mount an independent Review UI')
 })
+
+test('native oversized call and result linking reuses catalog-scoped fragment APIs and shared Review controls',()=>{
+  assert.match(page,/hookApi\.nativeRecordToolLink\(id/)
+  assert.match(page,/hookApi\.nativeRecordTextFragments\(id/)
+  assert.match(page,/nativeOversizedFindResultMore/)
+  assert.match(page,/nativeOversizedLinkedMore/)
+  assert.match(page,/page\.recordSha256!==result\.match\.recordSha256/)
+  assert.match(page,/item\.callKey!==fragment\.callKey/)
+  assert.match(page,/fragments:\[\.\.\.match\.fragments,\.\.\.page\.fragments\]\.slice\(-16\)/)
+  assert.match(api,/record-fragments\/link/)
+  assert.equal((page.match(/<TaskSurface\b/g)??[]).length,1)
+})

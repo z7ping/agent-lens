@@ -11,6 +11,7 @@ export interface NativeSessionWindowReader {
   read(query: NativeSessionReadQuery): Promise<NativeSessionReadResult>
   readTextFragments?: NativeSessionReader['readTextFragments']
   locateOversizedRecord?: NativeSessionReader['locateOversizedRecord']
+  findNativeToolResult?: NativeSessionReader['findNativeToolResult']
   /** Source-authorized, one-record native media hydration (never public raw DTO). */
   readUnpersistedMediaPage?(query: NativeSessionReadQuery): Promise<NativeSessionReadResult>
   readArchivedHooks?(query: {

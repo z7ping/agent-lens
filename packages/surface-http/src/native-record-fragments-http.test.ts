@@ -146,3 +146,71 @@ test('media route requires verified Catalog cursor, original SHA and bounded ima
     assert.equal(called,2)
   }finally{await new Promise<void>(resolve=>server.close(()=>resolve()))}
 })
+
+test('tool link route reattests native anchor, exposes only opaque matching result cursor',async()=>{
+  const id='native:'+'e'.repeat(32)
+  const sha='a'.repeat(64)
+  const callKey='c'.repeat(64)
+  const cursor=encodeNativeSessionCursor({
+    offset:100,sequence:2,fileIdentity:'1:9',
+    boundaryHash:'d'.repeat(64),recordFingerprint:'b'.repeat(64),
+    mode:'record-fragments',
+  })
+  const matchCursor={offset:210,sequence:4,fileIdentity:'1:9',
+    boundaryHash:'f'.repeat(64),recordFingerprint:'e'.repeat(64)}
+  let calls=0
+  const reader={
+    async read(){return {state:'unsupported' as const,reason:'unused'}},
+    async findNativeToolResult(q:{
+      sourceId:string;cursor:{offset:number};expectedSha256:string
+      fragmentOrdinal:number;callKey:string;limit:number
+    }){
+      calls++
+      assert.equal(q.sourceId,'pi')
+      assert.equal(q.cursor.offset,100)
+      assert.equal(q.expectedSha256,sha)
+      assert.equal(q.fragmentOrdinal,3)
+      assert.equal(q.callKey,callKey)
+      assert.equal(q.limit,4)
+      return {state:'available' as const,scannedRecords:2,
+        match:{cursor:matchCursor,recordSha256:'2'.repeat(64)}}
+    },
+  } as unknown as NativeSessionWindowReader
+  const catalog={
+    async getByReviewSessionId(){return {
+      sourceId:'pi',installationId:'install',nativeSessionId:'native-S',
+      locationKind:'native',
+    }},
+  } as unknown as Pick<NativeSessionCatalogStore,'getByReviewSessionId'>
+  const server=createServer(async(req,res)=>{
+    try{
+      if(!await handleNativeRecordFragmentsRequest(req,res,
+        new URL(req.url??'/','http://127.0.0.1'),reader,catalog)){
+        res.statusCode=404;res.end()
+      }
+    }catch(error){res.statusCode=400;res.end(String(error))}
+  })
+  await new Promise<void>(resolve=>server.listen(0,'127.0.0.1',resolve))
+  try{
+    const address=server.address()
+    assert.ok(address&&typeof address==='object')
+    const base=`http://127.0.0.1:${address.port}/api/v1/native-sessions/${id}/record-fragments/link`
+    const params=`cursor=${cursor}&expectedSha256=${sha}&fragmentOrdinal=3&callKey=${callKey}`
+    const response=await fetch(`${base}?${params}`)
+    assert.equal(response.status,200)
+    const result=await response.json() as Record<string,unknown>
+    assert.equal(result.state,'available')
+    assert.equal(result.coverage,'tool-link-only')
+    assert.equal(result.scannedRecords,2)
+    assert.equal((result.match as {recordSha256:string}).recordSha256,'2'.repeat(64))
+    assert.equal(JSON.stringify(result).includes('fileIdentity'),false)
+    assert.equal(JSON.stringify(result).includes('filePath'),false)
+    assert.equal(JSON.stringify(result).includes('raw-value'),false)
+    assert.equal(calls,1)
+    assert.equal((await fetch(`${base}?cursor=${cursor}&fragmentOrdinal=3&callKey=${callKey}`)).status,400)
+    assert.equal((await fetch(`${base}?${params}&path=/tmp/session.jsonl`)).status,400)
+    assert.equal((await fetch(`${base}?${params}&fragmentOrdinal=4`)).status,400)
+    assert.equal((await fetch(`${base}?${params}&callKey=nope`)).status,400)
+    assert.equal(calls,1)
+  }finally{await new Promise<void>(resolve=>server.close(()=>resolve()))}
+})

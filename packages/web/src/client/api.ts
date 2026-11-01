@@ -36,6 +36,7 @@ import {
   type NativeSessionSummaryDto,
   type NativeReviewWindowResponseDto,
   type NativeRecordTextFragmentsResponseDto,
+  type NativeRecordToolLinkResponseDto,
   type NativeRecordMediaChunkResponseDto,
   type NativeOversizedRecordLocateResponseDto,
   type NativeReviewTurnIndexResponseDto,
@@ -491,6 +492,26 @@ export class AgentLensApi {
     if(options.limit!==undefined)params.set('limit',String(Math.max(1,Math.min(8,options.limit))))
     return requestJson<NativeRecordTextFragmentsResponseDto>(
       `/api/v1/native-sessions/${encodeURIComponent(id)}/record-fragments?${params}`,
+      options.signal?{signal:options.signal}:{},
+    )
+  }
+
+  /** Exact native tool result link within a bounded, verified Source window.
+   * No full Review turn or SQL event is reconstructed by this request.
+   */
+  nativeRecordToolLink(id:string,options:{
+    cursor:string;expectedSha256:string;fragmentOrdinal:number
+    callKey:string;scanCursor?:string;limit?:number;signal?:AbortSignal
+  }):Promise<NativeRecordToolLinkResponseDto>{
+    const params=new URLSearchParams({
+      cursor:options.cursor,expectedSha256:options.expectedSha256,
+      fragmentOrdinal:String(options.fragmentOrdinal),callKey:options.callKey,
+    })
+    if(options.scanCursor)params.set('scanCursor',options.scanCursor)
+    if(options.limit!==undefined)params.set('limit',
+      String(Math.max(1,Math.min(4,options.limit))))
+    return requestJson<NativeRecordToolLinkResponseDto>(
+      `/api/v1/native-sessions/${encodeURIComponent(id)}/record-fragments/link?${params}`,
       options.signal?{signal:options.signal}:{},
     )
   }
