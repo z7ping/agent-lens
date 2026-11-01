@@ -15,7 +15,7 @@ const MAX_FRAGMENT_OFFSET=10_000_000
 const MAX_KEY_BYTES=256
 const MAX_META_BYTES=512
 const MAX_DEPTH=128
-const MAX_MEDIA_CHUNK_CHARS=32*1024
+const MAX_MEDIA_CHUNK_CHARS=128*1024
 const MAX_INLINE_IMAGES=8
 const MIME_TYPES=new Set(['image/png','image/jpeg','image/gif','image/webp'])
 
