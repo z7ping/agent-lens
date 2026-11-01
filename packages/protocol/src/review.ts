@@ -32,6 +32,12 @@ export interface ReviewMessageAttachmentDto {
    * external URLs are intentionally not promoted into the public Review contract.
    */
   dataUrl?: string
+  /** Catalog-scoped, SHA-attested native image only. No host file paths,
+   * raw image data or guessed associations are carried in this reference. */
+  nativeMedia?: {
+    sessionId:string;cursor:string;recordSha256:string
+    contentIndex:number;mimeType:string
+  }
 }
 
 export interface ReviewMessageAttachmentsResponseDto {
