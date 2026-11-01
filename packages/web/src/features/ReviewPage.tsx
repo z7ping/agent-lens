@@ -663,7 +663,50 @@ export function ReviewPage({ model, embedded = false, latestRequest = 0 }: { mod
                     {fragment.suppressed? ` · ${t('local.roundNav.nativeOversizedRedacted')}`:''}
                   </small>
                   <pre className="review-oversized-fragment">{fragment.text}</pre>
+                  {fragment.kind==='tool-call'&&fragment.callKey&&!fragment.suppressed
+                    &&oversized.fragments.find(item=>item.kind==='tool-call'
+                      &&item.callKey===fragment.callKey)?.ordinal===fragment.ordinal
+                    &&<Button size="small"
+                      disabled={Boolean(oversized.toolLink?.loading||oversized.loading)}
+                      onClick={()=>void findLinkedToolResult(fragment)}>
+                      {oversized.toolLink?.loading
+                        &&oversized.toolLink.callKey===fragment.callKey
+                        ?t('local.roundNav.querying')
+                        :t('local.roundNav.nativeOversizedFindResult')}
+                    </Button>}
                 </div>)}
+              {oversized?.sessionId===review.selectedId&&oversized.toolLink
+                &&<div>
+                  <small>{t('local.roundNav.nativeOversizedLinkedScan',{
+                    count:oversized.toolLink.scannedRecords,
+                  })}</small>
+                  {oversized.toolLink.error&&<div className="page-error" role="alert">
+                    {oversized.toolLink.error}</div>}
+                  {oversized.toolLink.match
+                    ?<>
+                      <small>{t('local.roundNav.nativeOversizedLinkedVerified')}</small>
+                      {oversized.toolLink.match.fragments.map(piece=>
+                        <div key={piece.ordinal}>
+                          <small>{t('local.roundNav.nativeOversizedPart',{
+                            count:piece.ordinal+1,
+                          })}</small>
+                          <pre className="review-oversized-fragment">{piece.text}</pre>
+                        </div>)}
+                      {oversized.toolLink.match.nextFragmentOffset!==undefined
+                        &&<small>{t('local.roundNav.nativeOversizedLinkedPartial')}</small>}
+                    </>
+                    :!oversized.toolLink.loading&&!oversized.toolLink.error
+                      ?<small>{t('local.roundNav.nativeOversizedLinkedMissing')}</small>
+                      :null}
+                  {oversized.toolLink.scanCursor&&!oversized.toolLink.loading
+                    &&!oversized.toolLink.match
+                    &&oversized.fragments.some(piece=>piece.ordinal===oversized.toolLink!.anchorOrdinal)
+                    &&<Button size="small"
+                      onClick={()=>void findLinkedToolResult(
+                        oversized.fragments.find(piece=>piece.ordinal===oversized.toolLink!.anchorOrdinal)!)}>
+                      {t('local.roundNav.nativeOversizedFindResultMore')}
+                    </Button>}
+                </div>}
               {oversized?.sessionId===review.selectedId&&oversized.images.map(image=>
                 <div key={image.contentIndex}>
                   <small>{t('local.roundNav.nativeOversizedImage',{count:image.contentIndex+1})}
