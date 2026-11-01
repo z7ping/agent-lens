@@ -649,3 +649,87 @@ test('giant scalar Pi record with unknown semantic field never promotes a fake c
     })
   }finally{await rm(root,{recursive:true,force:true})}
 })
+
+test('giant Pi toolResult preserves explicit success/failure, original call ID and lazy output',async()=>{
+  const root=await mkdtemp(join(tmpdir(),'agent-lens-tool-result-lazy-'))
+  const file=join(root,'session.jsonl')
+  const header=JSON.stringify({type:'session',id:'giant-tool-result'})
+  const output='完成🚀'.repeat(410_000)
+  const ts='2026-11-01T00:00:00Z'
+  const host={id:'host',name:'host',platform:process.platform,arch:process.arch,
+    createdAt:ts,lastSeenAt:ts}
+  const installation={id:'tool-result-inst',hostId:'host',productId:'pi',
+    dataRoot:root,firstSeenAt:ts,lastSeenAt:ts}
+  const ctx:SourceRawRecoveryContext={host,installation,
+    abortSignal:new AbortController().signal,
+    checkpoint:{async get(){return null},async set(){throw Error('read-only')},
+      async clear(){throw Error('read-only')}},
+  }
+  try{
+    const read=piSourceDefinition.readNativeSessionPage!
+    for(const isError of [true,false]){
+      const raw=JSON.stringify({type:'message',id:'large-result',message:{
+        role:'toolResult',toolCallId:'original-call',toolName:'read',
+        isError,content:output,
+      }})
+      await writeFile(file,[header,raw].join('\n')+'\n')
+      const first=await read({filePath:file,nativeSessionId:'giant-tool-result',
+        limit:1},ctx)
+      assert.equal(first.state,'available')
+      if(first.state!=='available')continue
+      const next=await read({filePath:file,nativeSessionId:'giant-tool-result',
+        cursor:first.nextCursor,limit:1},ctx)
+      assert.equal(next.state,'available')
+      if(next.state!=='available')continue
+      assert.equal(next.records[0]?.fingerprint,hash(raw))
+      assert.ok(JSON.stringify(next.records[0]?.payload).length<2048)
+      const normalized=await piSourceDefinition.normalize(next.records[0]!,{host,installation})
+      const result=normalized.observations.find(x=>x.kind==='tool.result')
+      assert.ok(result)
+      assert.equal(result.nativeCallId,'original-call')
+      const payload=result.payload as {success:boolean;output:string;
+        nativeLazyText?:{recordSha256:string;totalTextFragments:number}}
+      assert.equal(payload.success,!isError)
+      assert.equal(payload.output,'')
+      assert.ok(payload.nativeLazyText)
+      assert.ok(payload.nativeLazyText.totalTextFragments>16)
+      assert.ok(normalized.evidenceCandidates.every(x=>
+        x.sourceRecordId===next.records[0]!.id))
+    }
+  }finally{await rm(root,{recursive:true,force:true})}
+})
+
+test('giant Pi toolResult with missing isError or unknown details remains fragment-only',async()=>{
+  const root=await mkdtemp(join(tmpdir(),'agent-lens-tool-result-unknown-'))
+  const file=join(root,'session.jsonl')
+  const header=JSON.stringify({type:'session',id:'unknown-result'})
+  const ts='2026-11-01T00:00:00Z'
+  const host={id:'host',name:'host',platform:process.platform,arch:process.arch,
+    createdAt:ts,lastSeenAt:ts}
+  const installation={id:'unknown-result-inst',hostId:'host',productId:'pi',
+    dataRoot:root,firstSeenAt:ts,lastSeenAt:ts}
+  const ctx:SourceRawRecoveryContext={host,installation,
+    abortSignal:new AbortController().signal,
+    checkpoint:{async get(){return null},async set(){throw Error('read-only')},
+      async clear(){throw Error('read-only')}},
+  }
+  try{
+    const read=piSourceDefinition.readNativeSessionPage!
+    for(const body of [
+      {role:'toolResult',toolCallId:'call',toolName:'read',
+        content:'输出🚀'.repeat(410_000)},
+      {role:'toolResult',toolCallId:'call',toolName:'read',
+        isError:false,content:'输出🚀'.repeat(410_000),
+        details:{status:'unverified'}},
+    ]){
+      await writeFile(file,[header,JSON.stringify({type:'message',id:'unknown-result',
+        message:body})].join('\n')+'\n')
+      const first=await read({filePath:file,nativeSessionId:'unknown-result',limit:1},ctx)
+      assert.equal(first.state,'available')
+      if(first.state!=='available')continue
+      const next=await read({filePath:file,nativeSessionId:'unknown-result',
+        cursor:first.nextCursor,limit:1},ctx)
+      assert.deepEqual(next,{state:'unsupported',reason:'native-record-too-large'})
+    }
+  }finally{await rm(root,{recursive:true,force:true})}
+})
