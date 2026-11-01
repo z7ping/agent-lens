@@ -136,7 +136,7 @@ test('oversized next physical record preserves verified same-turn prefix without
         observationRecordIds:['record-one'],
         observationCursors:[{offset:0,sequence:0,fileIdentity}],
         evidenceCandidates:[],
-        nextCursor:{offset:2,sequence:1,fileIdentity},
+        nextCursor:{offset:2,sequence:1,fileIdentity,boundaryHash:'a'.repeat(64)},
         hasMore:true,pendingTail:false,
       }
     },
