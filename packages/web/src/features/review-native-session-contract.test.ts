@@ -41,3 +41,17 @@ test('native details render inside the only existing Review TaskSurface, with no
   assert.match(page,/statisticsCompleteness === 'window'/)
   assert.match(page,/nativeHasMore/)
 })
+
+test('oversized source records use the existing Review disclosure and bounded verified fragments',()=>{
+  assert.match(page,/review\.error\.includes\('native-record-too-large'\)/)
+  assert.match(page,/hookApi\.locateOversizedNativeRecord\(id/)
+  assert.match(page,/hookApi\.nativeRecordTextFragments\(id/)
+  assert.match(page,/page\.coverage!=='fragment-only'/)
+  assert.match(page,/page\.recordSha256!==current\.recordSha256/)
+  assert.match(page,/page\.fragments\.some\(\(piece,index\)=>piece\.ordinal!==next\+index\)/)
+  assert.match(page,/fragments:\[\.\.\.current\.fragments,\.\.\.page\.fragments\]\.slice\(-16\)/)
+  assert.match(page,/<Disclosure/)
+  assert.match(page,/nativeOversizedMore/)
+  assert.equal((page.match(/<TaskSurface\b/g)??[]).length,1,
+    'the fallback must not mount an independent Review UI')
+})

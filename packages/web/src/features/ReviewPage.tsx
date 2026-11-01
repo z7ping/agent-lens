@@ -18,9 +18,24 @@ import { ReviewRoundAdapter, interactionStats } from './ReviewRoundPresentation'
 import { TaskFileChangesDisclosure } from './TaskFileChangesDisclosure'
 import { AgentLensApi } from '../client/api'
 import type { AgentLensClientModel } from '../client/model'
-import type { ReviewInteractionDto } from '@agent-lens/protocol'
+import type { NativeRecordTextFragmentsResponseDto, ReviewInteractionDto } from '@agent-lens/protocol'
 import { useReviewSession } from './use-review-session'
 import { projectSelectOption } from './project-presentation'
+
+type VerifiedRecordTextFragment = Extract<NativeRecordTextFragmentsResponseDto,
+  {state:'available'}>['fragments'][number]
+type OversizedFragmentState = {
+  sessionId:string
+  searchCursor?:string
+  recordCursor?:string
+  recordSha256?:string
+  fragments:VerifiedRecordTextFragment[]
+  totalTextFragments?:number
+  nextFragmentOffset?:number
+  locating:boolean
+  loading:boolean
+  error?:string
+}
 
 export function ReviewPage({ model, embedded = false, latestRequest = 0 }: { model: AgentLensClientModel; embedded?: boolean; latestRequest?: number }) {
   const {
@@ -90,6 +105,15 @@ export function ReviewPage({ model, embedded = false, latestRequest = 0 }: { mod
   const [attachmentPending, setAttachmentPending] = useState(false)
   const hookApi = useMemo(() => new AgentLensApi(), [])
   const hookRequestRef = useRef(0)
+  const [oversized, setOversized] = useState<OversizedFragmentState|null>(null)
+  const oversizedRevisionRef=useRef(0)
+  const oversizedAbortRef=useRef<AbortController|null>(null)
+  useEffect(()=>{
+    oversizedAbortRef.current?.abort()
+    oversizedRevisionRef.current++
+    setOversized(null)
+    return ()=>oversizedAbortRef.current?.abort()
+  },[review.selectedId])
   const [hookEvidence, setHookEvidence] = useState<{
     sessionId: string
     interactions: ReviewInteractionDto[]
@@ -155,6 +179,109 @@ export function ReviewPage({ model, embedded = false, latestRequest = 0 }: { mod
       }))
     })
   }
+  const findOversizedRecord = async () => {
+    const id=review.selectedId
+    if(!id?.startsWith('native:')||oversized?.locating||oversized?.loading)return
+    oversizedAbortRef.current?.abort()
+    const controller=new AbortController()
+    oversizedAbortRef.current=controller
+    const revision=++oversizedRevisionRef.current
+    const active=()=>!controller.signal.aborted
+      &&oversizedRevisionRef.current===revision
+    let searchCursor=oversized?.sessionId===id?oversized.searchCursor:undefined
+    setOversized(previous=>({
+      sessionId:id,fragments:previous?.sessionId===id?previous.fragments:[],
+      ...(searchCursor?{searchCursor}:{}),locating:true,loading:false,
+    }))
+    try{
+      // Only explicit user action starts a finite search: max eight Source
+      // windows, eight physical records each. Never full-scan at startup.
+      for(let n=0;n<8;n++){
+        const found=await hookApi.locateOversizedNativeRecord(id,{
+          ...(searchCursor?{cursor:searchCursor}:{}),
+          limit:8,signal:controller.signal,
+        })
+        if(!active())return
+        if(found.state==='more'){
+          if(!found.nextCursor||found.nextCursor===searchCursor)
+            throw new Error('native-oversized-search-stalled')
+          searchCursor=found.nextCursor
+          continue
+        }
+        if(found.state==='found'){
+          if(!found.hasText)throw new Error('native-oversized-record-no-text')
+          const page=await hookApi.nativeRecordTextFragments(id,{
+            cursor:found.cursor,expectedSha256:found.recordSha256,
+            fragmentOffset:0,limit:4,signal:controller.signal,
+          })
+          if(!active())return
+          if(page.state!=='available')throw new Error(page.reason)
+          if(page.coverage!=='fragment-only'
+            ||page.recordSha256!==found.recordSha256
+            ||page.fragments.some((piece,index)=>piece.ordinal!==index))
+            throw new Error('native-fragment-evidence-mismatch')
+          setOversized({sessionId:id,recordCursor:found.cursor,
+            recordSha256:found.recordSha256,
+            fragments:page.fragments,
+            totalTextFragments:page.totalTextFragments,
+            ...(page.nextFragmentOffset===undefined?{}:{
+              nextFragmentOffset:page.nextFragmentOffset}),
+            locating:false,loading:false})
+          return
+        }
+        setOversized({sessionId:id,fragments:[],locating:false,loading:false,
+          ...(found.state==='end'?{error:t('local.roundNav.nativeOversizedNotFound')}
+          :{error:found.reason})})
+        return
+      }
+      setOversized({sessionId:id,searchCursor,fragments:[],
+        locating:false,loading:false})
+    }catch(error){
+      if(!active())return
+      setOversized({sessionId:id,fragments:[],locating:false,loading:false,
+        ...(searchCursor?{searchCursor}:{}),
+        error:error instanceof Error?error.message:String(error)})
+    }
+  }
+
+  const loadNextOversizedFragments = async () => {
+    const current=oversized
+    const id=review.selectedId
+    if(!current||!id||current.sessionId!==id||!current.recordCursor
+      ||!current.recordSha256||current.nextFragmentOffset===undefined
+      ||current.loading||current.locating)return
+    oversizedAbortRef.current?.abort()
+    const controller=new AbortController()
+    oversizedAbortRef.current=controller
+    const revision=++oversizedRevisionRef.current
+    const next=current.nextFragmentOffset
+    setOversized({...current,loading:true,error:undefined})
+    try{
+      const page=await hookApi.nativeRecordTextFragments(id,{
+        cursor:current.recordCursor,expectedSha256:current.recordSha256,
+        fragmentOffset:next,limit:4,signal:controller.signal,
+      })
+      if(controller.signal.aborted||oversizedRevisionRef.current!==revision)return
+      if(page.state!=='available')throw new Error(page.reason)
+      if(page.coverage!=='fragment-only'||page.recordSha256!==current.recordSha256
+        ||page.totalTextFragments!==current.totalTextFragments
+        ||!page.fragments.length
+        ||page.fragments.some((piece,index)=>piece.ordinal!==next+index)
+        ||(page.nextFragmentOffset!==undefined
+          &&page.nextFragmentOffset<=next))
+        throw new Error('native-fragment-evidence-mismatch')
+      setOversized({...current,loading:false,
+        fragments:[...current.fragments,...page.fragments].slice(-16),
+        ...(page.nextFragmentOffset===undefined
+          ?{nextFragmentOffset:undefined}
+          :{nextFragmentOffset:page.nextFragmentOffset})})
+    }catch(error){
+      if(controller.signal.aborted||oversizedRevisionRef.current!==revision)return
+      setOversized({...current,loading:false,
+        error:error instanceof Error?error.message:String(error)})
+    }
+  }
+
   const draftKey = useMemo(() => detail && detailLiveInteraction
     ? liveComposerDraftKey(detailLiveInteraction.liveId, `history:${detail.id}`)
     : '', [detail?.id, detailLiveInteraction?.liveId])
@@ -364,6 +491,44 @@ export function ReviewPage({ model, embedded = false, latestRequest = 0 }: { mod
           onKeyDownCapture={noteReaderUserIntent}
         >
           {review.error && <div className="page-error">{review.error}</div>}
+          {review.error&&review.selectedId?.startsWith('native:')
+            &&review.error.includes('native-record-too-large')
+            && <Disclosure
+              summary={t('local.roundNav.nativeOversizedTitle')}
+              summaryMeta={t('local.roundNav.nativeOversizedHint')}
+            >
+              {oversized?.sessionId===review.selectedId&&oversized.error
+                && <div className="page-error" role="alert">{oversized.error}</div>}
+              {oversized?.sessionId===review.selectedId
+                && oversized.fragments.map(fragment=><div key={fragment.ordinal}>
+                  <small>{t('local.roundNav.nativeOversizedPart',{count:fragment.ordinal+1})}
+                    {fragment.suppressed? ` · ${t('local.roundNav.nativeOversizedRedacted')}`:''}
+                  </small>
+                  <pre className="review-oversized-fragment">{fragment.text}</pre>
+                </div>)}
+              {oversized?.sessionId===review.selectedId&&oversized.totalTextFragments!==undefined
+                && <small>{t('local.roundNav.nativeOversizedProgress',{
+                  visible:oversized.fragments.length,
+                  total:oversized.totalTextFragments,
+                })}</small>}
+              {oversized?.sessionId===review.selectedId&&oversized.nextFragmentOffset!==undefined
+                && <Button size="small" disabled={oversized.loading}
+                  onClick={()=>void loadNextOversizedFragments()}>
+                  {oversized.loading
+                    ?t('local.roundNav.querying')
+                    :t('local.roundNav.nativeOversizedMore')}
+                </Button>}
+              {(!oversized?.recordCursor||oversized.searchCursor)
+                && <Button size="small"
+                  disabled={Boolean(oversized?.locating||oversized?.loading)}
+                  onClick={()=>void findOversizedRecord()}>
+                  {oversized?.locating
+                    ?t('local.roundNav.querying')
+                    :oversized?.searchCursor
+                      ?t('local.roundNav.nativeOversizedFindMore')
+                      :t('local.roundNav.nativeOversizedFind')}
+                </Button>}
+            </Disclosure>}
           {pathError && <div className="page-error" role="alert">{pathError}</div>}
           {!detail ? <div className="empty-state fill">{review.selectedId && review.detailLoading ? t('local.empty.loadingDetail') : t('local.empty.selectSession')}</div> : <div className="review-reader">
             {historyInteractionError && !historyInteractionBlocked && <div className="page-error" role="alert">{historyInteractionError}</div>}
