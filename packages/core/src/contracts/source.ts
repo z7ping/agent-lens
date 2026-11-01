@@ -272,7 +272,8 @@ export type SourceOversizedRecordResult =
 export interface SourceNativeToolLinkQuery {
   filePath:string;nativeSessionId:string
   cursor:SourceNativeSessionCursor;expectedSha256:string
-  fragmentOrdinal:number;callKey:string;limit?:number
+  /** Exactly one original anchor: a verified leaf ordinal or content block index. */
+  fragmentOrdinal?:number;contentIndex?:number;callKey:string;limit?:number
   scanCursor?:SourceNativeSessionCursor
 }
 export type SourceNativeToolLinkResult =
