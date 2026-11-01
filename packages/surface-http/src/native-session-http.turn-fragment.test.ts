@@ -165,6 +165,10 @@ test('oversized next physical record preserves verified same-turn prefix without
     const cursor=decodeNativeSessionCursor(page.nextCursor)
     assert.equal(cursor?.offset,2,'the original oversized SourceRecord was not skipped')
     assert.equal(cursor?.turnStart,0,'the partial turn retains its original user boundary')
+    const fallback=decodeNativeSessionCursor(page.oversizedRecordSearchCursor??null)
+    assert.equal(fallback?.mode,'record-fragments')
+    assert.equal(fallback?.offset,2)
+    assert.equal(fallback?.boundaryHash,'a'.repeat(64))
     const follow=await (await fetch(`${base}&cursor=${encodeURIComponent(page.nextCursor)}`)).json()
     assert.deepEqual(follow,{state:'unsupported',reason:'native-record-too-large'},
       'an unverified record is never rendered as a completed turn')
