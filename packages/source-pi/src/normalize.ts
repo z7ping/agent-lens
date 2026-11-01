@@ -44,11 +44,15 @@ function normalizedMessageAttachments(values: readonly unknown[]): {
     const type = stringField(block, 'type')
     const mimeType = stringField(block, 'mimeType', 'mime_type', 'mediaType', 'media_type')?.toLowerCase()
     const data = stringField(block, 'data', 'base64')
-    if (type === 'image' && mimeType?.startsWith('image/') && data) {
+    if (type === 'image' && mimeType?.startsWith('image/')
+      && (data || block.nativeDataVerified === true)) {
+      // Large Source-verified images are intentionally metadata-only here.
+      // The original bytes stay in the native JSONL record and can be fetched
+      // through its existing SHA-bound fragment/media endpoint on demand.
       attachments.push({
         type: 'image',
         mimeType,
-        data,
+        ...(data ? {data} : {}),
         ...(stringField(block, 'name', 'fileName', 'file_name', 'filename')
           ? { name: stringField(block, 'name', 'fileName', 'file_name', 'filename')! }
           : {}),
