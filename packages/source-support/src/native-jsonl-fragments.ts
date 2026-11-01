@@ -241,6 +241,8 @@ export async function readNativeJsonlTextFragments(input:{
           // A late/missing type cannot authorize arbitrary tool arguments.
           if(stringKind==='argument'&&currentBlock?.type!=='toolCall')
             stringKind='ignored'
+          if(stringKind==='thinking'&&currentBlock?.type!=='thinking')
+            stringKind='ignored'
           if(stringKind==='text'&&currentBlock?.type
             &&currentBlock.type!=='text'&&currentBlock.type!=='thinking')
             stringKind='ignored'
