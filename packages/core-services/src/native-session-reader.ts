@@ -436,12 +436,15 @@ export class NativeSessionReader {
       // redacted/off modes suppress the piece; explicit full mode still passes
       // through the existing CapturePolicy hard-redaction path.
       if(fragment.splitScalar&&this.capturePolicy.modeFor(scope)!=='full'){
-        return {...fragment,text:'[超长文本片段已脱敏]',
+        // An obscured split scalar cannot also expose its join identity.
+        const {callKey: _hiddenCallKey, ...safeFragment}=fragment
+        return {...safeFragment,text:'[超长文本片段已脱敏]',
           splitScalar:true,redactionApplied:true,suppressed:true}
       }
       const captured=this.capturePolicy.capture(scope,fragment.text,{maxText:12_000})
+      const {callKey: _hiddenCallKey, ...safeFragment}=fragment
       return {
-        ...fragment,
+        ...(captured.mode==='off'?safeFragment:fragment),
         text:typeof captured.value==='string'?captured.value:'',
         ...(fragment.splitScalar?{splitScalar:true}:{}),
         ...(captured.redactionApplied?{redactionApplied:true}:{}),
