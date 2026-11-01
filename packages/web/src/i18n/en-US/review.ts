@@ -393,6 +393,7 @@ export const englishReviewMessages: LocaleMessagesDto = {
         nativeOversizedLinkedScan: 'Scanned {{count}} following native records',
         nativeOversizedLinkedVerified: 'Native call ID verified (fragment evidence only)',
         nativeOversizedLinkedPartial: 'More result fragments remain in the original record',
+        nativeOversizedLinkedMore: 'Load more linked result fragments',
         nativeOversizedLinkedMissing: 'No verified linked result found in the scanned window',
         nativeOversizedProgress: 'Showing {{visible}} of {{total}} verified fragments',
         nativeHookEvidenceHint: 'Source-owned archive; some facts may also appear above. Full capture is not verified',
