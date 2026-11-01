@@ -83,6 +83,7 @@ test('media route requires verified Catalog cursor, original SHA and bounded ima
     mode:'record-fragments',
   })
   let called=0
+  let unsafeMime=false
   const reader={
     async read(){return {state:'unsupported' as const,reason:'unused'}},
     async readTextFragments(q:{
@@ -99,7 +100,7 @@ test('media route requires verified Catalog cursor, original SHA and bounded ima
         offset:10,fileIdentity:'9:1',recordSha256:sha,
         fragments:[],totalTextFragments:0,
         images:[{contentIndex:2,mimeType:'image/png'}],
-        media:{contentIndex:2,mimeType:'image/png',
+        media:{contentIndex:2,mimeType:unsafeMime?'image/svg+xml':'image/png',
           base64:'AQID',totalBase64Length:4},
       }}
     },
@@ -132,9 +133,13 @@ test('media route requires verified Catalog cursor, original SHA and bounded ima
     assert.equal(JSON.stringify(page).includes('fileIdentity'),false)
     assert.equal(JSON.stringify(page).includes('filePath'),false)
     assert.equal(called,1)
+    unsafeMime=true
+    const unsafe=await (await fetch(`${url}?${query}`)).json() as Record<string,unknown>
+    assert.equal(unsafe.state,'unsupported','HTTP must reject untrusted Source MIME')
+    assert.equal(called,2)
     assert.equal((await fetch(`${url}?cursor=${cursor}&imageIndex=2`)).status,400)
     assert.equal((await fetch(`${url}?${query}&mediaOffset=3`)).status,400)
     assert.equal((await fetch(`${url}?${query}&mediaLimit=262144`)).status,400)
-    assert.equal(called,1)
+    assert.equal(called,2)
   }finally{await new Promise<void>(resolve=>server.close(()=>resolve()))}
 })
