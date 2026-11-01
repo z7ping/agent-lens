@@ -162,7 +162,16 @@ async function readPiVerifiedLargeImagePage(
   const blocks=original.contentBlocks
   const imageBlocks=blocks.filter(block=>block.kind==='image')
   const assistant=original.role==='assistant'
-  if(!(assistant?original.strictLargeAssistantShape:original.strictImageUserShape)
+  const scalar=original.strictLargeScalarShape&&original.scalarContentVerified
+    &&(original.role==='user'||assistant)
+    &&original.nativeType==='message'&&Boolean(original.nativeEventId)
+    &&original.recordSha256===scan.span.sha256
+    &&original.fileIdentity===scan.span.fileIdentity
+    &&blocks.length===0&&original.images.length===0
+    &&original.totalTextFragments>16&&original.fragments.length===16
+    &&original.fragments.every(piece=>piece.kind==='message'
+      &&piece.contentIndex===undefined)
+  if(!scalar && (!(assistant?original.strictLargeAssistantShape:original.strictImageUserShape)
     ||original.nativeType!=='message'
     ||(original.role!=='user'&&!assistant)
     ||!original.nativeEventId||original.recordSha256!==scan.span.sha256
@@ -191,27 +200,29 @@ async function readPiVerifiedLargeImagePage(
     ||blocks.some(block=>['text','thinking'].includes(block.kind)
       &&(block.fragmentCount===0
         ||original.fragments.filter(piece=>piece.contentIndex===block.contentIndex)
-          .length!==block.fragmentCount)))
+          .length!==block.fragmentCount))))
     return {state:'unsupported',reason:'native-record-too-large'}
 
   // Reuse the existing image validator; a MIME label and a JSON string by
   // themselves do not prove the original base64 image payload is well formed.
-  const image=imageBlocks[0]!
-  const media=await readNativeJsonlTextFragments({
-    path:query.filePath,allowedRoots:roots,
-    ...(query.cursor?{cursor:query.cursor}:{}),
-    expectedSha256:scan.span.sha256,fragmentOffset:0,limit:1,
-    media:{contentIndex:image.contentIndex,offset:0,limit:4},
-    signal:ctx.abortSignal,
-  })
-  if(media.state!=='available'){
-    if(media.state==='drifted'||media.state==='unavailable')return media
-    return {state:'unsupported',reason:'native-record-too-large'}
+  if(!scalar){
+    const image=imageBlocks[0]!
+    const media=await readNativeJsonlTextFragments({
+      path:query.filePath,allowedRoots:roots,
+      ...(query.cursor?{cursor:query.cursor}:{}),
+      expectedSha256:scan.span.sha256,fragmentOffset:0,limit:1,
+      media:{contentIndex:image.contentIndex,offset:0,limit:4},
+      signal:ctx.abortSignal,
+    })
+    if(media.state!=='available'){
+      if(media.state==='drifted'||media.state==='unavailable')return media
+      return {state:'unsupported',reason:'native-record-too-large'}
+    }
+    if(media.record.recordSha256!==scan.span.sha256)
+      return {state:'drifted',reason:'native-record-hash-changed'}
+    if(media.record.media?.contentIndex!==image.contentIndex)
+      return {state:'unsupported',reason:'native-record-too-large'}
   }
-  if(media.record.recordSha256!==scan.span.sha256)
-    return {state:'drifted',reason:'native-record-hash-changed'}
-  if(media.record.media?.contentIndex!==image.contentIndex)
-    return {state:'unsupported',reason:'native-record-too-large'}
 
   const auth=await authorizeNativeSessionPath(query.filePath,roots)
   if(auth.state!=='authorized')return auth
@@ -225,7 +236,7 @@ async function readPiVerifiedLargeImagePage(
   if(!after.isFile()||after.dev!==before.dev||after.ino!==before.ino
     ||after.size!==before.size||after.mtimeMs!==before.mtimeMs)
     return {state:'drifted',reason:'native-file-changed-after-semantic-scan'}
-  const content=blocks.map(block=>{
+  const content=scalar?'':blocks.map(block=>{
     if(block.kind==='image')
       return {type:'image',mimeType:original.images[0]!.mimeType}
     if(block.kind==='tool-call')
@@ -261,7 +272,11 @@ async function readPiVerifiedLargeImagePage(
     locator:{kind:'file',path:query.filePath,offset:start},
     fingerprint:original.sourceLineSha256,parserVersion:PI_PARSER_VERSION,
     // The proof lives OUTSIDE the untrusted original native entry.
-    payload:{entry,session,verifiedLargeImageRecord:true},
+    payload:{entry,session,
+      ...(scalar?{verifiedLargeTextRecord:{
+        recordSha256:original.recordSha256,
+        totalTextFragments:original.totalTextFragments,
+      }}:{verifiedLargeImageRecord:true})},
   }
   return {state:'available',records:[record],
     recordCursors:[{offset:start,sequence:sequence-1,
