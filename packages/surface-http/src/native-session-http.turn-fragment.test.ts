@@ -216,6 +216,10 @@ test('oversized following turn does not discard an earlier complete turn in a ba
     assert.deepEqual(result.interactions.map(x=>x.ordinal),[1])
     assert.equal(decodeNativeSessionCursor(result.nextCursor)?.offset,1)
     assert.equal(result.hasMore,true)
+    const blocked=decodeNativeSessionCursor(result.oversizedRecordSearchCursor??null)
+    assert.equal(blocked?.mode,'record-fragments')
+    assert.equal(blocked?.offset,1)
+    assert.equal(blocked?.boundaryHash,'b'.repeat(64))
   }finally{
     await new Promise<void>(resolve=>server.close(()=>resolve()))
   }
