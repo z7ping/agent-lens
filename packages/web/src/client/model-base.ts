@@ -258,7 +258,8 @@ export abstract class AgentLensModelBase {
   ):Promise<string> => {
     const ref=attachment.nativeMedia
     const detail=this.snapshot.review.detail
-    if(!ref||!detail||detail.id!==ref.sessionId
+    if(!ref||attachment.type!=='image'||attachment.mimeType!==ref.mimeType
+      ||!detail||detail.id!==ref.sessionId
       ||detail.statisticsCompleteness!=='window'
       ||!detail.interactions.some(interaction=>interaction.nodes.some(node=>
         node.type==='message' &&node.observationIds.includes(observationId)
