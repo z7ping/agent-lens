@@ -377,7 +377,10 @@ export class NativeSessionReader {
       ...(scoped.runtimeProfile?{runtimeProfile:scoped.runtimeProfile}:{}),
       abortSignal:query.signal,checkpoint:readOnlyCheckpoint,
     })
-    if(found.state==='found'&&found.cursor.fileIdentity!==catalog.fileIdentity)
+    if(found.state==='found'&&(found.cursor.fileIdentity!==catalog.fileIdentity
+      ||(found.nextCursor&&(
+        found.nextCursor.fileIdentity!==catalog.fileIdentity
+        ||found.nextCursor.offset<=found.cursor.offset))))
       return {state:'drifted',reason:'native-record-identity-changed'}
     if(found.state==='more'&&found.nextCursor.fileIdentity!==catalog.fileIdentity)
       return {state:'drifted',reason:'native-record-identity-changed'}

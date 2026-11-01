@@ -59,7 +59,10 @@ export async function handleNativeOversizedRecordLocateRequest(
       state:'found',cursor:encodeNativeSessionCursor({
         ...result.cursor,mode:'record-fragments',
       }),recordSha256:result.recordSha256,hasText:result.hasText,
-      ...(result.nativeEventId?{nativeEventId:result.nativeEventId}:{})
+      ...(result.nativeEventId?{nativeEventId:result.nativeEventId}:{}),
+      ...(result.nextCursor?{nextCursor:encodeNativeSessionCursor({
+        ...result.nextCursor,mode:'record-fragments',
+      })}:{})
     }
     else if(result.state==='more')dto={
       state:'more',nextCursor:encodeNativeSessionCursor({

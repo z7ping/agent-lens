@@ -157,7 +157,7 @@ export type NativeMetricContributionDto =
  */
 export type NativeOversizedRecordLocateResponseDto =
   | {state:'found';cursor:string;recordSha256:string
-      hasText:boolean;nativeEventId?:string}
+      hasText:boolean;nativeEventId?:string;nextCursor?:string}
   | {state:'more';nextCursor:string}
   | {state:'end'}
   | {state:'pending'|'unavailable'|'drifted'|'unsupported';reason:string}

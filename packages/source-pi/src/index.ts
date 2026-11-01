@@ -277,7 +277,11 @@ export const piSourceDefinition: SourceDefinition = {
           cursor:{...startCursor,recordFingerprint:checked.record.sourceLineSha256},
           recordSha256:checked.record.recordSha256,
           hasText:checked.record.totalTextFragments>0,
-          ...(checked.record.nativeEventId?{nativeEventId:checked.record.nativeEventId}:{})
+          ...(checked.record.nativeEventId?{nativeEventId:checked.record.nativeEventId}:{}),
+          ...(span.nextOffset<original.size?{nextCursor:{
+            offset:span.nextOffset,sequence:startCursor.sequence+1,
+            fileIdentity:span.fileIdentity,boundaryHash:span.endBoundaryHash,
+          }}:{})
         }
       }
       inspectedBytes+=span.nextOffset-span.offset

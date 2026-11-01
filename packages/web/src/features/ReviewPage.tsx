@@ -222,6 +222,7 @@ export function ReviewPage({ model, embedded = false, latestRequest = 0 }: { mod
             throw new Error('native-fragment-evidence-mismatch')
           setOversized({sessionId:id,recordCursor:found.cursor,
             recordSha256:found.recordSha256,
+            ...(found.nextCursor?{searchCursor:found.nextCursor}:{}),
             fragments:page.fragments,
             totalTextFragments:page.totalTextFragments,
             ...(page.nextFragmentOffset===undefined?{}:{
