@@ -359,3 +359,61 @@ test('overlong Pi tool numeric literals are rejected without materializing a hug
     })
   }finally{await rm(root,{recursive:true,force:true})}
 })
+
+test('Pi tool result details expose only typed evidence leaves with native call association',async()=>{
+  const root=await mkdtemp(join(tmpdir(),'agent-lens-tool-result-details-'))
+  const path=join(root,'session.jsonl')
+  try{
+    const id='call-result-typed'
+    const record=JSON.stringify({type:'message',message:{
+      role:'toolResult',toolCallId:id,content:[{type:'text',text:'done'}],
+      details:{status:200,success:true,missing:null,
+        credentials:{token:'plain-sensitive-value'},
+        observations:[3,false,'detail'],
+        image:{data:'A'.repeat(3*1024*1024)}},
+    }})
+    await writeFile(path,record+'\n')
+    const result=await readNativeJsonlTextFragments({path,allowedRoots:[root],limit:16})
+    assert.equal(result.state,'available')
+    if(result.state!=='available')return
+    const parts=result.record.fragments
+    assert.deepEqual(parts.map(x=>x.text),[
+      'done','200','true','null','plain-sensitive-value','3','false','detail',
+    ])
+    assert.deepEqual(parts.map(x=>x.kind),Array(8).fill('tool-result'))
+    assert.deepEqual(parts.map(x=>x.valueType),[
+      undefined,'number','boolean','null','string','number','boolean','string',
+    ])
+    assert.deepEqual(parts[4]?.fieldKeys,['details','credentials','token'])
+    assert.deepEqual(parts[5]?.fieldKeys,['details','observations'])
+    const key=createHash('sha256').update(id).digest('hex')
+    assert.ok(parts.every(piece=>piece.callKey===key))
+    assert.ok(parts.every(piece=>piece.text.length<3*1024*1024))
+    assert.equal(result.record.totalTextFragments,8)
+    const next=await readNativeJsonlTextFragments({
+      path,allowedRoots:[root],fragmentOffset:4,limit:2,
+      expectedSha256:result.record.recordSha256,
+    })
+    assert.equal(next.state,'available')
+    if(next.state==='available')
+      assert.deepEqual(next.record.fragments.map(x=>x.ordinal),[4,5])
+  }finally{await rm(root,{recursive:true,force:true})}
+})
+
+test('unverified role ordering cannot promote arbitrary details to tool result evidence',async()=>{
+  const root=await mkdtemp(join(tmpdir(),'agent-lens-tool-result-role-'))
+  const path=join(root,'session.jsonl')
+  try{
+    const input={type:'message',message:{
+      details:{token:'not-proof',code:400},role:'toolResult',
+      content:[{type:'text',text:'verified later'}],
+    }}
+    await writeFile(path,JSON.stringify(input)+'\n')
+    const result=await readNativeJsonlTextFragments({path,allowedRoots:[root]})
+    assert.equal(result.state,'available')
+    if(result.state==='available'){
+      assert.deepEqual(result.record.fragments.map(x=>x.text),['verified later'])
+      assert.equal(JSON.stringify(result.record.fragments).includes('not-proof'),false)
+    }
+  }finally{await rm(root,{recursive:true,force:true})}
+})
