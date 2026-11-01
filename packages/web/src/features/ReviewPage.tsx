@@ -25,12 +25,16 @@ import { projectSelectOption } from './project-presentation'
 
 type VerifiedRecordTextFragment = Extract<NativeRecordTextFragmentsResponseDto,
   {state:'available'}>['fragments'][number]
+type VerifiedNativeContentBlock = NonNullable<Extract<NativeRecordTextFragmentsResponseDto,
+  {state:'available'}>['contentBlocks']>[number]
 type OversizedFragmentState = {
   sessionId:string
   searchCursor?:string
   recordCursor?:string
   recordSha256?:string
   fragments:VerifiedRecordTextFragment[]
+  contentBlocks?:VerifiedNativeContentBlock[]
+  contentBlocksTruncated?:boolean
   images:Array<{contentIndex:number;mimeType:string}>
   imagesTruncated?:boolean
   mediaIndex?:number
@@ -243,6 +247,8 @@ export function ReviewPage({ model, embedded = false, latestRequest = 0 }: { mod
             recordSha256:found.recordSha256,
             ...(found.nextCursor?{searchCursor:found.nextCursor}:{}),
             fragments:page.fragments,
+            ...(page.contentBlocks?{contentBlocks:page.contentBlocks}:{}),
+            ...(page.contentBlocksTruncated?{contentBlocksTruncated:true}:{}),
             images:page.images??[],
             ...(page.imagesTruncated?{imagesTruncated:true}:{}),
             totalTextFragments:page.totalTextFragments,
@@ -714,6 +720,23 @@ export function ReviewPage({ model, embedded = false, latestRequest = 0 }: { mod
             >
               {oversized?.sessionId===review.selectedId&&oversized.error
                 && <div className="page-error" role="alert">{oversized.error}</div>}
+              {oversized?.sessionId===review.selectedId
+                &&oversized.contentBlocks?.map(block=><div key={block.contentIndex}>
+                  <small>{t('local.roundNav.nativeOversizedBlock',{count:block.contentIndex+1})}
+                    {' · '}{block.kind==='thinking'?t('local.roundNav.nativeOversizedKindThinking')
+                      :block.kind==='tool-call'?t('local.roundNav.nativeOversizedKindToolCall')
+                      :block.kind==='image'?t('local.roundNav.nativeOversizedKindImage')
+                      :block.kind==='text'?t('local.roundNav.nativeOversizedKindMessage')
+                      :t('local.roundNav.nativeOversizedKindOther')}
+                    {block.name&&!block.suppressed?' · '+block.name:''}
+                    {' · '}{t('local.roundNav.nativeOversizedBlockFragments',{
+                      count:block.fragmentCount,
+                    })}
+                    {block.suppressed?' · '+t('local.roundNav.nativeOversizedRedacted'):''}
+                  </small>
+                </div>)}
+              {oversized?.sessionId===review.selectedId&&oversized.contentBlocksTruncated
+                &&<small>{t('local.roundNav.nativeOversizedBlocksTruncated')}</small>}
               {oversized?.sessionId===review.selectedId
                 && oversized.fragments.map(fragment=><div key={fragment.ordinal}>
                   <small>{t('local.roundNav.nativeOversizedPart',{count:fragment.ordinal+1})}
