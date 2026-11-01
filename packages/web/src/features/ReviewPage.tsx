@@ -408,7 +408,9 @@ export function ReviewPage({ model, embedded = false, latestRequest = 0 }: { mod
       setOversized(previous=>previous?.sessionId===id
         &&previous.recordSha256===current.recordSha256
         &&previous.toolLink?.match?.recordSha256===match.recordSha256
-        ?{...previous,toolLink:{...previous.toolLink,loading:false,
+        &&previous.toolLink.callKey===link.callKey
+        &&previous.toolLink.anchorOrdinal===link.anchorOrdinal
+        ?{...previous,toolLink:{...link,loading:false,
           match:{...match,
             fragments:[...match.fragments,...page.fragments].slice(-16),
             nextFragmentOffset:page.nextFragmentOffset}}}:previous)
@@ -417,7 +419,9 @@ export function ReviewPage({ model, embedded = false, latestRequest = 0 }: { mod
       setOversized(previous=>previous?.sessionId===id
         &&previous.recordSha256===current.recordSha256
         &&previous.toolLink?.match?.recordSha256===match.recordSha256
-        ?{...previous,toolLink:{...previous.toolLink,loading:false,
+        &&previous.toolLink.callKey===link.callKey
+        &&previous.toolLink.anchorOrdinal===link.anchorOrdinal
+        ?{...previous,toolLink:{...link,loading:false,
           error:error instanceof Error?error.message:String(error)}}:previous)
     }
   }
