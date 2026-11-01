@@ -360,7 +360,7 @@ async function readCompleteNativeTurns(
     // A partial turn is NOT a boundary for the next ordinal.
     if (!value.hasMore || value.turnFragment === 'partial') break
     if (turn === turnLimit - 1) break
-    const cursor = decodeCursor(value.nextCursor)
+    const cursor = decodeNativeSessionCursor(value.nextCursor)
     if (!cursor || cursor.mode !== 'review-turns'
       || cursor.turnOrdinal === undefined
       || cursor.turnOrdinal <= ordinal
@@ -553,7 +553,7 @@ export async function handleNativeSessionAttachmentRequest(
   }
   if ([...url.searchParams.keys()].some(key=>key!=='cursor')
     || url.searchParams.getAll('cursor').length!==1) throw badRequest('Invalid native attachment request')
-  const cursor=decodeCursor(url.searchParams.get('cursor'))
+  const cursor=decodeNativeSessionCursor(url.searchParams.get('cursor'))
   if (!cursor || cursor.mode) throw badRequest('Native attachment requires an original record-start cursor')
   const entry=await catalog.getByReviewSessionId(id)
   if (!entry || entry.locationKind!=='native') {
