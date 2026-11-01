@@ -32,6 +32,7 @@ type OversizedFragmentState = {
   recordSha256?:string
   fragments:VerifiedRecordTextFragment[]
   images:Array<{contentIndex:number;mimeType:string}>
+  imagesTruncated?:boolean
   mediaIndex?:number
   mediaDataUrl?:string
   totalTextFragments?:number
@@ -230,6 +231,7 @@ export function ReviewPage({ model, embedded = false, latestRequest = 0 }: { mod
             ...(found.nextCursor?{searchCursor:found.nextCursor}:{}),
             fragments:page.fragments,
             images:page.images??[],
+            ...(page.imagesTruncated?{imagesTruncated:true}:{}),
             totalTextFragments:page.totalTextFragments,
             ...(page.nextFragmentOffset===undefined?{}:{
               nextFragmentOffset:page.nextFragmentOffset}),
@@ -594,6 +596,8 @@ export function ReviewPage({ model, embedded = false, latestRequest = 0 }: { mod
                         :t('local.roundNav.nativeOversizedLoadImage')}
                     </Button>}
                 </div>)}
+              {oversized?.sessionId===review.selectedId&&oversized.imagesTruncated
+                &&<small>{t('local.roundNav.nativeOversizedImagesTruncated')}</small>}
               {oversized?.sessionId===review.selectedId&&oversized.totalTextFragments!==undefined
                 && <small>{t('local.roundNav.nativeOversizedProgress',{
                   visible:oversized.fragments.length,
