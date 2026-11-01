@@ -152,6 +152,16 @@ export type NativeMetricContributionDto =
   | {state:'unavailable'|'unsupported';reason:string}
 
 /** Sanitized, verified JSONL leaves; always INCOMPLETE as a Review turn. */
+/** Metadata-only bounded search to locate an oversized original JSONL
+ * record. No turn or SourceRecord completeness is inferred.
+ */
+export type NativeOversizedRecordLocateResponseDto =
+  | {state:'found';cursor:string;recordSha256:string
+      hasText:boolean;nativeEventId?:string}
+  | {state:'more';nextCursor:string}
+  | {state:'end'}
+  | {state:'pending'|'unavailable'|'drifted'|'unsupported';reason:string}
+
 export type NativeRecordTextFragmentsResponseDto =
   | {state:'available';coverage:'fragment-only';sessionId:string
     recordSha256:string;nativeEventId?:string;nativeType?:string;role?:string
