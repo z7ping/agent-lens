@@ -169,6 +169,15 @@ export type NativeRecordMediaChunkResponseDto =
       base64:string;totalBase64Length:number;nextOffset?:number}
   | {state:'pending'|'unavailable'|'drifted'|'unsupported';reason:string}
 
+/** Verified same-Source tool link lookup. Bounded physical scan, not a
+ * complete tool lifecycle or a recovered user turn. */
+export type NativeRecordToolLinkResponseDto =
+  | {state:'available';coverage:'tool-link-only';sessionId:string
+      scannedRecords:number
+      match?:{cursor:string;recordSha256:string}
+      nextCursor?:string}
+  | {state:'pending'|'unavailable'|'drifted'|'unsupported';reason:string}
+
 export type NativeRecordTextFragmentsResponseDto =
   | {state:'available';coverage:'fragment-only';sessionId:string
     recordSha256:string;nativeEventId?:string;nativeType?:string;role?:string
