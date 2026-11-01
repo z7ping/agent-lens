@@ -527,7 +527,8 @@ export class NativeSessionReader {
           ? 'tool' as const : 'prompt' as const
       // Trusted source field ancestry is for CapturePolicy only. Never send
       // credential-containing parameter names across the HTTP boundary.
-      const {fieldKeys,fieldKeysTooDeep,...publicFragment}=fragment
+      const {fieldKeys,fieldKeysTooDeep,
+        safeSplitScalar,...publicFragment}=fragment
       const safeFragment={...publicFragment}
       delete safeFragment.callKey
       // A fragmented scalar cannot be independently regex-redacted without
