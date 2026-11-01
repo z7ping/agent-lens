@@ -30,7 +30,8 @@ test('oversized locator returns only Catalog-authorized bounded fragment cursors
       return {state:'found' as const,cursor:{
         offset:100,sequence:1,fileIdentity:'1:2',boundaryHash,
         recordFingerprint:'c'.repeat(64),
-      },recordSha256:hash,hasText:true,nativeEventId:'user-giant'}
+      },recordSha256:hash,hasText:true,nativeEventId:'user-giant',
+        nextCursor:{offset:320,sequence:2,fileIdentity:'1:2',boundaryHash}}
     },
   } as unknown as NativeSessionWindowReader
   const catalog={
@@ -67,6 +68,13 @@ test('oversized locator returns only Catalog-authorized bounded fragment cursors
     const cursor=decodeNativeSessionCursor(found.cursor??null)
     assert.equal(cursor?.mode,'record-fragments')
     assert.equal(cursor?.recordFingerprint,'c'.repeat(64))
+    const after=decodeNativeSessionCursor(
+      (found as {nextCursor?:string}).nextCursor??null)
+    assert.equal(after?.mode,'record-fragments')
+    assert.equal(after?.offset,320)
+    assert.equal(after?.sequence,2)
+    assert.equal(after?.boundaryHash,boundaryHash)
+    assert.equal(after?.recordFingerprint,undefined)
     assert.equal(JSON.stringify(found).includes('filePath'),false)
     assert.equal(readCount,2)
     assert.equal((await fetch(url+'?path=/etc/passwd')).status,400)
