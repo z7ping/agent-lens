@@ -145,8 +145,23 @@ export function buildNodes(items: TimelineItemDto[], registry = new ToolRegistra
   const nodes: ReviewNodeDto[] = []
   const messagesByNativeId = new Map<string, ReviewMessageNodeDto>()
   const toolsByCallId = new Map<string, ReviewToolNodeDto>()
+  const settledToolIds = new Set<string>()
   const scopedCallId = (item: TimelineItemDto, callId: string) =>
     JSON.stringify([item.installationId, item.sourceId, item.sourceSessionId, callId])
+  // Source-native call IDs are authoritative only if unique within their
+  // scope. If two distinct tool.call observations reuse one ID, do not guess
+  // which one a later tool.result belongs to.
+  const callOwners = new Map<string, string>()
+  const ambiguousCalls = new Set<string>()
+  for (const item of items) {
+    if (item.kind !== 'tool.call') continue
+    const id = toolCallId(item)
+    if (!id) continue
+    const key = scopedCallId(item, id)
+    const owner = callOwners.get(key)
+    if (owner && owner !== item.id) ambiguousCalls.add(key)
+    else callOwners.set(key, item.id)
+  }
 
   for (const item of items) {
     if (item.kind === 'message.user' || item.kind === 'message.assistant' || item.kind === 'message.commentary' || item.kind === 'message.reasoning') {
@@ -221,15 +236,21 @@ export function buildNodes(items: TimelineItemDto[], registry = new ToolRegistra
         observationIds: [item.id],
       }
       nodes.push(node)
-      if (id) toolsByCallId.set(scopedCallId(item, id), node)
+      if (id && !ambiguousCalls.has(scopedCallId(item, id)))
+        toolsByCallId.set(scopedCallId(item, id), node)
       continue
     }
 
     if (item.kind === 'tool.result') {
       const payload = asRecord(item.payload)
       const id = toolCallId(item)
-      const linked = id ? toolsByCallId.get(scopedCallId(item, id)) : undefined
-      if (linked) {
+      const linked = id && !ambiguousCalls.has(scopedCallId(item, id))
+        ? toolsByCallId.get(scopedCallId(item, id)) : undefined
+      // Distinct terminal facts cannot replace an already attached result:
+      // preserve follow-up results as independent events, with their own
+      // Source evidence and error status visible in the shared TaskSurface.
+      if (linked && !settledToolIds.has(linked.id)) {
+        settledToolIds.add(linked.id)
         linked.endedAt = item.effectiveAt
         linked.status = payload.success === false ? 'error' : payload.success === true ? 'success' : 'unknown'
         const duration = payload.durationMs ?? payload.duration_ms
@@ -237,8 +258,9 @@ export function buildNodes(items: TimelineItemDto[], registry = new ToolRegistra
         if (payload.output !== undefined) linked.output = payload.output
         else if (payload.result !== undefined) linked.output = payload.result
         else linked.output = item.payload
-        linked.evidence = [...linked.evidence, ...item.evidence]
-        linked.observationIds.push(item.id)
+        linked.evidence = [...new Map([...linked.evidence, ...item.evidence]
+          .map(entry => [entry.id, entry])).values()]
+        linked.observationIds = [...new Set([...linked.observationIds, item.id])]
         continue
       }
     }
