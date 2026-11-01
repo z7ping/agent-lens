@@ -444,3 +444,122 @@ test('Pi oversized user image with invalid native base64 remains unsupported',as
       reason:'native-record-too-large'})
   }finally{await rm(root,{recursive:true,force:true})}
 })
+
+test('Pi oversized assistant text, thinking, empty tool call and image preserves native fact order',async()=>{
+  const root=await mkdtemp(join(tmpdir(),'agent-lens-pi-large-assistant-'))
+  const file=join(root,'session.jsonl')
+  const header=JSON.stringify({type:'session',id:'large-assistant',cwd:'/project'})
+  const callId='original-large-assistant-call'
+  const message=JSON.stringify({
+    type:'message',id:'assistant-giant',timestamp:'2026-11-01T12:00:00.000Z',
+    parentId:'user-1',message:{role:'assistant',
+      model:'test-model',provider:'test-provider',stopReason:'toolUse',
+      content:[
+        {type:'text',text:'Visible preface'},
+        {type:'thinking',thinking:'Original thinking'},
+        {type:'toolCall',id:callId,name:'read',arguments:{}},
+        {type:'image',mimeType:'image/png',data:'A'.repeat(2_300_000)},
+        {type:'text',text:'Visible conclusion'},
+      ],
+    },
+  })
+  const result=JSON.stringify({type:'message',id:'returned-tool',message:{
+    role:'toolResult',toolCallId:callId,toolName:'read',
+    content:[{type:'text',text:'result'}],
+  }})
+  const timestamp='2026-11-01T00:00:00Z'
+  const host={id:'host',name:'host',platform:process.platform,arch:process.arch,
+    createdAt:timestamp,lastSeenAt:timestamp}
+  const installation={id:'pi-giant-assistant',hostId:'host',productId:'pi',
+    dataRoot:root,firstSeenAt:timestamp,lastSeenAt:timestamp}
+  const ctx:SourceRawRecoveryContext={host,installation,
+    abortSignal:new AbortController().signal,
+    checkpoint:{async get(){return null},
+      async set(){throw Error('read-only')},async clear(){throw Error('read-only')}},
+  }
+  try{
+    await writeFile(file,[header,message,result].join('\n')+'\n')
+    assert.ok(Buffer.byteLength(message)>2*1024*1024)
+    const read=piSourceDefinition.readNativeSessionPage!
+    const initial=await read({filePath:file,nativeSessionId:'large-assistant',limit:1},ctx)
+    assert.equal(initial.state,'available')
+    if(initial.state!=='available')return
+    const oversized=await read({filePath:file,nativeSessionId:'large-assistant',
+      cursor:initial.nextCursor,limit:1},ctx)
+    assert.equal(oversized.state,'available')
+    if(oversized.state!=='available')return
+    assert.equal(oversized.records.length,1)
+    const record=oversized.records[0]!
+    assert.equal(record.fingerprint,hash(message))
+    assert.equal(record.nativeId,'assistant-giant')
+    assert.ok(JSON.stringify(record.payload).length<4096)
+    assert.ok(!JSON.stringify(record.payload).includes('A'.repeat(256)))
+    const facts=await piSourceDefinition.normalize(record,{host,installation})
+    const kinds=facts.observations.map(item=>item.kind)
+    assert.deepEqual(kinds.slice(0,5),[
+      'message.assistant','message.reasoning','tool.call',
+      'message.assistant','message.assistant',
+    ])
+    const call=facts.observations.find(item=>item.kind==='tool.call')
+    assert.equal(call?.nativeCallId,callId)
+    assert.equal((call?.payload as {nativeToolName:string}).nativeToolName,'read')
+    assert.deepEqual((call?.payload as {input:unknown}).input,{})
+    const image=facts.observations.find(item=>
+      item.kind==='message.assistant'
+      &&(item.payload as {attachments?:unknown}).attachments)
+    assert.ok(image)
+    assert.deepEqual((image?.payload as {attachments:unknown}).attachments,
+      [{type:'image',mimeType:'image/png'}])
+    assert.ok(facts.evidenceCandidates.every(item=>item.sourceRecordId===record.id))
+    const after=await read({filePath:file,nativeSessionId:'large-assistant',
+      cursor:oversized.nextCursor,limit:1},ctx)
+    assert.equal(after.state,'available')
+    if(after.state==='available'){
+      const next=await piSourceDefinition.normalize(after.records[0]!,{host,installation})
+      assert.equal(next.observations.find(item=>item.kind==='tool.result')?.nativeCallId,callId)
+    }
+  }finally{await rm(root,{recursive:true,force:true})}
+})
+
+test('Pi oversized assistant refuses nonempty arguments, duplicate call IDs and unparsed fields',async()=>{
+  const root=await mkdtemp(join(tmpdir(),'agent-lens-pi-large-assistant-reject-'))
+  const file=join(root,'session.jsonl')
+  const header=JSON.stringify({type:'session',id:'large-assistant-reject'})
+  const timestamp='2026-11-01T00:00:00Z'
+  const host={id:'host',name:'host',platform:process.platform,arch:process.arch,
+    createdAt:timestamp,lastSeenAt:timestamp}
+  const installation={id:'pi-reject-assistant',hostId:'host',productId:'pi',
+    dataRoot:root,firstSeenAt:timestamp,lastSeenAt:timestamp}
+  const ctx:SourceRawRecoveryContext={host,installation,
+    abortSignal:new AbortController().signal,
+    checkpoint:{async get(){return null},
+      async set(){throw Error('read-only')},async clear(){throw Error('read-only')}},
+  }
+  try{
+    const variants=[
+      [{type:'toolCall',id:'one',name:'exec',arguments:{script:'danger'}}],
+      [{type:'toolCall',id:'one',name:'exec',arguments:{}},
+        {type:'toolCall',id:'one',name:'exec',arguments:{}}],
+      [{type:'text',text:'preface',otherHiddenFact:'unparsed'}],
+      [{type:'toolCall',id:'one',name:'exec',arguments:'not-an-object'}],
+    ]
+    for(const [index,blocks] of variants.entries()){
+      const oversized=JSON.stringify({type:'message',id:'assistant-'+index,
+        message:{role:'assistant',content:[
+          ...blocks,{type:'image',mimeType:'image/png',data:'A'.repeat(2_250_000)},
+        ]}})
+      await writeFile(file,[header,oversized].join('\n')+'\n')
+      const first=await piSourceDefinition.readNativeSessionPage!({
+        filePath:file,nativeSessionId:'large-assistant-reject',limit:1,
+      },ctx)
+      assert.equal(first.state,'available')
+      if(first.state!=='available')continue
+      const second=await piSourceDefinition.readNativeSessionPage!({
+        filePath:file,nativeSessionId:'large-assistant-reject',
+        cursor:first.nextCursor,limit:1,
+      },ctx)
+      assert.deepEqual(second,{state:'unsupported',reason:'native-record-too-large'},
+        'unsupported oversized assistant variant '+index+' must remain fragment-only')
+    }
+  }finally{await rm(root,{recursive:true,force:true})}
+})
