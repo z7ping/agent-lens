@@ -11,6 +11,8 @@ import { normalizePiSessionEntry, type PiNativeFact } from '@agent-lens/protocol
 
 interface PiStoredEnvelope {
   entry: Record<string, unknown>
+  /** Set only by Source's SHA-verified oversized-media reader, not the raw Pi entry. */
+  verifiedLargeImageRecord?: boolean
   session: {
     nativeSessionId: string
     cwd?: string
@@ -32,7 +34,9 @@ function stringField(record: Record<string, unknown>, ...names: string[]): strin
   return undefined
 }
 
-function normalizedMessageAttachments(values: readonly unknown[]): {
+function normalizedMessageAttachments(
+  values: readonly unknown[], verifiedLargeImageRecord = false,
+): {
   attachments: Record<string, unknown>[]
   remainder: unknown[]
 } {
@@ -45,7 +49,7 @@ function normalizedMessageAttachments(values: readonly unknown[]): {
     const mimeType = stringField(block, 'mimeType', 'mime_type', 'mediaType', 'media_type')?.toLowerCase()
     const data = stringField(block, 'data', 'base64')
     if (type === 'image' && mimeType?.startsWith('image/')
-      && (data || block.nativeDataVerified === true)) {
+      && (data || verifiedLargeImageRecord)) {
       // Large Source-verified images are intentionally metadata-only here.
       // The original bytes stay in the native JSONL record and can be fetched
       // through its existing SHA-bound fragment/media endpoint on demand.
@@ -149,7 +153,9 @@ export async function normalizePiRecord(
 
     if (fact.kind === 'message') {
       if (fact.role === 'user') {
-        const normalized = normalizedMessageAttachments(fact.nonTextContent)
+        const normalized = normalizedMessageAttachments(
+          fact.nonTextContent, envelope.verifiedLargeImageRecord === true,
+        )
         observations.push(piFactCandidate(record, envelope, fact, 'message.user', {
           text: fact.text,
           ...(normalized.attachments.length ? { attachments: normalized.attachments } : {}),
