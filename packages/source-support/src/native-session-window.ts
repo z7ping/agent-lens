@@ -58,7 +58,7 @@ type NativePathAuthorization =
 
 /** Both the ordinary reader and the oversized-record inspector use the
  * same Source-owned realpath / allowedRoots authorization. */
-async function authorizeNativeSessionPath(
+export async function authorizeNativeSessionPath(
   path:string,allowedRoots:readonly string[],
 ):Promise<NativePathAuthorization>{
   let sourcePath:string
