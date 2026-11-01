@@ -8,6 +8,7 @@ import type {
   NativeSessionCatalogStore,
   SourceNativeSessionCursor,
   SourceNativeTextFragmentResult,
+  SourceNativeToolLinkResult,
   SourceOversizedRecordResult,
   SourceService,
   StorageService,
@@ -385,6 +386,65 @@ export class NativeSessionReader {
     if(found.state==='more'&&found.nextCursor.fileIdentity!==catalog.fileIdentity)
       return {state:'drifted',reason:'native-record-identity-changed'}
     return found
+  }
+
+  /** On-demand, read-only matching of a verified native call to a result
+   * in the same Catalog session. No Canonical writes or inferred completion.
+   */
+  async findNativeToolResult(query:{
+    sourceId:string;installationId:string;nativeSessionId:string
+    cursor:SourceNativeSessionCursor;expectedSha256:string
+    fragmentOrdinal:number;callKey:string;limit?:number
+    scanCursor?:SourceNativeSessionCursor;signal:AbortSignal
+  }):Promise<SourceNativeToolLinkResult>{
+    if(!this.capturePolicy.isSourceEnabled(query.sourceId))
+      return {state:'unsupported',reason:'source-disabled'}
+    if(!this.capturePolicy.isEnabled('tool'))
+      return {state:'unsupported',reason:'native-tool-capture-disabled'}
+    if(!this.storage.nativeSessionCatalog)
+      return {state:'unsupported',reason:'native-session-catalog-unavailable'}
+    query.signal.throwIfAborted()
+    const catalog=await this.storage.nativeSessionCatalog.get({
+      sourceId:query.sourceId,installationId:query.installationId,
+      nativeSessionId:query.nativeSessionId,locationKind:'native',
+    })
+    if(!catalog)return {state:'unavailable',reason:'native-session-not-indexed'}
+    if(catalog.fileIdentity!==query.cursor.fileIdentity
+      ||(query.scanCursor&&catalog.fileIdentity!==query.scanCursor.fileIdentity))
+      return {state:'drifted',reason:'native-catalog-file-identity-changed'}
+    const source=this.sources.list().find(x=>x.manifest.sourceId===query.sourceId)
+    if(!source?.findNativeToolResult)
+      return {state:'unsupported',reason:'native-tool-link-unsupported-by-source'}
+    const installation=await this.storage.repositories.installations.get(query.installationId)
+    if(!installation||installation.productId!==source.manifest.productId)
+      return {state:'drifted',reason:'native-installation-identity-changed'}
+    const scoped=await this.sessionRoots(query,installation)
+    if(scoped.state!=='available')return scoped
+    const host=await this.storage.repositories.hosts.get(installation.hostId)
+    if(!host)return {state:'unavailable',reason:'native-source-host-unavailable'}
+    const result=await source.findNativeToolResult({
+      filePath:catalog.filePath,nativeSessionId:catalog.nativeSessionId,
+      cursor:query.cursor,expectedSha256:query.expectedSha256,
+      fragmentOrdinal:query.fragmentOrdinal,callKey:query.callKey,
+      ...(query.scanCursor?{scanCursor:query.scanCursor}:{}),
+      ...(query.limit===undefined?{}:{limit:query.limit}),
+    },{
+      host,installation:scoped.installation,
+      ...(scoped.runtimeProfile?{runtimeProfile:scoped.runtimeProfile}:{}),
+      abortSignal:query.signal,checkpoint:readOnlyCheckpoint,
+    })
+    if(result.state!=='available')return result
+    if(!Number.isSafeInteger(result.scannedRecords)
+      ||result.scannedRecords<0||result.scannedRecords>(query.limit??4)
+      ||(result.match&&(!/^[0-9a-f]{64}$/.test(result.match.recordSha256)
+        ||result.match.cursor.fileIdentity!==catalog.fileIdentity
+        ||result.match.cursor.offset<=query.cursor.offset
+        ||!/^[0-9a-f]{64}$/.test(result.match.cursor.recordFingerprint??'')))
+      ||(result.nextCursor&&(result.match
+        ||result.nextCursor.fileIdentity!==catalog.fileIdentity
+        ||result.nextCursor.offset<=query.cursor.offset)))
+      return {state:'drifted',reason:'native-tool-link-evidence-invalid'}
+    return result
   }
 
   /** Catalog-authorized one-record fragment read. Raw Source leaves are
