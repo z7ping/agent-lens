@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto'
 import { open } from 'node:fs/promises'
-import { JSONParser } from '@streamparser/json'
+import { JSONParser, TokenType } from '@streamparser/json'
 import { sourceFileIdentity } from './source-fs'
 import {
   authorizeNativeSessionPath, inspectNativeSessionRecordSpan,
@@ -89,8 +89,15 @@ export async function readNativeJsonlTextFragments(input: {
     let totalTextFragments = 0
     let selectedBytes = 0
     let scalarBudgetExceeded = false
+    let rootIsObject = false
+    let sawFirstToken = false
 
     parser.onToken = token => {
+      if(!sawFirstToken){
+        sawFirstToken=true
+        rootIsObject=token.token===TokenType.LEFT_BRACE
+        if(!rootIsObject)throw new Error('native-record-not-object')
+      }
       // onToken fires for unfinished scalars on every bounded write().
       // Abort BEFORE a huge string can accumulate in the tokenizer.
       if (typeof token.value === 'string'
@@ -140,7 +147,9 @@ export async function readNativeJsonlTextFragments(input: {
     }catch(error){
       if (input.signal?.aborted) input.signal.throwIfAborted()
       return {state:'unsupported',reason:scalarBudgetExceeded
-        ?'native-record-scalar-budget':'native-record-invalid-json'}
+        ?'native-record-scalar-budget'
+        :!rootIsObject&&sawFirstToken?'native-record-not-object'
+        :'native-record-invalid-json'}
     }
     const last=await file.stat()
     if(sourceFileIdentity(last)!==span.fileIdentity

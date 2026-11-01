@@ -90,3 +90,16 @@ test('rejects invalid JSON, incomplete tail, wrong SHA, bad roots and drift',asy
     }),{state:'unsupported',reason:'native-record-invalid-json'})
   }finally{await rm(root,{recursive:true,force:true})}
 })
+
+test('no primitive JSONL root or unsafe fragment window is accepted',async()=>{
+  const root=await mkdtemp(join(tmpdir(),'agent-lens-streamed-object-'))
+  const path=join(root,'session.jsonl')
+  try{
+    await writeFile(path,'42\\n')
+    assert.deepEqual(await readNativeJsonlTextFragments({path,allowedRoots:[root]}),
+      {state:'unsupported',reason:'native-record-not-object'})
+    assert.deepEqual(await readNativeJsonlTextFragments({
+      path,allowedRoots:[root],fragmentOffset:-1,
+    }),{state:'unsupported',reason:'invalid-fragment-window'})
+  }finally{await rm(root,{recursive:true,force:true})}
+})
