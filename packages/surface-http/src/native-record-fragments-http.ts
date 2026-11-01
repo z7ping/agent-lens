@@ -27,7 +27,7 @@ export async function handleNativeRecordFragmentsRequest(
   }
   const keys=[...url.searchParams.keys()]
   const allowedKeys=linkMode
-    ?['cursor','expectedSha256','fragmentOrdinal','callKey','scanCursor','limit']
+    ?['cursor','expectedSha256','fragmentOrdinal','contentIndex','callKey','scanCursor','limit']
     :mediaMode?['cursor','expectedSha256','imageIndex','mediaOffset','mediaLimit']
       :['cursor','expectedSha256','fragmentOffset','limit']
   if(keys.some(x=>!allowedKeys.includes(x))
@@ -40,6 +40,9 @@ export async function handleNativeRecordFragmentsRequest(
   const expectedSha256=url.searchParams.get('expectedSha256')??undefined
   const callKey=url.searchParams.get('callKey')??''
   const fragmentOrdinal=Number(url.searchParams.get('fragmentOrdinal'))
+  const contentIndex=Number(url.searchParams.get('contentIndex'))
+  const hasFragmentOrdinal=url.searchParams.has('fragmentOrdinal')
+  const hasContentIndex=url.searchParams.has('contentIndex')
   const scanCursor=linkMode
     ?decodeNativeSessionCursor(url.searchParams.get('scanCursor')):undefined
   const fragmentOffset=url.searchParams.has('fragmentOffset')
@@ -52,9 +55,12 @@ export async function handleNativeRecordFragmentsRequest(
   const mediaLimit=url.searchParams.has('mediaLimit')
     ?Number(url.searchParams.get('mediaLimit')):128*1024
   if((linkMode&&(!expectedSha256||!/^[0-9a-f]{64}$/.test(callKey)
-      ||!url.searchParams.has('fragmentOrdinal')
-      ||!Number.isSafeInteger(fragmentOrdinal)||fragmentOrdinal<0
-      ||fragmentOrdinal>10_000_000||!Number.isSafeInteger(limit)
+      ||hasFragmentOrdinal===hasContentIndex
+      ||(hasFragmentOrdinal&&(!Number.isSafeInteger(fragmentOrdinal)
+        ||fragmentOrdinal<0||fragmentOrdinal>10_000_000))
+      ||(hasContentIndex&&(!Number.isSafeInteger(contentIndex)
+        ||contentIndex<0||contentIndex>10_000_000))
+      ||!Number.isSafeInteger(limit)
       ||limit<1||limit>4
       ||(scanCursor&&(scanCursor.mode!=='record-fragments'
         ||scanCursor.fileIdentity!==cursor.fileIdentity
@@ -88,7 +94,10 @@ export async function handleNativeRecordFragmentsRequest(
       const found=await reader!.findNativeToolResult!({
         sourceId:entry.sourceId,installationId:entry.installationId,
         nativeSessionId:entry.nativeSessionId,cursor,
-        expectedSha256:expectedSha256!,fragmentOrdinal,callKey,
+        expectedSha256:expectedSha256!,
+        ...(hasFragmentOrdinal?{fragmentOrdinal}:{}),
+        ...(hasContentIndex?{contentIndex}:{}),
+        callKey,
         ...(scanCursor?{scanCursor}:{}),limit,signal:abort.signal,
       })
       if(found.state!=='available'){

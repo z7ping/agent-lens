@@ -500,13 +500,18 @@ export class AgentLensApi {
    * No full Review turn or SQL event is reconstructed by this request.
    */
   nativeRecordToolLink(id:string,options:{
-    cursor:string;expectedSha256:string;fragmentOrdinal:number
-    callKey:string;scanCursor?:string;limit?:number;signal?:AbortSignal
+    cursor:string;expectedSha256:string;fragmentOrdinal?:number
+    contentIndex?:number;callKey:string;scanCursor?:string
+    limit?:number;signal?:AbortSignal
   }):Promise<NativeRecordToolLinkResponseDto>{
     const params=new URLSearchParams({
       cursor:options.cursor,expectedSha256:options.expectedSha256,
-      fragmentOrdinal:String(options.fragmentOrdinal),callKey:options.callKey,
+      callKey:options.callKey,
     })
+    if(options.fragmentOrdinal!==undefined)
+      params.set('fragmentOrdinal',String(options.fragmentOrdinal))
+    if(options.contentIndex!==undefined)
+      params.set('contentIndex',String(options.contentIndex))
     if(options.scanCursor)params.set('scanCursor',options.scanCursor)
     if(options.limit!==undefined)params.set('limit',
       String(Math.max(1,Math.min(4,options.limit))))

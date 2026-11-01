@@ -93,3 +93,12 @@ test('oversized block outline stays in the existing fragment-only Review disclos
   assert.equal((page.match(/<TaskSurface\b/g)??[]).length,1,
     'native structure must not introduce a second TaskSurface renderer')
 })
+
+test('verified zero-fragment tool blocks reuse the same native correlation action',()=>{
+  assert.match(page,/block\.kind==='tool-call'&&block\.fragmentCount===0/)
+  assert.match(page,/ordinal:-1,contentIndex:block\.contentIndex/)
+  assert.match(page,/anchorContentIndex===undefined/)
+  assert.match(page,/contentIndex:anchorContentIndex/)
+  assert.match(api,/params\.set\('contentIndex',String\(options\.contentIndex\)\)/)
+  assert.equal((page.match(/<TaskSurface\b/g)??[]).length,1)
+})
