@@ -130,3 +130,56 @@ test('Pi session page reads native messages by cursor without checkpoints or eve
     await rm(root, { recursive: true, force: true })
   }
 })
+
+test('Pi oversized locator scans resumable physical windows without skipping or inventing turns',async()=>{
+  const root=await mkdtemp(join(tmpdir(),'agent-lens-oversize-locate-'))
+  const file=join(root,'session.jsonl')
+  const header=JSON.stringify({type:'session',id:'oversize-session'})
+  const small=Array.from({length:9},(_,i)=>JSON.stringify({
+    type:'message',id:'u-'+i,message:{role:'user',content:'small-'+i},
+  }))
+  const giant=JSON.stringify({
+    type:'message',id:'large-user',
+    message:{role:'user',content:'中国🚀'.repeat(450000)},
+  })
+  const ctx:SourceRawRecoveryContext={
+    host:{id:'host',name:'host',platform:process.platform,arch:process.arch,
+      createdAt:'2026-11-01T00:00:00Z',lastSeenAt:'2026-11-01T00:00:00Z'},
+    installation:{id:'pi-oversize',hostId:'host',productId:'pi',dataRoot:root,
+      firstSeenAt:'2026-11-01T00:00:00Z',lastSeenAt:'2026-11-01T00:00:00Z'},
+    abortSignal:new AbortController().signal,
+    checkpoint:{async get(){return null},async set(){throw Error('write prohibited')},
+      async clear(){throw Error('delete prohibited')}},
+  }
+  try{
+    await writeFile(file,[header,...small,giant].join('\n')+'\n')
+    const search=piSourceDefinition.locateOversizedRecord!
+    const first=await search({filePath:file,nativeSessionId:'oversize-session',limit:8},ctx)
+    assert.equal(first.state,'more')
+    if(first.state!=='more')return
+    assert.ok(first.nextCursor.offset>0)
+    const second=await search({filePath:file,nativeSessionId:'oversize-session',
+      cursor:first.nextCursor,limit:8},ctx)
+    assert.equal(second.state,'found')
+    if(second.state!=='found')return
+    assert.equal(second.cursor.offset,Buffer.byteLength([header,...small].join('\n')+'\n'))
+    assert.equal(second.cursor.recordFingerprint,hash(giant))
+    assert.equal(second.recordSha256,hash(giant))
+    assert.equal(second.nativeEventId,'large-user')
+    assert.equal(second.hasText,true)
+    const firstPage=await piSourceDefinition.readNativeTextFragments!({
+      filePath:file,nativeSessionId:'oversize-session',cursor:second.cursor,
+      expectedSha256:second.recordSha256,limit:2,
+    },ctx)
+    assert.equal(firstPage.state,'available')
+    if(firstPage.state==='available'){
+      assert.deepEqual(firstPage.record.fragments.map(x=>x.ordinal),[0,1])
+      assert.equal(firstPage.record.nextFragmentOffset,2)
+    }
+    assert.deepEqual(await search({filePath:file,nativeSessionId:'wrong'},ctx),
+      {state:'drifted',reason:'native-session-identity-changed'})
+    const extra=await search({filePath:file,nativeSessionId:'oversize-session',
+      cursor:{...second.cursor,offset:second.cursor.offset+1}},ctx)
+    assert.equal(extra.state,'drifted')
+  }finally{await rm(root,{recursive:true,force:true})}
+})
