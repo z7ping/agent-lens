@@ -569,7 +569,12 @@ export class NativeSessionReader {
     const contentBlocks=result.record.contentBlocks?.flatMap(block=>{
       if(block.kind==='image'&&!mediaAllowed)return []
       const {name,callKey,...safeBlock}=block
-      if(block.kind!=='tool-call')return [safeBlock]
+      if(block.kind!=='tool-call'){
+        // No fragment text is emitted here; still mark source lanes hidden by
+        // the parent record's verified capture scope as unavailable.
+        return [this.capturePolicy.isEnabled(roleScope)?safeBlock
+          :{...safeBlock,suppressed:true}]
+      }
       if(!this.capturePolicy.isEnabled('tool'))
         return [{...safeBlock,suppressed:true}]
       const captured=this.capturePolicy.capture('tool',name??'',{maxText:512})
