@@ -175,6 +175,7 @@ async function readCompleteNativeTurn(
     if (!sawUser || turnStart === undefined || observations.length === 0) {
       return { state: 'unsupported', reason: 'native-review-no-user-turn' }
     }
+    const oversizedSearchCursor = oversizedBlocked ? oversizedLocatorCursor(nextCursor) : undefined
     const base = projectNativeReviewWindow({
       sourceId: query.sourceId, installationId: query.installationId,
       nativeSessionId: query.nativeSessionId,
@@ -195,8 +196,7 @@ async function readCompleteNativeTurn(
         ...base,
         // A fragment is explicitly incomplete, never a proven finished turn.
         turnFragment: partial ? 'partial' : 'complete',
-        ...(oversizedBlocked && oversizedLocatorCursor(nextCursor)
-          ? {oversizedRecordSearchCursor:oversizedLocatorCursor(nextCursor)} : {}),
+        ...(oversizedSearchCursor ? {oversizedRecordSearchCursor:oversizedSearchCursor} : {}),
         nextCursor: encodeNativeSessionCursor({
           ...nextCursor,
           mode: 'review-turns',
