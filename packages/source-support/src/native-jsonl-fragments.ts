@@ -47,6 +47,8 @@ export interface NativeJsonlTextFragment {
   fieldKeys?:string[]
   /** True when property nesting is too deep for safe policy evaluation. */
   fieldKeysTooDeep?:boolean
+  /** Original primitive JSON type for tool arguments, not a complete node. */
+  valueType?:'string'|'number'|'boolean'|'null'
   /** This text leaf spans multiple fragments; policy must not redact them
    * separately without taking token-boundary context into account. */
   splitScalar?:boolean
@@ -158,6 +160,8 @@ export async function readNativeJsonlTextFragments(input:{
     let mediaFound=false
     let selectedIndex:number|undefined
     let textKind:FragmentKind='message'
+    let valueType:NativeJsonlTextFragment['valueType']
+    let activeNumber=false
     let argumentKeys:string[]|undefined
     let argumentKeysTooDeep=false
     let failed:string|undefined
@@ -185,6 +189,16 @@ export async function readNativeJsonlTextFragments(input:{
       frame.key=undefined
       return result
     }
+    const toolArgumentContext=(path:readonly PathKey[])=>{
+      if(media||currentBlock?.type!=='toolCall'||classify(path)!=='argument')
+        return false
+      selectedIndex=contentIndex(path)
+      textKind='tool-call'
+      const keys=path.slice(3).filter((part):part is string=>typeof part==='string')
+      argumentKeysTooDeep=keys.length>16
+      argumentKeys=argumentKeysTooDeep?undefined:keys
+      return true
+    }
     const flushText=()=>{
       // Empty text values are still first-class leaves.
       const ordinal=totalTextFragments++
@@ -199,6 +213,7 @@ export async function readNativeJsonlTextFragments(input:{
             ?{fieldKeys:argumentKeys}:{}),
           ...(textKind==='tool-call'&&argumentKeysTooDeep
             ?{fieldKeysTooDeep:true}:{}),
+          ...(textKind==='tool-call'&&valueType?{valueType}:{}),
         })
         selectedLeafIds.push(currentTextLeaf)
         selectedBytes+=textBytes
@@ -315,11 +330,9 @@ export async function readNativeJsonlTextFragments(input:{
             :stringKind==='argument'?'tool-call':'message'
           // Carry keys only inside trusted Source -> Reader. The CapturePolicy
           // must see ancestors such as credentials.password, including arrays.
-          const keys=stringKind==='argument'
-            ?path.slice(3).filter((part):part is string=>typeof part==='string')
-            :[]
-          argumentKeysTooDeep=keys.length>16
-          argumentKeys=argumentKeysTooDeep?undefined:keys
+          if(stringKind==='argument')toolArgumentContext(path)
+          else{argumentKeys=undefined;argumentKeysTooDeep=false}
+          valueType=stringKind==='argument'?'string':undefined
           meta='';textBuffer='';textBytes=0;pendingHighSurrogate=''
           if(stringKind==='text'||stringKind==='thinking'||stringKind==='argument'){
             currentTextLeaf=nextTextLeaf++;textPieces=0
@@ -391,12 +404,48 @@ export async function readNativeJsonlTextFragments(input:{
           }
           return
         }
-        case 'startNumber':
+        case 'startNumber':{
+          const path=nextPath()
+          activeNumber=toolArgumentContext(path)
+          if(activeNumber){
+            valueType='number'
+            textBuffer='';textBytes=0;textPieces=0
+            currentTextLeaf=nextTextLeaf++
+          }
+          return
+        }
+        case 'numberChunk':
+          if(activeNumber){
+            // Preserve native numeric lexemes without parseFloat precision loss.
+            // A pathological numeric literal does not justify allocating it.
+            if(textBytes+token.value.length>128){
+              failed='native-tool-number-budget'
+              throw new Error(failed)
+            }
+            textBuffer+=token.value
+            textBytes+=token.value.length
+          }
+          return
+        case 'endNumber':
+          if(activeNumber){
+            flushText()
+            activeNumber=false
+          }
+          return
         case 'nullValue':
         case 'trueValue':
-        case 'falseValue':
-          nextPath()
+        case 'falseValue':{
+          const path=nextPath()
+          if(toolArgumentContext(path)){
+            valueType=name==='nullValue'?'null':'boolean'
+            currentTextLeaf=nextTextLeaf++
+            textBuffer=name==='nullValue'?'null':name==='trueValue'?'true':'false'
+            textBytes=textBuffer.length
+            textPieces=0
+            flushText()
+          }
           return
+        }
         default:
           return
       }
