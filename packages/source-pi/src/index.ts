@@ -332,9 +332,9 @@ export const piSourceDefinition: SourceDefinition = {
     const block=anchor.record.contentBlocks.find(item=>
       item.contentIndex===query.contentIndex)
     const anchored=leafAnchor
-      ?leaf?.ordinal===query.fragmentOrdinal&&leaf.kind==='tool-call'
-        &&leaf.callKey===query.callKey
-      :block?.kind==='tool-call'&&block.callKey===query.callKey
+      ?Boolean(leaf&&leaf.ordinal===query.fragmentOrdinal
+        &&leaf.kind==='tool-call'&&leaf.callKey===query.callKey)
+      :Boolean(block&&block.kind==='tool-call'&&block.callKey===query.callKey)
     // One native call ID must not silently identify multiple tools inside
     // the original oversized record. A truncated block outline cannot prove
     // uniqueness; fall back to unpaired Source evidence rather than guessing.
