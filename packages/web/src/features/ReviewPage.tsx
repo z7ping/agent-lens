@@ -37,6 +37,14 @@ type OversizedFragmentState = {
   mediaDataUrl?:string
   totalTextFragments?:number
   nextFragmentOffset?:number
+  toolLink?:{
+    callKey:string;anchorOrdinal:number;loading:boolean
+    scannedRecords:number;scanCursor?:string
+    match?:{cursor:string;recordSha256:string
+      fragments:VerifiedRecordTextFragment[];nextFragmentOffset?:number
+      totalTextFragments:number}
+    error?:string
+  }
   locating:boolean
   loading:boolean
   error?:string
@@ -288,6 +296,81 @@ export function ReviewPage({ model, embedded = false, latestRequest = 0 }: { mod
       if(controller.signal.aborted||oversizedRevisionRef.current!==revision)return
       setOversized({...current,loading:false,
         error:error instanceof Error?error.message:String(error)})
+    }
+  }
+
+  const findLinkedToolResult = async (fragment:VerifiedRecordTextFragment) => {
+    const current=oversized
+    const id=review.selectedId
+    if(!id||!current||current.sessionId!==id||!current.recordCursor
+      ||!current.recordSha256||current.loading||current.locating
+      ||current.toolLink?.loading||fragment.kind!=='tool-call'
+      ||!fragment.callKey||fragment.suppressed)return
+    oversizedAbortRef.current?.abort()
+    const controller=new AbortController()
+    oversizedAbortRef.current=controller
+    const revision=++oversizedRevisionRef.current
+    const earlier=current.toolLink?.callKey===fragment.callKey
+      &&current.toolLink.anchorOrdinal===fragment.ordinal
+      ?current.toolLink:undefined
+    const priorScanned=earlier?.scannedRecords??0
+    const scanCursor=earlier?.scanCursor
+    setOversized({...current,toolLink:{
+      callKey:fragment.callKey,anchorOrdinal:fragment.ordinal,
+      loading:true,scannedRecords:priorScanned,
+      ...(scanCursor?{scanCursor}:{}),
+    }})
+    try{
+      const result=await hookApi.nativeRecordToolLink(id,{
+        cursor:current.recordCursor,expectedSha256:current.recordSha256,
+        fragmentOrdinal:fragment.ordinal,callKey:fragment.callKey,
+        ...(scanCursor?{scanCursor}:{}),limit:4,signal:controller.signal,
+      })
+      if(controller.signal.aborted||oversizedRevisionRef.current!==revision)return
+      if(result.state!=='available')throw new Error(result.reason)
+      if(result.coverage!=='tool-link-only'||result.sessionId!==id
+        ||result.scannedRecords<0||result.scannedRecords>4
+        ||(result.match&&result.nextCursor))
+        throw new Error('native-tool-link-evidence-mismatch')
+      let match:NonNullable<OversizedFragmentState['toolLink']>['match']|undefined
+      if(result.match){
+        const page=await hookApi.nativeRecordTextFragments(id,{
+          cursor:result.match.cursor,expectedSha256:result.match.recordSha256,
+          limit:4,signal:controller.signal,
+        })
+        if(controller.signal.aborted||oversizedRevisionRef.current!==revision)return
+        if(page.state!=='available')throw new Error(page.reason)
+        if(page.coverage!=='fragment-only'
+          ||page.recordSha256!==result.match.recordSha256
+          ||(page.role!=='tool'&&page.role!=='toolResult')
+          ||page.fragments.some((item,index)=>item.ordinal!==index
+            ||item.kind!=='tool-result'
+            ||(item.callKey!==undefined&&item.callKey!==fragment.callKey)))
+          throw new Error('native-tool-link-result-mismatch')
+        match={cursor:result.match.cursor,recordSha256:result.match.recordSha256,
+          fragments:page.fragments,totalTextFragments:page.totalTextFragments,
+          ...(page.nextFragmentOffset===undefined?{}:{
+            nextFragmentOffset:page.nextFragmentOffset}),
+        }
+      }
+      setOversized(previous=>previous?.sessionId===id
+        &&previous.recordSha256===current.recordSha256
+        ?{...previous,toolLink:{
+          callKey:fragment.callKey!,anchorOrdinal:fragment.ordinal,
+          loading:false,scannedRecords:priorScanned+result.scannedRecords,
+          ...(result.nextCursor?{scanCursor:result.nextCursor}:{}),
+          ...(match?{match}:{}),
+        }}:previous)
+    }catch(error){
+      if(controller.signal.aborted||oversizedRevisionRef.current!==revision)return
+      setOversized(previous=>previous?.sessionId===id
+        &&previous.recordSha256===current.recordSha256
+        ?{...previous,toolLink:{
+          callKey:fragment.callKey!,anchorOrdinal:fragment.ordinal,
+          loading:false,scannedRecords:priorScanned,
+          ...(scanCursor?{scanCursor}:{}),
+          error:error instanceof Error?error.message:String(error),
+        }}:previous)
     }
   }
 
