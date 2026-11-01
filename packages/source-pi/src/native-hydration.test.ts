@@ -378,7 +378,9 @@ test('oversized Pi image user message joins canonical native TaskSurface with co
     const payload=message?.payload as {text?:string;attachments?:Array<{
       type:string;mimeType:string;data?:string}>}
     assert.equal(payload.text,'First line\n\nLast line')
-    assert.deepEqual(payload.attachments,[{type:'image',mimeType:'image/png'}])
+    assert.deepEqual(payload.attachments,[
+      {type:'image',mimeType:'image/png',nativeContentIndex:1},
+    ])
     assert.ok(normalized.evidenceCandidates.some(x=>x.sourceRecordId===record.id))
     const following=await read({filePath:file,nativeSessionId:'large-image-turn',
       cursor:recovered.nextCursor,limit:1},ctx)
@@ -509,7 +511,7 @@ test('Pi oversized assistant text, thinking, empty tool call and image preserves
       &&(item.payload as {attachments?:unknown}).attachments)
     assert.ok(image)
     assert.deepEqual((image?.payload as {attachments:unknown}).attachments,
-      [{type:'image',mimeType:'image/png'}])
+      [{type:'image',mimeType:'image/png',nativeContentIndex:3}])
     assert.ok(facts.evidenceCandidates.every(item=>item.sourceRecordId===record.id))
     const after=await read({filePath:file,nativeSessionId:'large-assistant',
       cursor:oversized.nextCursor,limit:1},ctx)
