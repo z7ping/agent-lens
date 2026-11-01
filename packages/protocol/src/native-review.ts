@@ -177,7 +177,8 @@ export type NativeRecordTextFragmentsResponseDto =
       contentIndex?:number;callKey?:string
       redactionApplied?:boolean;suppressed?:boolean;splitScalar?:boolean}>
     totalTextFragments:number;nextFragmentOffset?:number
-    images?:Array<{contentIndex:number;mimeType:string}>}
+    images?:Array<{contentIndex:number;mimeType:string}>
+    imagesTruncated?:boolean}
   | {state:'pending'|'unavailable'|'drifted'|'unsupported';reason:string}
 
 export type NativeReviewWindowResponseDto =
