@@ -11,6 +11,7 @@
     "test": "tsx --test \"src/**/*.test.ts\""
   },
   "dependencies": {
+    "@streamparser/json": "0.0.26",
     "chokidar": "5.0.0"
   }
 }
