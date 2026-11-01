@@ -527,14 +527,15 @@ export class NativeSessionReader {
           ? 'tool' as const : 'prompt' as const
       // Trusted source field ancestry is for CapturePolicy only. Never send
       // credential-containing parameter names across the HTTP boundary.
-      const {fieldKeys,fieldKeysTooDeep,...publicFragment}=fragment
+      const {fieldKeys,fieldKeysTooDeep,
+        safeSplitScalar,...publicFragment}=fragment
       const safeFragment={...publicFragment}
       delete safeFragment.callKey
       // A fragmented scalar cannot be independently regex-redacted without
       // leaking split tokens. Deep parameter structures also fail closed.
       if(fieldKeysTooDeep
         ||fieldKeys?.some(key=>key==='__proto__'||key==='prototype'||key==='constructor')
-        ||fragment.splitScalar){
+        ||(fragment.splitScalar&&!safeSplitScalar)){
         return {...safeFragment,text:'[超长文本片段已脱敏]',
           redactionApplied:true,suppressed:true}
       }

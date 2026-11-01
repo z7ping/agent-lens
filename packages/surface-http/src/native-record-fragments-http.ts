@@ -34,7 +34,11 @@ export async function handleNativeRecordFragmentsRequest(
     ||keys.some(x=>url.searchParams.getAll(x).length!==1))
     throw badRequest('Unsupported record-fragment query parameter')
   const cursor=decodeNativeSessionCursor(url.searchParams.get('cursor'))
-  if(!cursor||!['review-turns','record-fragments'].includes(cursor.mode??'')
+  const structuralBodyCursor=Boolean(!mediaMode&&!linkMode
+    &&cursor&&!cursor.mode
+    &&/^[0-9a-f]{64}$/.test(url.searchParams.get('expectedSha256')??''))
+  if(!cursor||!(['review-turns','record-fragments'].includes(cursor.mode??'')
+    ||structuralBodyCursor)
     ||!cursor.recordFingerprint||(linkMode&&cursor.mode!=='record-fragments'))
     throw badRequest('Verified Review turn cursor required')
   const expectedSha256=url.searchParams.get('expectedSha256')??undefined

@@ -563,3 +563,89 @@ test('Pi oversized assistant refuses nonempty arguments, duplicate call IDs and 
     }
   }finally{await rm(root,{recursive:true,force:true})}
 })
+
+test('giant scalar Pi user and assistant bodies become verified lazy native Review facts',async()=>{
+  const root=await mkdtemp(join(tmpdir(),'agent-lens-large-scalar-'))
+  const file=join(root,'session.jsonl')
+  const header=JSON.stringify({type:'session',id:'large-scalar'})
+  const originalText='原文🚀'.repeat(400_000)
+  const user=JSON.stringify({type:'message',id:'giant-user',message:{
+    role:'user',content:originalText,
+  }})
+  const assistant=JSON.stringify({type:'message',id:'giant-assistant',message:{
+    role:'assistant',content:originalText,
+    model:'test-model',provider:'test',
+  }})
+  const ts='2026-11-01T00:00:00Z'
+  const host={id:'host',name:'host',platform:process.platform,arch:process.arch,
+    createdAt:ts,lastSeenAt:ts}
+  const installation={id:'large-scalar',hostId:'host',productId:'pi',
+    dataRoot:root,firstSeenAt:ts,lastSeenAt:ts}
+  const ctx:SourceRawRecoveryContext={host,installation,
+    abortSignal:new AbortController().signal,
+    checkpoint:{async get(){return null},async set(){throw Error('read-only')},
+      async clear(){throw Error('read-only')}},
+  }
+  try{
+    await writeFile(file,[header,user,assistant].join('\n')+'\n')
+    let cursor:Parameters<NonNullable<typeof piSourceDefinition.readNativeSessionPage>>[0]['cursor']|undefined
+    const read=piSourceDefinition.readNativeSessionPage!
+    const first=await read({filePath:file,nativeSessionId:'large-scalar',limit:1},ctx)
+    assert.equal(first.state,'available')
+    if(first.state!=='available')return
+    cursor=first.nextCursor
+    for(const [id,physical] of [['giant-user',user],['giant-assistant',assistant]]){
+      const result=await read({filePath:file,nativeSessionId:'large-scalar',
+        cursor,limit:1},ctx)
+      assert.equal(result.state,'available')
+      if(result.state!=='available')break
+      assert.equal(result.records.length,1)
+      const record=result.records[0]!
+      assert.equal(record.nativeId,id)
+      assert.equal(record.fingerprint,hash(physical))
+      assert.ok(JSON.stringify(record.payload).length<2048)
+      assert.ok(!JSON.stringify(record.payload).includes('原文🚀'))
+      const normalized=await piSourceDefinition.normalize(record,{host,installation})
+      const message=normalized.observations.find(item=>
+        item.kind==='message.user'||item.kind==='message.assistant')
+      assert.ok(message)
+      const ref=(message?.payload as {nativeLazyText?:{
+        recordSha256:string;totalTextFragments:number}}).nativeLazyText
+      assert.ok(ref)
+      assert.ok(ref.totalTextFragments>16)
+      assert.ok(/^[0-9a-f]{64}$/.test(ref.recordSha256))
+      cursor=result.nextCursor
+    }
+  }finally{await rm(root,{recursive:true,force:true})}
+})
+
+test('giant scalar Pi record with unknown semantic field never promotes a fake complete turn',async()=>{
+  const root=await mkdtemp(join(tmpdir(),'agent-lens-scalar-unknown-'))
+  const file=join(root,'session.jsonl')
+  const header=JSON.stringify({type:'session',id:'unknown-scalar'})
+  const giant=JSON.stringify({type:'message',id:'user-unknown',message:{
+    role:'user',content:'x'.repeat(2_200_000),
+    additionalUnparsedField:'evidence cannot disappear',
+  }})
+  const ts='2026-11-01T00:00:00Z'
+  const host={id:'host',name:'host',platform:process.platform,arch:process.arch,
+    createdAt:ts,lastSeenAt:ts}
+  const installation={id:'unknown-scalar',hostId:'host',productId:'pi',
+    dataRoot:root,firstSeenAt:ts,lastSeenAt:ts}
+  const ctx:SourceRawRecoveryContext={host,installation,
+    abortSignal:new AbortController().signal,
+    checkpoint:{async get(){return null},async set(){throw Error('read-only')},
+      async clear(){throw Error('read-only')}},
+  }
+  try{
+    await writeFile(file,[header,giant].join('\n')+'\n')
+    const read=piSourceDefinition.readNativeSessionPage!
+    const first=await read({filePath:file,nativeSessionId:'unknown-scalar',limit:1},ctx)
+    assert.equal(first.state,'available')
+    if(first.state!=='available')return
+    assert.deepEqual(await read({filePath:file,nativeSessionId:'unknown-scalar',
+      cursor:first.nextCursor,limit:1},ctx),{
+      state:'unsupported',reason:'native-record-too-large',
+    })
+  }finally{await rm(root,{recursive:true,force:true})}
+})

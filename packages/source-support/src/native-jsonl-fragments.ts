@@ -70,6 +70,9 @@ export interface NativeJsonlTextFragment {
   /** This text leaf spans multiple fragments; policy must not redact them
    * separately without taking token-boundary context into account. */
   splitScalar?:boolean
+  /** Source-private proof: all split boundaries separate non-ASCII codepoints.
+   * Hard secret redactors cannot match across those boundaries. */
+  safeSplitScalar?:boolean
 }
 
 export type NativeJsonlFragmentReadResult =
@@ -83,6 +86,8 @@ export type NativeJsonlFragmentReadResult =
       strictImageUserShape:boolean
       /** Stream-verified assistant text/thinking/empty-tool/media shape. */
       strictLargeAssistantShape:boolean
+      /** Complete bounded-schema proof for a giant scalar message.content. */
+      strictLargeScalarShape:boolean;scalarContentVerified:boolean
       assistantMeta?:{
         provider?:string;model?:string;stopReason?:string;errorMessage?:string
       }
@@ -190,6 +195,8 @@ export async function readNativeJsonlTextFragments(input:{
     let nativeParentId:string|undefined
     let strictImageUserShape=true
     let strictLargeAssistantShape=true
+    let strictLargeScalarShape=true
+    let scalarContentVerified=false
     const seenSourcePaths=new Set<string>()
     const assistantMeta:{
       provider?:string;model?:string;stopReason?:string;errorMessage?:string
@@ -224,6 +231,7 @@ export async function readNativeJsonlTextFragments(input:{
     let textBuffer=''
     let textBytes=0
     let textPieces=0
+    let scalarSplitSafe=true
     let currentTextLeaf=0
     let nextTextLeaf=0
     const selectedLeafIds:number[]=[]
@@ -258,6 +266,14 @@ export async function readNativeJsonlTextFragments(input:{
       // An assistant tool's complete JSON arguments may only be {}.
       return false
     }
+    const permittedScalarPath=(path:readonly PathKey[]):boolean=>{
+      if(path.length===0)return true
+      if(path.length===1)return typeof path[0]==='string'
+        &&['type','id','parentId','timestamp','message'].includes(path[0])
+      return path.length===2&&path[0]==='message'
+        &&typeof path[1]==='string'
+        &&['role','content','provider','model','stopReason','errorMessage'].includes(path[1])
+    }
     const nextPath=():PathKey[]=>{
       const frame=stack.at(-1)
       if(!frame)return []
@@ -270,6 +286,7 @@ export async function readNativeJsonlTextFragments(input:{
       }
       if(!permittedImageUserPath(result))strictImageUserShape=false
       if(!permittedAssistantPath(result))strictLargeAssistantShape=false
+      if(!permittedScalarPath(result))strictLargeScalarShape=false
       // JSON permits repeated object keys, but a projected Source fact cannot
       // silently choose a different occurrence or conflate two call IDs.
       if(frame.kind==='object'&&result.length<=4){
@@ -277,6 +294,7 @@ export async function readNativeJsonlTextFragments(input:{
         if(seenSourcePaths.has(key)){
           strictImageUserShape=false
           strictLargeAssistantShape=false
+          strictLargeScalarShape=false
         }else seenSourcePaths.add(key)
       }
       if(result.length===4&&currentBlock&&result[0]==='message'
@@ -341,7 +359,15 @@ export async function readNativeJsonlTextFragments(input:{
       // complete JS code points, never within a surrogate pair.
       for(const codePoint of safe){
         const n=Buffer.byteLength(codePoint,'utf8')
-        if(textBytes+n>FRAGMENT_BYTES)flushText()
+        if(textBytes+n>FRAGMENT_BYTES){
+          const end=[...textBuffer].at(-1)
+          // Conservative: any ASCII/space/control at either edge might be
+          // part of an unbounded secret or path redaction pattern.
+          if(!end||(end.codePointAt(0)??0)<=127
+            ||(codePoint.codePointAt(0)??0)<=127)
+            scalarSplitSafe=false
+          flushText()
+        }
         textBuffer+=codePoint
         textBytes+=n
       }
@@ -362,7 +388,10 @@ export async function readNativeJsonlTextFragments(input:{
           if(path.length===2&&path[0]==='message'
             &&['role','provider','model','stopReason','errorMessage'].includes(String(path[1]))){
             strictLargeAssistantShape=false
+            strictLargeScalarShape=false
           }
+          if(path.length===2&&path[0]==='message'&&path[1]==='content')
+            strictLargeScalarShape=false
           if(name==='startObject'&&path.length===3
             &&contentIndex(path)!==undefined)
             currentBlock={index:path[2] as number,fragmentCount:0,
@@ -459,6 +488,8 @@ export async function readNativeJsonlTextFragments(input:{
         case 'startString':{
           const path=nextPath()
           selectedIndex=contentIndex(path)
+          if(path.length===2&&path[0]==='message'&&path[1]==='content')
+            scalarContentVerified=true
           stringKind=classify(path)
           if(media&&selectedIndex===media.contentIndex&&path.length===4
             &&path[3]==='data')stringKind='imageData'
@@ -488,6 +519,7 @@ export async function readNativeJsonlTextFragments(input:{
           if(stringKind==='text'||stringKind==='thinking'||stringKind==='argument'
             ||stringKind==='resultField'){
             currentTextLeaf=nextTextLeaf++;textPieces=0
+            scalarSplitSafe=true
           }
           return
         }
@@ -505,7 +537,11 @@ export async function readNativeJsonlTextFragments(input:{
             flushText()
             if(textPieces>1){
               for(let i=0;i<fragments.length;i++){
-                if(selectedLeafIds[i]===currentTextLeaf)fragments[i]!.splitScalar=true
+                if(selectedLeafIds[i]!==currentTextLeaf)continue
+                fragments[i]!.splitScalar=true
+                if(scalarSplitSafe&&textKind==='message'
+                  &&(role==='user'||role==='assistant'))
+                  fragments[i]!.safeSplitScalar=true
               }
             }
           }
@@ -577,8 +613,10 @@ export async function readNativeJsonlTextFragments(input:{
             strictImageUserShape=false
           if(path.length===1&&['type','id','parentId','timestamp'].includes(String(path[0]))
             ||path.length===2&&path[0]==='message'
-              &&['role','provider','model','stopReason','errorMessage'].includes(String(path[1])))
+              &&['role','provider','model','stopReason','errorMessage','content'].includes(String(path[1]))){
             strictLargeAssistantShape=false
+            strictLargeScalarShape=false
+          }
           activeNumber=toolFieldContext(path)
           if(activeNumber){
             valueType='number'
@@ -611,8 +649,10 @@ export async function readNativeJsonlTextFragments(input:{
           const path=nextPath()
           if(path.length===1&&['type','id','parentId','timestamp'].includes(String(path[0]))
             ||path.length===2&&path[0]==='message'
-              &&['role','provider','model','stopReason','errorMessage'].includes(String(path[1])))
+              &&['role','provider','model','stopReason','errorMessage','content'].includes(String(path[1]))){
             strictLargeAssistantShape=false
+            strictLargeScalarShape=false
+          }
           if(toolFieldContext(path)){
             valueType=name==='nullValue'?'null':'boolean'
             currentTextLeaf=nextTextLeaf++
@@ -698,6 +738,7 @@ export async function readNativeJsonlTextFragments(input:{
       ...(nativeTimestamp?{nativeTimestamp}:{}),
       ...(nativeParentId?{nativeParentId}:{}),
       strictImageUserShape,strictLargeAssistantShape,
+      strictLargeScalarShape,scalarContentVerified,
       ...(Object.keys(assistantMeta).length?{assistantMeta}:{}),
       ...(role?{role}:{}),
       ...((role==='tool'||role==='toolResult')&&resultCallId

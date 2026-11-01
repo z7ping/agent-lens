@@ -226,6 +226,11 @@ export interface ReviewMessageNodeDto extends ReviewNodeSourceDto {
   attachments?: ReviewMessageAttachmentDto[]
   /** Opaque native record rewind cursor; usable only with catalog-owned Source identity. */
   nativeAttachmentCursor?: string
+  /** Fully SHA-verified native structure; body text is intentionally lazy.
+   * Each page is independently reattested against the original SourceRecord. */
+  nativeLazyText?:{
+    cursor:string;recordSha256:string;totalTextFragments:number
+  }
   payload: JsonValue
   evidence: TimelineEvidenceDto[]
   observationIds: string[]

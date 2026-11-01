@@ -893,3 +893,47 @@ test('verified native block metadata never bypasses tool and image CapturePolicy
     assert.equal(noMedia.record.contentBlocks?.[0]?.suppressed,true)
   }
 })
+
+test('native lazy scalar text only exposes Source-proven safe boundary fragments',async()=>{
+  const storage={
+    nativeSessionCatalog:{async get(){return catalog}},
+    repositories:{installations:{async get(){return installation}},
+      hosts:{async get(){return host}}},
+  } as unknown as StorageService
+  const source={manifest:{sourceId:'pi',productId:'pi'},
+    async readNativeTextFragments(){
+      return {state:'available' as const,record:{
+        offset:70,fileIdentity:'1:9',recordSha256:'a'.repeat(64),
+        role:'user',totalTextFragments:256,
+        fragments:[
+          {ordinal:0,kind:'message' as const,text:'中文正文',splitScalar:true,
+            safeSplitScalar:true},
+          {ordinal:1,kind:'message' as const,text:'Bearer secretABC',
+            splitScalar:true},
+        ],
+      }}
+    },
+  } as unknown as SourceDefinition
+  const policy={
+    isSourceEnabled:()=>true,isEnabled:()=>true,
+    capture(_scope:string,value:unknown){
+      return {mode:'redacted' as const,value,redactionApplied:false}
+    },
+  } as unknown as CapturePolicyService
+  const reader=new NativeSessionReader(storage,
+    {list:()=>[source]} as unknown as SourceService,policy)
+  const page=await reader.readTextFragments({
+    sourceId:'pi',installationId:'install',nativeSessionId:'S1',
+    cursor:{offset:70,sequence:2,fileIdentity:'1:9'},
+    signal:new AbortController().signal,
+  })
+  assert.equal(page.state,'available')
+  if(page.state==='available'){
+    assert.equal(page.record.fragments[0]?.text,'中文正文')
+    assert.equal(page.record.fragments[0]?.suppressed,undefined)
+    assert.equal(page.record.fragments[1]?.suppressed,true)
+    assert.equal(page.record.fragments[1]?.text,'[超长文本片段已脱敏]')
+    assert.equal(JSON.stringify(page).includes('safeSplitScalar'),false,
+      'internal privacy proofs never cross HTTP-bound Core DTOs')
+  }
+})
