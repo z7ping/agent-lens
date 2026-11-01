@@ -512,23 +512,25 @@ test('large split scalar fragments are masked under redacted CapturePolicy',asyn
       }}
     },
   } as unknown as SourceDefinition
-  let called=false
-  const policy={
-    isSourceEnabled:()=>true,
-    modeFor:()=> 'redacted' as const,
-    capture(){called=true;return {value:'unexpected',mode:'redacted',redactionApplied:false}},
-  } as unknown as CapturePolicyService
-  const reader=new NativeSessionReader(storage,
-    {list:()=>[source]} as unknown as SourceService,policy)
-  const value=await reader.readTextFragments({
-    ...query,cursor:{offset:0,sequence:0,fileIdentity:'1:9'},
-  })
-  assert.equal(value.state,'available')
-  if(value.state==='available')assert.deepEqual(value.record.fragments,[{
-    ordinal:0,text:'[超长文本片段已脱敏]',kind:'thinking',contentIndex:0,
-    splitScalar:true,redactionApplied:true,suppressed:true,
-  }])
-  assert.equal(called,false,'raw split token must not be redacted independently')
+  for(const mode of ['redacted','full'] as const){
+    let called=false
+    const policy={
+      isSourceEnabled:()=>true,
+      modeFor:()=>mode,
+      capture(){called=true;return {value:'unexpected',mode,redactionApplied:false}},
+    } as unknown as CapturePolicyService
+    const reader=new NativeSessionReader(storage,
+      {list:()=>[source]} as unknown as SourceService,policy)
+    const value=await reader.readTextFragments({
+      ...query,cursor:{offset:0,sequence:0,fileIdentity:'1:9'},
+    })
+    assert.equal(value.state,'available')
+    if(value.state==='available')assert.deepEqual(value.record.fragments,[{
+      ordinal:0,text:'[超长文本片段已脱敏]',kind:'thinking',contentIndex:0,
+      splitScalar:true,redactionApplied:true,suppressed:true,
+    }])
+    assert.equal(called,false,`${mode} must not sanitize a partial scalar independently`)
+  }
 })
 
 test('inline image chunks require enabled prompt capture and validated original identities',async()=>{
@@ -610,7 +612,7 @@ test('native tool argument fragments use key-aware CapturePolicy and hide privat
       const value=JSON.stringify(input)
       const isSensitive=value.includes('plain-secret')||value.includes('other-secret')
       if(value.includes('plain-secret'))
-        return {value:{arguments:{credentials:{password:'[已脱敏]'}}},
+        return {value:{arguments:{credentials:'[已脱敏]'}},
           mode:'redacted' as const,redactionApplied:true}
       if(value.includes('other-secret'))
         return {value:{arguments:{items:{token:'[已脱敏]'}}},
