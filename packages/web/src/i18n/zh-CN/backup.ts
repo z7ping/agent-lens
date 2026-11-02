@@ -28,6 +28,7 @@ export const chineseBackupMessages: LocaleMessagesDto = {
     },
     files: '{{count}} 个文件',
     logicalFiles: '{{logical}} 项 · {{files}} 个文件',
+    importSucceeded: '备份包导入成功：{{count}} 个文件，已保存至本地快照库。',
     snapshotCreated: '快照已创建：{{files}} 个文件 · {{size}}{{excluded}}',
     snapshotExcluded: ' · {{count}} 项按安全规则排除',
     copyPathFailed: '复制路径失败，请手动选择路径文本。',
