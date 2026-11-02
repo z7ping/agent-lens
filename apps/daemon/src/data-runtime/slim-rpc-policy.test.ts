@@ -6,7 +6,7 @@ test('Slim Data Runtime permits only current-state and numerical methods',()=>{
   for(const path of [
     ['health'],['nativeSessionList','query'],
     ['nativeSessionCatalog','get'],['nativeSessionCatalog','upsert'],
-    ['nativeSessionMetrics','overview'],['nativeSessionMetrics','replace'],
+    ['nativeSessionMetrics','overview'],['nativeSessionMetrics','queryErrors'],['nativeSessionMetrics','replace'],
     ['nativeFacets','query'],
     ['identity','resolveInstallation'],['nativeSessionContexts','upsert'],
     ['repositories','hosts','get'],['repositories','installations','get'],
