@@ -170,7 +170,7 @@ export class SqliteNativeSessionMetrics implements NativeSessionMetricsStore {
         // Literal substring search: escape LIKE wildcard characters.
         where.push(`(e.summary LIKE ? ESCAPE '\\' OR e.error_code LIKE ? ESCAPE '\\'
           OR e.tool_name LIKE ? ESCAPE '\\')`)
-        const escaped=query.search.replace(/[\\%_]/g,'\\  async get(identity: Identity): Promise<NativeSessionMetricReadResult> {')
+        const escaped=query.search.replace(/[\\%_]/g, match => '\\\\'+match)
         params.push(...Array(3).fill(`%${escaped}%`))
       }
       const base=`FROM native_error_index e
