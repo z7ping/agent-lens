@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router-dom'
 import type { NativeErrorIndexItemDto, NativeErrorIndexResponseDto } from '@agent-lens/protocol'
@@ -17,7 +17,7 @@ export function NativeFailureExamples({filters,toolName}: {filters:QueryFilters;
   const {t,i18n}=useTranslation('tools')
   const navigate=useNavigate()
   const sourceId=filters.sourceIds?.length===1?filters.sourceIds[0]??'':''
-  const from=rangeStart(filters.range)
+  const from=useMemo(()=>rangeStart(filters.range),[filters.range])
   const [query,setQuery]=useState('')
   const [search,setSearch]=useState('')
   const [offset,setOffset]=useState(0)
