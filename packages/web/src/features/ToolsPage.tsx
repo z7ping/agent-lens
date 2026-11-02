@@ -266,7 +266,19 @@ export function ToolsPage({ model, toolbarHost }: { model: AgentLensClientModel;
       setSelectedToolKey(null)
       return
     }
-    if(lastToolRoute.current===location.search || !data)return
+    if(!data)return
+    if(lastToolRoute.current===location.search){
+      // SSE/statistics refresh must update an open reading view, not leave
+      // its counts frozen at the moment the URL detail was first opened.
+      if(kind==='native'){
+        const currentRow=nativeToolRows.find(item=>item.nativeToolName===key
+          && item.sourceId===params.get('source')
+          && item.partial===(params.get('partial')==='1'))
+        setSelectedNativeTool(current=>currentRow&&current
+          ?{...currentRow}:currentRow??null)
+      }
+      return
+    }
     if(kind==='native'){
       const tool=nativeToolRows.find(item=>item.nativeToolName===key
         && item.sourceId===params.get('source')
@@ -396,7 +408,7 @@ export function ToolsPage({ model, toolbarHost }: { model: AgentLensClientModel;
                 {t(nativeMetrics.coverage==='partial'||nativeMetrics.toolsTruncated?'page.nativePartialStatus':'page.nativeCompleteStatus')}
               </StatusBadge>
             </div>
-            <small>{t('page.nativeScope', {ready:nativeMetrics.readySessions,
+            <small title={t('page.nativeTimeBasis')}>{t('page.nativeScope', {ready:nativeMetrics.readySessions,
               eligible:nativeMetrics.eligibleSessions})}</small>
             {nativeMetrics.partialSessions>0 && <small title={t('page.nativeObservedGroup')}>
               {t('page.nativeObservedShort', {
