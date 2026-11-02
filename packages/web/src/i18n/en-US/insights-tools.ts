@@ -136,7 +136,7 @@ export const englishInsightsToolsMessages: LocaleMessagesDto = {
 
       description:'Read confirmed failures on demand from native sessions using the current agent, project and session activity range. Examples stay in this view’s memory; they do not establish a root cause or final task failure.',
       scan:'Find failures',continue:'Continue scan',stop:'Stop search',pause:'Pause scan',
-      copy:'Copy structured examples',copied:'Copied',copyFailed:'Copy failed, retry',
+      copy:'Copy structured examples',copyError:'Copy error',copied:'Copied',copyFailed:'Copy failed, retry',
       progress:'{{sessions}} sessions · {{pages}} pages · {{count}} failures',
       samples:'Failures ({{count}})',details:'Failure details',selectExample:'Select a failure on the left',
       skippedCount:'{{count}} sessions skipped',budgetReached:'Scan budget reached',paused:'Paused',partialShort:'Partial context',
