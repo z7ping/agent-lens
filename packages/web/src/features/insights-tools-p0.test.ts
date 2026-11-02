@@ -33,14 +33,18 @@ test('unverified native tool observations are a separate lower-bound group', asy
   assert.match(tools, /page\.nativeObservedGroup/)
 })
 
-test('tool-table failure colors override the generic table-cell foreground', async () => {
+test('tool-table inherits default text color; semantic states do not require selector escalation', async () => {
   const [tools, styles] = await Promise.all([
     source('./ToolsPage.tsx'),
     source('../tools.css'),
   ])
   assert.match(tools, /<td className=\{tool\.errorCount \? 'cell-danger' : 'cell-muted'\}>\{tool\.errorCount\}<\/td>/)
-  assert.match(styles, /\.tool-table td\s*\{[^}]*color:\s*var\(--al-ink-2\)/)
-  // The table-qualified selector must be more specific than '.tool-table td'.
-  assert.match(styles, /\.tool-table td\.cell-danger\s*\{[^}]*color:\s*var\(--al-danger\)/)
-  assert.match(styles, /\.tool-table td\.cell-muted\s*\{[^}]*color:\s*var\(--al-muted-2\)/)
+  assert.match(styles, /\.tool-table\s*\{[^}]*color:\s*var\(--al-ink-2\)/)
+  const cellRule=styles.match(/\.tool-table td\s*\{([^}]*)\}/)?.[1]
+  assert.ok(cellRule,'table cell geometry rule must remain present')
+  assert.doesNotMatch(cellRule,/\bcolor\s*:/)
+  assert.doesNotMatch(styles,/\.tool-table td\.cell-/)
+  assert.match(styles, /\.cell-danger\s*\{[^}]*color:\s*var\(--al-danger\)/)
+  assert.match(styles, /\.cell-slow\s*\{[^}]*color:/)
+  assert.match(styles, /\.cell-muted\s*\{[^}]*color:\s*var\(--al-muted-2\)/)
 })
