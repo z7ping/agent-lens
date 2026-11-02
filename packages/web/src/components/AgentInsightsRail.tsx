@@ -66,10 +66,11 @@ function stateValue(asset: AgentAssetInventoryDto, state: string): boolean | 'un
 }
 
 function coverageStatus(agent: AgentCoverageItemDto, type: 'skill' | 'mcp', canonicalName: string): CoverageStatus {
-  if (agent.usedAssetsStatus === 'unavailable') return 'unknown'
   if (agent.usedAssets.some(item => item.type === type && item.canonicalName === canonicalName && item.callCount > 0)) return 'used'
   const asset = agent.assetInventory.find(item => item.type === type && item.canonicalName === canonicalName)
-  if (!asset) return 'unobserved'
+  // A missing asset can only be marked unobserved when usage coverage is certified.
+  // Known installation/discoverability evidence remains valid even if usage is unknown.
+  if (!asset) return agent.usedAssetsStatus === 'unavailable' ? 'unknown' : 'unobserved'
   if (stateValue(asset, 'discoverable') === true) return 'discoverable'
   if (['installed', 'configured', 'enabled', 'exposed'].some(state => stateValue(asset, state) === true)) return 'configured'
   return 'discovered'
