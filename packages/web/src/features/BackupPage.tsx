@@ -180,7 +180,6 @@ export function BackupPage({
   const [verification, setVerification] = useState<Record<string, BackupVerifyResponseDto>>({})
   const [physicalPathSnapshot, setPhysicalPathSnapshot] = useState<BackupSnapshotManifestDto | null>(null)
   const [preview, setPreview] = useState<BackupRestorePreviewResponseDto | null>(null)
-  const [previewLoading, setPreviewLoading] = useState(false)
   const [previewError, setPreviewError] = useState('')
   const [previewRetry, setPreviewRetry] = useState(0)
   const [confirmation, setConfirmation] = useState<PendingConfirmation | null>(null)
@@ -190,19 +189,15 @@ export function BackupPage({
     if (!previewSnapshotId) {
       setPreview(null)
       setPreviewError('')
-      setPreviewLoading(false)
       return
     }
     let disposed = false
     setPreview(null)
     setPreviewError('')
-    setPreviewLoading(true)
     void api.backupRestorePreview(previewSnapshotId).then(result => {
       if (!disposed) setPreview(result)
     }).catch(reason => {
       if (!disposed) setPreviewError(reason instanceof Error ? reason.message : String(reason))
-    }).finally(() => {
-      if (!disposed) setPreviewLoading(false)
     })
     return () => { disposed = true }
   }, [api, previewSnapshotId, previewRetry])
