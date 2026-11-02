@@ -132,6 +132,9 @@ export class DefaultHermesLiveService {
   }
 
   async snapshot(runtimeSessionId: string, _since?: string, window?: LiveSnapshotWindow): Promise<LiveSnapshot> {
+    // Hermes REST exposes bounded offset pages, not an atomic after-message-id
+    // cursor. Deliberately omit leafId: the shared recovery path then rebases
+    // the latest bounded native window instead of pretending to be incremental.
     const runtime = this.runtime(runtimeSessionId)
     await this.refreshActiveRun(runtime)
     const history = runtime.nativeSessionId

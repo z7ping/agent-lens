@@ -125,3 +125,59 @@ test('reasoning previews are released before tools when they differ from assista
   assert.deepEqual(result.map(item => item?.type),
     ['text.delta', 'reasoning.end', 'message.end', 'tool.start', 'text.end', 'completed'])
 })
+
+test('Hermes reasoning deltas with missing native ids share one stable reasoning block', () => {
+  const result = events(
+    { event: 'reasoning.delta', delta: 'Inspect ' },
+    { event: 'reasoning.delta', delta: 'logs' },
+    { event: 'message.delta', delta: 'Found issue' },
+    { event: 'run.completed', output: 'Found issue' },
+  )
+  assert.deepEqual(result.map(item => item?.type),
+    ['reasoning.delta', 'reasoning.delta', 'text.delta', 'text.end', 'completed'])
+  assert.equal(result[0] && 'messageId' in result[0] ? result[0].messageId : '',
+    result[1] && 'messageId' in result[1] ? result[1].messageId : '')
+  assert.notEqual(result[0] && 'messageId' in result[0] ? result[0].messageId : '',
+    result[2] && 'messageId' in result[2] ? result[2].messageId : '')
+})
+
+test('Hermes synthesizes an unambiguous tool identity when upstream omits the call id', () => {
+  const result = events(
+    { event: 'tool.started', tool: 'terminal', preview: 'pwd' },
+    { event: 'tool.started', tool: 'terminal', preview: 'ls' },
+    { event: 'tool.completed', tool: 'terminal', preview: 'done pwd' },
+    { event: 'tool.failed', tool: 'terminal', preview: 'failed ls' },
+    { event: 'run.completed', output: 'Report' },
+  )
+  assert.deepEqual(result.map(item => item?.type),
+    ['tool.start', 'tool.start', 'tool.end', 'tool.end', 'text.end', 'completed'])
+  const callIds = result.slice(0, 4).map(item => item && 'callId' in item ? item.callId : '')
+  assert.ok(callIds[0])
+  assert.notEqual(callIds[0], callIds[1])
+  assert.deepEqual(callIds.slice(2), callIds.slice(0, 2))
+})
+
+test('Hermes preserves official tool call ids when present', () => {
+  const result = events(
+    { event: 'tool.started', tool: 'terminal', tool_call_id: 'native-1' },
+    { event: 'tool.completed', tool: 'terminal', tool_call_id: 'native-1' },
+    { event: 'run.completed' },
+  )
+  assert.equal(result[0] && 'callId' in result[0] ? result[0].callId : '', 'native-1')
+  assert.equal(result[1] && 'callId' in result[1] ? result[1].callId : '', 'native-1')
+})
+
+test('Hermes keeps separate thinking blocks across intermediate tool boundaries', () => {
+  const result = events(
+    { event: 'reasoning.delta', delta: 'Before tool' },
+    { event: 'tool.started', tool: 'terminal' },
+    { event: 'tool.completed', tool: 'terminal' },
+    { event: 'reasoning.delta', delta: 'After tool' },
+    { event: 'run.completed', output: 'Answer' },
+  )
+  const first = result[0] && 'messageId' in result[0] ? result[0].messageId : ''
+  const second = result[3] && 'messageId' in result[3] ? result[3].messageId : ''
+  assert.ok(first)
+  assert.ok(second)
+  assert.notEqual(first, second)
+})

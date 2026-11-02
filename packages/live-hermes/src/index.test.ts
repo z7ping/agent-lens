@@ -145,3 +145,34 @@ test('Hermes Live passes native bounded snapshot windows through the existing Li
     await service.dispose()
   }
 })
+
+test('Hermes opts into shared bounded recovery without claiming an unsupported incremental leaf', async () => {
+  assert.ok(hermesLiveManifest.capabilities?.includes('recovery'))
+  const windows: unknown[] = []
+  const client = {
+    createSession: async () => 'native-session',
+    sessionMessagesPage: async (_sessionId: string, window: unknown) => {
+      windows.push(window)
+      return {
+        entries: [{ id: '10', role: 'assistant', content: 'Persisted reply' }],
+        page: { hasEarlier: true, before: 'hermes-history:latest:1', hasLater: false },
+      }
+    },
+  } as unknown as HermesApiClient
+  const service = new DefaultHermesLiveService(client)
+  try {
+    const runtime = await service.start({})
+    const initial = await service.snapshot(runtime.runtimeSessionId, undefined,
+      { edge: 'latest', limit: 120 })
+    const recovered = await service.snapshot(runtime.runtimeSessionId, undefined,
+      { limit: 120 })
+    assert.deepEqual(windows, [
+      { edge: 'latest', limit: 120 }, { limit: 120 },
+    ])
+    assert.deepEqual(initial.entries, recovered.entries)
+    assert.equal(recovered.leafId, undefined)
+    assert.equal(recovered.page?.hasEarlier, true)
+  } finally {
+    await service.dispose()
+  }
+})

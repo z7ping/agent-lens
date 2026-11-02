@@ -78,14 +78,19 @@ test('Hermes history traverses newest, oldest and both directions using bounded 
     assert.equal(last.entries.length, 120)
     assert.equal((last.entries[0] as { id: string }).id, '148')
     assert.equal((last.entries.at(-1) as { id: string }).id, '267')
-    assert.equal(last.page.before, 'hermes-history:latest:120')
+    assert.equal(last.page.before, 'hermes-history:latest:120:148')
     assert.equal(last.page.hasEarlier, true)
     assert.equal(last.page.hasLater, false)
 
+    // New rows arriving after we captured the tail must not shift the
+    // older-page boundary or cause a duplicated/missing history interval.
+    raw.push(...Array.from({ length: 5 }, (_, i) => ({
+      id: 268 + i, role: 'assistant', content: `new message ${i}`,
+    })))
     const middle = await client.sessionMessagesPage('session-1', { before: last.page.before, limit: 120 })
     assert.equal((middle.entries[0] as { id: string }).id, '28')
     assert.equal((middle.entries.at(-1) as { id: string }).id, '147')
-    assert.equal(middle.page.after, 'hermes-history:latest:119')
+    assert.equal(middle.page.after, 'hermes-history:latest:124:147')
     const first = await client.sessionMessagesPage('session-1', { before: middle.page.before, limit: 120 })
     assert.equal(first.entries.length, 27)
     assert.equal((first.entries[0] as { id: string }).id, '1')
@@ -103,7 +108,7 @@ test('Hermes history traverses newest, oldest and both directions using bounded 
     assert.equal((next.entries[0] as { id: string }).id, '121')
     assert.equal((next.entries.at(-1) as { id: string }).id, '240')
     const newest = await client.sessionMessagesPage('session-1', { after: next.page.after, limit: 120 })
-    assert.equal(newest.entries.length, 27)
+    assert.equal(newest.entries.length, 32)
     assert.equal(newest.page.hasLater, false)
     const backward = await client.sessionMessagesPage('session-1', { before: newest.page.before, limit: 120 })
     assert.deepEqual(backward.entries.map(item => (item as { id: string }).id),
@@ -113,6 +118,48 @@ test('Hermes history traverses newest, oldest and both directions using bounded 
       const n = Number(new URLSearchParams(value).get('limit'))
       return n >= 1 && n <= 120
     }))
+  } finally {
+    globalThis.fetch = saved
+  }
+})
+
+test('Hermes replay.truncated preserves the official open SSE stream and emits later terminal events', async () => {
+  const original = globalThis.fetch
+  const frames = [
+    'data: {"event":"replay.truncated","run_id":"run-1","oldest_retained_seq":502,"requested_seq":200}',
+    '', 'id: 502',
+    'data: {"event":"message.delta","run_id":"run-1","seq":502,"delta":"Recovered tail"}',
+    '', 'id: 503',
+    'data: {"event":"run.completed","run_id":"run-1","seq":503,"output":"Recovered tail"}',
+    '', '',
+  ].join('\n')
+  try {
+    let requests = 0
+    globalThis.fetch = (async () => {
+      requests += 1
+      return new Response(frames, { status: 200 })
+    }) as typeof fetch
+    const client = new HermesApiClient({ apiUrl: 'http://127.0.0.1:8642', apiKey: 'test' })
+    const seen: Record<string, unknown>[] = []
+    for await (const event of client.runEvents('run-1')) seen.push(event)
+    assert.deepEqual(seen.map(event => event.event), ['replay.truncated', 'message.delta', 'run.completed'])
+    assert.equal(requests, 1)
+  } finally {
+    globalThis.fetch = original
+  }
+})
+
+test('Hermes anchored latest paging stops safely if a boundary row disappeared', async () => {
+  const saved = globalThis.fetch
+  try {
+    globalThis.fetch = (async () => new Response(JSON.stringify({ data: [] }),
+      { status: 200, headers: { 'Content-Type': 'application/json' } })) as typeof fetch
+    const client = new HermesApiClient({ apiUrl: 'http://127.0.0.1:8642', apiKey: 'test' })
+    await assert.rejects(
+      client.sessionMessagesPage('session-1',
+        { before: 'hermes-history:latest:120:missing-anchor', limit: 120 }),
+      /boundary is no longer available/,
+    )
   } finally {
     globalThis.fetch = saved
   }
