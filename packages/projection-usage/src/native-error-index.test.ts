@@ -5,7 +5,7 @@ import { NativeErrorIndexAccumulator } from './native-error-index'
 
 function observation(payload:unknown,kind:'tool.result'|'session.lifecycle'='tool.result'):ObservationCandidate {
   return {kind,occurredAt:'2026-11-02T00:00:00Z',capturedAt:'2026-11-02T00:00:00Z',
-    identityHints:{},payload}
+    identityHints:{nativeSessionId:'session'},payload}
 }
 
 test('all explicit failures are retained; successes and keyword-only errors are excluded',()=>{
