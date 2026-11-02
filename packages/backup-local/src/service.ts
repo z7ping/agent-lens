@@ -312,6 +312,28 @@ async function* walkFiles(root: string, excludedVault?: string): AsyncIterable<{
   }
 }
 
+/** Restore preview must not dereference a symlinked path component. */
+async function restoreTargetState(root: string, sourceRelativePath: string): Promise<'file' | 'missing' | 'symlink' | 'other'> {
+  const base = await pathState(root)
+  if (base !== 'directory') return base === 'symlink' ? 'symlink' : base === 'missing' ? 'missing' : 'other'
+  const segments = sourceRelativePath.split('/')
+  let current = root
+  for (let index = 0; index < segments.length; index += 1) {
+    current = join(current, segments[index]!)
+    let metadata
+    try {
+      metadata = await lstat(current)
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') return 'missing'
+      return 'other'
+    }
+    if (metadata.isSymbolicLink()) return 'symlink'
+    if (index < segments.length - 1 && !metadata.isDirectory()) return 'other'
+    if (index === segments.length - 1) return metadata.isFile() ? 'file' : 'other'
+  }
+  return 'other'
+}
+
 function sensitiveReason(path: string, kinds: Set<BackupAssetKind>, bytes: Uint8Array): BackupExcludedEntry['reason'] | null {
   if (isSensitiveFileName(path)) return 'sensitive-file-name'
   if (containsHighConfidenceSecret(bytes)) return 'sensitive-content'
@@ -1182,13 +1204,13 @@ export class LocalBackupService implements BackupService {
         items.push({ sourceId: file.sourceId, archivePath: file.archivePath, kinds: file.kinds, status: 'blocked', reason: '恢复目标超出智能体数据目录' })
         continue
       }
-      const state = await pathState(targetPath)
+      const state = await restoreTargetState(root, sourceRelativePath)
       if (state === 'missing') {
         items.push({ sourceId: file.sourceId, archivePath: file.archivePath, targetPath, kinds: file.kinds, status: 'missing' })
         continue
       }
       if (state !== 'file') {
-        items.push({ sourceId: file.sourceId, archivePath: file.archivePath, targetPath, kinds: file.kinds, status: 'blocked', reason: state === 'symlink' ? '目标是符号链接' : '目标不是普通文件' })
+        items.push({ sourceId: file.sourceId, archivePath: file.archivePath, targetPath, kinds: file.kinds, status: 'blocked', reason: state === 'symlink' ? '恢复目标路径包含符号链接' : '目标不是普通文件或不可访问' })
         continue
       }
       try {
