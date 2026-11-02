@@ -305,6 +305,21 @@ export function BackupPage({
     setSuccess('')
     try {
       const result = await api.createBackup({ sourceIds: selectedSources, kinds: selectedKinds })
+      // The UI promises "create and verify". Run the real integrity check,
+      // and keep an unverified/failed snapshot visible in history for recovery.
+      setCreateOpen(false)
+      await refresh()
+      let checked: BackupVerifyResponseDto
+      try {
+        checked = await api.verifyBackup(result.snapshot.id)
+      } catch (reason) {
+        throw new Error(t('create.verifyNotCompleted', {
+          id: result.snapshot.id,
+          error: reason instanceof Error ? reason.message : String(reason),
+        }))
+      }
+      setVerification(current => ({ ...current, [result.snapshot.id]: checked }))
+      if (!checked.valid) throw new Error(t('create.verifyFailed', { id: result.snapshot.id }))
       const bytes = result.snapshot.files.reduce((sum, file) => sum + file.size, 0)
       const excluded = result.snapshot.excluded.length
       setSuccess(t('snapshotCreated', {

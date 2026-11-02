@@ -165,3 +165,14 @@ test('Backup 响应式不通过横向表格或滚动兜底核心资产信息', (
   assert.match(backupCss, /@media \(max-width: 767\.98px\)[\s\S]*?\.backup-agent-group \{[\s\S]*?grid-template-columns: 1fr;/)
   assert.match(backupCss, /\.backup-create-footer \{[\s\S]*?flex-direction: column;/)
 })
+
+
+test('创建并校验必须执行完整性校验，失败时不得报告成功', () => {
+  const createAt = backupPage.indexOf('const result = await api.createBackup(')
+  const verifyAt = backupPage.indexOf('checked = await api.verifyBackup(result.snapshot.id)')
+  const successAt = backupPage.indexOf("setSuccess(t('snapshotCreated'")
+  assert.ok(createAt >= 0 && verifyAt > createAt && successAt > verifyAt)
+  assert.match(backupPage, /setVerification\(current => \(\{ \.\.\.current, \[result\.snapshot\.id\]: checked \}\)\)/)
+  assert.match(backupPage, /if \(!checked\.valid\) throw new Error\(t\('create\.verifyFailed'/)
+  assert.match(backupPage, /setCreateOpen\(false\)[\s\S]*?await refresh\(\)[\s\S]*?checked = await api\.verifyBackup/)
+})
