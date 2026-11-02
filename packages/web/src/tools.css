@@ -139,6 +139,11 @@
 .tool-table .tool-table-sort:hover { color: var(--al-ink); }
 .tool-native-summary { display: flex; flex-direction: column; gap: 6px; }
 .tool-native-summary small { color: var(--al-muted); font-size: 12px; line-height: 1.6; }
+.tool-table .tool-native-observed-group th {
+  border-top: 1px solid var(--al-line);
+  text-align: left;
+  font-weight: 600;
+}
 .tool-table tbody tr[tabindex] { cursor: pointer; }
 .tool-table tbody tr[tabindex]:hover td { background: var(--al-soft-2); }
 .tool-table .tool-table-sort:focus-visible,
