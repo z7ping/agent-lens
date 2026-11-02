@@ -187,3 +187,87 @@ test('indexes once, reuses content-addressed blobs, and keeps legacy snapshots c
     await rm(root, { recursive: true, force: true })
   }
 })
+
+test('empty explicit scopes never back up every source and an in-root vault never indexes itself', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'agentlens-backup-vault-'))
+  const configRoot = join(root, 'config')
+  const dataRoot = join(root, 'data')
+  const vault = join(dataRoot, 'agentlens-backups')
+  try {
+    await mkdir(dataRoot, { recursive: true })
+    await mkdir(configRoot, { recursive: true })
+    await writeFile(join(dataRoot, 'session.jsonl'), '{"type":"session"}\n', 'utf8')
+    const deps = fixtureServices(configRoot, dataRoot)
+    const service = new LocalBackupService(deps.storage, deps.sources, deps.identity, { vaultPath: vault })
+    await assert.rejects(service.createSnapshot({ sourceIds: [], kinds: ['session'] }), /备份范围为空/)
+    await assert.rejects(service.createSnapshot({ sourceIds: ['test-source'], kinds: [] }), /备份范围为空/)
+    await assert.rejects(service.refreshIndex({ sourceIds: [] }), /备份扫描范围为空/)
+    await service.refreshIndex()
+    const first = await service.createSnapshot({ sourceIds: ['test-source'], kinds: ['session'] })
+    assert.equal(first.files.length, 1)
+    assert.equal((await service.verifySnapshot(first.id)).valid, true)
+    await service.refreshIndex()
+    const second = await service.createSnapshot({ sourceIds: ['test-source'], kinds: ['session'] })
+    assert.equal(second.files.length, 1)
+    assert.equal(second.files[0]?.sha256, first.files[0]?.sha256)
+    const inventory = JSON.parse(await readFile(join(vault, 'inventory-v1.json'), 'utf8')) as {
+      files: Array<{ originalPath: string }>
+    }
+    assert.deepEqual(inventory.files.map(file => file.originalPath), [join(dataRoot, 'session.jsonl')])
+  } finally {
+    await rm(root, { recursive: true, force: true })
+  }
+})
+
+test('restore preview matches each installation and blocks ambiguous cross-installation targets', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'agentlens-backup-restore-targets-'))
+  const first = join(root, 'one')
+  const second = join(root, 'two')
+  const third = join(root, 'three')
+  const vault = join(root, 'vault')
+  let detectedRoots = [first, second]
+  try {
+    for (const [dir, label] of [[first, 'first'], [second, 'second'], [third, 'third']]) {
+      await mkdir(dir, { recursive: true })
+      await writeFile(join(dir, 'session.jsonl'), label + '\n')
+    }
+    const deps = fixtureServices(join(root, 'config'), first)
+    const baseSource = deps.sources.list()[0]!
+    const sources = { list: () => [{
+      ...baseSource,
+      async detect() {
+        return detectedRoots.map(dataRoot => ({
+          sourceId: 'test-source', productId: 'test-product', dataRoot,
+          confidence: 'exact' as const,
+        }))
+      },
+      discoverAssets: undefined,
+    }] } as unknown as SourceService
+    const identity = {
+      resolveHost: deps.identity.resolveHost.bind(deps.identity),
+      async resolveInstallation(input: { dataRoot?: string }) {
+        const dataRoot = input.dataRoot!
+        return {
+          id: dataRoot === first ? 'installation-one' : dataRoot === second ? 'installation-two' : 'installation-three',
+          hostId: 'host-test', productId: 'test-product', dataRoot,
+          firstSeenAt: '2026-08-22T00:00:00.000Z',
+          lastSeenAt: '2026-08-22T00:00:00.000Z',
+        }
+      },
+    } as unknown as IdentityService
+    const service = new LocalBackupService(deps.storage, sources, identity, { vaultPath: vault })
+    await service.refreshIndex()
+    const snapshot = await service.createSnapshot({ sourceIds: ['test-source'], kinds: ['session'] })
+    assert.equal(snapshot.files.length, 2)
+    const firstPreview = await service.previewRestore(snapshot.id)
+    assert.equal(firstPreview.unchanged, 2, 'each installation must resolve to its own root')
+    assert.equal(firstPreview.modified, 0)
+    detectedRoots = [first, third]
+    const changed = await service.previewRestore(snapshot.id)
+    assert.equal(changed.unchanged, 1)
+    assert.equal(changed.blocked, 1)
+    assert.match(changed.items.find(item => item.archivePath.includes('installation-two'))?.reason ?? '', /多个安装实例/)
+  } finally {
+    await rm(root, { recursive: true, force: true })
+  }
+})
