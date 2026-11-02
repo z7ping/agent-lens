@@ -20,7 +20,7 @@ function first(row:Record<string,unknown>,keys:readonly string[]):string|undefin
 }
 function redact(value:string):string {
   // A short diagnostic is not permission to retain credentials or transcript text.
-  return value
+  return value.slice(0,8192)
     .replace(/(?:bearer\s+)[a-z0-9._~+/-]+/gi,'Bearer [redacted]')
     .replace(/(?:password|token|api[_-]?key|secret)\s*[:=]\s*[^\s,;]+/gi,'[redacted]')
     .replace(/\b(?:sk|ghp|gho|github_pat)_[a-z0-9_-]{12,}\b/gi,'[redacted]')
