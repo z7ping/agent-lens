@@ -140,7 +140,7 @@
   border-radius: 4px;
   background: var(--al-soft-2);
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  font-size: .9em;
+  font-size: var(--text-caption);
 }
 .live-md-link { color: var(--al-accent); text-decoration: underline; text-underline-offset: 2px; }
 .live-md-bold { font-weight: 700; }
