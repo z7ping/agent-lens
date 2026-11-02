@@ -36,6 +36,8 @@ export async function handleNativeErrorIndexRequest(
   const projectId=optional('projectId',256)
   const toolName=optional('toolName',128)
   const search=optional('q',128)
+  const fingerprint=optional('fingerprint',64)
+  if(fingerprint&&!/^[0-9a-f]{64}$/.test(fingerprint))throw badRequest('Invalid fingerprint')
   const from=optional('from',40)
   const to=optional('to',40)
   for(const date of [from,to])if(date&&!Number.isFinite(Date.parse(date)))throw badRequest('Invalid date')
