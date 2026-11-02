@@ -50,6 +50,32 @@ test('global error radar reuses one indexed overview and keeps the single-Agent 
   assert.doesNotMatch(css, /!important/)
 })
 
+test('radar uses a shared multi-line Button tile rather than overriding fixed Button height', async () => {
+  const [insights, domainCss, primitives, sharedCss, globalCss] = await Promise.all([
+    source('./InsightsPage.tsx'),
+    source('../insights.css'),
+    source('../components/ui/Primitives.tsx'),
+    source('../components/ui/ui-primitives.css'),
+    source('../styles.css'),
+  ])
+  assert.match(insights, /<Button key=\{agent\.sourceId\} variant="tile"/)
+  assert.match(primitives, /export type ButtonVariant = [^\n]*'tile'/)
+  assert.match(globalCss, /\.btn \{[\s\S]*?height:\s*30px;/)
+  const tileRule = sharedCss.match(/\.btn\.tile \{([^}]*)\}/)?.[1]
+  assert.ok(tileRule, 'a multi-line Button must own its geometry')
+  for (const expected of [
+    /height:\s*auto;/,
+    /min-height:\s*88px;/,
+    /flex-direction:\s*column;/,
+    /align-items:\s*stretch;/,
+    /white-space:\s*normal;/,
+  ]) assert.match(tileRule, expected)
+  assert.match(sharedCss, /\.btn\.tile\[aria-pressed='true'\]/)
+  assert.doesNotMatch(domainCss, /\.insight-agent-radar-item\s*\{[^}]*\}/)
+  assert.doesNotMatch(domainCss, /\.insight-agent-radar-item\.is-selected\s*\{/)
+  assert.match(domainCss, /@media \(max-width: 767\.98px\) \{[\s\S]*?\.insight-agent-radar-grid \{/)
+})
+
 test('unverified native tool observations are a separate lower-bound group', async () => {
   const tools = await source('./ToolsPage.tsx')
   assert.match(tools, /if\(left\.partial!==right\.partial\)/)
