@@ -166,3 +166,32 @@ test('slim metrics are scoped by project context, never legacy SQL observations'
     },4),[])
   }finally{await slim.close()}
 })
+
+
+test('native trend groups certified sessions by last activity UTC day, not event timestamps',async()=>{
+  const storage=await createFixture()
+  try{
+    for(const [id,lastActivityAt,coverage] of [
+      ['early','2026-10-25T11:00:00Z','complete'],
+      ['later','2026-10-26T22:00:00Z','complete'],
+      ['partial','2026-10-26T23:00:00Z','partial'],
+    ] as const){
+      await storage.nativeSessionCatalog.upsert({...location(id),lastActivityAt})
+      assert.equal(await storage.nativeSessionMetrics.replace(metric(id,coverage)),true)
+    }
+    const q={sourceId:source,parserVersion,coverageCertified:true,includeTrend:true}
+    const result=await storage.nativeSessionMetrics.overview(q)
+    assert.deepEqual(result.trend,[
+      {date:'2026-10-25',sessionCount:1,interactionCount:5,toolCallCount:3,errorCount:1},
+      {date:'2026-10-26',sessionCount:1,interactionCount:5,toolCallCount:3,errorCount:1},
+    ])
+    assert.equal(result.partialSessions,1)
+    assert.equal(result.totals.toolCallCount,6,'partial does not inflate verified totals')
+    assert.equal((await storage.nativeSessionMetrics.overview({
+      sourceId:source,parserVersion,coverageCertified:true,
+    })).trend,undefined,'no extra SQL trend for regular tool metrics')
+    assert.deepEqual((await storage.nativeSessionMetrics.overview({
+      ...q,coverageCertified:false,
+    })).trend,[],'revoked certification must hide all verified trend days')
+  }finally{await storage.close()}
+})
