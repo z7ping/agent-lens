@@ -44,6 +44,9 @@ export function BackupRestorePreviewWorkbench({
     [sourceTree, scope, query, status],
   )
   const matchingCount = visibleTree.reduce((sum, node) => sum + previewCount(node.counts), 0)
+  // A single source is already identified in the heading. Show its folders
+  // directly instead of forcing users through an extra root disclosure.
+  const displayedRoots = visibleTree.length === 1 ? visibleTree[0]!.children : visibleTree
   const changed = preview.blocked + preview.modified + preview.missing
   // Automatic expansion is bounded by the whole visible result, not per-directory.
   // Thousands of small folders must not render thousands of rows at once.
@@ -131,7 +134,10 @@ export function BackupRestorePreviewWorkbench({
       </Button>
       <div className="backup-preview-workbench-heading">
         <h2>{t('preview.title')}</h2>
-        <span title={preview.snapshotId}>{snapshot ? new Date(snapshot.createdAt).toLocaleString(locale) : preview.snapshotId}</span>
+        <span title={preview.snapshotId}>
+          {sourceTree.length === 1 ? `${agentLabel(sourceTree[0]!.sourceId)} · ` : ''}
+          {snapshot ? new Date(snapshot.createdAt).toLocaleString(locale) : preview.snapshotId}
+        </span>
       </div>
       <StatusBadge tone={preview.blocked ? 'warning' : 'success'}>
         {preview.blocked ? t('preview.blocked', { count: preview.blocked }) : t('preview.passed')}
@@ -172,7 +178,7 @@ export function BackupRestorePreviewWorkbench({
 
     {visibleTree.length ? <div className="backup-preview-tree" role="tree" aria-label={t('preview.files')}>
       <div className="backup-preview-tree-result">{t('preview.matching', { count: matchingCount.toLocaleString(locale) })}</div>
-      {visibleTree.map(root => renderNode(root, 0))}
+      {displayedRoots.map(root => renderNode(root, 0))}
     </div> : <div className="backup-preview-tree-empty" role="status">
       <UiIcon name={query.trim() ? 'search' : 'status-success'} size={20}/>
       <strong>{query.trim() ? t('preview.noMatches') : changed === 0 && scope === 'changes' ? t('preview.noDifferences') : t('preview.noMatches')}</strong>
