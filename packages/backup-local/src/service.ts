@@ -906,7 +906,7 @@ export class LocalBackupService implements BackupService {
     }
   }
 
-  private async storeBlob(hash: string, bytes: Buffer): Promise<void> {
+  private async storeBlob(hash: string, bytes: Buffer, repairCorrupt = false): Promise<void> {
     const path = this.blobPath(hash)
     await mkdir(join(path, '..'), { recursive: true })
     try {
@@ -917,7 +917,18 @@ export class LocalBackupService implements BackupService {
     }
     const existing = await readFile(path)
     if (existing.byteLength !== bytes.byteLength || sha256(existing) !== hash) {
-      throw new Error(`备份内容库存在损坏或 Hash 冲突：${hash}`)
+      // A confirmed import can safely repair a content-addressed blob because
+      // the incoming bytes were already verified against this exact hash.
+      if (!repairCorrupt || sha256(bytes) !== hash) {
+        throw new Error(`备份内容库存在损坏或 Hash 冲突：${hash}`)
+      }
+      const replacement = `${path}.${randomUUID()}.repair.tmp`
+      try {
+        await writeFile(replacement, bytes, { flag: 'wx' })
+        await rename(replacement, path)
+      } finally {
+        await rm(replacement, { force: true })
+      }
     }
   }
 
@@ -1146,8 +1157,17 @@ export class LocalBackupService implements BackupService {
     await mkdir(this.blobsPath, { recursive: true })
     const existing = await this.getSnapshot(manifest.id)
     if (existing) {
-      if (existing.manifestSha256 === manifest.manifestSha256) return existing
-      throw new Error(`本地已存在同名但内容不同的快照：${manifest.id}`)
+      if (existing.manifestSha256 !== manifest.manifestSha256) {
+        throw new Error(`本地已存在同名但内容不同的快照：${manifest.id}`)
+      }
+      // Identical metadata does not prove that the existing content store is
+      // intact. Re-import must repair missing/damaged blobs rather than no-op.
+      for (const file of manifest.files) {
+        await this.storeBlob(file.sha256, fileMap.get(file.archivePath)!, true)
+      }
+      const verified = await this.verifySnapshot(manifest.id)
+      if (!verified.valid) throw new Error('重新导入后快照完整性校验仍失败')
+      return existing
     }
     const stagePath = join(this.snapshotsPath, `${manifest.id}.tmp`)
     const finalPath = join(this.snapshotsPath, manifest.id)
@@ -1155,7 +1175,7 @@ export class LocalBackupService implements BackupService {
     await mkdir(stagePath, { recursive: true })
     try {
       for (const file of manifest.files) {
-        await this.storeBlob(file.sha256, fileMap.get(file.archivePath)!)
+        await this.storeBlob(file.sha256, fileMap.get(file.archivePath)!, true)
       }
       await writeFile(join(stagePath, 'manifest.json'), `${JSON.stringify(manifest, null, 2)}\n`, { flag: 'wx' })
       await rename(stagePath, finalPath)
