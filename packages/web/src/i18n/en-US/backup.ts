@@ -241,6 +241,9 @@ export const englishBackupMessages: LocaleMessagesDto = {
       purposeDescription: 'AgentLens 1.0 does not delete, move, or clean original {{agent}} data.',
     },
     preview: {
+      checking: "Checking",
+      loadingDetail: "Verifying snapshot integrity and comparing current files (about {{count}} snapshot files)",
+      longRunning: "Large snapshots can take longer. Still awaiting the result; you can return to snapshots.",
       back: "Back to snapshots",
       loading: "Checking snapshot differences",
       archiveGroup: "Archive path (target unresolved)",

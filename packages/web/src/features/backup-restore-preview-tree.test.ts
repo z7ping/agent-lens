@@ -62,3 +62,40 @@ test('thousands of unchanged files yield empty default differences and complete 
   assert.equal(filterPreviewTree(roots, 'changes', '').length, 0)
   assert.equal(leafNames(filterPreviewTree(roots, 'all', '')).length, 2495)
 })
+
+
+test('shared directory ancestry is compressed into one visible path without dropping leaf evidence', () => {
+  const rows = [
+    file('C:\\Users\\Demo\\.codex\\plugins\\cache\\entry-one.json', 'modified'),
+    file('C:\\Users\\Demo\\.codex\\plugins\\cache\\entry-two.json', 'unchanged'),
+  ]
+  const roots = filterPreviewTree(buildPreviewTree(rows), 'all', '')
+  const source = roots[0]!
+  assert.equal(source.children.length, 1)
+  const shared = source.children[0]!
+  assert.equal(shared.kind, 'directory')
+  assert.equal(shared.name, 'C:/Users/Demo/.codex/plugins/cache')
+  assert.equal(shared.counts.modified, 1)
+  assert.equal(shared.counts.unchanged, 1)
+  assert.deepEqual(leafNames([shared]).sort(), ['entry-one.json', 'entry-two.json'])
+  assert.equal(shared.children[0]!.kind, 'file')
+})
+
+test('different branches stay distinct, and an unresolved archive path remains explicitly marked', () => {
+  const rows: BackupRestorePreviewItemDto[] = [
+    file('C:\\Users\\Demo\\.codex\\hooks.json', 'modified'),
+    file('C:\\Users\\Demo\\.codex\\plugins\\cache\\entry-one.json', 'unchanged'),
+    { sourceId: 'codex', archivePath: 'settings/config.json', kinds: ['config'], status: 'blocked', reason: 'target unresolved' },
+  ]
+  const roots = filterPreviewTree(buildPreviewTree(rows), 'all', '')
+  const source = roots[0]!
+  const archive = source.children.find(node => node.name === '@archive')
+  assert.ok(archive)
+  assert.equal(archive.kind, 'directory')
+  assert.equal(archive.children[0]!.name, 'settings')
+  const host = source.children.find(node => node.kind === 'directory' && node.name.includes('.codex'))
+  assert.ok(host)
+  assert.equal(host.children.length, 2)
+  assert.equal(host.children.find(node => node.kind === 'directory')!.name, 'plugins/cache')
+  assert.equal(source.counts.blocked, 1)
+})

@@ -241,6 +241,9 @@ export const chineseBackupMessages: LocaleMessagesDto = {
       purposeDescription: 'AgentLens 1.0 不删除、不移动、不清理 {{agent}} 的原始数据。',
     },
     preview: {
+      checking: "正在检查",
+      loadingDetail: "正在校验备份完整性并比对当前文件（快照约 {{count}} 个文件）",
+      longRunning: "文件较多时检查可能较慢。当前仍在等待结果，可返回备份记录。",
       back: "返回备份记录",
       loading: "正在检查快照差异",
       archiveGroup: "归档路径（目标未确定）",

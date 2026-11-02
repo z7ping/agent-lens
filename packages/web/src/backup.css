@@ -772,7 +772,7 @@
 .backup-preview-tree-folder-toggle:hover { background: var(--al-soft-2); }
 .backup-preview-tree-folder-toggle:focus-visible { outline: 2px solid var(--al-accent); outline-offset: -2px; }
 .backup-preview-tree-folder-toggle svg { flex: 0 0 auto; color: var(--al-muted); }
-.backup-preview-tree-folder-name { min-width: 0; overflow: hidden; font-size: 13px; font-weight: 640; text-overflow: ellipsis; white-space: nowrap; }
+.backup-preview-tree-folder-name { min-width: 0; flex: 1 1 auto; font-size: 13px; font-weight: 640; overflow-wrap: anywhere; }
 .backup-preview-tree-folder-count { margin-left: auto; color: var(--al-muted); font-size: 12px; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .backup-preview-tree-folder-diff { color: var(--al-warning); font-size: 12px; white-space: nowrap; }
 .backup-preview-tree-children { min-width: 0; margin-left: 15px; padding-left: 9px; border-left: 1px solid var(--al-line); }
@@ -788,7 +788,10 @@
 .backup-preview-tree-empty { display: flex; min-height: 200px; flex-direction: column; align-items: center; justify-content: center; gap: 10px; padding: 24px; color: var(--al-muted); text-align: center; }
 .backup-preview-tree-empty strong { color: var(--al-ink-2); font-size: 13px; }
 .backup-preview-workbench-note { margin: 0; padding: 11px 16px; border-top: 1px solid var(--al-line); color: var(--al-muted); font-size: 12px; line-height: 1.6; }
-.backup-preview-load-state { display: grid; justify-items: start; gap: 12px; }
+.backup-preview-load-state { display: flex; min-width: 0; flex-direction: column; align-items: stretch; gap: 12px; padding: 16px 0; }
+.backup-preview-load-state > .btn { align-self: flex-start; }
+.backup-preview-load-state .operation-progress { width: 100%; }
+.backup-preview-wait-hint { color: var(--al-muted); font-size: 12px; line-height: 1.55; }
 
 /* 创建/导入确认：Dialog 负责外壳，只保留业务事实布局。 */
 .backup-confirm-overlay .ui-overlay-panel { width: min(100%, 500px); }
