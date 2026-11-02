@@ -297,7 +297,8 @@ export function ToolsPage({ model, toolbarHost }: { model: AgentLensClientModel;
     ?selectedNativeTool:null
   const activeLegacyTool=detailParams.get('kind')==='legacy'
     &&selectedToolKey===detailParams.get('tool')?selectedTool:null
-  const readingDetail=Boolean(activeNativeTool||activeLegacyTool)
+  const showingFailures=detailParams.get('view')==='failures'
+  const readingDetail=Boolean(activeNativeTool||activeLegacyTool||showingFailures)
   const toggleNativeSort=(key:NativeSortKey)=>{
     setNativeSort(current=>current.key===key
       ?{key,direction:current.direction==='descending'?'ascending':'descending'}
@@ -522,6 +523,15 @@ export function ToolsPage({ model, toolbarHost }: { model: AgentLensClientModel;
         </>}
       </div>}
 
+      {showingFailures && <section className="page-content tools-content tool-detail-content">
+        <header className="tool-detail-header">
+          <Button size="small" onClick={closeToolDetail}><UiIcon name="arrow-left" size={14}/>{t('page.backToTools')}</Button>
+          <h2>{t('page.failureScene')}</h2>
+        </header>
+        <div className="tool-drill-body">
+          <NativeFailureExamples filters={usage.filters}/>
+        </div>
+      </section>}
       {activeNativeTool && <section className="page-content tools-content tool-detail-content">
         <header className="tool-detail-header">
           <Button size="small" onClick={closeToolDetail}><UiIcon name="arrow-left" size={14}/>{t('page.backToTools')}</Button>
