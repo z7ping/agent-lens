@@ -19,6 +19,7 @@ interface SidebarFilterDisclosureProps {
   onOpen?: () => void
   showAllOption?: boolean
   agentOrderManagement?: boolean
+  allowUndetectedSelection?: boolean
 }
 
 /** 工作区左侧筛选的统一折叠壳；页面只提供筛选字段与业务状态。 */
@@ -29,6 +30,7 @@ export function SidebarFilterDisclosure({
   onOpen,
   showAllOption = false,
   agentOrderManagement = false,
+  allowUndetectedSelection = false,
 }: SidebarFilterDisclosureProps) {
   const { t } = useTranslation('common')
   const { t: tAgents } = useTranslation('agents')
@@ -120,7 +122,7 @@ export function SidebarFilterDisclosure({
           type="button"
           className={`workspace-agent-filter-option ${selected ? 'is-selected' : ''}`}
           aria-pressed={selected}
-          disabled={agentSelection.mode === 'single' && !agent.detected}
+          disabled={agentSelection.mode === 'single' && !agent.detected && !allowUndetectedSelection}
           onClick={() => selectAgent(agent.sourceId)}
         >
           <AgentLogo sourceId={agent.sourceId} size="compact"/>
