@@ -87,7 +87,7 @@ export function useReviewUrlSync({
     // Preserve this deep link while canonicalizing filter query parameters.
     const focusTurn=new URLSearchParams(search).get('focusTurn')
     const nextParams=new URLSearchParams(reviewSearchFromFilters(filters))
-    if(focusTurn && /^[1-9]\\d*$/.test(focusTurn)
+    if(focusTurn && /^[1-9]\d*$/.test(focusTurn)
       && Number.isSafeInteger(Number(focusTurn))){
       nextParams.set('focusTurn',focusTurn)
     }
