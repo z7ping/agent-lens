@@ -172,6 +172,8 @@ test('native error index retains every diagnostic, paginates and rejects stale s
     assert.equal(second.hasMore,false)
     assert.equal(new Set([...first.items,...second.items].map(x=>x.eventKey)).size,31)
     assert.equal((await storage.nativeSessionMetrics.queryErrors({...query,search:'exit'})).total,31)
+    assert.equal((await storage.nativeSessionMetrics.queryErrors({...query,fingerprint:'a'.repeat(64)})).total,31)
+    assert.equal((await storage.nativeSessionMetrics.queryErrors({...query,fingerprint:'b'.repeat(64)})).total,0)
     assert.equal((await storage.nativeSessionMetrics.queryErrors({...query,toolName:'read'})).total,0)
     await storage.nativeSessionCatalog.upsert({...location,fileSize:1001,fileMtimeMs:201})
     assert.equal((await storage.nativeSessionMetrics.queryErrors(query)).total,0,
