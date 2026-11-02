@@ -203,7 +203,7 @@ export class HermesApiClient {
     sessionId: string,
     window: LiveSnapshotWindow = {},
   ): Promise<{ entries: unknown[]; page: LiveSnapshotPage }> {
-    const query = hermesHistoryQuery(window)
+    let query = hermesHistoryQuery(window)
     const base = `/api/sessions/${encodeURIComponent(sessionId)}/messages`
     const read = async (offset: number, limit: number): Promise<unknown[]> => {
       const params = new URLSearchParams({
@@ -222,7 +222,52 @@ export class HermesApiClient {
           ? { ...record, id: String(id) } : value
       })
     }
+    if (query.order === 'latest' && query.anchorId && query.direction
+      && typeof query.anchorOffset === 'number') {
+      // Offset-from-the-newest shifts whenever Hermes appends messages. Find
+      // the exact boundary row before reading the adjacent page, instead of
+      // silently duplicating rows or skipping older facts.
+      const target = query.anchorId
+      const expected = query.anchorOffset + (query.direction === 'before' ? -1 : 1)
+      let searchOffset = Math.max(0, expected - 120)
+      let located: number | undefined
+      for (let attempt = 0; attempt < 20; attempt += 1) {
+        const chunk = await read(searchOffset, 120)
+        const found = chunk.findIndex(item => asRecord(item).id === target)
+        if (found >= 0) {
+          located = searchOffset + chunk.length - found - 1
+          break
+        }
+        if (chunk.length < 120) break
+        searchOffset += chunk.length
+      }
+      if (located === undefined) {
+        throw new HermesApiError('Hermes history boundary is no longer available; jump to latest')
+      }
+      if (query.direction === 'before') {
+        query = { ...query, offset: located + 1 }
+      } else {
+        // A newer page must not contain items older than its anchor, even if
+        // fewer than limit new messages have arrived since the last read.
+        if (located === 0) return {
+          entries: [], page: { hasEarlier: true, hasLater: false },
+        }
+        const limit = Math.min(query.limit, located)
+        query = { ...query, offset: located - limit, limit }
+      }
+    }
     const entries = await read(query.offset, query.limit)
+    if (query.order === 'latest' && query.anchorId && query.direction) {
+      // A concurrent append between boundary lookup and page read can shift
+      // the offset again; reject a stale page rather than silently skipping
+      // native facts. A subsequent navigation retries from the same row ID.
+      const boundaryOffset = query.direction === 'before'
+        ? query.offset - 1 : query.offset + query.limit
+      const boundary = await read(boundaryOffset, 1)
+      if (asRecord(boundary[0]).id !== query.anchorId) {
+        throw new HermesApiError('Hermes history changed while paging; retry from the same boundary')
+      }
+    }
     // A full last page is not proof older/newer rows exist.
     const more = entries.length === query.limit
       && (await read(query.offset + entries.length, 1)).length > 0
@@ -308,7 +353,12 @@ export class HermesApiClient {
             const parsed = this.parseSseFrame(frame)
             if (parsed) {
               if (parsed.event === 'replay.truncated') {
-                throw new HermesApiError('Hermes event replay window truncated; refresh native session history')
+                // The official Runs endpoint keeps this SSE connection open
+                // and immediately replays the retained suffix. Do not abort
+                // the live stream just because older events were evicted.
+                yield parsed
+                boundary = buffer.search(/\r?\n\r?\n/)
+                continue
               }
               const seq = typeof parsed.seq === 'number' && Number.isSafeInteger(parsed.seq)
                 ? parsed.seq : undefined
@@ -341,8 +391,7 @@ export class HermesApiClient {
       }
       if (streamSignal.aborted) return
       attempts += 1
-      if (attempts > 3 || (failure instanceof HermesApiError
-        && failure.message.includes('replay window truncated'))) {
+      if (attempts > 3) {
         if (failure) throw failure
         throw new HermesApiError('Hermes event stream ended without a terminal run event')
       }

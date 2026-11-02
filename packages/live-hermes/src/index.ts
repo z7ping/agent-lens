@@ -31,6 +31,7 @@ const CAPABILITIES = [
   'send',
   'stream',
   'interrupt',
+  'recovery',
 ] as const satisfies readonly LiveCapabilityName[]
 
 const INPUT_CAPABILITIES = createLiveInputCapabilities({

@@ -13,6 +13,34 @@ export class HermesRunTranscriptAssembler {
   private segmentText = ''
   private lastInterim: { id: string; text: string } | undefined
   private pendingReasoning: Readonly<Record<string, unknown>>[] = []
+  private reasoningSegment = 0
+  private toolSequence = 0
+  private activeTools: Array<{ id: string; name: string }> = []
+
+  private reasoningId(): string {
+    return `hermes:${this.runId}:reasoning:${this.reasoningSegment}`
+  }
+
+  private toolEvent(event: Readonly<Record<string, unknown>>, name: string): Readonly<Record<string, unknown>> {
+    const tool = typeof event.tool === 'string' ? event.tool
+      : typeof event.tool_name === 'string' ? event.tool_name : 'tool'
+    const nativeId = typeof event.tool_call_id === 'string' && event.tool_call_id
+      ? event.tool_call_id : typeof event.call_id === 'string' && event.call_id
+        ? event.call_id : undefined
+    if (name === 'tool.started') {
+      const id = nativeId || `hermes:${this.runId}:tool:${++this.toolSequence}`
+      this.activeTools.push({ id, name: tool })
+      return { ...event, tool_call_id: id }
+    }
+    const index = nativeId
+      ? this.activeTools.findIndex(item => item.id === nativeId)
+      : this.activeTools.findIndex(item => item.name === tool)
+    const match = index >= 0 ? this.activeTools.splice(index, 1)[0] : undefined
+    // If a terminal event was replayed without its start, keep its native
+    // identity or mint a distinct orphan id; never update an unrelated tool.
+    return { ...event, tool_call_id: nativeId || match?.id
+      || `hermes:${this.runId}:tool:orphan:${++this.toolSequence}` }
+  }
 
   constructor(private readonly runId: string) {}
 
@@ -37,14 +65,21 @@ export class HermesRunTranscriptAssembler {
       if (visible && thinking && (visible === thinking
         || (thinking.length >= 490 && visible.startsWith(thinking)))) return []
       return [{ ...event, event: 'hermes.reasoning.verified',
+        message_id: typeof event.message_id === 'string' && event.message_id
+          ? event.message_id : this.reasoningId(),
         derived_from: event.event, text: preview }]
     })
     this.pendingReasoning = []
+    this.reasoningSegment += 1
     return result
   }
 
   ingest(event: Readonly<Record<string, unknown>>): Readonly<Record<string, unknown>>[] {
     const name = typeof event.event === 'string' ? event.event : event.type
+    if (name === 'reasoning.delta' || name === 'thinking.delta') {
+      return [{ ...event, message_id: typeof event.message_id === 'string' && event.message_id
+        ? event.message_id : this.reasoningId() }]
+    }
     if (name === 'reasoning.available'
       || (name === 'tool.progress' && event.tool_name === '_thinking')) {
       this.pendingReasoning.push(event)
@@ -98,8 +133,9 @@ export class HermesRunTranscriptAssembler {
     // emitting message.interim. Preserve that text as commentary instead of
     // leaving a stray final answer before the tool.
     if (name === 'tool.started') {
+      const toolEvent = this.toolEvent(event, name)
       const reasoning = this.releaseReasoning(this.segmentText)
-      if (!this.segmentText) return [...reasoning, event]
+      if (!this.segmentText) return [...reasoning, toolEvent]
       const boundary = {
         event: 'message.interim', run_id: this.runId,
         message_id: this.messageId(), already_streamed: true,
@@ -107,9 +143,12 @@ export class HermesRunTranscriptAssembler {
       }
       this.lastInterim = { id: this.messageId(), text: this.segmentText }
       this.advance()
-      return [...reasoning, boundary, event]
+      return [...reasoning, boundary, toolEvent]
     }
 
+    if (name === 'tool.completed' || name === 'tool.failed') {
+      return [this.toolEvent(event, name)]
+    }
     if (name === 'assistant.completed') {
       const id = typeof event.message_id === 'string' && event.message_id
         ? event.message_id : this.messageId()
