@@ -227,7 +227,7 @@ export abstract class AgentLensReviewModel extends AgentLensIntegrationModel {
     const filters = { ...this.snapshot.usage.filters, ...patch }
     this.publish({
       ...this.snapshot,
-      usage: { ...this.snapshot.usage, filters },
+      usage: { ...this.snapshot.usage, filters, response: null },
     })
     void this.refreshUsage()
   }

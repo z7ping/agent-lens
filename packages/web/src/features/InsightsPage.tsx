@@ -79,9 +79,10 @@ export function InsightsPage({ model, toolbarHost }: { model: AgentLensClientMod
   const [showFailures,setShowFailures] = useState(false)
   const locale = i18n.resolvedLanguage ?? i18n.language ?? 'zh-CN'
   const facets = useClientSnapshotField(model, 'facets')
+  const usage = useClientSnapshotField(model, 'usage')
   const health = useClientSnapshotField(model, 'health')
   const liveConnected = useClientSnapshotField(model, 'liveConnected')
-  const insightsModel = useMemo(() => new InsightsClientModel(), [])
+  const insightsModel = useMemo(() => new InsightsClientModel(undefined, model.getSnapshot().usage.filters), [model])
   const insights = useSyncExternalStore(insightsModel.subscribe, insightsModel.getSnapshot, insightsModel.getSnapshot)
 
   useEffect(() => {
@@ -89,37 +90,47 @@ export function InsightsPage({ model, toolbarHost }: { model: AgentLensClientMod
     return () => insightsModel.stop()
   }, [insightsModel, model])
 
-  const data = insights.response
+  // Usage is the shared scope owner for both tabs. An insights response is
+  // hidden until its filter identity matches, preventing stale cross-Agent totals.
+  const matchingScope = usage.filters.sourceIds?.length === 1
+    && insights.filters.sourceIds?.length === 1
+    && usage.filters.sourceIds[0] === insights.filters.sourceIds[0]
+    && usage.filters.projectId === insights.filters.projectId
+    && usage.filters.range === insights.filters.range
+  useEffect(() => {
+    if (!matchingScope) insightsModel.setFilters(usage.filters)
+  }, [insightsModel, matchingScope, usage.filters])
+  const data = matchingScope ? insights.response : null
   const verifiedNative=data?.meta.native?.state==='available' ? data.meta.native : null
   const agents = useOrderedAgents(facets?.agents ?? [])
   const insightAgents = useOrderedAgents(data?.agents ?? [])
   const projects = facets?.projects ?? []
-  const agentSelectionSummary = insights.filters.sourceIds === null
-    ? t('filters.allAgents')
-    : insights.filters.sourceIds.length
-      ? t('filters.selectedAgents', { count: insights.filters.sourceIds.length })
-      : t('filters.none')
+  const selectedSourceId = usage.filters.sourceIds?.[0] ?? ''
+  const selectedAgent = agents.find(agent => agent.sourceId === selectedSourceId)
+  const agentSelectionSummary = selectedSourceId
+    ? agentLabel(selectedSourceId, selectedAgent?.displayName)
+    : t('filters.none')
   const maxTrendSessions = Math.max(1, ...(data?.trend.map(item => item.sessionCount) ?? [1]))
-  const canRelaxFilters = Boolean(insights.filters.sourceIds !== null || insights.filters.projectId || insights.filters.range !== 'all')
+  const canRelaxFilters = Boolean(usage.filters.projectId || usage.filters.range !== 'all')
   const hasSseBanner = Boolean(health && !liveConnected)
   const comparison = data?.comparison
   const delta: InsightMetricDeltaDto | undefined = comparison?.delta
   const boundedRange = insights.filters.range !== 'all'
 
-  const relaxFilters = () => insightsModel.setFilters({ sourceIds: null, projectId: '', range: 'all' })
+  const relaxFilters = () => model.setUsageFilters({ projectId: '', range: 'all' })
   const projectFilterOptions = [
     { value: '', label: t('filters.allProjects') },
     ...projects.map(projectSelectOption),
   ]
   const toolbarFilters = <div className="workspace-view-controls" aria-label={t('filters.aria')}>
     <div className="workspace-view-filter">
-      <SidebarFilterDisclosure summary={agentSelectionSummary} agents={agents} agentSelection={{ mode: 'multiple', value: insights.filters.sourceIds, onChange: sourceIds => insightsModel.setFilters({ sourceIds }) }}/>
+      <SidebarFilterDisclosure summary={agentSelectionSummary} agents={agents} allowUndetectedSelection agentSelection={{ mode: 'single', value: selectedSourceId, onChange: sourceId => model.setUsageFilters({ sourceIds: [sourceId], projectId: '' }) }}/>
     </div>
     <div className="workspace-view-filter">
-      <SelectMenu value={insights.filters.projectId} onChange={projectId => insightsModel.setFilters({ projectId })} ariaLabel={t('filters.projectAria')} placeholder={t('filters.allProjects')} searchable searchPlaceholder={t('filters.searchProject')} options={projectFilterOptions}/>
+      <SelectMenu value={usage.filters.projectId} onChange={projectId => model.setUsageFilters({ projectId })} ariaLabel={t('filters.projectAria')} placeholder={t('filters.allProjects')} searchable searchPlaceholder={t('filters.searchProject')} options={projectFilterOptions}/>
     </div>
     <div className="workspace-view-filter workspace-view-filter-time">
-      <SelectMenu value={insights.filters.range} onChange={range => insightsModel.setFilters({ range: range as typeof insights.filters.range })} ariaLabel={t('filters.timeAria')} options={[
+      <SelectMenu value={usage.filters.range} onChange={range => model.setUsageFilters({ range: range as typeof usage.filters.range })} ariaLabel={t('filters.timeAria')} options={[
         { value: 'today', label: t('range.today') }, { value: '7d', label: t('range.sevenDays') }, { value: '30d', label: t('range.thirtyDays') }, { value: 'all', label: t('range.all') },
       ]}/>
     </div>
@@ -132,7 +143,7 @@ export function InsightsPage({ model, toolbarHost }: { model: AgentLensClientMod
 
   return <>
     {showFailures&&<Drawer open title={t('page.failureExamples')} onClose={()=>setShowFailures(false)}>
-      <NativeFailureExamples filters={insights.filters}/>
+      <NativeFailureExamples filters={usage.filters}/>
     </Drawer>}
     {toolbarHost ? createPortal(toolbarFilters, toolbarHost) : null}
     <main className="workspace-page insights-page">
@@ -207,7 +218,7 @@ export function InsightsPage({ model, toolbarHost }: { model: AgentLensClientMod
           </section>
         </> : data && data.summary.sessionCount > 0 ? <>
           <section className="insight-coverage-strip" aria-label={t('page.coverageAria')}>
-            <div><span>{t('page.statisticsRange')}</span><b>{rangeLabel(insights.filters.range, t, locale, data.meta.from, data.meta.to)}</b></div>
+            <div><span>{t('page.statisticsRange')}</span><b>{rangeLabel(usage.filters.range, t, locale, data.meta.from, data.meta.to)}</b></div>
             <div><span>{t('page.sessionSample')}</span><b>{t('page.sessionCount', { count: data.summary.sessionCount })}</b></div>
             <div><span>{t('page.coverageStatus')}</span><b className={data.meta.sampled ? 'is-warning' : ''}>{data.meta.sampled ? t('page.safeSample', { count: data.meta.sessionSampleLimit }) : t('page.fullAggregation')}</b></div>
             <div><span>{t('page.generatedAt')}</span><b>{formatGeneratedAt(data.meta.generatedAt, locale)}</b></div>

@@ -32,7 +32,9 @@ export class InsightsClientModel {
   private invalidation = 0
   private nativeRefreshTimer:ReturnType<typeof setTimeout>|null=null
 
-  constructor(private readonly api = new AgentLensApi()) {}
+  constructor(private readonly api = new AgentLensApi(), filters?: QueryFilters) {
+    if (filters) this.snapshot = { ...this.snapshot, filters }
+  }
 
   getSnapshot = (): InsightsClientSnapshot => this.snapshot
 
@@ -70,6 +72,7 @@ export class InsightsClientModel {
     this.publish({
       ...this.snapshot,
       filters: { ...this.snapshot.filters, ...patch },
+      response: null,
     })
     void this.refresh()
   }
