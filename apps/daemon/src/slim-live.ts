@@ -12,7 +12,7 @@ import {
 } from '@agent-lens/live-codex'
 import {
   DefaultHermesLiveService, HermesApiClient, HermesLiveAdapter,
-  resolveHermesApiClientConfig,
+  resolveHermesApiClientConfig, initializeLocalHermesApi,
 } from '@agent-lens/live-hermes'
 import { createSlimPiHistoryResolver } from './slim-pi-history.js'
 import { createSlimCodexHistoryResolver } from './slim-codex-history.js'
@@ -35,6 +35,7 @@ export async function startSlimLive(
   const enabled=(productId:string)=>authorizedLiveProducts.has(productId)
     && policy.isSourceEnabled(productId)
   let stopped=false
+  let hermesSetup: (() => Promise<{ status: 'ready' | 'needs-gateway'; reason?: string }>) | undefined
   try {
     if(enabled('pi')){
       const piService=new DefaultPiLiveService(
@@ -59,9 +60,16 @@ export async function startSlimLive(
     }
     if(enabled('hermes')){
       const config=await resolveHermesApiClientConfig({})
-      const adapter=new HermesLiveAdapter(
-        new DefaultHermesLiveService(new HermesApiClient(config)),
-      )
+      const client=new HermesApiClient(config)
+      const adapter=new HermesLiveAdapter(new DefaultHermesLiveService(client))
+      hermesSetup=async()=>{
+        await initializeLocalHermesApi()
+        client.reconfigure(await resolveHermesApiClientConfig({}))
+        const availability=await adapter.availability()
+        return availability.available
+          ? {status:'ready'}
+          : {status:'needs-gateway',...(availability.reason?{reason:availability.reason}:{})}
+      }
       const registration=lives.register(adapter)
       cleanup.push(async()=>{await registration.dispose();await adapter.dispose()})
     }
@@ -71,7 +79,7 @@ export async function startSlimLive(
     throw error
   }
   return {
-    lives,attachments,
+    lives,attachments,hermesSetup,
     async dispose(){
       if(stopped)return
       stopped=true
