@@ -176,7 +176,7 @@ test('native trend groups certified sessions by last activity UTC day, not event
       ['later','2026-10-26T22:00:00Z','complete'],
       ['partial','2026-10-26T23:00:00Z','partial'],
     ] as const){
-      await storage.nativeSessionCatalog.upsert({...location(id),lastActivityAt})
+      await storage.nativeSessionCatalog.upsert({...location(id),lastActivityAt,updatedAt:lastActivityAt})
       assert.equal(await storage.nativeSessionMetrics.replace(metric(id,coverage)),true)
     }
     const q={sourceId:source,parserVersion,coverageCertified:true,includeTrend:true}
