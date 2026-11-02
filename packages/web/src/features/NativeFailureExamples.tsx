@@ -4,7 +4,6 @@ import { useNavigate } from 'react-router-dom'
 import type { NativeErrorIndexItemDto, NativeErrorIndexResponseDto } from '@agent-lens/protocol'
 import { AgentLensApi, rangeStart, type QueryFilters } from '../client/api'
 import { copyText } from '../client/clipboard'
-import { CopyableCodeBlock } from '../components/CopyableCodeBlock'
 import { EmptyStatePanel, ErrorStateBanner } from '../components/StateViews'
 import { Button, Input, StatusBadge, Toolbar, ToolbarGroup, UiIcon } from '../components/ui'
 import './native-failure-examples.css'
@@ -27,6 +26,7 @@ export function NativeFailureExamples({filters,toolName}: {filters:QueryFilters;
   const [loading,setLoading]=useState(false)
   const [error,setError]=useState('')
   const [copyState,setCopyState]=useState<'idle'|'copied'|'error'>('idle')
+  const [errorCopyState,setErrorCopyState]=useState<'idle'|'copied'|'error'>('idle')
   const [retry,setRetry]=useState(0)
 
   useEffect(()=>{
@@ -76,6 +76,14 @@ export function NativeFailureExamples({filters,toolName}: {filters:QueryFilters;
 
   const entries=data?.items??[]
   const active=entries.find(item=>item.eventKey===selectedKey)??entries[0]
+  useEffect(()=>{setErrorCopyState('idle')},[active?.eventKey])
+  const copyError=async()=>{
+    if(!active)return
+    try{
+      await copyText(active.summary||active.errorCode||'—')
+      setErrorCopyState('copied')
+    }catch{setErrorCopyState('error')}
+  }
   const openReview=(item:NativeErrorIndexItemDto)=>{
     if(!item.sessionId)return
     const params=new URLSearchParams({range:'all',status:'all'})
@@ -132,16 +140,16 @@ export function NativeFailureExamples({filters,toolName}: {filters:QueryFilters;
             title={t('failures.empty')} description={t('failures.indexed')}/>}
         <ul className="native-failure-list">{entries.map(item=><li key={item.eventKey}>
           <button type="button" className={`native-failure-item${active===item?' is-selected':''}`}
-            aria-pressed={active===item} onClick={()=>setSelectedKey(item.eventKey)}>
+            aria-pressed={active===item} title={item.coverage==='partial'?t('failures.partial'):undefined}
+            onClick={()=>setSelectedKey(item.eventKey)}>
             <span className="native-failure-item-main">
               <UiIcon name="exclamation" size={14}/>
               <b>{item.toolName??t('failures.runtime')}</b>
-              {item.coverage==='partial'&&<StatusBadge tone="warning">{t('page.nativePartialStatus')}</StatusBadge>}
+              <time dateTime={item.occurredAt} className="native-failure-item-time">
+                {new Date(item.occurredAt).toLocaleString(i18n.resolvedLanguage)}
+              </time>
             </span>
-            <span className="native-failure-item-meta">{item.summary||item.errorCode||'—'}</span>
-            <span className="native-failure-item-meta">
-              {new Date(item.occurredAt).toLocaleString(i18n.resolvedLanguage)}
-            </span>
+            <span className="native-failure-item-summary">{item.summary||item.errorCode||'—'}</span>
           </button>
         </li>)}</ul>
         {data&&data.total>PAGE_SIZE&&<div className="native-failure-pagination">
@@ -156,17 +164,27 @@ export function NativeFailureExamples({filters,toolName}: {filters:QueryFilters;
           <div className="native-failure-detail-heading">
             <span><StatusBadge tone="danger" dot>{t('failures.failure')}</StatusBadge>
               <strong>{active.toolName??t('failures.runtime')}</strong></span>
-            <Button size="small" disabled={!active.sessionId} onClick={()=>openReview(active)}>
-              <UiIcon name="link" size={14}/>{t('failures.openSession')}</Button>
+            <div className="native-failure-detail-actions">
+              <Button size="small" variant="quiet" disabled={fingerprint===active.fingerprint}
+                onClick={()=>setFingerprint(active.fingerprint)} title={active.fingerprint}>
+                {t('failures.sameFingerprint')}</Button>
+              <Button size="small" disabled={!active.sessionId} onClick={()=>openReview(active)}>
+                <UiIcon name="link" size={14}/>{t('failures.openSession')}</Button>
+            </div>
           </div>
-          <p className="native-failure-context">{active.errorCode??active.kind} · {new Date(active.occurredAt).toLocaleString(i18n.resolvedLanguage)}</p>
-          <div className="native-failure-error-block"><strong>{t('failures.error')}</strong>
-            <CopyableCodeBlock>{active.summary||active.errorCode||'—'}</CopyableCodeBlock></div>
-          <div className="native-failure-detail-footer">
-            <Button size="small" variant="quiet" disabled={fingerprint===active.fingerprint}
-              onClick={()=>setFingerprint(active.fingerprint)} title={active.fingerprint}>
-              {t('failures.sameFingerprint')}</Button>
-            {active.coverage==='partial'&&<StatusBadge tone="warning">{t('page.nativePartialStatus')}</StatusBadge>}
+          <div className="native-failure-context-row">
+            <p className="native-failure-context">{active.errorCode??active.kind} · {new Date(active.occurredAt).toLocaleString(i18n.resolvedLanguage)}</p>
+            {active.coverage==='partial'&&<StatusBadge tone="warning" title={t('failures.partial')}>{t('page.nativePartialStatus')}</StatusBadge>}
+          </div>
+          <div className="native-failure-error-block">
+            <div className="native-failure-error-heading">
+              <strong>{t('failures.error')}</strong>
+              <Button size="small" variant="quiet" onClick={()=>void copyError()}>
+                <UiIcon name="copy" size={14}/>
+                {t(errorCopyState==='copied'?'failures.copied':errorCopyState==='error'?'failures.copyFailed':'failures.copyError')}
+              </Button>
+            </div>
+            <pre className="native-failure-raw-error">{active.summary||active.errorCode||'—'}</pre>
           </div>
         </div>:<div className="native-failure-placeholder">{loading?t('failures.loading'):t('failures.selectExample')}</div>}
       </section>
