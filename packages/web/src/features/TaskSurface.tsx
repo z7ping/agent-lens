@@ -53,6 +53,8 @@ export interface TaskSurfaceProps extends HTMLAttributes<HTMLElement> {
    * It is a lower bound, never a claim about the session's full turn count. */
   turnRailKnownCount?: number | undefined
   onTurnRailSelect?(item: TaskTurnRailData): void | Promise<void>
+  /** Optional verified URL deep-link anchor, resolved by the existing virtual rail. */
+  focusTurnTarget?:{key:string;ordinal:number}|undefined
 }
 
 interface TaskSurfaceViewValue {
@@ -452,13 +454,14 @@ function activeTurnRailItem(items: TaskTurnRailItem[], anchorY: number): TaskTur
  * TaskSurface 持有统一 Reader/Document/Composer 槽位、语义轮次导轨与边界导航。
  */
 export const TaskSurface = forwardRef<HTMLElement, TaskSurfaceProps>(function TaskSurface(
-  { mode, className, children, boundaryNavigation, turnRailItems: providedTurnRailItems, turnRailTotal, turnRailKnownCount, onTurnRailSelect, ...props },
+  { mode, className, children, boundaryNavigation, turnRailItems: providedTurnRailItems, turnRailTotal, turnRailKnownCount, onTurnRailSelect, focusTurnTarget, ...props },
   ref,
 ) {
   const { t } = useTranslation('task')
   const rootRef = useRef<HTMLElement>(null)
   const railItemsRef = useRef<TaskTurnRailItem[]>([])
   const pendingTurnRailTargetRef = useRef<{ id: string; ordinal?: number | undefined } | null>(null)
+  const handledExternalFocusKeyRef = useRef('')
   const railElementBySemanticIdRef = useRef(new Map<string, HTMLElement>())
   const providedTurnRailItemsRef = useRef(providedTurnRailItems)
   providedTurnRailItemsRef.current = providedTurnRailItems
@@ -702,6 +705,15 @@ export const TaskSurface = forwardRef<HTMLElement, TaskSurfaceProps>(function Ta
     })
     return () => window.cancelAnimationFrame(frame)
   }, [railItems, scrollRailItemToAnchor])
+
+  useEffect(()=>{
+    if(!focusTurnTarget || !Number.isSafeInteger(focusTurnTarget.ordinal)
+      ||focusTurnTarget.ordinal<1 ||focusTurnTarget.key===handledExternalFocusKeyRef.current)return
+    handledExternalFocusKeyRef.current=focusTurnTarget.key
+    const target=railItems.find(item=>item.ordinal===focusTurnTarget.ordinal)
+    if(target?.element && scrollRailItemToAnchor(target))return
+    pendingTurnRailTargetRef.current={id:focusTurnTarget.key,ordinal:focusTurnTarget.ordinal}
+  },[focusTurnTarget?.key,focusTurnTarget?.ordinal,railItems,scrollRailItemToAnchor])
 
   const jumpToRound = (item: TaskTurnRailItem) => {
     if (scrollRailItemToAnchor(item)) return
