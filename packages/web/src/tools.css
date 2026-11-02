@@ -229,6 +229,11 @@
 .tool-drill-overlay .ui-overlay-panel { width: min(92vw, 520px); }
 .tool-drill-overlay .ui-overlay-body { padding: 0; }
 .tool-drill-overlay .ui-overlay-heading h2 { font-family: var(--font-mono); }
+.tool-detail-content { max-width: none; }
+.tool-detail-header { display: flex; align-items: center; flex-wrap: wrap; gap: 10px 16px; padding: 18px 20px 0; }
+.tool-detail-header h2 { display: inline-flex; align-items: center; gap: 8px; min-width: 0; margin: 0; color: var(--al-ink); font-family: var(--font-mono); font-size: 16px; overflow-wrap: anywhere; }
+.tool-detail-header > small { color: var(--al-muted); font-size: 12px; }
+.tool-detail-content .tool-drill-body { padding: 18px 20px 28px; }
 .tool-drill-body { padding: 16px 20px 28px; overflow: visible; }
 
 .tool-drill-grid {
