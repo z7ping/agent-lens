@@ -44,6 +44,22 @@ test('Live 和 Review 共用消息、思考、工具、过程与文本渲染入�
   assert.doesNotMatch(read('../review.css'), /\.review-(?:message|thinking|tool|process)(?:\s|[.#:{])/)
 })
 
+test('Review 消息证据只呈现一个弱化入口，不重复来源徽章和文字链接', () => {
+  const review = read('./ReviewRoundPresentation.tsx')
+  const message = review.slice(review.indexOf('  const messageTime = taskSessionMessageTime(node.at)'),
+    review.indexOf('function reviewToolModel('))
+  const css = read('../task-detail.css')
+  assert.doesNotMatch(message, /<EvidenceBadges/)
+  assert.doesNotMatch(message, /local\.evidence\.evidenceDetail[^\n]*<\/button>/)
+  assert.match(message, /className="task-message-evidence-action"/)
+  assert.match(message, /aria-label=\{t\('local\.evidence\.evidenceDetail', \{ count: node\.evidence\.length \}\)\}/)
+  assert.match(message, /onClick=\{\(\) => inspect\(node\)\}/)
+  assert.match(message, /node\.evidence\.length > 0 && <IconButton/)
+  assert.match(css, /\.task-message-evidence-action\)\.ui-icon-button/)
+  // Reasoning / tools / events still retain their source provenance.
+  assert.match(review, /meta=\{<EvidenceBadges evidence=\{node\.evidence\} compact\/>\}/)
+})
+
 test('相同的 Session 事实在两种模式中只有一份 DOM 结构', () => {
   const message = renderToStaticMarkup(createElement(TaskSessionMessage, {
     role: 'assistant', text: '共同消息', collapsible: false,
