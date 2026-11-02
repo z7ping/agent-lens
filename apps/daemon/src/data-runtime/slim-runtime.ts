@@ -57,9 +57,9 @@ export class SlimDataRuntime {
 
   async start():Promise<void>{
     if(this.started)return
-    // Reject v38 and absent DB before allocating worker threads or creating
-    // any file. All migration/backup actions are separate explicit operations.
-    const verified=SqliteSlimStorage.openExisting(this.options.dbPath,true)
+    // Reject Legacy v38 and missing files. Existing authenticated Slim v1/v2
+    // receive only the additive v3 schema migration before readers start.
+    const verified=SqliteSlimStorage.openExisting(this.options.dbPath,false)
     try{await verified.health()}finally{await verified.close()}
     try{
       await this.writer.start()
