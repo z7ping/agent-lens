@@ -20,7 +20,7 @@ import { BackupDataRootTree } from '../components/BackupDirectoryTree'
 import { BackupRestorePreviewWorkbench } from './BackupRestorePreviewWorkbench'
 import { LocalPathActions } from '../components/LocalPathActions'
 import { SidebarFilterDisclosure } from '../components/SidebarFilterDisclosure'
-import { ErrorStateBanner, PageLoadingState } from '../components/StateViews'
+import { ErrorStateBanner, OperationProgress, PageLoadingState } from '../components/StateViews'
 import { Button, Dialog, Drawer, IconButton, StatusBadge, UiIcon } from '../components/ui'
 
 const RECOMMENDED_KINDS: BackupAssetKindDto[] = ['config', 'skill', 'mcp', 'plugin', 'extension', 'hook', 'rule']
@@ -181,6 +181,7 @@ export function BackupPage({
   const [physicalPathSnapshot, setPhysicalPathSnapshot] = useState<BackupSnapshotManifestDto | null>(null)
   const [preview, setPreview] = useState<BackupRestorePreviewResponseDto | null>(null)
   const [previewError, setPreviewError] = useState('')
+  const [previewElapsedMs, setPreviewElapsedMs] = useState(0)
   const [previewRetry, setPreviewRetry] = useState(0)
   const [confirmation, setConfirmation] = useState<PendingConfirmation | null>(null)
   const importInput = useRef<HTMLInputElement>(null)
@@ -189,17 +190,30 @@ export function BackupPage({
     if (!previewSnapshotId) {
       setPreview(null)
       setPreviewError('')
+      setPreviewElapsedMs(0)
       return
     }
+    const controller = new AbortController()
+    const startedAt = Date.now()
+    const elapsedTimer = window.setInterval(() => setPreviewElapsedMs(Date.now() - startedAt), 1000)
     let disposed = false
     setPreview(null)
     setPreviewError('')
-    void api.backupRestorePreview(previewSnapshotId).then(result => {
+    setPreviewElapsedMs(0)
+    void api.backupRestorePreview(previewSnapshotId, controller.signal).then(result => {
       if (!disposed) setPreview(result)
     }).catch(reason => {
-      if (!disposed) setPreviewError(reason instanceof Error ? reason.message : String(reason))
+      if (!disposed && !(reason instanceof DOMException && reason.name === 'AbortError')) {
+        setPreviewError(reason instanceof Error ? reason.message : String(reason))
+      }
+    }).finally(() => {
+      window.clearInterval(elapsedTimer)
     })
-    return () => { disposed = true }
+    return () => {
+      disposed = true
+      controller.abort()
+      window.clearInterval(elapsedTimer)
+    }
   }, [api, previewSnapshotId, previewRetry])
 
   const closeRestorePreview = () => {
@@ -550,12 +564,21 @@ export function BackupPage({
                   </Button>
                   <ErrorStateBanner message={previewError} onRetry={() => setPreviewRetry(value => value + 1)} showDoctor={false}/>
                 </div>
-              : <PageLoadingState
-                  eyebrow={t('preview.title')}
-                  statusLabel={t('loading.status')}
-                  title={t('preview.loading')}
-                  description={t('preview.noteDescription')}
-                />
+              : <div className="backup-preview-load-state">
+                  <Button size="small" variant="quiet" onClick={closeRestorePreview}>
+                    <UiIcon name="arrow-left" size={14}/>{t('preview.back')}
+                  </Button>
+                  <OperationProgress
+                    title={t('preview.loading')}
+                    description={t('preview.loadingDetail', {
+                      count: (snapshots.find(snapshot => snapshot.id === previewSnapshotId)?.fileCount ?? 0).toLocaleString(locale),
+                    })}
+                    statusLabel={t('preview.checking')}
+                    elapsedMs={previewElapsedMs}
+                  >
+                    {previewElapsedMs >= 12000 && <span className="backup-preview-wait-hint">{t('preview.longRunning')}</span>}
+                  </OperationProgress>
+                </div>
         ) : activeView === 'assets' ? <div className="backup-assets-surface">
           <div className="backup-asset-overview">
             <div className="backup-asset-overview-primary">
