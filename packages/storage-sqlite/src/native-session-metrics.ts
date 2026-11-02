@@ -528,6 +528,10 @@ export class SqliteNativeSessionMetrics implements NativeSessionMetricsStore {
           ON metrics.source_id=catalog.source_id
           AND metrics.installation_id=catalog.installation_id
           AND metrics.native_session_id=catalog.native_session_id
+        LEFT JOIN native_error_index_state AS error_state
+          ON error_state.source_id=catalog.source_id
+          AND error_state.installation_id=catalog.installation_id
+          AND error_state.native_session_id=catalog.native_session_id
         WHERE catalog.location_kind='native'
           
           AND catalog.source_id=?
@@ -546,7 +550,13 @@ export class SqliteNativeSessionMetrics implements NativeSessionMetricsStore {
             OR metrics.file_mtime_ms<>catalog.file_mtime_ms
             OR metrics.parser_version<>?
             OR metrics.projection_version<>?
-            OR (metrics.coverage='partial' AND ?=1))
+            OR (metrics.coverage='partial' AND ?=1)
+            OR error_state.source_id IS NULL
+            OR error_state.file_identity<>catalog.file_identity
+            OR error_state.file_size<>catalog.file_size
+            OR error_state.file_mtime_ms<>catalog.file_mtime_ms
+            OR error_state.parser_version<>metrics.parser_version
+            OR error_state.projection_version<>metrics.projection_version)
           ${before ? `AND (
             catalog.last_activity_at < ?
             OR (catalog.last_activity_at = ? AND catalog.installation_id > ?)
