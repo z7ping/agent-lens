@@ -64,7 +64,7 @@ export function nativeFailureExamples(session: NativeSessionSummaryDto, window: 
 
 type FailureApi = Pick<AgentLensApi,'nativeSessions'|'nativeReviewById'>
 
-/** 每次推进最多一个有界目录页或原生 Review 页，正文只留在本次抽屉内存。 */
+/** 每次推进最多一个有界目录页或原生 Review 页；样本只留在视图内存。 */
 export class NativeFailureScanner {
   private sessions: NativeSessionSummaryDto[] = []
   private catalogCursor: string | undefined

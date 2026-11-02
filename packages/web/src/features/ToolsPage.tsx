@@ -109,6 +109,7 @@ export function ToolsPage({ model, toolbarHost }: { model: AgentLensClientModel;
   const review = useClientSnapshotField(model, 'review')
   const navigate = useNavigate()
   const location = useLocation()
+  const failureSamplesRef = useRef<HTMLDivElement>(null)
   const data = usage.response
   const nativeMetrics=data?.meta.native
   const nativeOnlyMode=data?.meta.mode==='native-only'
@@ -547,15 +548,23 @@ export function ToolsPage({ model, toolbarHost }: { model: AgentLensClientModel;
           <div className="tool-drill-grid">
             <div className="tool-drill-stat"><b>{activeNativeTool.callCount}</b><span>{t('page.callCount')}</span></div>
             <div className="tool-drill-stat"><b>{activeNativeTool.resultCount}</b><span>{t('page.nativeResults')}</span></div>
-            <div className="tool-drill-stat"><b>{activeNativeTool.errorCount}</b><span>{t('page.failureCount')}</span></div>
+            <button type="button" className="tool-drill-stat tool-drill-stat-action"
+              disabled={activeNativeTool.errorCount===0}
+              onClick={()=>{failureSamplesRef.current?.scrollIntoView({block:'start'});failureSamplesRef.current?.focus({preventScroll:true})}}
+              title={t('page.failureScene')}>
+              <b className={activeNativeTool.errorCount>0?'cell-danger':''}>{activeNativeTool.errorCount}</b>
+              <span>{t('page.failureCount')}</span>
+            </button>
             <div className="tool-drill-stat"><b>{activeNativeTool.sessionCount}</b><span>{t('page.involvedSessions')}</span></div>
             <div className="tool-drill-stat"><b>{nativeDuration(activeNativeTool.averageDurationMs,t)}</b><span>{t('page.averageDuration')}</span></div>
             <div className="tool-drill-stat"><b className={activeNativeTool.maxDurationMs!=null&&activeNativeTool.maxDurationMs>=NATIVE_SLOW_MAX_MS?'cell-slow':''}>{nativeDuration(activeNativeTool.maxDurationMs,t)}</b><span>{t('page.maxDuration')}</span></div>
           </div>
           {nativeDetailLoading&&<div className="tool-drill-note">{t('page.loadingSessions')}</div>}
           {nativeDetailError&&<div className="tool-drill-note">{nativeDetailError}</div>}
-          <NativeFailureExamples filters={{...usage.filters,sourceIds:[activeNativeTool.sourceId]}}
-            toolName={activeNativeTool.nativeToolName}/>
+          <div ref={failureSamplesRef} tabIndex={-1} className="tool-native-failure-target">
+            <NativeFailureExamples filters={{...usage.filters,sourceIds:[activeNativeTool.sourceId]}}
+              toolName={activeNativeTool.nativeToolName}/>
+          </div>
         </div>
       </section>}
 

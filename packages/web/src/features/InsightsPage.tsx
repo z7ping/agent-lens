@@ -181,14 +181,16 @@ export function InsightsPage({ model, toolbarHost }: { model: AgentLensClientMod
               <span>{t('page.interactions')}</span>
               <strong>{verifiedNative.interactionCount}</strong>
             </div>
-            <div className="workspace-metric-card insight-kpi">
+            <button type="button" className="workspace-metric-card insight-kpi insight-kpi-action"
+              onClick={()=>navigate('/tools')} title={t('page.toolCalls')}>
               <span>{t('page.toolCalls')}</span>
               <strong>{verifiedNative.toolCallCount}</strong>
-            </div>
-            <div className="workspace-metric-card insight-kpi">
+            </button>
+            <button type="button" className="workspace-metric-card insight-kpi insight-kpi-action is-failure"
+              onClick={()=>navigate('/tools?view=failures')} title={t('page.failureExamples')}>
               <span>{t('page.explicitFailures')}</span>
               <strong>{verifiedNative.errorCount}</strong>
-            </div>
+            </button>
           </section>}
           {nativeTrend.length>0 && <section className="insight-card">
             <div className="insight-card-head insight-native-trend-heading">
