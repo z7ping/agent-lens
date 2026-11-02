@@ -76,6 +76,36 @@ test('radar uses a shared multi-line Button tile rather than overriding fixed Bu
   assert.match(domainCss, /@media \(max-width: 767\.98px\) \{[\s\S]*?\.insight-agent-radar-grid \{/)
 })
 
+test('interactive analytics cards expose a compact chevron, focus and scope without new primitives', async () => {
+  const [insights, insightsCss, tools, toolsCss, sharedCss, zh, en] = await Promise.all([
+    source('./InsightsPage.tsx'),
+    source('../insights.css'),
+    source('./ToolsPage.tsx'),
+    source('../tools.css'),
+    source('../components/ui/ui-primitives.css'),
+    source('../i18n/zh-CN/insights-tools.ts'),
+    source('../i18n/en-US/insights-tools.ts'),
+  ])
+  assert.match(insights, /<UiIcon name="chevron-right" size=\{14\} className="insight-agent-radar-arrow"\/>/)
+  assert.match(insights, /className="insight-agent-radar-name"/)
+  assert.match(insights, /aria-pressed=\{selectedSourceId === agent.sourceId\}/)
+  assert.match(sharedCss, /\.btn\.tile\[aria-pressed='true'\]/)
+  assert.match(insightsCss, /\.insight-agent-radar-item:is\(:hover, :focus-visible, \[aria-pressed='true'\]\)/)
+  assert.match(insightsCss, /\.insight-kpi-action:is\(:hover, :focus-visible\)/)
+  assert.match(insights, /<section className="insight-native-coverage"/)
+  assert.match(insights, /data\.meta\.native\.partialSessions > 0/)
+  assert.doesNotMatch(insightsCss, /\.insight-coverage-strip\.is-native/)
+  assert.doesNotMatch(insightsCss, /!important/)
+  assert.match(tools, /className="tool-table-sort"/)
+  assert.match(tools, /tabIndex=\{0\}/)
+  assert.match(toolsCss, /\.tool-table tbody tr\[tabindex\] \{ cursor: pointer; \}/)
+  assert.match(toolsCss, /\.tool-table tbody tr:focus-visible/)
+  for (const translations of [zh, en]) {
+    assert.match(translations, /radarPartialSessions:/)
+    assert.match(translations, /radarAdditionalObserved:/)
+  }
+})
+
 test('unverified native tool observations are a separate lower-bound group', async () => {
   const tools = await source('./ToolsPage.tsx')
   assert.match(tools, /if\(left\.partial!==right\.partial\)/)
