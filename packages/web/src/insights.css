@@ -60,16 +60,6 @@
 .insight-agent-radar-head > span { color: var(--al-muted); font-size: var(--text-caption); }
 .insight-agent-radar-head > span.is-warning { color: var(--al-warning); }
 .insight-agent-radar-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
-.insight-agent-radar-item {
-  display: flex;
-  min-width: 0;
-  flex-direction: column;
-  align-items: stretch;
-  gap: 5px;
-  padding: 10px 12px;
-  text-align: left;
-}
-.insight-agent-radar-item.is-selected { border-color: var(--al-accent); background: var(--al-soft); }
 .insight-agent-radar-identity { display: flex; align-items: center; gap: 6px; min-width: 0; font-weight: 650; }
 .insight-agent-radar-identity > span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .insight-agent-radar-item > strong {

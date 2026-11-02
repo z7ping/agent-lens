@@ -217,7 +217,7 @@ export function InsightsPage({ model, toolbarHost }: { model: AgentLensClientMod
                   : observed !== null ? t('page.radarObservedLabel')
                     : metric?.eligibleSessions ? t('page.radarPending')
                       : metric ? t('page.radarNoSessions') : t('page.radarUnavailable')
-              return <Button key={agent.sourceId} className={`insight-agent-radar-item${selectedSourceId === agent.sourceId ? ' is-selected' : ''}${hasErrors ? ' has-errors' : ''}`}
+              return <Button key={agent.sourceId} variant="tile" className={`insight-agent-radar-item${selectedSourceId === agent.sourceId ? ' is-selected' : ''}${hasErrors ? ' has-errors' : ''}`}
                 aria-pressed={selectedSourceId === agent.sourceId}
                 title={metric ? t('page.radarTooltip', {
                   ready: metric.readySessions, eligible: metric.eligibleSessions,
