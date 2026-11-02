@@ -425,9 +425,11 @@ export function BackupPage({
     if (busy) return
     setBusy('import')
     setError('')
+    setSuccess('')
     try {
-      await api.importBackup(file)
+      const imported = await api.importBackup(file)
       await refresh()
+      setSuccess(t('importSucceeded', { count: imported.snapshot.files.length.toLocaleString(locale) }))
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : String(reason))
     } finally {

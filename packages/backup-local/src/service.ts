@@ -174,7 +174,9 @@ function safePortableRelative(value: string): string {
 }
 
 function safeSnapshotId(value: string): string {
-  if (!/^[A-Za-z0-9._-]+$/.test(value)) throw new Error('Unsafe backup snapshot id')
+  if (!/^[A-Za-z0-9._-]+$/.test(value) || value === '.' || value === '..') {
+    throw new Error('Unsafe backup snapshot id')
+  }
   return value
 }
 
@@ -904,7 +906,7 @@ export class LocalBackupService implements BackupService {
     }
   }
 
-  private async storeBlob(hash: string, bytes: Buffer): Promise<void> {
+  private async storeBlob(hash: string, bytes: Buffer, repairCorrupt = false): Promise<void> {
     const path = this.blobPath(hash)
     await mkdir(join(path, '..'), { recursive: true })
     try {
@@ -915,7 +917,18 @@ export class LocalBackupService implements BackupService {
     }
     const existing = await readFile(path)
     if (existing.byteLength !== bytes.byteLength || sha256(existing) !== hash) {
-      throw new Error(`备份内容库存在损坏或 Hash 冲突：${hash}`)
+      // A confirmed import can safely repair a content-addressed blob because
+      // the incoming bytes were already verified against this exact hash.
+      if (!repairCorrupt || sha256(bytes) !== hash) {
+        throw new Error(`备份内容库存在损坏或 Hash 冲突：${hash}`)
+      }
+      const replacement = `${path}.${randomUUID()}.repair.tmp`
+      try {
+        await writeFile(replacement, bytes, { flag: 'wx' })
+        await rename(replacement, path)
+      } finally {
+        await rm(replacement, { force: true })
+      }
     }
   }
 
@@ -1144,8 +1157,17 @@ export class LocalBackupService implements BackupService {
     await mkdir(this.blobsPath, { recursive: true })
     const existing = await this.getSnapshot(manifest.id)
     if (existing) {
-      if (existing.manifestSha256 === manifest.manifestSha256) return existing
-      throw new Error(`本地已存在同名但内容不同的快照：${manifest.id}`)
+      if (existing.manifestSha256 !== manifest.manifestSha256) {
+        throw new Error(`本地已存在同名但内容不同的快照：${manifest.id}`)
+      }
+      // Identical metadata does not prove that the existing content store is
+      // intact. Re-import must repair missing/damaged blobs rather than no-op.
+      for (const file of manifest.files) {
+        await this.storeBlob(file.sha256, fileMap.get(file.archivePath)!, true)
+      }
+      const verified = await this.verifySnapshot(manifest.id)
+      if (!verified.valid) throw new Error('重新导入后快照完整性校验仍失败')
+      return existing
     }
     const stagePath = join(this.snapshotsPath, `${manifest.id}.tmp`)
     const finalPath = join(this.snapshotsPath, manifest.id)
@@ -1153,7 +1175,7 @@ export class LocalBackupService implements BackupService {
     await mkdir(stagePath, { recursive: true })
     try {
       for (const file of manifest.files) {
-        await this.storeBlob(file.sha256, fileMap.get(file.archivePath)!)
+        await this.storeBlob(file.sha256, fileMap.get(file.archivePath)!, true)
       }
       await writeFile(join(stagePath, 'manifest.json'), `${JSON.stringify(manifest, null, 2)}\n`, { flag: 'wx' })
       await rename(stagePath, finalPath)
@@ -1167,6 +1189,10 @@ export class LocalBackupService implements BackupService {
   async previewRestore(id: string): Promise<BackupRestorePreview> {
     const manifest = await this.getSnapshot(id)
     if (!manifest) throw new Error(`找不到快照：${id}`)
+    // Restore preview is actionable only when every archived byte is recoverable.
+    // A valid manifest alone cannot prove that its blob files still exist.
+    const integrity = await this.verifySnapshot(id)
+    if (!integrity.valid) throw new Error('快照完整性校验失败，拒绝恢复预演；请先检查备份记录')
     const targets = await this.targets({ sourceIds: [...new Set(manifest.files.map(file => file.sourceId))] })
     const bySource = new Map<string, BackupTarget[]>()
     for (const target of targets) {
@@ -1175,19 +1201,28 @@ export class LocalBackupService implements BackupService {
       entries.push(target)
       bySource.set(sourceId, entries)
     }
+    const historicalInstallations = new Map<string, Set<string>>()
+    for (const file of manifest.files) {
+      const key = `${file.sourceId}\u0000${file.productId}`
+      const ids = historicalInstallations.get(key) ?? new Set<string>()
+      ids.add(file.installationId)
+      historicalInstallations.set(key, ids)
+    }
     const items: BackupRestorePreviewEntry[] = []
 
     for (const file of manifest.files) {
       const candidates = (bySource.get(file.sourceId) ?? [])
         .filter(candidate => candidate.detected.productId === file.productId)
-      // Prefer the exact installation. Imported cross-host backups may use a
-      // different ID: only a unique local candidate is safe to preview.
+      // Prefer exact installation identity. Cross-host fallback is safe only
+      // when both the snapshot and the local host have ONE installation.
+      // Otherwise distinct archived instances could be silently merged.
       const exact = candidates.find(candidate => candidate.installation.id === file.installationId)
-      const target = exact ?? (candidates.length === 1 ? candidates[0] : undefined)
+      const historicalCount = historicalInstallations.get(`${file.sourceId}\u0000${file.productId}`)?.size ?? 0
+      const target = exact ?? (historicalCount === 1 && candidates.length === 1 ? candidates[0] : undefined)
       const root = file.sourceScope === 'data' ? target?.detected.dataRoot : target?.detected.configRoot
       if (!target || !root) {
-        const reason = candidates.length > 1
-          ? '检测到多个安装实例，无法确定恢复位置，请先明确目标实例'
+        const reason = candidates.length > 1 || historicalCount > 1
+          ? '快照或本机存在多个安装实例，无法安全确定恢复目标'
           : '当前未检测到对应智能体或恢复根目录'
         items.push({ sourceId: file.sourceId, archivePath: file.archivePath, kinds: file.kinds, status: 'blocked', reason })
         continue

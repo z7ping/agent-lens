@@ -10,7 +10,7 @@ import type {
   SourceService,
   StorageService,
 } from '@agent-lens/core'
-import { LocalBackupService } from './service'
+import { LocalBackupService, backupLocalInternals } from './service'
 
 function fixtureServices(configRoot: string, dataRoot: string) {
   const calls = { detect: 0, discover: 0 }
@@ -165,6 +165,19 @@ test('indexes once, reuses content-addressed blobs, and keeps legacy snapshots c
     const imported = await importedService.importSnapshot(exported)
     assert.equal(imported.manifestSha256, manifest.manifestSha256)
     assert.equal((await importedService.verifySnapshot(imported.id)).valid, true)
+    // A duplicate import must restore verified content, not silently accept a
+    // matching manifest pointing to missing or corrupt local blobs.
+    const importedFile = imported.files[0]!
+    const importedBlobPath = join(vaultB, 'blobs', importedFile.sha256.slice(0, 2), importedFile.sha256)
+    await writeFile(importedBlobPath, Buffer.alloc(importedFile.size, 120))
+    assert.equal((await importedService.verifySnapshot(imported.id)).valid, false)
+    const repaired = await importedService.importSnapshot(exported)
+    assert.equal(repaired.id, imported.id)
+    assert.equal((await importedService.verifySnapshot(imported.id)).valid, true)
+    await rm(importedBlobPath)
+    assert.equal((await importedService.verifySnapshot(imported.id)).valid, false)
+    await importedService.importSnapshot(exported)
+    assert.equal((await importedService.verifySnapshot(imported.id)).valid, true)
     assert.deepEqual(await listBlobHashes(vaultB), manifest.files.map(file => file.sha256).sort())
 
     await writeFile(join(skillRoot, 'SKILL.md'), '# Review changed\n', 'utf8')
@@ -267,6 +280,9 @@ test('restore preview matches each installation and blocks ambiguous cross-insta
     assert.equal(changed.unchanged, 1)
     assert.equal(changed.blocked, 1)
     assert.match(changed.items.find(item => item.archivePath.includes('installation-two'))?.reason ?? '', /多个安装实例/)
+    detectedRoots = [third]
+    const noMatchingInstances = await service.previewRestore(snapshot.id)
+    assert.equal(noMatchingInstances.blocked, 2, 'two archived installations must not collapse onto one new local installation')
   } finally {
     await rm(root, { recursive: true, force: true })
   }
@@ -295,6 +311,51 @@ test('restore preview refuses a symlinked ancestor before reading current target
     const preview = await service.previewRestore(snapshot.id)
     assert.equal(preview.blocked, 1)
     assert.match(preview.items[0]?.reason ?? '', /符号链接/)
+  } finally {
+    await rm(root, { recursive: true, force: true })
+  }
+})
+
+
+test('snapshot IDs never resolve to dot or parent directories', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'agentlens-backup-id-'))
+  try {
+    const deps = fixtureServices(join(root, 'config'), join(root, 'data'))
+    const service = new LocalBackupService(deps.storage, deps.sources, deps.identity, {
+      vaultPath: join(root, 'vault'),
+    })
+    await assert.rejects(service.getSnapshot('.'), /Unsafe backup snapshot id/)
+    await assert.rejects(service.getSnapshot('..'), /Unsafe backup snapshot id/)
+    await assert.rejects(service.previewRestore('..'), /Unsafe backup snapshot id/)
+    assert.throws(() => backupLocalInternals.parseManifest({
+      schemaVersion: 1, id: '..', createdAt: '2026-11-02T00:00:00.000Z',
+      manifestSha256: 'irrelevant', files: [], excluded: [],
+    }), /Unsafe backup snapshot id/)
+  } finally {
+    await rm(root, { recursive: true, force: true })
+  }
+})
+
+test('restore preview refuses a missing or corrupt archived blob even if the local file matches', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'agentlens-backup-preview-integrity-'))
+  const configRoot = join(root, 'config')
+  const dataRoot = join(root, 'data')
+  try {
+    await mkdir(dataRoot, { recursive: true })
+    await mkdir(configRoot, { recursive: true })
+    await writeFile(join(dataRoot, 'session.jsonl'), 'original\n', 'utf8')
+    const deps = fixtureServices(configRoot, dataRoot)
+    const service = new LocalBackupService(deps.storage, deps.sources, deps.identity, {
+      vaultPath: join(root, 'vault'),
+    })
+    await service.refreshIndex()
+    const snapshot = await service.createSnapshot({ kinds: ['session'] })
+    assert.equal((await service.previewRestore(snapshot.id)).unchanged, 1)
+    const file = snapshot.files[0]!
+    const blob = join(root, 'vault', 'blobs', file.sha256.slice(0, 2), file.sha256)
+    await writeFile(blob, Buffer.alloc(file.size, 120))
+    assert.equal((await service.verifySnapshot(snapshot.id)).valid, false)
+    await assert.rejects(service.previewRestore(snapshot.id), /快照完整性校验失败/)
   } finally {
     await rm(root, { recursive: true, force: true })
   }
