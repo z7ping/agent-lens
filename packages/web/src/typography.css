@@ -53,35 +53,25 @@
 }
 
 /*
- * Responsive Task reading type (Live + Review only).
- * Breakpoints measure CSS viewport width, so browser zoom and Windows scaling
- * select the compact tier automatically. Sidebar and controls keep their
- * existing global type scale; Task geometry and line heights do not change.
- *
- *               <768px    768–1399px   >=1400px
- * Conversation   15px       15px         16px
- * Thinking       13px       14px         14px
- * Tool            13px       13px         14px
- * Code            12px       13px         13px
- * Metadata        12px       12px         12px
+ * Compact Task reading (Live + Review only). Use a 14px body on mobile, 13px
+ * from the shared 768px desktop breakpoint onward; no large-screen enlargement.
+ * Supporting details never drop below the product's 12px accessibility floor.
+ * Sidebar, other workspaces and shared control hit areas keep their own scale.
  */
 .task-surface.task-session-view {
-  --text-task-body:15px;
-  --text-task-thinking-markdown:13px;
+  --text-task-body:var(--font-size-md);
+  --text-task-process:var(--font-size-xs);
+  --text-task-thinking-markdown:var(--font-size-xs);
+  --text-task-tool:var(--font-size-xs);
+  --text-task-tool-code:var(--font-size-xs);
+  --text-task-code:var(--font-size-xs);
+  --text-task-heading:var(--font-size-md);
+  --text-task-emphasis:var(--font-size-md);
 }
 
 @media (min-width: 768px) {
   .task-surface.task-session-view {
-    --text-task-process:var(--font-size-md);
-    --text-task-thinking-markdown:var(--text-task-process);
-    --text-task-code:var(--font-size-sm);
-  }
-}
-
-@media (min-width: 1400px) {
-  .task-surface.task-session-view {
-    --text-task-body:var(--font-size-lg);
-    --text-task-tool:var(--font-size-md);
+    --text-task-body:var(--font-size-sm);
   }
 }
 
