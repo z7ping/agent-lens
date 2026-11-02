@@ -707,7 +707,12 @@ export const TaskSurface = forwardRef<HTMLElement, TaskSurfaceProps>(function Ta
   }, [railItems, scrollRailItemToAnchor])
 
   useEffect(()=>{
-    if(!focusTurnTarget || !Number.isSafeInteger(focusTurnTarget.ordinal)
+    if(!focusTurnTarget){
+      handledExternalFocusKeyRef.current=''
+      pendingTurnRailTargetRef.current=null
+      return
+    }
+    if(!Number.isSafeInteger(focusTurnTarget.ordinal)
       ||focusTurnTarget.ordinal<1 ||focusTurnTarget.key===handledExternalFocusKeyRef.current)return
     handledExternalFocusKeyRef.current=focusTurnTarget.key
     const target=railItems.find(item=>item.ordinal===focusTurnTarget.ordinal)
