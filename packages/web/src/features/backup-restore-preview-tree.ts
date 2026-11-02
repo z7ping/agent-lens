@@ -117,4 +117,33 @@ export function filterPreviewTree(
     return { ...node, children, counts }
   }
   return roots.map(visit).filter((node): node is PreviewTreeNode => node !== null)
+    .map(compactPreviewPaths)
+}
+
+/**
+ * Collapse directory-only chains into one visible path. The last directory
+ * retains its stable ID and destination path; file evidence stays unchanged.
+ * Special archive/network roots remain explicit so users never confuse an
+ * unresolved archive path with a verified restore destination.
+ */
+export function compactPreviewPaths(node: PreviewTreeNode): PreviewTreeNode {
+  if (node.kind === 'file') return node
+  let current: PreviewTreeNode = {
+    ...node,
+    children: node.children.map(compactPreviewPaths),
+  }
+  while (
+    current.kind === 'directory' &&
+    !['@archive', '@network'].includes(current.name) &&
+    current.children.length === 1 &&
+    current.children[0]?.kind === 'directory' &&
+    !['@archive', '@network'].includes(current.children[0].name)
+  ) {
+    const child = current.children[0]!
+    current = {
+      ...child,
+      name: current.name === '/' ? `/${child.name}` : `${current.name}/${child.name}`,
+    }
+  }
+  return current
 }
