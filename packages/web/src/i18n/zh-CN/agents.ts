@@ -376,6 +376,7 @@ export const chineseAgentsMessages: LocaleMessagesDto = {
       noRuntimeConfig: '暂无运行与配置路径',
       showMorePaths: '查看更多 {{count}} 条路径',
       captureSupport: 'AgentLens 采集支持',
+      captureSupportUnavailable: '当前来源尚未提供可核验的采集能力明细。',
       captureSupportTitle: '这里展示的是 AgentLens 适配器声明的采集支持，不代表当前智能体安装实例自报告的产品能力。',
     },
     managedFiles: {
