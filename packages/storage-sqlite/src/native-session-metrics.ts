@@ -6,6 +6,7 @@ import type {
   NativeSessionMetricOverviewQuery,
   NativeSessionMetricRebuildCandidate,
   NativeSessionMetricRebuildCursor,
+  NativeErrorIndexEntry, NativeErrorIndexQuery, NativeErrorIndexResult,
 } from '@agent-lens/core'
 import { NATIVE_SESSION_METRIC_PROJECTION_VERSION } from '@agent-lens/core'
 import type { SqliteExecutor } from './executor'
@@ -76,7 +77,14 @@ export class SqliteNativeSessionMetrics implements NativeSessionMetricsStore {
   constructor(private readonly executor: SqliteExecutor) {}
 
   /** An exact Catalog revision is required before overwriting derived totals. */
-  async replace(input: NativeSessionMetricSnapshot): Promise<boolean> {
+  async replace(input: NativeSessionMetricSnapshot, errors: readonly NativeErrorIndexEntry[] = []): Promise<boolean> {
+    if (errors.some(entry => !entry.eventKey || entry.eventKey.length!==64
+      || !entry.fingerprint || entry.fingerprint.length!==64
+      || !Number.isFinite(Date.parse(entry.occurredAt))
+      || entry.summary.length>240 || entry.toolName!==null && entry.toolName.length>128
+      || entry.errorCode!==null && entry.errorCode.length>80)) {
+      throw new TypeError('Invalid native error index entry')
+    }
     assertSnapshot(input)
     return this.executor.transaction(async () => {
       const exists = this.executor.db.prepare(`
@@ -125,7 +133,82 @@ export class SqliteNativeSessionMetrics implements NativeSessionMetricsStore {
         tool.callCount,tool.resultCount,tool.errorCount,tool.totalDurationMs,
         tool.durationSampleCount??0,tool.maxDurationMs??null,
       )
+      // Atomic replacement only after the Catalog revision has been validated.
+      this.executor.db.prepare(`DELETE FROM native_error_index
+        WHERE source_id=? AND installation_id=? AND native_session_id=?`)
+        .run(input.sourceId,input.installationId,input.nativeSessionId)
+      const insertError=this.executor.db.prepare(`INSERT INTO native_error_index (
+        source_id,installation_id,native_session_id,event_key,occurred_at,
+        turn_ordinal,native_event_id,tool_name,error_kind,error_code,summary,fingerprint
+      ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`)
+      for(const error of errors)insertError.run(
+        input.sourceId,input.installationId,input.nativeSessionId,error.eventKey,
+        error.occurredAt,error.turnOrdinal,error.nativeEventId,error.toolName,
+        error.kind,error.errorCode,error.summary,error.fingerprint,
+      )
       return true
+    })
+  }
+
+
+  /** Search only current, parser-matching Source facts. Never serve stale rows. */
+  queryErrors(query:NativeErrorIndexQuery):Promise<NativeErrorIndexResult> {
+    if(!query.sourceId || !query.parserVersion || query.limit<1 || query.limit>100
+      || query.offset<0 || !Number.isSafeInteger(query.offset))throw new RangeError('Invalid error index query')
+    return this.executor.run(()=>{
+      const where=[
+        'e.source_id=?', 'm.parser_version=?', 'm.projection_version=?',
+      ]
+      const params:(string|number)[]=[
+        query.sourceId,query.parserVersion,NATIVE_SESSION_METRIC_PROJECTION_VERSION,
+      ]
+      if(query.projectId){where.push('ctx.project_id=?');params.push(query.projectId)}
+      if(query.toolName){where.push('e.tool_name=?');params.push(query.toolName)}
+      if(query.from){where.push('e.occurred_at>=?');params.push(query.from)}
+      if(query.to){where.push('e.occurred_at<=?');params.push(query.to)}
+      if(query.search){
+        // Literal substring search: escape LIKE wildcard characters.
+        where.push(`(e.summary LIKE ? ESCAPE '\\' OR e.error_code LIKE ? ESCAPE '\\'
+          OR e.tool_name LIKE ? ESCAPE '\\')`)
+        const escaped=query.search.replace(/[\\%_]/g,'\\  async get(identity: Identity): Promise<NativeSessionMetricReadResult> {')
+        params.push(...Array(3).fill(`%${escaped}%`))
+      }
+      const base=`FROM native_error_index e
+        JOIN native_session_metrics m ON m.source_id=e.source_id
+          AND m.installation_id=e.installation_id AND m.native_session_id=e.native_session_id
+        JOIN native_session_catalog c ON c.source_id=e.source_id
+          AND c.installation_id=e.installation_id AND c.native_session_id=e.native_session_id
+          AND c.location_kind='native'
+          AND c.file_identity=m.file_identity AND c.file_size=m.file_size
+          AND c.file_mtime_ms=m.file_mtime_ms
+        LEFT JOIN native_session_context ctx ON ctx.source_id=e.source_id
+          AND ctx.installation_id=e.installation_id AND ctx.native_session_id=e.native_session_id
+        WHERE ${where.join(' AND ')}`
+      const total=(this.executor.db.prepare(`SELECT COUNT(*) AS value ${base}`)
+        .get(...params) as {value:number}).value
+      const rows=this.executor.db.prepare(`SELECT
+          e.event_key,e.occurred_at,e.turn_ordinal,e.native_event_id,e.tool_name,
+          e.error_kind,e.error_code,e.summary,e.fingerprint,
+          c.review_session_id,m.coverage
+        ${base}
+        ORDER BY e.occurred_at DESC,e.event_key DESC
+        LIMIT ? OFFSET ?`).all(...params,query.limit,query.offset) as Array<{
+          event_key:string;occurred_at:string;turn_ordinal:number|null
+          native_event_id:string|null;tool_name:string|null;error_kind:'tool'|'runtime'
+          error_code:string|null;summary:string;fingerprint:string
+          review_session_id:string|null;coverage:'complete'|'partial'
+        }>
+      return {
+        total,hasMore:query.offset+rows.length<total,
+        items:rows.map(row=>({
+          eventKey:row.event_key,occurredAt:row.occurred_at,
+          turnOrdinal:row.turn_ordinal,nativeEventId:row.native_event_id,
+          toolName:row.tool_name,kind:row.error_kind,errorCode:row.error_code,
+          summary:row.summary,fingerprint:row.fingerprint,
+          sessionId:row.review_session_id??'',
+          sourceId:query.sourceId,coverage:row.coverage,
+        })),
+      }
     })
   }
 
