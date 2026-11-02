@@ -246,3 +246,25 @@ test('native tool durations derive averages only from observed result samples',a
   assert.equal(unknown?.averageDurationMs,undefined)
   assert.equal(unknown?.maxDurationMs,undefined)
 })
+
+
+test('Insights opt-in native trend keeps last-activity cohorts and partial coverage separate',async()=>{
+  const metrics={overview:async(query:{sourceId:string;includeTrend?:boolean})=>{
+    assert.equal(query.includeTrend,true)
+    return {...overview(query.sourceId,1),trend:[
+      {date:'2026-10-25',sessionCount:1,interactionCount:3,toolCallCount:2,errorCount:1},
+    ]}
+  }} as unknown as NativeSessionMetricsStore
+  const value=await nativeMetricContribution(metrics,sources,policy,{
+    sourceIds:['pi'],from:'2026-10-24T00:00:00Z',includeTrend:true,
+  })
+  if(value.state!=='available')assert.fail('Expected available metrics')
+  assert.equal(value.coverage,'partial')
+  assert.deepEqual(value.trend,[
+    {date:'2026-10-25',sessionCount:1,interactionCount:3,toolCallCount:2,errorCount:1},
+  ])
+  assert.equal(value.missingSessions,1)
+  const without=await nativeMetricContribution(metrics,sources,policy,{sourceIds:['pi']})
+  if(without.state!=='available')assert.fail('Expected available metrics')
+  assert.equal(without.trend,undefined)
+})
