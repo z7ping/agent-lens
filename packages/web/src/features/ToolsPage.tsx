@@ -391,6 +391,8 @@ export function ToolsPage({ model, toolbarHost }: { model: AgentLensClientModel;
     <main className="workspace-page tools-page">
       {!readingDetail && <div className="page-content tools-content">
         {usage.error && <ErrorStateBanner message={usage.error} onRetry={() => void model.refreshUsage()}/>} 
+        {nativeOnlyMode && nativeMetrics?.state!=='available' && <ErrorStateBanner
+          message={t('page.nativeMetricsUnavailable')} onRetry={() => void model.refreshUsage()}/> }
         {projectionPartial && projection && <div className="tool-projection-status" role="status" aria-live="polite">
           <UiIcon name="refresh" size={14}/>
           <span><b>{t('page.projectionTitle')}</b><small>{t('page.projectionDescription', { projected: projection.projectedCount.toLocaleString(locale), total: projection.sourceObservationCount.toLocaleString(locale), percent: projectionPercent })}</small></span>
