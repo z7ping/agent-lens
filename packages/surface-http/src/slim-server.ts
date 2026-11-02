@@ -50,6 +50,7 @@ import {
 import { discoverLocalePacks } from './locale-packs'
 import { handleLiveRequest } from './live-http'
 import { handleHermesLiveSetupRequest, type HermesLiveSetupController } from './hermes-live-setup-http'
+import { handleAgentWorkspaceRequest, type AgentWorkspaceReader } from './agent-workspace-http'
 import { handleLiveAttachmentRequest } from './live-attachments-http'
 import { nativeMetricContribution } from './native-metrics-contribution'
 import { nativeOnlyInsightsResponse, nativeOnlyToolUsageResponse } from './native-only-usage-insights'
@@ -92,6 +93,7 @@ export interface NativeOnlyHttpOptions {
   lives?: LiveService
   liveAttachments?: LiveAttachmentService
   hermesLiveSetup?: HermesLiveSetupController
+  workspaceReaders?: Readonly<Record<string, AgentWorkspaceReader>>
   integrationDiscovery?:IntegrationDiscoveryController
   integrationManagement?:IntegrationManagementController
   integrationStatus?:(productId:string)=>Promise<AgentIntegrationRuntimeStatus|null>
@@ -154,6 +156,8 @@ export async function startNativeOnlyHttpSurface(
       if(await handleIntegrationPackageRequest(
         request,response,url,options.integrationPackages))return
       if(await handleHermesLiveSetupRequest(request,response,url,options.hermesLiveSetup))return
+      if(await handleAgentWorkspaceRequest(request,response,url,options.workspaceReaders,
+        options.sources,options.capturePolicy))return
       if(await handleLiveAttachmentRequest(request,response,url,options.liveAttachments))return
       if(await handleLiveRequest(request,response,url,options.lives,
         options.selectProjectDirectory,{

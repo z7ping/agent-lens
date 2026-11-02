@@ -13,7 +13,7 @@ import { DefaultSourceService } from '@agent-lens/core-services'
 import { piSourceDefinition } from '@agent-lens/source-pi'
 import { codexSourceDefinition } from '@agent-lens/source-codex'
 import { claudeSourceDefinition } from '@agent-lens/source-claude'
-import { hermesSourceDefinition } from '@agent-lens/source-hermes'
+import { hermesSourceDefinition, readHermesWorkspace } from '@agent-lens/source-hermes'
 import { openCodeSourceDefinition } from '@agent-lens/source-opencode'
 import { startNativeOnlyHttpSurface, previewLocalHostTextFile, type IntegrationPackageController } from '@agent-lens/surface-http'
 import type { PiEcosystemQueryService } from '@agent-lens/protocol'
@@ -170,6 +170,7 @@ export async function startSlimNativeDaemon(options:SlimDaemonOptions){
       rescanAgents:id=>coordinator.rescan(id),
       ...(options.port===undefined?{}:{port:options.port}),
       sources,capturePolicy:policy,
+      workspaceReaders: {hermes: readHermesWorkspace},
       ...(policy.isSourceEnabled('pi')?{
         piEcosystem:options.piEcosystem??new NpmPiEcosystemProvider(),
       }:{}),
