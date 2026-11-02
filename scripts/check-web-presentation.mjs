@@ -143,6 +143,28 @@ assertCssValue('.select-menu-trigger', 'font-size', '13px')
 
 const read = key => readFileSync(files[key], 'utf8')
 const css = Object.fromEntries(Object.keys(files).filter(key => key !== 'main').map(key => [key, read(key)]))
+// A table default foreground belongs on the container (inherited).
+// Direct cell colors would suppress error/warning/unknown semantic states;
+// do not repair that with more-specific selectors.
+const toolTableRules = cssRules(css.tools)
+const toolTableBase = toolTableRules.find(rule => rule.selector === '.tool-table')
+if (toolTableBase?.declarations.color !== 'var(--al-ink-2)') {
+  throw new Error('工具表格默认文字色必须由 .tool-table 统一继承')
+}
+for (const rule of toolTableRules) {
+  if (/^\\.tool-table td(?:$|[\\s.:#\\[])/.test(rule.selector) && 'color' in rule.declarations) {
+    throw new Error('工具表格单元格禁止重设 color：状态颜色应由 .cell-danger / .cell-slow / .cell-muted 持有')
+  }
+}
+for (const [selector, color] of [
+  ['.cell-danger', 'var(--al-danger)'],
+  ['.cell-muted', 'var(--al-muted-2)'],
+]) {
+  if (!toolTableRules.some(rule => rule.selector === selector && rule.declarations.color === color)) {
+    throw new Error(selector + ' 必须直接持有状态颜色')
+  }
+}
+
 const integrationsCss = readFileSync(p('integrations.css'), 'utf8')
 const integrationLayoutOverrides = cssRules(integrationsCss).filter(rule => rule.selector === '.integration-management-content')
 if (integrationLayoutOverrides.some(rule => ['width', 'max-width', 'margin', 'padding'].some(property => property in rule.declarations))) {
