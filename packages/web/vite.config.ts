@@ -13,8 +13,18 @@ export default defineConfig({
   define: {
     __AGENT_LENS_RUNTIME_PORT__: JSON.stringify(runtimePort),
   },
+  // Lexical's PrismJS integration relies on module execution order. Rolldown
+  // may split the pre-bundled code and Prism modules otherwise.
+  optimizeDeps: {
+    rolldownOptions: {
+      experimental: { strictExecutionOrder: true },
+    },
+  },
   build: {
     chunkSizeWarningLimit: 700,
+    rolldownOptions: {
+      experimental: { strictExecutionOrder: true },
+    },
   },
   server: {
     host: '127.0.0.1',
