@@ -193,6 +193,18 @@ test('indexes once, reuses content-addressed blobs, and keeps legacy snapshots c
     const skill = preview.items.find(item => item.kinds.includes('skill'))
     assert.equal(skill?.status, 'modified')
     assert.equal(preview.blocked, 0)
+    const inspected = await importedService.previewRestoreFile(imported.id, skill!.archivePath)
+    assert.equal(inspected.snapshot.content, '# Review\n')
+    assert.equal(inspected.current.content, '# Review changed\n')
+    assert.equal(inspected.snapshotId, imported.id)
+    await assert.rejects(importedService.previewRestoreFile(imported.id, '../../outside'), /找不到该文件/)
+    const sessionFile = imported.files.find(file => file.kinds.includes('session'))!
+    const protectedSession = await importedService.previewRestoreFile(imported.id, sessionFile.archivePath)
+    assert.equal(protectedSession.snapshot.previewStatus, 'metadata-only')
+    assert.equal(protectedSession.snapshot.blockedReason, 'protected-data')
+    await rm(join(skillRoot, 'SKILL.md'))
+    const missing = await importedService.previewRestoreFile(imported.id, skill!.archivePath)
+    assert.equal(missing.current.previewStatus, 'missing')
 
     const stored = await readFile(join(vaultB, 'snapshots', imported.id, 'manifest.json'), 'utf8')
     assert.equal(stored.includes('secretsecret'), false)
