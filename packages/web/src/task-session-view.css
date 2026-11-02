@@ -71,15 +71,16 @@
 
 /*
  * 1280px 窗口配合工作栏时，实际 Task Surface 会落入 lg 宽度。
- * 96px 是已确认的稳定阅读列留白；真实小屏仍由下面 viewport media 收窄。
+ * Compact 阅读区改为 36px 内边距，避免在窄容器浪费正文宽度；
+ * 真实小屏仍由下面 viewport media 收窄。
  */
 @container task-surface (max-width: 991.98px) {
   .task-session-view .task-session-document,
-  .task-session-view .task-session-composer { padding-inline: 96px; }
+  .task-session-view .task-session-composer { padding-inline: 36px; }
 
   .task-surface-live .live-task-float-stack {
-    right: 96px;
-    left: 96px;
+    right: 36px;
+    left: 36px;
     width: auto;
   }
 }
