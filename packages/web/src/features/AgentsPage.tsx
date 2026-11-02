@@ -18,7 +18,7 @@ import { WorkspaceViewTabs } from '../components/WorkspaceViewTabs'
 import { useIntegrationOrder } from '../components/IntegrationOrderProvider'
 import { AgentManagedFilesDialog } from '../components/AgentManagedFilesDialog'
 import { LocalPathActions } from '../components/LocalPathActions'
-import { WorkspaceSkeleton } from '../components/StateViews'
+import { ErrorStateBanner, WorkspaceSkeleton } from '../components/StateViews'
 import { Button, Disclosure, IconButton, SelectMenu, StatusBadge, UiIcon } from '../components/ui'
 import {
   IntegrationObservationPanel,
@@ -626,9 +626,10 @@ function AgentCard({ model, agent, management, discovery, discoveryScanning, dis
       <Disclosure
         className="disclosure-group"
         summary={<span title={t('sections.captureSupportTitle')}>{t('sections.captureSupport')}</span>}
-        summaryMeta={<span className="disclosure-count">{agent.capabilities.length}</span>}
+        summaryMeta={<span className="disclosure-count">{agent.capabilities.length || '—'}</span>}
       >
         <div className="capability-list">
+          {!agent.capabilities.length && <div className="muted-empty compact">{t('sections.captureSupportUnavailable')}</div>}
           {agent.capabilities.map(cap => <div key={cap.name} className="capability-row" title={capabilityDetail(cap, t)}><span>{translatedLabel(capabilityLabelKey, cap.name, t)} · {capabilityDetail(cap, t)}</span><b data-status={cap.status}>{translatedLabel(capabilityStatusLabelKey, cap.status, t)}</b></div>)}
         </div>
       </Disclosure>
@@ -763,7 +764,10 @@ export function AgentsPage({
             discoveryError={snapshot.integrationDiscoveryError}
             piView={piView}
             onManageIntegration={id => navigate(`/agents?view=management&agent=${encodeURIComponent(id)}`)}
-          /> : detailPending || selectedRow?.summary ? <WorkspaceSkeleton kind="agents"/> : selectedManagement ? <IntegrationOnlyObservationCard
+          /> : selectedRow?.summary && !detailPending && snapshot.agentDetailError
+            ? <ErrorStateBanner message={snapshot.agentDetailError}
+                onRetry={() => void model.ensureAgentDetail(selectedRow.sourceId).catch(() => undefined)}/>
+            : detailPending || selectedRow?.summary ? <WorkspaceSkeleton kind="agents"/> : selectedManagement ? <IntegrationOnlyObservationCard
             key={selectedManagement.integrationId}
             management={selectedManagement}
             discovery={selectedDiscovery}
