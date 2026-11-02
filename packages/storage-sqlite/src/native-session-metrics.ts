@@ -131,6 +131,73 @@ export class SqliteNativeSessionMetrics implements NativeSessionMetricsStore {
   }
 
 
+
+  /** Small IPC-safe batches; only the published generation becomes queryable. */
+  async stageErrors(identity:Identity,generation:string,errors:readonly NativeErrorIndexEntry[]):Promise<void>{
+    if(!/^[0-9a-f-]{36}$/.test(generation)||errors.length>50)throw new RangeError('Invalid error batch')
+    for(const entry of errors){
+      if(!/^[0-9a-f]{64}$/.test(entry.eventKey)||!/^[0-9a-f]{64}$/.test(entry.fingerprint)
+        ||!Number.isFinite(Date.parse(entry.occurredAt))
+        ||entry.summary.length>240||entry.toolName!==null&&entry.toolName.length>128
+        ||entry.errorCode!==null&&entry.errorCode.length>80){
+        throw new TypeError('Invalid native error index entry')
+      }
+    }
+    await this.executor.transaction(async()=>{
+      const db=this.executor.db
+      // Clean interrupted staging generations but preserve the published one.
+      db.prepare(`DELETE FROM native_error_index WHERE source_id=? AND installation_id=?
+        AND native_session_id=? AND scan_generation<>?
+        AND scan_generation<>COALESCE((SELECT scan_generation FROM native_error_index_state
+          WHERE source_id=? AND installation_id=? AND native_session_id=?),'')`)
+        .run(identity.sourceId,identity.installationId,identity.nativeSessionId,generation,
+          identity.sourceId,identity.installationId,identity.nativeSessionId)
+      const insert=db.prepare(`INSERT OR IGNORE INTO native_error_index (
+        source_id,installation_id,native_session_id,scan_generation,event_key,
+        occurred_at,turn_ordinal,native_event_id,tool_name,error_kind,
+        error_code,summary,fingerprint
+      ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`)
+      for(const entry of errors)insert.run(identity.sourceId,identity.installationId,
+        identity.nativeSessionId,generation,entry.eventKey,entry.occurredAt,
+        entry.turnOrdinal,entry.nativeEventId,entry.toolName,entry.kind,
+        entry.errorCode,entry.summary,entry.fingerprint)
+    })
+  }
+
+  /** Atomic publish: both the metric and Catalog revisions must still match. */
+  async publishErrors(input:NativeSessionMetricSnapshot,generation:string):Promise<boolean>{
+    if(!/^[0-9a-f-]{36}$/.test(generation))throw new RangeError('Invalid error generation')
+    return this.executor.transaction(async()=>{
+      const identity=[input.sourceId,input.installationId,input.nativeSessionId]
+      const match=this.executor.db.prepare(`SELECT 1 FROM native_session_metrics m
+        JOIN native_session_catalog c ON c.source_id=m.source_id
+          AND c.installation_id=m.installation_id AND c.native_session_id=m.native_session_id
+        WHERE m.source_id=? AND m.installation_id=? AND m.native_session_id=?
+          AND c.location_kind='native'
+          AND c.file_identity=? AND c.file_size=? AND c.file_mtime_ms=?
+          AND m.file_identity=? AND m.file_size=? AND m.file_mtime_ms=?
+          AND m.parser_version=? AND m.projection_version=? LIMIT 1`)
+        .get(...identity,input.fileIdentity,input.fileSize,input.fileMtimeMs,
+          input.fileIdentity,input.fileSize,input.fileMtimeMs,input.parserVersion,input.projectionVersion)
+      if(!match)return false
+      this.executor.db.prepare(`INSERT INTO native_error_index_state(
+        source_id,installation_id,native_session_id,scan_generation,
+        file_identity,file_size,file_mtime_ms,parser_version,projection_version,indexed_at
+      ) VALUES (?,?,?,?,?,?,?,?,?,?)
+      ON CONFLICT(source_id,installation_id,native_session_id) DO UPDATE SET
+        scan_generation=excluded.scan_generation,file_identity=excluded.file_identity,
+        file_size=excluded.file_size,file_mtime_ms=excluded.file_mtime_ms,
+        parser_version=excluded.parser_version,projection_version=excluded.projection_version,
+        indexed_at=excluded.indexed_at`)
+        .run(...identity,generation,input.fileIdentity,input.fileSize,input.fileMtimeMs,
+          input.parserVersion,input.projectionVersion,new Date().toISOString())
+      this.executor.db.prepare(`DELETE FROM native_error_index WHERE
+        source_id=? AND installation_id=? AND native_session_id=? AND scan_generation<>?`)
+        .run(...identity,generation)
+      return true
+    })
+  }
+
   /** Search only current, parser-matching Source facts. Never serve stale rows. */
   queryErrors(query:NativeErrorIndexQuery):Promise<NativeErrorIndexResult> {
     if(!query.sourceId || !query.parserVersion || query.limit<1 || query.limit>100
