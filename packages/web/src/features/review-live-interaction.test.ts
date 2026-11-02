@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
 import test from 'node:test'
 import type { LiveProductDto } from '@agent-lens/protocol'
 import { projectReviewLiveInteraction } from './review-live-interaction'
@@ -99,4 +100,20 @@ test('historical composer renders only advertised inactive controls before nativ
   assert.equal(result?.canThinkingControl, true)
   assert.equal(result?.canStreamModes, true)
   assert.equal(result?.canForkAt, false)
+})
+
+test('Pi native-window Review keeps inline continuation when adapter advertises resume/send', () => {
+  const nativeReview = { productId: 'pi', statisticsCompleteness: 'window' as const }
+  const interaction = projectReviewLiveInteraction(nativeReview, [product({
+    liveId: 'pi',
+    productId: 'pi',
+    capabilities: ['resume', 'send', 'fork-at'],
+  })])
+  assert.equal(interaction?.canResume && interaction.canSend, true)
+  assert.equal(interaction?.canForkAt, true)
+
+  // The native window describes metric coverage, not whether Pi can resume.
+  const reviewHook = readFileSync(new URL('./use-review-session.ts', import.meta.url), 'utf8')
+  assert.match(reviewHook, /\(\) => projectReviewLiveInteraction\(detail, liveProducts\)/)
+  assert.doesNotMatch(reviewHook, /statisticsCompleteness === 'window'\s*\?\s*undefined\s*:\s*projectReviewLiveInteraction/)
 })

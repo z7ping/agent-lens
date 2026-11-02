@@ -67,10 +67,11 @@ export function useReviewSession(model: AgentLensClientModel, embedded: boolean)
   const agents = snapshot.facets?.agents ?? []
   const projects = snapshot.facets?.projects ?? []
   const detail = review.detail
+  // Native-window Review retains the same Source identity. The Live adapter
+  // advertises resume/fork capabilities independently of Review metric coverage.
   const detailLiveInteraction = useMemo(
-    () => detail?.statisticsCompleteness === 'window'
-      ? undefined : projectReviewLiveInteraction(detail, liveProducts),
-    [detail?.id, detail?.productId, detail?.statisticsCompleteness, liveProducts],
+    () => projectReviewLiveInteraction(detail, liveProducts),
+    [detail?.id, detail?.productId, liveProducts],
   )
   // Index progress is independent of text loading. One request scans only
   // bounded native Source pages; only a proven EOF exposes totalRounds.
