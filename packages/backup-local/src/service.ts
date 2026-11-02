@@ -1146,17 +1146,28 @@ export class LocalBackupService implements BackupService {
     const manifest = await this.getSnapshot(id)
     if (!manifest) throw new Error(`找不到快照：${id}`)
     const targets = await this.targets({ sourceIds: [...new Set(manifest.files.map(file => file.sourceId))] })
-    const bySource = new Map<string, BackupTarget>()
+    const bySource = new Map<string, BackupTarget[]>()
     for (const target of targets) {
-      if (!bySource.has(target.source.manifest.sourceId)) bySource.set(target.source.manifest.sourceId, target)
+      const sourceId = target.source.manifest.sourceId
+      const entries = bySource.get(sourceId) ?? []
+      entries.push(target)
+      bySource.set(sourceId, entries)
     }
     const items: BackupRestorePreviewEntry[] = []
 
     for (const file of manifest.files) {
-      const target = bySource.get(file.sourceId)
+      const candidates = (bySource.get(file.sourceId) ?? [])
+        .filter(candidate => candidate.detected.productId === file.productId)
+      // Prefer the exact installation. Imported cross-host backups may use a
+      // different ID: only a unique local candidate is safe to preview.
+      const exact = candidates.find(candidate => candidate.installation.id === file.installationId)
+      const target = exact ?? (candidates.length === 1 ? candidates[0] : undefined)
       const root = file.sourceScope === 'data' ? target?.detected.dataRoot : target?.detected.configRoot
       if (!target || !root) {
-        items.push({ sourceId: file.sourceId, archivePath: file.archivePath, kinds: file.kinds, status: 'blocked', reason: '当前未检测到对应智能体或恢复根目录' })
+        const reason = candidates.length > 1
+          ? '检测到多个安装实例，无法确定恢复位置，请先明确目标实例'
+          : '当前未检测到对应智能体或恢复根目录'
+        items.push({ sourceId: file.sourceId, archivePath: file.archivePath, kinds: file.kinds, status: 'blocked', reason })
         continue
       }
       let sourceRelativePath: string
