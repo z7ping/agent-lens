@@ -83,7 +83,15 @@ export function useReviewUrlSync({
       if (!sameReviewFilters(filters, pendingUrlFiltersRef.current)) return
       pendingUrlFiltersRef.current = null
     }
-    const nextSearch = reviewSearchFromFilters(filters)
+    // A verified failure sample may point to an exact native Review ordinal.
+    // Preserve this deep link while canonicalizing filter query parameters.
+    const focusTurn=new URLSearchParams(search).get('focusTurn')
+    const nextParams=new URLSearchParams(reviewSearchFromFilters(filters))
+    if(focusTurn && /^[1-9]\d*$/.test(focusTurn)
+      && Number.isSafeInteger(Number(focusTurn))){
+      nextParams.set('focusTurn',focusTurn)
+    }
+    const nextSearch=`?${nextParams.toString()}`
     if (search === nextSearch) return
     replace(pathname, nextSearch)
   }, [active, filters, pathname, replace, search])

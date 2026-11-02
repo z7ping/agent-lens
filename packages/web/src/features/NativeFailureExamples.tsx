@@ -22,7 +22,7 @@ export function NativeFailureExamples({filters,toolName}: {filters:QueryFilters;
     projectId:filters.projectId,range:filters.range,
   },toolName),[sourceIdsKey,filters.projectId,filters.range,toolName])
   const controller = useRef<AbortController | null>(null)
-  const [,setRevision] = useState(0)
+  const [revision,setRevision] = useState(0)
   const [loading,setLoading] = useState(false)
   const [error,setError] = useState('')
   const [copyState,setCopyState] = useState<'idle'|'copied'|'error'>('idle')
@@ -69,6 +69,18 @@ export function NativeFailureExamples({filters,toolName}: {filters:QueryFilters;
       setCopyState('copied')
     } catch {setCopyState('error')}
   }
+  const repeats=useMemo(()=>{
+    const samples=new Map<string,{toolName:string;error:string;count:number}>()
+    for(const example of scanner.examples){
+      if(example.kind!=='tool'||!example.toolName||example.truncated)continue
+      const key=JSON.stringify([example.toolName,example.error])
+      const old=samples.get(key)
+      if(old)old.count++
+      else samples.set(key,{toolName:example.toolName,error:example.error,count:1})
+    }
+    return [...samples.values()].filter(item=>item.count>1)
+      .sort((a,b)=>b.count-a.count).slice(0,5)
+  },[scanner,revision])
   return <section className="native-failure-examples" aria-label={t('failures.title')}>
     <p className="native-failure-note">{t('failures.description')}</p>
     <Toolbar aria-label={t('failures.title')}>
@@ -86,6 +98,15 @@ export function NativeFailureExamples({filters,toolName}: {filters:QueryFilters;
     </p>
     {error&&<ErrorStateBanner message={error} onRetry={()=>void scan()}/>}
     {scanner.skippedSessions>0&&<p className="native-failure-note">{t('failures.skipped',{count:scanner.skippedSessions})} {scanner.lastIssue}</p>}
+    {repeats.length>0&&<div className="native-failure-repeats">
+      <strong>{t('failures.repeatedSampleTitle')}</strong>
+      <p className="native-failure-note">{t('failures.repeatedSampleNote')}</p>
+      {repeats.map(item=><div className="native-failure-repeat" key={JSON.stringify([item.toolName,item.error])}>
+        <span><b>{item.toolName}</b><small title={item.error}>{item.error.slice(0,160)}</small></span>
+        <b>{t('failures.repeatedSampleCount',{count:item.count})}</b>
+      </div>)}
+    </div>}
+
     {!scanner.examples.length&&!loading&&<EmptyStatePanel compact icon={<UiIcon name="search" size={20}/>} title={t('failures.empty')}
       description={t('failures.emptyDescription')}/>}
     {scanner.examples.map(example=><Disclosure key={`${example.sessionId}:${example.id}`}
@@ -98,7 +119,7 @@ export function NativeFailureExamples({filters,toolName}: {filters:QueryFilters;
         <div><strong>{t('failures.error')}</strong><CopyableCodeBlock>{example.error}</CopyableCodeBlock></div>
         {(example.truncated||example.contextPartial)&&<p className="native-failure-note">{t('failures.partial')}</p>}
         <p className="native-failure-note">{t('failures.evidence',{observations:example.observationIds.length,evidence:example.evidenceIds.length})}</p>
-        <Button onClick={()=>navigate(`/review/${encodeURIComponent(example.sessionId)}?range=all&status=all`)}>{t('failures.openSession')}</Button>
+        <Button onClick={()=>navigate(`/review/${encodeURIComponent(example.sessionId)}?range=all&status=all&focusTurn=${encodeURIComponent(String(example.ordinal))}`)}>{t('failures.openSession')}</Button>
       </div>
     </Disclosure>)}
   </section>

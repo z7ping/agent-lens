@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useLocation, useNavigate, useParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import type { HubReviewSessionSummaryDto, LiveMessageDto, NativeSessionSummaryDto, ReviewNodeDto, NativeReviewTurnIndexResponseDto } from '@agent-lens/protocol'
 import { fetchHubReviewSessions } from '../client/hub-review'
@@ -29,6 +29,7 @@ export function useReviewSession(model: AgentLensClientModel, embedded: boolean)
   const snapshot = useClientSnapshot(model)
   const { sessionId } = useParams()
   const navigate = useNavigate()
+  const location = useLocation()
   const [inspect, setInspect] = useState<ReviewNodeDto | null>(null)
   const [roundFilter, setRoundFilter] = useState<RoundFilter>('all')
   const [roundFilterLoading, setRoundFilterLoading] = useState(false)
@@ -57,6 +58,7 @@ export function useReviewSession(model: AgentLensClientModel, embedded: boolean)
   const pendingReaderAnchorRef = useRef<{ position: ReviewReaderPosition; userRevision: number } | null>(null)
   const readerUserRevisionRef = useRef(0)
   const nativeNavigationRevisionRef=useRef(0)
+  const handledFocusTurnRef=useRef('')
   const detailAutoLoadBaselineRef = useRef(0)
   const followingTailRef = useRef(false)
   const roundExpansionRef = useRef(new Map<string, boolean>())
@@ -653,6 +655,24 @@ export function useReviewSession(model: AgentLensClientModel, embedded: boolean)
     // after the new virtual round shell has mounted. Do not race its anchor
     // with a separate scrollTop request.
   }
+
+  useEffect(()=>{
+    const focus=new URLSearchParams(location.search).get('focusTurn')
+    if(!focus || !/^[1-9]\d*$/.test(focus)){
+      handledFocusTurnRef.current=''
+      return
+    }
+    const ordinal=Number(focus)
+    if(!Number.isSafeInteger(ordinal)||!detail?.id||detail.id!==sessionId
+      ||roundFilterLoading)return
+    const identity=`${detail.id}:${ordinal}`
+    if(handledFocusTurnRef.current===identity)return
+    handledFocusTurnRef.current=identity
+    // Existing navigation reads only the bounded native turn window and lets
+    // TaskSurface anchor the selected round after the virtual shell mounts.
+    nativeNavigationRevisionRef.current++
+    void model.jumpToReviewInteraction(ordinal)
+  },[location.search,detail?.id,sessionId,roundFilterLoading,model])
 
   const showFromStart = async () => {
     nativeNavigationRevisionRef.current++

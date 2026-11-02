@@ -138,6 +138,8 @@ export type NativeMetricContributionDto =
         }>
         toolsTruncated?:boolean
       }
+      /** Optional verified-session counts by UTC last-activity date (not event dates). */
+      trend?:Array<{date:string;sessionCount:number;interactionCount:number;toolCallCount:number;errorCount:number}>
       /** Optional bounded, per-Source numerical tool totals for Usage UI. */
       tools?:Array<{
         sourceId:string

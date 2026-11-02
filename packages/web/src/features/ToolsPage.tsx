@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import type { TFunction } from 'i18next'
 import { useTranslation } from 'react-i18next'
 import { createPortal } from 'react-dom'
-import { useNavigate } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 import type { ToolUsageDto } from '@agent-lens/protocol'
 import { AgentLensApi } from '../client/api'
 import type { AgentLensClientModel } from '../client/model'
@@ -11,7 +11,7 @@ import { agentLabel, useOrderedAgents } from '../components/AgentScope'
 import { EmptyStatePanel, ErrorStateBanner, WorkspaceSkeleton } from '../components/StateViews'
 import { ToolKindIcon, toolVisualKind } from '../components/ToolKindIcon'
 import { SidebarFilterDisclosure } from '../components/SidebarFilterDisclosure'
-import { Button, Drawer, IconButton, SelectMenu, UiIcon } from '../components/ui'
+import { Button, IconButton, SelectMenu, UiIcon } from '../components/ui'
 import { projectSelectOption } from './project-presentation'
 import { NativeFailureExamples } from './NativeFailureExamples'
 
@@ -108,6 +108,7 @@ export function ToolsPage({ model, toolbarHost }: { model: AgentLensClientModel;
   const facets = useClientSnapshotField(model, 'facets')
   const review = useClientSnapshotField(model, 'review')
   const navigate = useNavigate()
+  const location = useLocation()
   const data = usage.response
   const nativeMetrics=data?.meta.native
   const nativeOnlyMode=data?.meta.mode==='native-only'
@@ -168,6 +169,8 @@ export function ToolsPage({ model, toolbarHost }: { model: AgentLensClientModel;
   const [nativeDetailLoading,setNativeDetailLoading]=useState(false)
   const [nativeDetailError,setNativeDetailError]=useState('')
   const nativeRequest = useRef(0)
+  const lastToolRoute = useRef('')
+  const previousScope = useRef(JSON.stringify(usage.filters))
   const [detailTools, setDetailTools] = useState<Map<string, ToolUsageDto>>(() => new Map())
   const [detailLoadingKey, setDetailLoadingKey] = useState<string | null>(null)
   const [detailError, setDetailError] = useState('')
@@ -242,6 +245,60 @@ export function ToolsPage({ model, toolbarHost }: { model: AgentLensClientModel;
       setDetailLoadingKey(current => current === key ? null : current)
     }
   }
+
+  const closeToolDetail=()=>navigate('/tools')
+  const openNativeTool=(tool:(typeof nativeToolRows)[number])=>
+    navigate({pathname:'/tools',search:new URLSearchParams({
+      kind:'native',tool:tool.nativeToolName,source:tool.sourceId,
+      partial:tool.partial?'1':'0',
+    }).toString()})
+  const openLegacyTool=(key:string)=>
+    navigate({pathname:'/tools',search:new URLSearchParams({kind:'legacy',tool:key}).toString()})
+  // Tool identity is URL state: Back/Forward and direct links restore the reading surface.
+  useEffect(()=>{
+    const params=new URLSearchParams(location.search)
+    const kind=params.get('kind'), key=params.get('tool')
+    if(!key||(kind!=='native'&&kind!=='legacy')){
+      lastToolRoute.current=''
+      nativeRequest.current++
+      setSelectedNativeTool(null)
+      setSelectedToolKey(null)
+      return
+    }
+    if(lastToolRoute.current===location.search || !data)return
+    if(kind==='native'){
+      const tool=nativeToolRows.find(item=>item.nativeToolName===key
+        && item.sourceId===params.get('source')
+        && item.partial===(params.get('partial')==='1'))
+      if(!tool)return
+      lastToolRoute.current=location.search
+      setSelectedToolKey(null)
+      void selectNativeTool(tool)
+    }else{
+      if(!tools.some(tool=>toolKey(tool.sourceIds,tool.nativeToolName)===key))return
+      lastToolRoute.current=location.search
+      nativeRequest.current++
+      setSelectedNativeTool(null)
+      void selectTool(key)
+    }
+  },[location.search,data])
+  useEffect(()=>{
+    const next=JSON.stringify(usage.filters)
+    if(next===previousScope.current)return
+    previousScope.current=next
+    lastToolRoute.current=''
+    if(new URLSearchParams(location.search).has('tool'))navigate('/tools',{replace:true})
+  },[usage.filters.sourceIds,usage.filters.projectId,usage.filters.range,location.search,navigate])
+  const detailParams=new URLSearchParams(location.search)
+  const activeNativeTool=detailParams.get('kind')==='native'
+    &&selectedNativeTool?.nativeToolName===detailParams.get('tool')
+    &&selectedNativeTool?.sourceId===detailParams.get('source')
+    &&selectedNativeTool?.partial===(detailParams.get('partial')==='1')
+    ?selectedNativeTool:null
+  const activeLegacyTool=detailParams.get('kind')==='legacy'
+    &&selectedToolKey===detailParams.get('tool')?selectedTool:null
+  const showingFailures=detailParams.get('view')==='failures'
+  const readingDetail=Boolean(activeNativeTool||activeLegacyTool||showingFailures)
   const toggleNativeSort=(key:NativeSortKey)=>{
     setNativeSort(current=>current.key===key
       ?{key,direction:current.direction==='descending'?'ascending':'descending'}
@@ -273,9 +330,9 @@ export function ToolsPage({ model, toolbarHost }: { model: AgentLensClientModel;
   }
   const renderNativeToolRow = (tool:(typeof nativeToolRows)[number]) => <tr key={tool.sourceId+'::'+tool.nativeToolName+'::'+tool.partial}
                 tabIndex={0}
-                onClick={()=>{void selectNativeTool(tool)}}
+                onClick={()=>openNativeTool(tool)}
                 onKeyDown={event=>{if(event.key==='Enter'||event.key===' '){
-                  event.preventDefault();void selectNativeTool(tool)
+                  event.preventDefault();openNativeTool(tool)
                 }}}> 
                 <td><span className="tool-table-name"><ToolKindIcon kind={toolVisualKind(tool.nativeToolName)}/>
                   <span><b className="tool-name">{tool.nativeToolName}</b>
@@ -319,7 +376,7 @@ export function ToolsPage({ model, toolbarHost }: { model: AgentLensClientModel;
   return <>
     {toolbarHost ? createPortal(toolbarFilters, toolbarHost) : null}
     <main className="workspace-page tools-page">
-      <div className="page-content tools-content">
+      {!readingDetail && <div className="page-content tools-content">
         {usage.error && <ErrorStateBanner message={usage.error} onRetry={() => void model.refreshUsage()}/>} 
         {projectionPartial && projection && <div className="tool-projection-status" role="status" aria-live="polite">
           <UiIcon name="refresh" size={14}/>
@@ -367,19 +424,19 @@ export function ToolsPage({ model, toolbarHost }: { model: AgentLensClientModel;
           <div className="section-heading-row"><div><h3>{t('page.attention')}</h3></div></div>
           <div className="tool-attention-list">
             {nativeMostErrors&&<button type="button" className="tool-attention-row"
-              onClick={()=>void selectNativeTool(nativeMostErrors)}>
+              onClick={()=>openNativeTool({...nativeMostErrors,partial:false})}>
               <span className="tool-attention-badge is-danger">{t('page.failureCluster')}</span>
               <span><b>{nativeMostErrors.nativeToolName}</b><small>{sourceLabels([nativeMostErrors.sourceId])}</small></span>
               <strong className="cell-danger">{t('page.countTimes',{count:nativeMostErrors.errorCount})}</strong>
             </button>}
             {nativeSlowest&&<button type="button" className="tool-attention-row"
-              onClick={()=>void selectNativeTool(nativeSlowest)}>
+              onClick={()=>openNativeTool({...nativeSlowest,partial:false})}>
               <span className="tool-attention-badge is-warning">{t('page.slowestBadge')}</span>
               <span><b>{nativeSlowest.nativeToolName}</b><small>{t('page.nativeDurationSamples',{count:nativeSlowest.durationSampleCount??0})}</small></span>
               <strong className="cell-slow">{nativeDuration(nativeSlowest.averageDurationMs,t)}</strong>
             </button>}
             {nativeLongest&&<button type="button" className="tool-attention-row"
-              onClick={()=>void selectNativeTool(nativeLongest)}>
+              onClick={()=>openNativeTool({...nativeLongest,partial:false})}>
               <span className="tool-attention-badge is-warning">{t('page.longestBadge')}</span>
               <span><b>{nativeLongest.nativeToolName}</b><small>{sourceLabels([nativeLongest.sourceId])}</small></span>
               <strong className="cell-slow">{nativeDuration(nativeLongest.maxDurationMs,t)}</strong>
@@ -425,7 +482,7 @@ export function ToolsPage({ model, toolbarHost }: { model: AgentLensClientModel;
                   const successRate = rateValue(tool.successCount, tool.errorCount)
                   const key = toolKey(tool.sourceIds, tool.nativeToolName)
                   const kind = toolVisualKind(tool.nativeToolName)
-                  return <tr key={key} tabIndex={0} onClick={() => { void selectTool(key) }} onKeyDown={event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); void selectTool(key) } }}>
+                  return <tr key={key} tabIndex={0} onClick={() => openLegacyTool(key)} onKeyDown={event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); openLegacyTool(key) } }}>
                     <td><span className="tool-table-name"><ToolKindIcon kind={kind}/><span><b className="tool-name">{tool.nativeToolName}</b><span className="tool-source">{sourceLabels(tool.sourceIds)}</span></span></span></td>
                     <td><span className="tool-bar-cell"><span>{tool.callCount}</span><span className="metric-bar" aria-hidden="true"><i style={{ width: `${Math.max(4, tool.callCount / maxCalls * 100)}%` }}/></span></span></td>
                     <td>{tool.sessionCount}</td>
@@ -446,12 +503,12 @@ export function ToolsPage({ model, toolbarHost }: { model: AgentLensClientModel;
           {(mostErrors || slowest) && <section className="tool-attention">
             <div className="section-heading-row"><div><h3>{t('page.attention')}</h3></div></div>
             <div className="tool-attention-list">
-              {mostErrors && <button className="tool-attention-row" onClick={() => { void selectTool(toolKey(mostErrors.sourceIds, mostErrors.nativeToolName)) }}>
+              {mostErrors && <button className="tool-attention-row" onClick={() => openLegacyTool(toolKey(mostErrors.sourceIds, mostErrors.nativeToolName))}>
                 <span className="tool-attention-badge is-danger">{t('page.failureCluster')}</span>
                 <span><b>{mostErrors.nativeToolName}</b><small>{t('page.failureSummary', { failures: mostErrors.errorCount, rate: rate(mostErrors.successCount, mostErrors.errorCount) })}</small></span>
                 <strong>{t('page.countTimes', { count: mostErrors.errorCount })}</strong>
               </button>}
-              {slowest && <button className="tool-attention-row" onClick={() => { void selectTool(toolKey(slowest.sourceIds, slowest.nativeToolName)) }}>
+              {slowest && <button className="tool-attention-row" onClick={() => openLegacyTool(toolKey(slowest.sourceIds, slowest.nativeToolName))}>
                 <span className="tool-attention-badge is-warning">{t('page.slowestBadge')}</span>
                 <span><b>{slowest.nativeToolName}</b><small>{t('page.callsAndSessions', { calls: slowest.callCount, sessions: slowest.sessionCount })}</small></span>
                 <strong>{duration(slowest.averageDurationMs, t)}</strong>
@@ -464,47 +521,54 @@ export function ToolsPage({ model, toolbarHost }: { model: AgentLensClientModel;
             <div className="attributed-asset-list">{assets.map(asset => <div key={`${asset.type}:${asset.canonicalName}`} className="attributed-asset"><b>{asset.canonicalName}</b><span>{assetTypeLabel(asset.type, t)}</span><span title={t('page.attributionMethod', { method: asset.attribution })}>{confidenceLabel(asset.confidence, t)}</span><span className="asset-usage-bar" aria-hidden="true"><i style={{ width: `${Math.max(4, asset.callCount / maxAssetCalls * 100)}%` }}/></span><strong>{asset.callCount}</strong><small>{t('page.times')}</small></div>)}</div>
           </section> : null}
         </>}
-      </div>
+      </div>}
 
-      {selectedNativeTool && <Drawer
-        open
-        className="tool-drill-overlay"
-        title={<span className="tool-drawer-title"><ToolKindIcon kind={toolVisualKind(selectedNativeTool.nativeToolName)}/>{selectedNativeTool.nativeToolName}</span>}
-        description={sourceLabels([selectedNativeTool.sourceId])+(selectedNativeTool.partial?t('page.nativeObservedSuffix'):'')}
-        onClose={()=>{nativeRequest.current++;setSelectedNativeTool(null)}}
-      >
+      {showingFailures && <section className="page-content tools-content tool-detail-content">
+        <header className="tool-detail-header">
+          <Button size="small" onClick={closeToolDetail}><UiIcon name="arrow-left" size={14}/>{t('page.backToTools')}</Button>
+          <h2>{t('page.failureScene')}</h2>
+        </header>
+        <div className="tool-drill-body">
+          <NativeFailureExamples filters={usage.filters}/>
+        </div>
+      </section>}
+      {activeNativeTool && <section className="page-content tools-content tool-detail-content">
+        <header className="tool-detail-header">
+          <Button size="small" onClick={closeToolDetail}><UiIcon name="arrow-left" size={14}/>{t('page.backToTools')}</Button>
+          <h2><ToolKindIcon kind={toolVisualKind(activeNativeTool.nativeToolName)}/>{activeNativeTool.nativeToolName}</h2>
+          <small>{sourceLabels([activeNativeTool.sourceId])+(activeNativeTool.partial?t('page.nativeObservedSuffix'):'')}</small>
+        </header>
         <div className="tool-drill-body">
           <div className="tool-drill-grid">
-            <div className="tool-drill-stat"><b>{selectedNativeTool.callCount}</b><span>{t('page.callCount')}</span></div>
-            <div className="tool-drill-stat"><b>{selectedNativeTool.resultCount}</b><span>{t('page.nativeResults')}</span></div>
-            <div className="tool-drill-stat"><b>{selectedNativeTool.errorCount}</b><span>{t('page.failureCount')}</span></div>
-            <div className="tool-drill-stat"><b>{selectedNativeTool.sessionCount}</b><span>{t('page.involvedSessions')}</span></div>
-            <div className="tool-drill-stat"><b>{nativeDuration(selectedNativeTool.averageDurationMs,t)}</b><span>{t('page.averageDuration')}</span></div>
-            <div className="tool-drill-stat"><b className={selectedNativeTool.maxDurationMs!=null&&selectedNativeTool.maxDurationMs>=NATIVE_SLOW_MAX_MS?'cell-slow':''}>{nativeDuration(selectedNativeTool.maxDurationMs,t)}</b><span>{t('page.maxDuration')}</span></div>
+            <div className="tool-drill-stat"><b>{activeNativeTool.callCount}</b><span>{t('page.callCount')}</span></div>
+            <div className="tool-drill-stat"><b>{activeNativeTool.resultCount}</b><span>{t('page.nativeResults')}</span></div>
+            <div className="tool-drill-stat"><b>{activeNativeTool.errorCount}</b><span>{t('page.failureCount')}</span></div>
+            <div className="tool-drill-stat"><b>{activeNativeTool.sessionCount}</b><span>{t('page.involvedSessions')}</span></div>
+            <div className="tool-drill-stat"><b>{nativeDuration(activeNativeTool.averageDurationMs,t)}</b><span>{t('page.averageDuration')}</span></div>
+            <div className="tool-drill-stat"><b className={activeNativeTool.maxDurationMs!=null&&activeNativeTool.maxDurationMs>=NATIVE_SLOW_MAX_MS?'cell-slow':''}>{nativeDuration(activeNativeTool.maxDurationMs,t)}</b><span>{t('page.maxDuration')}</span></div>
           </div>
           {nativeDetailLoading&&<div className="tool-drill-note">{t('page.loadingSessions')}</div>}
           {nativeDetailError&&<div className="tool-drill-note">{nativeDetailError}</div>}
           <div className="tool-drill-note">{t('page.nativeOnlyModeNote')}</div>
-          <NativeFailureExamples filters={{...usage.filters,sourceIds:[selectedNativeTool.sourceId]}}
-            toolName={selectedNativeTool.nativeToolName}/>
+          <NativeFailureExamples filters={{...usage.filters,sourceIds:[activeNativeTool.sourceId]}}
+            toolName={activeNativeTool.nativeToolName}/>
         </div>
-      </Drawer>}
+      </section>}
 
-      {selectedTool && <Drawer
-        open
-        className="tool-drill-overlay"
-        title={<span className="tool-drawer-title"><ToolKindIcon kind={toolVisualKind(selectedTool.nativeToolName)}/>{selectedTool.nativeToolName}</span>}
-        description={sourceLabels(selectedTool.sourceIds)}
-        onClose={() => setSelectedToolKey(null)}
-      >
+      {activeLegacyTool && <section className="page-content tools-content tool-detail-content">
+        <header className="tool-detail-header">
+          <Button size="small" onClick={closeToolDetail}><UiIcon name="arrow-left" size={14}/>{t('page.backToTools')}</Button>
+          <h2><ToolKindIcon kind={toolVisualKind(activeLegacyTool.nativeToolName)}/>{activeLegacyTool.nativeToolName}</h2>
+          <small>{sourceLabels(activeLegacyTool.sourceIds)}</small>
+        </header>
         <div className="tool-drill-body">
           <div className="tool-drill-grid">
-            <div className="tool-drill-stat"><b>{selectedTool.callCount}</b><span>{t('page.callCount')}</span></div>
-            <div className="tool-drill-stat"><b>{selectedTool.sessionCount}</b><span>{t('page.involvedSessions')}</span></div>
-            <div className="tool-drill-stat"><b>{rate(selectedTool.successCount, selectedTool.errorCount)}</b><span>{t('page.successRate')}</span></div>
-            <div className="tool-drill-stat"><b className={selectedTool.errorCount ? 'cell-danger' : ''}>{selectedTool.errorCount}</b><span>{t('page.failureCount')}</span></div>
-            <div className="tool-drill-stat"><b>{duration(selectedTool.totalDurationMs, t)}</b><span>{t('page.totalDuration')}</span></div>
-            <div className="tool-drill-stat"><b>{duration(selectedTool.averageDurationMs, t)}</b><span>{t('page.averageDuration')}</span></div>
+            <div className="tool-drill-stat"><b>{activeLegacyTool.callCount}</b><span>{t('page.callCount')}</span></div>
+            <div className="tool-drill-stat"><b>{activeLegacyTool.sessionCount}</b><span>{t('page.involvedSessions')}</span></div>
+            <div className="tool-drill-stat"><b>{rate(activeLegacyTool.successCount, activeLegacyTool.errorCount)}</b><span>{t('page.successRate')}</span></div>
+            <div className="tool-drill-stat"><b className={activeLegacyTool.errorCount ? 'cell-danger' : ''}>{activeLegacyTool.errorCount}</b><span>{t('page.failureCount')}</span></div>
+            <div className="tool-drill-stat"><b>{duration(activeLegacyTool.totalDurationMs, t)}</b><span>{t('page.totalDuration')}</span></div>
+            <div className="tool-drill-stat"><b>{duration(activeLegacyTool.averageDurationMs, t)}</b><span>{t('page.averageDuration')}</span></div>
           </div>
 
           {firstFailedSession && <button type="button" className="tool-failure-shortcut" onClick={() => openReviewSession(firstFailedSession.logicalSessionId)}>
@@ -525,7 +589,7 @@ export function ToolsPage({ model, toolbarHost }: { model: AgentLensClientModel;
                 const time = formatSessionTime(session.endedAt ?? summary?.endedAt, locale)
                 const context = [project, time, t('page.sessionCalls', { count: session.callCount }), (session.errorCount ?? 0) > 0 ? t('page.sessionFailures', { count: session.errorCount }) : ''].filter(Boolean).join(' · ')
                 return <button key={session.logicalSessionId} className={`tool-session-link ${(session.errorCount ?? 0) > 0 ? 'has-error' : ''}`} onClick={() => openReviewSession(session.logicalSessionId)} title={label}>
-                  <span className="tool-session-copy"><b>{label}</b><small>{context || sourceLabels(summary?.sourceIds ?? selectedTool.sourceIds)}</small></span>
+                  <span className="tool-session-copy"><b>{label}</b><small>{context || sourceLabels(summary?.sourceIds ?? activeLegacyTool.sourceIds)}</small></span>
                   <span className="metric-bar" aria-hidden="true"><i style={{ width: `${Math.max(5, session.callCount / max * 100)}%` }}/></span>
                   <span className="tool-session-open">{(session.errorCount ?? 0) > 0 ? t('page.viewFailure') : t('page.open')} <UiIcon name="arrow-right" size={14}/></span>
                 </button>
@@ -534,9 +598,9 @@ export function ToolsPage({ model, toolbarHost }: { model: AgentLensClientModel;
             </div>
             {detailLoadingKey !== selectedToolKey && selectedSessions.length > 3 && <button type="button" className="tool-session-toggle" onClick={() => setShowAllSessions(value => !value)}>{showAllSessions ? t('page.collapseSessions') : t('page.showAllSessions', { count: selectedSessions.length })}</button>}
           </section>
-          {detailLoadingKey !== selectedToolKey && selectedTool.errorCount > 0 && !firstFailedSession && <div className="tool-drill-note">{t('page.boundedFailureNote', { count: selectedTool.errorCount })}</div>}
+          {detailLoadingKey !== selectedToolKey && activeLegacyTool.errorCount > 0 && !firstFailedSession && <div className="tool-drill-note">{t('page.boundedFailureNote', { count: activeLegacyTool.errorCount })}</div>}
         </div>
-      </Drawer>}
+      </section>}
     </main>
   </>
 }

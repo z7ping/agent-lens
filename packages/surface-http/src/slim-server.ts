@@ -393,7 +393,7 @@ export async function startNativeOnlyHttpSurface(
         }
         const native=await nativeMetricContribution(
           storage.nativeSessionMetrics,options.sources,options.capturePolicy,
-          {...scope,projectScopeReady:true,...(usage?{includeTools:true}:{})})
+          {...scope,projectScopeReady:true,...(usage?{includeTools:true}:{includeTrend:Boolean(scope.from)})})
         writeJson(response,200,usage
           ?nativeOnlyToolUsageResponse(native)
           :nativeOnlyInsightsResponse(native,scope))

@@ -16,6 +16,8 @@ export interface NativeContributionScope {
   to?:string
   /** Opt-in per-tool numbers for Usage only; Insights remains compact. */
   includeTools?:boolean
+  /** Opt-in verified session activity trend for Insights, never event-day counts. */
+  includeTrend?:boolean
 }
 
 /** SQL-only Native-only contribution to the EXISTING Usage/Insights DTO.
@@ -64,6 +66,7 @@ export async function nativeMetricContribution(
       ...(scope.projectId?{projectId:scope.projectId}:{}),
       ...(scope.toolName?{nativeToolName:scope.toolName}:{}),
       ...(scope.from?{from:scope.from}:{}),...(scope.to?{to:scope.to}:{}),
+      ...(scope.includeTrend?{includeTrend:true}:{}),
     })))
     const sum=(key:'eligibleSessions'|'readySessions'|'missingSessions'|'staleSessions'|'partialSessions')=>
       chunks.reduce((total,item)=>total+item[key],0)
@@ -124,7 +127,22 @@ export async function nativeMetricContribution(
         tools:observedTools.slice(0,256),toolsTruncated:observedToolsTruncated,
       }:{}),
     }:undefined
+    const trend=scope.includeTrend?Array.from(chunks.reduce((days,item)=>{
+      for(const point of item.trend??[]){
+        const previous=days.get(point.date)??{date:point.date,sessionCount:0,interactionCount:0,toolCallCount:0,errorCount:0}
+        days.set(point.date,{
+          date:point.date,
+          sessionCount:previous.sessionCount+point.sessionCount,
+          interactionCount:previous.interactionCount+point.interactionCount,
+          toolCallCount:previous.toolCallCount+point.toolCallCount,
+          errorCount:previous.errorCount+point.errorCount,
+        })
+      }
+      return days
+    },new Map<string,{date:string;sessionCount:number;interactionCount:number;toolCallCount:number;errorCount:number}>()).values())
+      .sort((a,b)=>a.date.localeCompare(b.date)):undefined
     return {
+      ...(trend?{trend}:{}),
       state:'available',
       coverage:eligible===ready && !toolsTruncated?'complete':'partial',
       eligibleSessions:eligible,readySessions:ready,

@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState, useSyncExternalStore } from 'react'
+import { useEffect, useMemo, useSyncExternalStore } from 'react'
+import { useNavigate } from 'react-router-dom'
 import type { TFunction } from 'i18next'
 import { useTranslation } from 'react-i18next'
 import { createPortal } from 'react-dom'
@@ -10,9 +11,8 @@ import { agentLabel, useOrderedAgents } from '../components/AgentScope'
 import { BackgroundDataNotice } from '../components/BackgroundDataNotice'
 import { EmptyStatePanel, ErrorStateBanner, WorkspaceSkeleton } from '../components/StateViews'
 import { SidebarFilterDisclosure } from '../components/SidebarFilterDisclosure'
-import { Button, Disclosure, Drawer, IconButton, SelectMenu, UiIcon } from '../components/ui'
+import { Button, Disclosure, IconButton, SelectMenu, UiIcon } from '../components/ui'
 import { projectSelectOption } from './project-presentation'
-import { NativeFailureExamples } from './NativeFailureExamples'
 
 function duration(ms: number, t: TFunction): string {
   if (ms < 1000) return t('duration.milliseconds', { value: ms })
@@ -76,7 +76,7 @@ function MetricDelta({ label, value }: { label: string; value: number | null }) 
 
 export function InsightsPage({ model, toolbarHost }: { model: AgentLensClientModel; toolbarHost?: HTMLDivElement | null }) {
   const { t, i18n } = useTranslation('insights')
-  const [showFailures,setShowFailures] = useState(false)
+  const navigate = useNavigate()
   const locale = i18n.resolvedLanguage ?? i18n.language ?? 'zh-CN'
   const facets = useClientSnapshotField(model, 'facets')
   const usage = useClientSnapshotField(model, 'usage')
@@ -102,6 +102,8 @@ export function InsightsPage({ model, toolbarHost }: { model: AgentLensClientMod
   }, [insightsModel, matchingScope, usage.filters])
   const data = matchingScope ? insights.response : null
   const verifiedNative=data?.meta.native?.state==='available' ? data.meta.native : null
+  const nativeTrend=verifiedNative?.trend??[]
+  const maxNativeTrendSessions=Math.max(1,...nativeTrend.map(item=>item.sessionCount))
   const agents = useOrderedAgents(facets?.agents ?? [])
   const insightAgents = useOrderedAgents(data?.agents ?? [])
   const projects = facets?.projects ?? []
@@ -135,16 +137,13 @@ export function InsightsPage({ model, toolbarHost }: { model: AgentLensClientMod
       ]}/>
     </div>
     <div className="workspace-view-filter-actions">
-      {data?.meta.mode==='native-only'&&<Button onClick={()=>setShowFailures(true)}>{t('page.failureExamples')}</Button>}
+      {data?.meta.mode==='native-only'&&<Button onClick={()=>navigate('/tools?view=failures')}>{t('page.failureExamples')}</Button>}
       {canRelaxFilters && <Button className="workspace-view-clear-filter" onClick={relaxFilters}>{t('page.relaxFilters')}</Button>}
       <IconButton size="small" onClick={() => void insightsModel.refresh()} title={t('filters.refresh')} aria-label={t('filters.refresh')}><UiIcon name="refresh" size={14}/></IconButton>
     </div>
   </div>
 
   return <>
-    {showFailures&&<Drawer open title={t('page.failureExamples')} onClose={()=>setShowFailures(false)}>
-      <NativeFailureExamples filters={usage.filters}/>
-    </Drawer>}
     {toolbarHost ? createPortal(toolbarFilters, toolbarHost) : null}
     <main className="workspace-page insights-page">
       <div className="page-content insights-content">
@@ -190,6 +189,18 @@ export function InsightsPage({ model, toolbarHost }: { model: AgentLensClientMod
             <div className="workspace-metric-card insight-kpi">
               <span>{t('page.explicitFailures')}</span>
               <strong>{verifiedNative.errorCount}</strong>
+            </div>
+          </section>}
+          {nativeTrend.length>0 && <section className="insight-card">
+            <div className="insight-card-head"><h2>{t('page.nativeTrendTitle')}</h2></div>
+            <p className="insight-trend-caption">{t('page.nativeTrendDescription')}</p>
+            <div className="insight-trend" role="img" aria-label={t('page.nativeTrendTitle')}>
+              {nativeTrend.map(point=><div key={point.date} className="insight-trend-column"
+                title={t('page.nativeTrendPoint',{date:point.date,sessions:point.sessionCount,calls:point.toolCallCount})}>
+                <div className="insight-trend-bar-wrap"><span className="insight-trend-bar"
+                  style={{height:`${Math.max(point.sessionCount?8:1,point.sessionCount/maxNativeTrendSessions*100)}%`}}/></div>
+                <strong>{point.sessionCount}</strong><span>{point.date.slice(5)}</span>
+              </div>)}
             </div>
           </section>}
           {verifiedNative?.observed && <section className="insight-kpi-grid"

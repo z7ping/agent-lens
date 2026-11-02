@@ -19,6 +19,8 @@ export interface NativeSessionMetricOverviewQuery {
   nativeToolName?:string
   from?:string
   to?:string
+  /** Optional, bounded daily attribution by session last activity; no event timestamps. */
+  includeTrend?:boolean
 }
 export interface NativeSessionMetricToolTotal {
   nativeToolName:string
@@ -57,6 +59,10 @@ export interface NativeSessionMetricOverview {
     tools:NativeSessionMetricToolTotal[]
     toolsTruncated:boolean
   }
+  /** Counts for verified sessions grouped by their last-activity date (UTC).
+   * Not a per-event timestamp series; partial/missing/stale sessions excluded.
+   */
+  trend?:Array<{date:string;sessionCount:number;interactionCount:number;toolCallCount:number;errorCount:number}>
   /** Only tool names and numbers. No event ID, args or output. */
   tools:NativeSessionMetricToolTotal[]
   toolsTruncated:boolean
