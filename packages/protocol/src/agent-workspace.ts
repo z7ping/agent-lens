@@ -84,6 +84,7 @@ export interface AgentWorkspaceResponseDto {
   tasksHasMore: boolean
   schedules: AgentWorkScheduleDto[]
   executions: AgentWorkExecutionDto[]
+  executionsHasMore: boolean
   meta: {
     protocolVersion: typeof AGENT_LENS_PROTOCOL_VERSION
     generatedAt: string

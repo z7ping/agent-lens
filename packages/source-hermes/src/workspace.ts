@@ -142,10 +142,11 @@ async function readProjects(root: string): Promise<AgentWorkProjectDto[]> {
   }
   return projects
 }
-async function readSchedules(root: string) {
+async function readSchedules(root: string, jobId?:string, profileName?:string, executionOffset=0) {
   const profiles = [{name:'default',home:root}, ...(await dirs(join(root,'profiles'))).map(name => ({name, home:join(root,'profiles',name)}))]
   const schedules: AgentWorkScheduleDto[] = []
   const executions: AgentWorkExecutionDto[] = []
+  let executionsHasMore = false
   let discovered = false
   for (const profile of profiles.slice(0, 32)) {
     const jobsPath = join(profile.home, 'cron', 'jobs.json')
@@ -176,13 +177,16 @@ async function readSchedules(root: string) {
     }
     if (await fileExists(executionPath)) {
       discovered = true
+      if (!jobId || profileName !== profile.name) continue
       const db = openReadOnly(executionPath)
       try {
         const ec = columns(db, 'executions')
         if (!ec.has('job_id') || !ec.has('id') || !ec.has('status')) throw new Error('Unsupported Hermes cron executions schema')
         const records = db.prepare('SELECT ' + select(ec, ['id','job_id','status','claimed_at','started_at','finished_at','error','delivery_outcome']) +
-          ' FROM executions ORDER BY claimed_at DESC, id DESC LIMIT ?').all(MAX_EXECUTIONS) as Record<string,unknown>[]
-        for (const row of records) {
+          ' FROM executions WHERE job_id = ? ORDER BY claimed_at DESC, id DESC LIMIT ? OFFSET ?')
+          .all(jobId, MAX_EXECUTIONS + 1, executionOffset) as Record<string,unknown>[]
+        executionsHasMore = records.length > MAX_EXECUTIONS
+        for (const row of records.slice(0,MAX_EXECUTIONS)) {
           executions.push({
             id:String(row.id),jobId:String(row.job_id),profile:profile.name,status:String(row.status),
             claimedAt:String(row.claimed_at ?? ''),
@@ -195,7 +199,7 @@ async function readSchedules(root: string) {
       } finally { db.close() }
     }
   }
-  return { discovered, schedules, executions }
+  return { discovered, schedules, executions, executionsHasMore }
 }
 /** Bounded, read-only Hermes work view. Features are independent so one broken source does not hide the other. */
 export async function readHermesWorkspace(options: {
@@ -203,13 +207,16 @@ export async function readHermesWorkspace(options: {
   offset?: number
   limit?: number
   roots?: string[]
+  jobId?: string
+  profile?: string
+  executionOffset?: number
 } = {}): Promise<AgentWorkspaceResponseDto> {
   const roots = options.roots ?? resolveHermesConfigRoots()
   const features: AgentWorkFeatureDto[] = [
     {id:'boards',availability:'unknown'},
     {id:'schedules',availability:'unknown'},
   ]
-  const result: Workspace = {features,projects:[],boards:[],tasks:[],runs:[],tasksHasMore:false,schedules:[],executions:[]}
+  const result: Workspace = {features,projects:[],boards:[],tasks:[],runs:[],tasksHasMore:false,schedules:[],executions:[],executionsHasMore:false}
   const limit = Math.min(100,Math.max(1,Math.floor(options.limit ?? 40)))
   const offset = Math.max(0,Math.min(100000,Math.floor(options.offset ?? 0)))
   const candidates = [...new Set(roots.map(root => basename(dirname(root)) === 'profiles' ? dirname(dirname(root)) : root))]
@@ -228,10 +235,11 @@ export async function readHermesWorkspace(options: {
   }
   for (const root of candidates) {
     try {
-      const info = await readSchedules(root)
+      const info = await readSchedules(root, options.jobId, options.profile, Math.min(100000,Math.max(0,options.executionOffset ?? 0)))
       if (info.discovered) {
         result.schedules = info.schedules
         result.executions = info.executions
+        result.executionsHasMore = info.executionsHasMore
         features[1] = {id:'schedules',availability:'available'}
         break
       }

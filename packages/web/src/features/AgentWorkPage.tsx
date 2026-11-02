@@ -6,6 +6,7 @@ import { useClientSnapshot } from '../client/use-client-snapshot'
 import { Button, SelectMenu, StatusBadge } from '../components/ui'
 
 const PAGE_SIZE = 40
+const MAX_EXECUTION_PAGE = 200
 const formatDate = (value: string | undefined): string => {
   if (!value) return '—'
   const date = new Date(value)
@@ -19,6 +20,7 @@ export function AgentWorkPage({model,sourceId}: {model:AgentLensClientModel;sour
   const [panel,setPanel] = useState<'boards'|'schedules'>('boards')
   const [selectedTask,setSelectedTask] = useState<string|null>(null)
   const [selectedJob,setSelectedJob] = useState<string|null>(null)
+  const [executionOffset,setExecutionOffset] = useState(0)
   const [offset,setOffset] = useState(0)
   const loadBoard = (board: string, nextOffset = 0) => {
     setSelectedTask(null)
@@ -29,6 +31,21 @@ export function AgentWorkPage({model,sourceId}: {model:AgentLensClientModel;sour
   const schedulesAvailable = response?.features.some(f => f.id === 'schedules' && f.availability === 'available') ?? false
   const board = response?.boards.find(item => item.id === response.selectedBoard)
   const activePanel = panel === 'boards' && !boardAvailable && schedulesAvailable ? 'schedules' : panel
+  const openJob = (job:AgentWorkScheduleDto) => {
+    const identity=job.profile+':'+job.id
+    const next=selectedJob===identity?null:identity
+    setSelectedJob(next)
+    setExecutionOffset(0)
+    if (next) void model.refreshAgentWorkspace(sourceId,{
+      board:response?.selectedBoard,jobId:job.id,profile:job.profile,executionOffset:0,
+    })
+  }
+  const goExecutionPage = (job:AgentWorkScheduleDto,offset:number) => {
+    setExecutionOffset(offset)
+    void model.refreshAgentWorkspace(sourceId,{
+      board:response?.selectedBoard,jobId:job.id,profile:job.profile,executionOffset:offset,
+    })
+  }
   const selectedSchedule:AgentWorkScheduleDto|undefined = response?.schedules.find(item =>
     item.profile + ':' + item.id === selectedJob)
   return <main className="workspace-page">
@@ -79,7 +96,7 @@ export function AgentWorkPage({model,sourceId}: {model:AgentLensClientModel;sour
               <span className="asset-scope">{job.profile}</span>
               {job.noAgent && <span className="asset-scope">{t('work.scriptOnly')}</span>}
             </div>
-            <Button size="small" variant="ghost" onClick={()=>setSelectedJob(old=>old===job.profile+':'+job.id?null:job.profile+':'+job.id)}>{job.name}</Button>
+            <Button size="small" variant="quiet" onClick={()=>openJob(job)}>{job.name}</Button>
             <div className="runtime-config-row"><span>{job.schedule || '—'}</span><span>{t('work.nextRun')} {formatDate(job.nextRunAt)}</span></div>
             {job.lastError && <div className="agent-path-error">{job.lastError}</div>}
             {selectedSchedule && selectedSchedule.id===job.id && selectedSchedule.profile===job.profile && <>
@@ -90,7 +107,19 @@ export function AgentWorkPage({model,sourceId}: {model:AgentLensClientModel;sour
                 {run.deliveryOutcome && <span>{t('work.delivery')} {run.deliveryOutcome}</span>}
                 {run.error && <div className="agent-path-error">{run.error}</div>}
               </div>)}
+              <div className="runtime-config-row">
+                {executionOffset>0 && <Button size="small" disabled={snapshot.loading} onClick={()=>goExecutionPage(job,Math.max(0,executionOffset-MAX_EXECUTION_PAGE))}>{t('work.previous')}</Button>}
+                {response.executionsHasMore && <Button size="small" disabled={snapshot.loading} onClick={()=>goExecutionPage(job,executionOffset+MAX_EXECUTION_PAGE)}>{t('work.next')}</Button>}
+              </div>
             </>}
+          </div>)}
+        </section>}
+        {response.projects.length>0 && <section className="agent-primary-section">
+          <div className="section-heading-row"><h3>{t('work.projects')}</h3><span className="section-total">{response.projects.length}</span></div>
+          {response.projects.map(project=><div className="runtime-config-row" key={project.profile+':'+project.id}>
+            <span>{project.name}</span><span className="asset-scope">{project.profile}</span>
+            {project.boardId && <span className="asset-scope">{project.boardId}</span>}
+            {project.primaryPath && <code>{project.primaryPath}</code>}
           </div>)}
         </section>}
       </div>}

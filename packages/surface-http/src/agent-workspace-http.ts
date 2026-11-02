@@ -7,6 +7,9 @@ export type AgentWorkspaceReader = (options?: {
   board?: string
   offset?: number
   limit?: number
+  jobId?: string
+  profile?: string
+  executionOffset?: number
 }) => Promise<AgentWorkspaceResponseDto>
 
 const SLUG = /^[a-zA-Z0-9][a-zA-Z0-9_-]{0,79}$/
@@ -40,25 +43,32 @@ export async function handleAgentWorkspaceRequest(
   if (!provider) {
     // No workspace provider does not mean the Agent's other functionality is broken.
     writeJson(response,200,{sourceId,features:[],projects:[],boards:[],tasks:[],runs:[],
-      tasksHasMore:false,schedules:[],executions:[],meta:{protocolVersion:AGENT_LENS_PROTOCOL_VERSION,generatedAt:new Date().toISOString()}})
+      tasksHasMore:false,schedules:[],executions:[],executionsHasMore:false,meta:{protocolVersion:AGENT_LENS_PROTOCOL_VERSION,generatedAt:new Date().toISOString()}})
     return true
   }
-  if ([...url.searchParams.keys()].some(key => !['board','offset','limit'].includes(key))) {
+  if ([...url.searchParams.keys()].some(key => !['board','offset','limit','jobId','profile','executionOffset'].includes(key))) {
     throw badRequest('Invalid workspace parameters')
   }
   const board = url.searchParams.get('board') ?? undefined
   if (board && !SLUG.test(board)) throw badRequest('Invalid board')
   const offsetText = url.searchParams.get('offset')
   const limitText = url.searchParams.get('limit')
+  const jobId = url.searchParams.get('jobId') ?? undefined
+  const profile = url.searchParams.get('profile') ?? undefined
+  const execOffsetText = url.searchParams.get('executionOffset')
   if (offsetText && !/^\d{1,6}$/.test(offsetText)) throw badRequest('Invalid offset')
   if (limitText && !/^\d{1,3}$/.test(limitText)) throw badRequest('Invalid limit')
+  if (jobId && (!/^[a-zA-Z0-9_-]{1,128}$/.test(jobId) || !profile || !/^[a-zA-Z0-9_-]{1,80}$/.test(profile))) throw badRequest('Invalid job identity')
+  if (execOffsetText && !/^\d{1,6}$/.test(execOffsetText)) throw badRequest('Invalid execution offset')
   const offset = offsetText ? Number(offsetText) : 0
   const limit = limitText ? Number(limitText) : 40
-  if (offset > 100000 || limit < 1 || limit > 100) throw badRequest('Workspace page outside budget')
+  const executionOffset = execOffsetText ? Number(execOffsetText) : 0
+  if (offset > 100000 || executionOffset > 100000 || limit < 1 || limit > 100) throw badRequest('Workspace page outside budget')
   const result = await provider({
     ...(board ? {board} : {}),
     offset,
     limit,
+    ...(jobId && profile?{jobId,profile,executionOffset}:{}),
   })
   if (result.sourceId !== sourceId) {
     writeJson(response,502,{error:'Workspace provider source identity mismatch'})

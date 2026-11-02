@@ -208,11 +208,13 @@ export class AgentLensApi {
       () => requestJson('/api/v1/agents/coverage'),
     )
   }
-  agentWorkspace(sourceId: string, options: {board?:string;offset?:number;limit?:number} = {}): Promise<AgentWorkspaceResponseDto> {
+  agentWorkspace(sourceId: string, options: {board?:string;offset?:number;limit?:number;jobId?:string;profile?:string;executionOffset?:number} = {}): Promise<AgentWorkspaceResponseDto> {
     const params = new URLSearchParams()
     if (options.board) params.set('board', options.board)
     if (options.offset) params.set('offset', String(options.offset))
     if (options.limit) params.set('limit', String(options.limit))
+    if (options.jobId && options.profile) { params.set('jobId', options.jobId); params.set('profile',options.profile) }
+    if (options.executionOffset) params.set('executionOffset',String(options.executionOffset))
     const suffix = params.size ? '?' + params : ''
     return requestJson<AgentWorkspaceResponseDto>('/api/v1/agents/' + encodeURIComponent(sourceId) + '/workspace' + suffix)
   }
