@@ -205,6 +205,22 @@ function Shell({ model }: { model: AgentLensClientModel }) {
     installationIds: agent.installationIds,
   }))
   const agents = snapshot.facets?.agents ?? summaryAgents
+  // Insights and Tools share usage filters. A single Source is required before
+  // showing aggregates, so neither tab accidentally mixes unrelated agents.
+  useEffect(() => {
+    if (!location.pathname.startsWith('/tools') && !location.pathname.startsWith('/insights')) return
+    if (!agents.length) return
+    const ids = agents.map(agent => agent.sourceId)
+    const selected = snapshot.usage.filters.sourceIds
+    if (selected?.length === 1 && ids.includes(selected[0])) {
+      try { window.localStorage.setItem('agent-lens.insights-tools.source-id', selected[0]) } catch { /* private mode */ }
+      return
+    }
+    let saved = ''
+    try { saved = window.localStorage.getItem('agent-lens.insights-tools.source-id') ?? '' } catch { /* private mode */ }
+    const sourceId = ids.includes(saved) ? saved : agents.find(agent => agent.detected)?.sourceId ?? ids[0]
+    model.setUsageFilters({ sourceIds: [sourceId], projectId: '' })
+  }, [model, location.pathname, agents, snapshot.usage.filters.sourceIds])
   const toggleTheme = () => {
     const next = theme === 'dark' ? 'light' : 'dark'
     setTheme(next)
