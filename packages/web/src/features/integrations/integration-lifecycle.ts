@@ -228,18 +228,52 @@ export function agentObservationState(
   }
 }
 
+/** Missing package lifecycle is not a failed Source or a failed authorization grant. */
+function packageUnmanagedLifecycleState(
+  management: IntegrationManagementItemDto,
+  t: TFunction,
+): IntegrationLifecyclePresentation {
+  if (management.enabled.restartRequired) {
+    return {
+      label: t('status.pendingRestart'),
+      title: t('status.pendingRestartTitle'),
+      className: 'is-history',
+    }
+  }
+  if (!management.enabled.configured) {
+    return {
+      label: t('status.disabled'),
+      title: t('status.packageUnmanagedDisabledTitle'),
+      className: 'is-disabled',
+    }
+  }
+  if (management.availability === 'error') {
+    return {
+      label: t('status.abnormal'),
+      title: t('status.abnormalTitle'),
+      className: 'is-error',
+    }
+  }
+  if (management.availability === 'unavailable') {
+    return {
+      label: t('status.unavailable'),
+      title: t('status.unavailableTitle'),
+      className: 'is-history',
+    }
+  }
+  return {
+    label: t('status.enabled'),
+    title: t('status.packageUnmanagedEnabledTitle'),
+    className: 'is-enabled',
+  }
+}
+
 export function integrationManagementLifecycleState(
   management: IntegrationManagementItemDto,
   t: TFunction,
 ): IntegrationLifecyclePresentation {
   const packageState = management.packageState
-  if (!packageState) {
-    return {
-      label: t('status.managementUnavailable'),
-      title: t('status.managementUnavailableTitle'),
-      className: 'is-error',
-    }
-  }
+  if (!packageState) return packageUnmanagedLifecycleState(management, t)
   if (!packageState.installed) {
     return {
       label: t('status.notAdded'),
@@ -300,11 +334,28 @@ export function integrationLifecycleState(
   if (management) {
     const packageState = management.packageState
     if (!packageState) {
-      return {
-        label: t('status.managementUnavailable'),
-        title: t('status.managementUnavailableTitle'),
-        className: 'is-error',
+      if (!agent?.detected && (discoveryError || discovery?.presence === 'error')) {
+        return {
+          label: t('status.scanFailed'),
+          title: discoveryError || discovery?.reason || t('status.scanFailedTitle'),
+          className: 'is-error',
+        }
       }
+      if (!agent?.detected && discoveryScanning) {
+        return {
+          label: t('status.scanning'),
+          title: t('status.scanningTitle'),
+          className: 'is-scanning',
+        }
+      }
+      if (!agent?.detected && discovery?.presence !== 'present' && discovery?.presence !== 'data-only') {
+        return {
+          label: t('status.notDetected'),
+          title: t('status.notDetectedTitle'),
+          className: 'is-missing',
+        }
+      }
+      return packageUnmanagedLifecycleState(management, t)
     }
     if (!packageState.installed) {
       if (discoveryError || discovery?.presence === 'error') {
