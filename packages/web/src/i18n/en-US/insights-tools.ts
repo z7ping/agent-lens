@@ -176,6 +176,7 @@ export const englishInsightsToolsMessages: LocaleMessagesDto = {
       description: 'Show only verifiable call facts: what was used, how often it failed, how long it took, and how many calls can be reliably attributed to specific capability assets.',
       projectionTitle: 'Historical tool index is being backfilled; current results are incomplete',
       projectionDescription: '{{projected}} / {{total}} tool events projected ({{percent}}%). Current statistics will keep growing as backfill continues.',
+      backToTools: 'Back to tools',
       nativeTitle: 'Native tool metrics',
       nativeScope: '{{ready}} / {{eligible}} Native-only sessions verified',
       nativeObservedSummary: '{{sessions}} partially observed sessions, at least {{calls}} calls',
