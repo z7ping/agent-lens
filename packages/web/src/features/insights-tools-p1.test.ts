@@ -37,15 +37,15 @@ test('native trend is explicitly separate from legacy and from event timestamps'
   assert.match(contribution,/scope\.includeTrend/)
 })
 
-test('native error samples preserve verified round navigation and virtual anchor',async()=>{
-  const [failures,review,session,surface,url]=await Promise.all([
+test('native error links never fabricate unverified turn ordinals',async()=>{
+  const [view,review,session,surface,url]=await Promise.all([
     source('./NativeFailureExamples.tsx'),
     source('./ReviewPage.tsx'),
     source('./use-review-session.ts'),
     source('./TaskSurface.tsx'),
     source('../client/useReviewUrlSync.ts'),
   ])
-  assert.match(failures,/focusTurn=\$\{encodeURIComponent\(String\(active\.ordinal\)\)\}/)
+  assert.match(view,/if\(item\.turnOrdinal!==null\)params\.set\('focusTurn'/)
   assert.match(review,/focusTurnTarget=\{/)
   assert.match(session,/jumpToReviewInteraction\(item\.ordinal\)/)
   assert.match(surface,/pendingTurnRailTargetRef\.current=\{id:focusTurnTarget\.key,ordinal:focusTurnTarget\.ordinal\}/)
@@ -77,31 +77,27 @@ test('native statistics show compact status and date basis without repeated expl
   }
 })
 
-test('failure workbench is two-pane, scans automatically in bounded batches and retains native evidence',async()=>{
-  const [view,scanner,css]=await Promise.all([
+test('failure workbench reads the complete indexed population by pages, not a 20-sample scanner',async()=>{
+  const [view,css,api,reader]=await Promise.all([
     source('./NativeFailureExamples.tsx'),
-    source('./native-failure-examples.ts'),
     source('./native-failure-examples.css'),
+    source('../client/api.ts'),
+    source('./native-failure-examples.ts'),
   ])
-  assert.match(view,/void scan\(\)/)
-  assert.match(view,/const AUTO_SCAN_BUDGET = 80/)
-  assert.match(view,/const SCAN_BATCH_SIZE = 4/)
-  assert.match(view,/setTimeout\(resolve,0\)/)
-  assert.match(view,/controller\.current\?\.abort\(\)/)
-  assert.match(view,/scanner\.finished\|\|scanner\.capped/)
-  assert.match(view,/scanBudgetReached:budgetReached/)
-  assert.match(view,/setSelectedId\(key\)/)
+  assert.match(view,/api\.nativeErrors\(/)
+  assert.match(view,/const PAGE_SIZE=50/)
+  assert.match(view,/setOffset\(offset\+PAGE_SIZE\)/)
+  assert.match(view,/setTimeout\(\(\)=>\{void load\(\)\},4000\)/)
+  assert.match(view,/controller\.abort\(\)/)
   assert.match(view,/className="native-failure-split"/)
   assert.match(view,/className="native-failure-list-pane"/)
   assert.match(view,/className="native-failure-detail-pane"/)
-  assert.match(view,/active\.evidenceIds\.length/)
-  assert.match(view,/active\.truncated\|\|active\.contextPartial/)
-  assert.match(scanner,/const MAX_EXAMPLES = 20/)
-  assert.match(scanner,/turnLimit:2/)
+  assert.match(api,/nativeErrors\(options:/)
+  assert.doesNotMatch(view,/NativeFailureScanner/)
+  assert.doesNotMatch(reader,/MAX_EXAMPLES = 20/)
   assert.match(css,/grid-template-columns: minmax\(280px, 35fr\) minmax\(0, 65fr\)/)
   assert.match(css,/@media \(max-width: 1199\.98px\)/)
   assert.doesNotMatch(view,/<Drawer/)
-  assert.doesNotMatch(view,/scanner\.next\([^)]*\)\.then\(/)
 })
 
 test('native statistics navigate to failure reading while unverified counters stay distinct',async()=>{
