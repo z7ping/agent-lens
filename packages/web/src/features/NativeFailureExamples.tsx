@@ -158,7 +158,7 @@ export function NativeFailureExamples({filters,toolName}: {filters:QueryFilters;
                 className={`native-failure-item${active===example?' is-selected':''}${repeats>=3?' is-repeated':''}`}
                 aria-pressed={active===example} onClick={()=>setSelectedId(key)}>
                 <span className="native-failure-item-main">
-                  <UiIcon name="alert-circle" size={14}/>
+                  <UiIcon name="exclamation" size={14}/>
                   <b>{example.toolName??t(example.kind==='tool'?'failures.unknownTool':'failures.runtime')}</b>
                   {repeats>1&&<span className="native-failure-repeat-count" title={t('failures.repeatedSampleNote')}>×{repeats}</span>}
                 </span>
@@ -179,7 +179,7 @@ export function NativeFailureExamples({filters,toolName}: {filters:QueryFilters;
             <span><StatusBadge tone="danger" dot>{t('failures.error')}</StatusBadge>
               <strong>{active.toolName??t(active.kind==='tool'?'failures.unknownTool':'failures.runtime')}</strong></span>
             <Button size="small" onClick={()=>navigate(`/review/${encodeURIComponent(active.sessionId)}?range=all&status=all&focusTurn=${encodeURIComponent(String(active.ordinal))}`)}>
-              <UiIcon name="external-link" size={14}/>{t('failures.openSession')}</Button>
+              <UiIcon name="link" size={14}/>{t('failures.openSession')}</Button>
           </div>
           <p className="native-failure-context" title={active.title??active.sessionId}>
             {active.projectName??active.title??active.sessionId} · {t('failures.round',{ordinal:active.ordinal})}
