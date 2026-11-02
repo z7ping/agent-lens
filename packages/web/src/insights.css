@@ -49,13 +49,6 @@
   white-space: nowrap;
 }
 .insight-coverage-strip b.is-warning { color: var(--al-warning); }
-.insight-coverage-strip > small {
-  grid-column: 1 / -1;
-  padding: 9px 14px;
-  color: var(--al-muted);
-  font-size: 12px;
-  line-height: 1.6;
-}
 
 /* 核心指标 */
 .insight-kpi-grid {
@@ -104,7 +97,8 @@
   border: 0;
 }
 .insight-card-head h2 { margin: 0; font-size: 14px; font-weight: 700; letter-spacing: -.01em; }
-.insight-trend-caption { margin: 4px 0 12px; color: var(--al-muted); font-size: 12px; line-height: 1.6; }
+.insight-native-trend-heading { display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 4px 12px; }
+.insight-native-trend-heading > span { color: var(--al-muted); font-size: 12px; }
 .insight-card-head p { margin: 4px 0 0; color: var(--al-muted); font-size: 12px; line-height: 1.6; }
 
 /* 趋势 */
