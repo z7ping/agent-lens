@@ -23,6 +23,7 @@ import {
 import { handleNativeSessionBodySearchRequest } from './native-session-search-http'
 import { handleNativeSessionMetricsRequest } from './native-session-metrics-http'
 import { handleNativeSessionMetricsOverviewRequest } from './native-session-metrics-overview-http'
+import { handleNativeErrorIndexRequest } from './native-errors-http'
 import { NativeMetricsAutoRefresh } from './native-metrics-auto-refresh'
 import { nativeOnlyFacetResponse } from './native-only-facets'
 import { nativeOnlyAgentOverview, nativeOnlyAgentCoverage, nativeOnlyAgentDetail } from './native-only-agent-overview'
@@ -136,6 +137,7 @@ export async function startNativeOnlyHttpSurface(
       if(request.method==='GET'&&[
         '/api/v1/usage','/api/v1/usage/detail','/api/v1/insights',
         '/api/v1/native-sessions/metrics/overview',
+        '/api/v1/native-errors',
       ].includes(url.pathname))refresh.schedule()
 
       // Live is the EXISTING Pi runtime controller, not a SQL projection.
@@ -158,6 +160,9 @@ export async function startNativeOnlyHttpSurface(
         ...(turnIndex ? {turnIndex} : {}),
       }))return
 
+      if(await handleNativeErrorIndexRequest(
+        request,response,url,storage.nativeSessionMetrics,
+        options.sources,options.capturePolicy))return
       if(await handleNativeSessionMetricsOverviewRequest(
         request,response,url,storage.nativeSessionMetrics,
         options.sources,options.capturePolicy,true))return
