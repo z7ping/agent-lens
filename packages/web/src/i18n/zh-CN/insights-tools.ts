@@ -52,6 +52,8 @@ export const chineseInsightsToolsMessages: LocaleMessagesDto = {
       radarVerified: '已校验 {{count}}',
       radarVerifiedLabel: '已校验',
       radarObservedLabel: '部分观察',
+      radarAdditionalObserved: '另观察 ≥{{count}}',
+      radarPartialSessions: '部分观察 {{count}}',
       radarPending: '待校验',
       radarNoSessions: '无会话',
       radarUnavailable: '未取得',
