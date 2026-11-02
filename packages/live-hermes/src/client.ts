@@ -105,13 +105,15 @@ function clientHost(value: string | undefined): string {
 export async function resolveHermesApiClientConfig(
   config: HermesApiClientConfig = {},
 ): Promise<ResolvedHermesApiClientConfig> {
-  const roots = unique([
-    process.env.HERMES_HOME,
-    join(homedir(), '.hermes'),
-    process.platform === 'win32' && process.env.LOCALAPPDATA
-      ? join(process.env.LOCALAPPDATA, 'hermes')
-      : undefined,
-  ])
+  // An explicit Hermes home/profile must never inherit credentials from another installation.
+  const roots = unique(process.env.HERMES_HOME
+    ? [process.env.HERMES_HOME]
+    : [
+      join(homedir(), '.hermes'),
+      process.platform === 'win32' && process.env.LOCALAPPDATA
+        ? join(process.env.LOCALAPPDATA, 'hermes')
+        : undefined,
+    ])
   const envFiles = unique([
     ...(config.envFiles ?? []),
     ...roots.map(root => join(root, '.env')),
