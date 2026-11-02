@@ -658,7 +658,10 @@ export function useReviewSession(model: AgentLensClientModel, embedded: boolean)
 
   useEffect(()=>{
     const focus=new URLSearchParams(location.search).get('focusTurn')
-    if(!focus || !/^[1-9]\d*$/.test(focus))return
+    if(!focus || !/^[1-9]\d*$/.test(focus)){
+      handledFocusTurnRef.current=''
+      return
+    }
     const ordinal=Number(focus)
     if(!Number.isSafeInteger(ordinal)||!detail?.id||detail.id!==sessionId
       ||roundFilterLoading)return
