@@ -30,6 +30,9 @@ export function NativeFailureExamples({filters,toolName}: {filters:QueryFilters;
   const [retry,setRetry]=useState(0)
 
   useEffect(()=>{
+    setFingerprint('')
+  },[sourceId,filters.projectId,filters.range,toolName])
+  useEffect(()=>{
     setOffset(0)
     setSelectedKey(null)
   },[sourceId,filters.projectId,filters.range,toolName,search,fingerprint])
@@ -92,7 +95,9 @@ export function NativeFailureExamples({filters,toolName}: {filters:QueryFilters;
     <div className="native-failure-scan-bar">
       <span className="native-failure-scan-status" role="status" aria-live="polite">
         <StatusBadge dot tone={data&&(data.indexedSessions<data.eligibleSessions||data.partialSessions>0)?'warning':'neutral'}>
-          {data&&(data.indexedSessions<data.eligibleSessions||data.partialSessions>0)?t('failures.indexing'):t('failures.indexed')}
+          {!data?t('failures.loading')
+            :data.indexedSessions<data.eligibleSessions?t('failures.indexing')
+            :data.partialSessions>0?t('page.nativePartialStatus'):t('failures.indexed')}
         </StatusBadge>
         {data&&<span>{t('failures.indexCoverage',{ready:data.indexedSessions,eligible:data.eligibleSessions})}</span>}
         {data&&<b>{t('failures.samples',{count:data.total})}</b>}
