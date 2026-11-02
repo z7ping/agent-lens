@@ -493,7 +493,7 @@ export abstract class AgentLensModelBase {
 
   async refreshAgentWorkspace(
     sourceId: string,
-    options: {board?:string;offset?:number;limit?:number;jobId?:string;profile?:string;executionOffset?:number} = {},
+    options: {board?:string;offset?:number;limit?:number;jobId?:string;profile?:string;executionOffset?:number;scheduleOffset?:number} = {},
   ): Promise<void> {
     const generation = ++this.workspaceGeneration
     this.patch({agentWorkspace:{sourceId,response:this.snapshot.agentWorkspace.sourceId===sourceId

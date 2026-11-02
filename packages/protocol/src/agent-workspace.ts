@@ -1,7 +1,7 @@
 import { AGENT_LENS_PROTOCOL_VERSION } from './timeline'
 
 /** Workspace features describe observable provider data, not Source/Live installation permissions. */
-export type AgentWorkFeature = 'boards' | 'schedules'
+export type AgentWorkFeature = 'boards' | 'schedules' | 'projects'
 export type AgentWorkAvailability = 'available' | 'unknown' | 'error'
 export interface AgentWorkFeatureDto {
   id: AgentWorkFeature
@@ -83,6 +83,8 @@ export interface AgentWorkspaceResponseDto {
   runs: AgentWorkRunDto[]
   tasksHasMore: boolean
   schedules: AgentWorkScheduleDto[]
+  schedulesHasMore: boolean
+  schedulesTotal: number
   executions: AgentWorkExecutionDto[]
   executionsHasMore: boolean
   meta: {

@@ -21,6 +21,7 @@ export function AgentWorkPage({model,sourceId}: {model:AgentLensClientModel;sour
   const [selectedTask,setSelectedTask] = useState<string|null>(null)
   const [selectedJob,setSelectedJob] = useState<string|null>(null)
   const [executionOffset,setExecutionOffset] = useState(0)
+  const [scheduleOffset,setScheduleOffset] = useState(0)
   const [offset,setOffset] = useState(0)
   const loadBoard = (board: string, nextOffset = 0) => {
     setSelectedTask(null)
@@ -29,6 +30,7 @@ export function AgentWorkPage({model,sourceId}: {model:AgentLensClientModel;sour
   }
   const boardAvailable = response?.features.some(f => f.id === 'boards' && f.availability === 'available') ?? false
   const schedulesAvailable = response?.features.some(f => f.id === 'schedules' && f.availability === 'available') ?? false
+  const projectsAvailable = response?.features.some(f => f.id === 'projects' && f.availability === 'available') ?? false
   const board = response?.boards.find(item => item.id === response.selectedBoard)
   const activePanel = panel === 'boards' && !boardAvailable && schedulesAvailable ? 'schedules' : panel
   const openJob = (job:AgentWorkScheduleDto) => {
@@ -46,6 +48,14 @@ export function AgentWorkPage({model,sourceId}: {model:AgentLensClientModel;sour
       board:response?.selectedBoard,jobId:job.id,profile:job.profile,executionOffset:offset,
     })
   }
+  const goSchedulePage = (nextOffset:number) => {
+    setScheduleOffset(nextOffset)
+    setSelectedJob(null)
+    setExecutionOffset(0)
+    void model.refreshAgentWorkspace(sourceId,{
+      board:response?.selectedBoard,scheduleOffset:nextOffset,
+    })
+  }
   const selectedSchedule:AgentWorkScheduleDto|undefined = response?.schedules.find(item =>
     item.profile + ':' + item.id === selectedJob)
   return <main className="workspace-page">
@@ -53,6 +63,9 @@ export function AgentWorkPage({model,sourceId}: {model:AgentLensClientModel;sour
       {snapshot.sourceId === sourceId && snapshot.error && <div className="agent-path-error" role="alert">{snapshot.error} <Button size="small" onClick={() => void model.refreshAgentWorkspace(sourceId)}>{t('work.retry')}</Button></div>}
       {(!response && snapshot.loading) && <div className="muted-empty compact" role="status">{t('work.loading')}</div>}
       {response && <div className="agent-detail-pane">
+        {response.features.filter(f=>f.availability==='error').map(feature=><div key={feature.id} role="alert" className="agent-path-error">
+          {t('work.featureError',{name:feature.id})} {feature.reason}
+        </div>)}
         <div className="agent-primary-section">
           <div className="section-heading-row">
             <h2>{t('work.title')}</h2>
@@ -67,7 +80,7 @@ export function AgentWorkPage({model,sourceId}: {model:AgentLensClientModel;sour
           <section className="agent-primary-section">
             <div className="section-heading-row"><h3>{t('work.boardTasks')}</h3><span className="section-total">{board?.taskCount ?? 0}</span></div>
             <SelectMenu ariaLabel={t('work.selectBoard')} value={response.selectedBoard ?? ''} searchable
-              options={response.boards.map(item => ({value:item.id,label:item.name + (item.archived?'（已归档）':'')}))}
+              options={response.boards.map(item => ({value:item.id,label:item.name + (item.archived?t('work.archived'):'')}))}
               onChange={value=>loadBoard(value)}/>
             {response.tasks.length===0 && <div className="muted-empty compact">{t('work.noTasks')}</div>}
             {response.tasks.map(item => <div className="asset-item" key={item.id}>
@@ -88,7 +101,7 @@ export function AgentWorkPage({model,sourceId}: {model:AgentLensClientModel;sour
           </section>
         </>}
         {activePanel==='schedules' && schedulesAvailable && <section className="agent-primary-section">
-          <div className="section-heading-row"><h3>{t('work.schedules')}</h3><span className="section-total">{response.schedules.length}</span></div>
+          <div className="section-heading-row"><h3>{t('work.schedules')}</h3><span className="section-total">{response.schedulesTotal}</span></div>
           {!response.schedules.length && <div className="muted-empty compact">{t('work.noSchedules')}</div>}
           {response.schedules.map(job=><div className="asset-item" key={job.profile+':'+job.id}>
             <div className="asset-item-head">
@@ -114,7 +127,7 @@ export function AgentWorkPage({model,sourceId}: {model:AgentLensClientModel;sour
             </>}
           </div>)}
         </section>}
-        {response.projects.length>0 && <section className="agent-primary-section">
+        {projectsAvailable && <section className="agent-primary-section">
           <div className="section-heading-row"><h3>{t('work.projects')}</h3><span className="section-total">{response.projects.length}</span></div>
           {response.projects.map(project=><div className="runtime-config-row" key={project.profile+':'+project.id}>
             <span>{project.name}</span><span className="asset-scope">{project.profile}</span>

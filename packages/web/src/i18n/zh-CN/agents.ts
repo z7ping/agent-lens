@@ -3,6 +3,8 @@ import type { LocaleMessagesDto } from '@agent-lens/protocol'
 export const chineseAgentsMessages: LocaleMessagesDto = {
   agents: {
     work: {
+      archived: '（已归档）',
+      featureError: '{{name}} 读取失败：',
       projects: '项目',
       title: '工作',
       retry: '重试',

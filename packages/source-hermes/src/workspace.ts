@@ -120,12 +120,14 @@ async function readBoards(root: string, requestedBoard: string | undefined, offs
   }
   return { boards, selectedBoard, tasks, runs, tasksHasMore }
 }
-async function readProjects(root: string): Promise<AgentWorkProjectDto[]> {
+async function readProjects(root: string): Promise<{discovered:boolean; projects:AgentWorkProjectDto[]}> {
   const profiles = [{name:'default',home:root}, ...(await dirs(join(root,'profiles'))).map(name => ({name,home:join(root,'profiles',name)}))]
   const projects:AgentWorkProjectDto[]=[]
-  for (const profile of profiles.slice(0,32)) {
+  let discovered = false
+  for (const profile of profiles) {
     const path = join(profile.home,'projects.db')
     if (!await fileExists(path)) continue
+    discovered = true
     const db = openReadOnly(path)
     try {
       const pc=columns(db,'projects')
@@ -140,15 +142,16 @@ async function readProjects(root: string): Promise<AgentWorkProjectDto[]> {
       })
     }finally{db.close()}
   }
-  return projects
+  return {discovered,projects}
 }
-async function readSchedules(root: string, jobId?:string, profileName?:string, executionOffset=0) {
+async function readSchedules(root: string, jobId?:string, profileName?:string, executionOffset=0, scheduleOffset=0) {
   const profiles = [{name:'default',home:root}, ...(await dirs(join(root,'profiles'))).map(name => ({name, home:join(root,'profiles',name)}))]
   const schedules: AgentWorkScheduleDto[] = []
   const executions: AgentWorkExecutionDto[] = []
   let executionsHasMore = false
+  let schedulesTotal = 0
   let discovered = false
-  for (const profile of profiles.slice(0, 32)) {
+  for (const profile of profiles) {
     const jobsPath = join(profile.home, 'cron', 'jobs.json')
     const executionPath = join(profile.home, 'cron', 'executions.db')
     if (await fileExists(jobsPath)) {
@@ -159,11 +162,13 @@ async function readSchedules(root: string, jobId?:string, profileName?:string, e
       for (const raw of records) {
         const job = obj(raw)
         const id = text(job.id)
-        if (!id || schedules.length >= MAX_SCHEDULES) continue
+        if (!id) continue
+        const ordinal=schedulesTotal++
+        if (ordinal < scheduleOffset || schedules.length >= MAX_SCHEDULES) continue
         const schedule = obj(job.schedule)
         schedules.push({
           id, profile:profile.name, name:text(job.name) ?? text(job.prompt)?.slice(0,50) ?? id,
-          state: job.enabled === false ? 'paused' : text(job.state) === 'paused' ? 'scheduled' : text(job.state) ?? 'scheduled',
+          state: ['completed','error'].includes(text(job.state) ?? '') ? String(job.state) : job.enabled === false ? 'paused' : text(job.state) === 'paused' ? 'scheduled' : text(job.state) ?? 'scheduled',
           enabled: job.enabled !== false,
           schedule: text(job.schedule_display) ?? text(schedule.display) ?? text(schedule.expr) ?? text(schedule.kind) ?? '',
           noAgent:job.no_agent === true,
@@ -199,7 +204,7 @@ async function readSchedules(root: string, jobId?:string, profileName?:string, e
       } finally { db.close() }
     }
   }
-  return { discovered, schedules, executions, executionsHasMore }
+  return { discovered, schedules, schedulesHasMore: schedulesTotal > scheduleOffset+schedules.length, schedulesTotal, executions, executionsHasMore }
 }
 /** Bounded, read-only Hermes work view. Features are independent so one broken source does not hide the other. */
 export async function readHermesWorkspace(options: {
@@ -210,13 +215,15 @@ export async function readHermesWorkspace(options: {
   jobId?: string
   profile?: string
   executionOffset?: number
+  scheduleOffset?: number
 } = {}): Promise<AgentWorkspaceResponseDto> {
   const roots = options.roots ?? resolveHermesConfigRoots()
   const features: AgentWorkFeatureDto[] = [
     {id:'boards',availability:'unknown'},
     {id:'schedules',availability:'unknown'},
+    {id:'projects',availability:'unknown'},
   ]
-  const result: Workspace = {features,projects:[],boards:[],tasks:[],runs:[],tasksHasMore:false,schedules:[],executions:[],executionsHasMore:false}
+  const result: Workspace = {features,projects:[],boards:[],tasks:[],runs:[],tasksHasMore:false,schedules:[],schedulesHasMore:false,schedulesTotal:0,executions:[],executionsHasMore:false}
   const limit = Math.min(100,Math.max(1,Math.floor(options.limit ?? 40)))
   const offset = Math.max(0,Math.min(100000,Math.floor(options.offset ?? 0)))
   const candidates = [...new Set(roots.map(root => basename(dirname(root)) === 'profiles' ? dirname(dirname(root)) : root))]
@@ -235,9 +242,11 @@ export async function readHermesWorkspace(options: {
   }
   for (const root of candidates) {
     try {
-      const info = await readSchedules(root, options.jobId, options.profile, Math.min(100000,Math.max(0,options.executionOffset ?? 0)))
+      const info = await readSchedules(root, options.jobId, options.profile, Math.min(100000,Math.max(0,options.executionOffset ?? 0)), Math.min(100000,Math.max(0,options.scheduleOffset ?? 0)))
       if (info.discovered) {
         result.schedules = info.schedules
+        result.schedulesHasMore = info.schedulesHasMore
+        result.schedulesTotal = info.schedulesTotal
         result.executions = info.executions
         result.executionsHasMore = info.executionsHasMore
         features[1] = {id:'schedules',availability:'available'}
@@ -250,13 +259,15 @@ export async function readHermesWorkspace(options: {
   }
   for (const root of candidates) {
     try {
-      const projects = await readProjects(root)
-      if (projects.length) {
-        result.projects = projects
+      const info = await readProjects(root)
+      if (info.discovered) {
+        result.projects = info.projects
+        features[2] = {id:'projects',availability:'available'}
         break
       }
-    } catch {
-      // Project metadata does not gate Board/Cron availability.
+    } catch (error) {
+      features[2] = {id:'projects',availability:'error',reason:error instanceof Error?error.message:'read failed'}
+      break
     }
   }
   return {sourceId:'hermes',...result,meta:{protocolVersion:AGENT_LENS_PROTOCOL_VERSION,generatedAt:new Date().toISOString()}}
