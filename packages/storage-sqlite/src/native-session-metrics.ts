@@ -220,6 +220,12 @@ export class SqliteNativeSessionMetrics implements NativeSessionMetricsStore {
       const base=`FROM native_error_index e
         JOIN native_session_metrics m ON m.source_id=e.source_id
           AND m.installation_id=e.installation_id AND m.native_session_id=e.native_session_id
+        JOIN native_error_index_state st ON st.source_id=e.source_id
+          AND st.installation_id=e.installation_id AND st.native_session_id=e.native_session_id
+          AND st.scan_generation=e.scan_generation
+          AND st.file_identity=m.file_identity AND st.file_size=m.file_size
+          AND st.file_mtime_ms=m.file_mtime_ms
+          AND st.parser_version=m.parser_version AND st.projection_version=m.projection_version
         JOIN native_session_catalog c ON c.source_id=e.source_id
           AND c.installation_id=e.installation_id AND c.native_session_id=e.native_session_id
           AND c.location_kind='native'
@@ -242,8 +248,30 @@ export class SqliteNativeSessionMetrics implements NativeSessionMetricsStore {
           error_code:string|null;summary:string;fingerprint:string
           review_session_id:string|null;coverage:'complete'|'partial'
         }>
+      const scope=['m.source_id=?','m.parser_version=?','m.projection_version=?']
+      const scopeArgs:(string|number)[]=[
+        query.sourceId,query.parserVersion,NATIVE_SESSION_METRIC_PROJECTION_VERSION,
+      ]
+      if(query.projectId){scope.push('ctx.project_id=?');scopeArgs.push(query.projectId)}
+      if(query.from){scope.push('c.last_activity_at>=?');scopeArgs.push(query.from)}
+      if(query.to){scope.push('c.last_activity_at<=?');scopeArgs.push(query.to)}
+      const indexedSessions=(this.executor.db.prepare(`SELECT COUNT(*) AS value
+        FROM native_error_index_state st
+        JOIN native_session_metrics m ON st.source_id=m.source_id
+          AND st.installation_id=m.installation_id AND st.native_session_id=m.native_session_id
+          AND st.file_identity=m.file_identity AND st.file_size=m.file_size
+          AND st.file_mtime_ms=m.file_mtime_ms
+          AND st.parser_version=m.parser_version AND st.projection_version=m.projection_version
+        JOIN native_session_catalog c ON c.source_id=m.source_id
+          AND c.installation_id=m.installation_id AND c.native_session_id=m.native_session_id
+          AND c.location_kind='native'
+          AND c.file_identity=m.file_identity AND c.file_size=m.file_size
+          AND c.file_mtime_ms=m.file_mtime_ms
+        LEFT JOIN native_session_context ctx ON ctx.source_id=m.source_id
+          AND ctx.installation_id=m.installation_id AND ctx.native_session_id=m.native_session_id
+        WHERE ${scope.join(' AND ')}`).get(...scopeArgs) as {value:number}).value
       return {
-        total,hasMore:query.offset+rows.length<total,
+        indexedSessions,total,hasMore:query.offset+rows.length<total,
         items:rows.map(row=>({
           eventKey:row.event_key,occurredAt:row.occurred_at,
           turnOrdinal:row.turn_ordinal,nativeEventId:row.native_event_id,
