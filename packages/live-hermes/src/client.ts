@@ -197,9 +197,10 @@ export class HermesApiClient {
 
   async sessionMessages(sessionId: string): Promise<unknown[]> {
     const response = asRecord(await this.requestJson(
-      `/api/sessions/${encodeURIComponent(sessionId)}/messages?order=oldest&limit=500`,
+      `/api/sessions/${encodeURIComponent(sessionId)}/messages?order=latest&limit=500&include_compacted=true`,
     ))
-    return Array.isArray(response.data) ? response.data : []
+    return Array.isArray(response.data) ? response.data
+      : Array.isArray(response.messages) ? response.messages : []
   }
 
   async createRun(sessionId: string, input: string): Promise<string> {
@@ -245,38 +246,74 @@ export class HermesApiClient {
     runId: string,
     signal?: AbortSignal,
   ): AsyncIterable<Record<string, unknown>> {
-    const response = await this.request(
-      `/v1/runs/${encodeURIComponent(runId)}/events`,
-      { method: 'GET', ...(signal ? { signal } : {}) },
-    )
-    if (!response.body) throw new HermesApiError('Hermes run event stream has no response body')
-
-    const reader = response.body.getReader()
-    const decoder = new TextDecoder()
-    let buffer = ''
-
-    try {
-      while (true) {
-        const { done, value } = await reader.read()
-        if (done) break
-        buffer += decoder.decode(value, { stream: true })
-
-        let boundary = buffer.search(/\r?\n\r?\n/)
-        while (boundary >= 0) {
-          const frame = buffer.slice(0, boundary)
-          const separator = buffer.slice(boundary).match(/^\r?\n\r?\n/)?.[0] ?? '\n\n'
-          buffer = buffer.slice(boundary + separator.length)
-          const parsed = this.parseSseFrame(frame)
-          if (parsed) yield parsed
-          boundary = buffer.search(/\r?\n\r?\n/)
+    // Hermes Runs SSE supports Last-Event-ID/last_seq replay. Unlike a plain
+    // reconnect, this cursor prevents duplicate deltas and tools.
+    let lastSequence = -1
+    let attempts = 0
+    const path = `/v1/runs/${encodeURIComponent(runId)}/events`
+    while (!signal?.aborted) {
+      let failure: unknown
+      let reader: ReadableStreamDefaultReader<Uint8Array> | undefined
+      try {
+        const response = await this.request(path, {
+          method: 'GET',
+          ...(signal ? { signal } : {}),
+          ...(lastSequence >= 0 ? { headers: { 'Last-Event-ID': String(lastSequence) } } : {}),
+        })
+        if (!response.body) throw new HermesApiError('Hermes run event stream has no response body')
+        reader = response.body.getReader()
+        const decoder = new TextDecoder()
+        let buffer = ''
+        while (!signal?.aborted) {
+          const { done, value } = await reader.read()
+          if (done) break
+          buffer += decoder.decode(value, { stream: true })
+          let boundary = buffer.search(/\r?\n\r?\n/)
+          while (boundary >= 0) {
+            const frame = buffer.slice(0, boundary)
+            const separator = buffer.slice(boundary).match(/^\r?\n\r?\n/)?.[0] ?? '\n\n'
+            buffer = buffer.slice(boundary + separator.length)
+            const parsed = this.parseSseFrame(frame)
+            if (parsed) {
+              if (parsed.event === 'replay.truncated') {
+                throw new HermesApiError('Hermes event replay window truncated; refresh native session history')
+              }
+              const seq = typeof parsed.seq === 'number' && Number.isSafeInteger(parsed.seq)
+                ? parsed.seq : undefined
+              if (seq === undefined || seq > lastSequence) {
+                if (seq !== undefined) lastSequence = seq
+                yield parsed
+                if (parsed.event === 'run.completed' || parsed.event === 'run.failed'
+                  || parsed.event === 'run.cancelled' || parsed.event === 'run.interrupted') return
+              }
+            }
+            boundary = buffer.search(/\r?\n\r?\n/)
+          }
         }
+        buffer += decoder.decode()
+        const tail = this.parseSseFrame(buffer)
+        if (tail && !signal?.aborted) {
+          const seq = typeof tail.seq === 'number' && Number.isSafeInteger(tail.seq)
+            ? tail.seq : undefined
+          if (seq === undefined || seq > lastSequence) {
+            if (seq !== undefined) lastSequence = seq
+            yield tail
+            if (tail.event === 'run.completed' || tail.event === 'run.failed'
+              || tail.event === 'run.cancelled' || tail.event === 'run.interrupted') return
+          }
+        }
+      } catch (error) {
+        failure = error
+      } finally {
+        reader?.releaseLock()
       }
-
-      buffer += decoder.decode()
-      const tail = this.parseSseFrame(buffer)
-      if (tail) yield tail
-    } finally {
-      reader.releaseLock()
+      if (signal?.aborted) return
+      attempts += 1
+      if (attempts > 3 || (failure instanceof HermesApiError
+        && failure.message.includes('replay window truncated'))) {
+        if (failure) throw failure
+        throw new HermesApiError('Hermes event stream ended without a terminal run event')
+      }
     }
   }
 

@@ -72,6 +72,7 @@ function hermesNumber(value: unknown): number | undefined {
  */
 export function normalizeHermesLiveEvent(event: Readonly<Record<string, unknown>>): LiveEvent | undefined {
   const name = hermesText(event.event) || hermesText(event.type)
+  if (event.agentLensDeferred === true) return undefined
 
   if (name === 'task.title.updated') {
     const title = hermesText(event.title)
@@ -104,7 +105,7 @@ export function normalizeHermesLiveEvent(event: Readonly<Record<string, unknown>
       ...(messageId ? { messageId } : {}),
     }
   }
-  if (name === 'assistant.delta') {
+  if (name === 'message.delta' || name === 'assistant.delta') {
     const delta = hermesText(event.delta)
     if (!delta) return undefined
     const messageId = hermesText(event.message_id)
@@ -114,7 +115,7 @@ export function normalizeHermesLiveEvent(event: Readonly<Record<string, unknown>
       ...(messageId ? { messageId } : {}),
     }
   }
-  if (name === 'assistant.completed') {
+  if (name === 'assistant.completed' || name === 'hermes.reply.final' || name === 'hermes.reply.interim-text') {
     const text = hermesText(event.content)
     const messageId = hermesText(event.message_id)
     return {
@@ -123,10 +124,30 @@ export function normalizeHermesLiveEvent(event: Readonly<Record<string, unknown>
       ...(messageId ? { messageId } : {}),
     }
   }
-  if (name === 'reasoning.available'
+  if (name === 'message.interim' || name === 'assistant.commentary') {
+    const messageId = hermesText(event.message_id)
+    return { type: 'message.end', role: 'assistant', phase: 'commentary',
+      ...(messageId ? { messageId } : {}) }
+  }
+  if (name === 'hermes.reply.promote') {
+    const messageId = hermesText(event.message_id)
+    return messageId
+      ? { type: 'message.end', role: 'assistant', phase: 'final', messageId }
+      : undefined
+  }
+  if (name === 'reasoning.delta' || name === 'thinking.delta') {
+    const delta = hermesText(event.delta) || hermesText(event.text)
+    const messageId = hermesText(event.message_id)
+    return delta ? { type: 'reasoning.delta', delta,
+      ...(messageId ? { messageId } : {}) } : undefined
+  }
+  if (name === 'reasoning.available' || name === 'hermes.reasoning.verified'
     || (name === 'tool.progress' && hermesText(event.tool_name) === '_thinking')) {
-    const delta = hermesText(event.text) || hermesText(event.delta) || hermesText(event.preview)
-    return delta ? { type: 'reasoning.delta', delta } : undefined
+    // A completed reasoning preview is a replacement, not an append-only chunk.
+    const value = hermesText(event.text) || hermesText(event.delta) || hermesText(event.preview)
+    const messageId = hermesText(event.message_id)
+    return value ? { type: 'reasoning.end', text: value,
+      ...(messageId ? { messageId } : {}) } : undefined
   }
   if (name === 'tool.started') {
     const tool = hermesText(event.tool) || hermesText(event.tool_name) || 'tool'

@@ -70,8 +70,8 @@ test('Hermes Live maps public run events into the same Live renderer vocabulary'
     event: 'reasoning.available',
     text: 'thinking',
   }), {
-    type: 'reasoning.delta',
-    delta: 'thinking',
+    type: 'reasoning.end',
+    text: 'thinking',
   })
   assert.deepEqual(normalizeHermesLiveEvent({
     event: 'tool.started',
