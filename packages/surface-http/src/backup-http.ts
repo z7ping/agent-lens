@@ -51,7 +51,9 @@ function parseKinds(value: unknown): BackupAssetKind[] | undefined {
   if (!Array.isArray(value) || !value.every(isBackupKind)) {
     throw badRequest('kinds must be an array of known backup kinds')
   }
-  return [...new Set(value)]
+  const kinds = [...new Set(value)]
+  if (!kinds.length) throw badRequest('kinds must not be empty')
+  return kinds
 }
 
 function parseSourceIds(value: unknown): string[] | undefined {
@@ -60,7 +62,7 @@ function parseSourceIds(value: unknown): string[] | undefined {
     throw badRequest('sourceIds must be an array of strings')
   }
   const normalized = [...new Set(value.map(item => item.trim()).filter(Boolean))]
-  if (normalized.length !== value.length) throw badRequest('sourceIds must contain unique non-empty strings')
+  if (normalized.length !== value.length || !normalized.length) throw badRequest('sourceIds must contain unique non-empty strings')
   return normalized
 }
 
