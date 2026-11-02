@@ -123,7 +123,7 @@
 .task-composer-markdown-preview ol { padding-left: 22px; }
 .task-composer-markdown-preview blockquote { padding-left: 9px; border-left: 2px solid var(--al-line-strong); color: var(--al-muted); }
 .task-composer-markdown-preview pre { padding: 7px 9px; overflow: auto; border: 1px solid var(--al-line); border-radius: 7px; background: var(--al-soft-2); font: 12px/1.55 var(--font-mono); white-space: pre-wrap; }
-.task-composer-markdown-preview :not(pre) > code { padding: 1px 4px; border-radius: 4px; background: var(--al-soft-2); font-family: var(--font-mono); font-size: .9em; }
+.task-composer-markdown-preview :not(pre) > code { padding: 1px 4px; border-radius: 4px; background: var(--al-soft-2); font-family: var(--font-mono); font-size: var(--text-caption); }
 .task-composer-preview-empty { color: var(--al-muted-2); font-size: 13px; }
 .task-composer-bar { display: flex; min-height: 48px; align-items: center; gap: 12px; padding: 4px 10px 9px 14px; border-top: 0; }
 .task-composer-connection-anchor { display: inline-flex; width: 132px; min-width: 132px; align-items: center; }
