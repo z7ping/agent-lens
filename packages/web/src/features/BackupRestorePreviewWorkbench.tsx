@@ -3,6 +3,8 @@ import { useTranslation } from 'react-i18next'
 import type { BackupRestorePreviewResponseDto, BackupSnapshotSummaryDto } from '@agent-lens/protocol'
 import { agentLabel } from '../components/AgentScope'
 import { LocalPathActions } from '../components/LocalPathActions'
+import type { AgentLensApi } from '../client/api'
+import { BackupRestoreFileInspector } from './BackupRestoreFileInspector'
 import { Button, Input, StatusBadge, UiIcon } from '../components/ui'
 import {
   buildPreviewTree, filterPreviewTree, previewCount,
@@ -21,8 +23,9 @@ function markedName(label: string, query: string): ReactNode {
 }
 
 export function BackupRestorePreviewWorkbench({
-  preview, snapshot, onBack, onOpenPath, onPathError,
+  api, preview, snapshot, onBack, onOpenPath, onPathError,
 }: {
+  api: AgentLensApi
   preview: BackupRestorePreviewResponseDto
   snapshot?: BackupSnapshotSummaryDto
   onBack(): void
@@ -31,6 +34,12 @@ export function BackupRestorePreviewWorkbench({
 }) {
   const { t, i18n } = useTranslation('backup')
   const locale = i18n.resolvedLanguage ?? i18n.language ?? 'zh-CN'
+  const [selectedKey, setSelectedKey] = useState<string | null>(() =>
+    preview.items.find(item => item.status === 'modified')?.archivePath
+    ?? preview.items.find(item => item.status === 'missing')?.archivePath
+    ?? preview.items.find(item => item.status === 'blocked')?.archivePath
+    ?? null)
+  const selected = preview.items.find(item => item.archivePath === selectedKey) ?? null
   const [scope, setScope] = useState<PreviewTreeScope>('changes')
   const [status, setStatus] = useState<StatusFilter>('all')
   const [query, setQuery] = useState('')
@@ -92,10 +101,12 @@ export function BackupRestorePreviewWorkbench({
       const item = node.item!
       return <div key={node.id} className="backup-preview-tree-file" role="treeitem"
         aria-level={depth + 1} title={node.path} data-status={item.status}>
-        <span className="backup-preview-tree-file-name">
+        <button type="button" className="backup-preview-tree-file-name"
+          aria-pressed={selectedKey === item.archivePath} onClick={() => setSelectedKey(item.archivePath)}
+          title={t('preview.openFile')}>
           <UiIcon name="file" size={14}/>
           <code>{markedName(node.name, query)}</code>
-        </span>
+        </button>
         <StatusBadge tone={item.status === 'blocked' ? 'danger' : item.status === 'modified' ? 'warning' : item.status === 'unchanged' ? 'success' : 'accent'}>
           {t(`previewStatus.${item.status}`)}
         </StatusBadge>
@@ -176,14 +187,20 @@ export function BackupRestorePreviewWorkbench({
         aria-label={t('preview.searchPlaceholder')} placeholder={t('preview.searchPlaceholder')}/>
     </div>
 
-    {visibleTree.length ? <div className="backup-preview-tree" role="tree" aria-label={t('preview.files')}>
-      <div className="backup-preview-tree-result">{t('preview.matching', { count: matchingCount.toLocaleString(locale) })}</div>
-      {displayedRoots.map(root => renderNode(root, 0))}
-    </div> : <div className="backup-preview-tree-empty" role="status">
-      <UiIcon name={query.trim() ? 'search' : 'status-success'} size={20}/>
-      <strong>{query.trim() ? t('preview.noMatches') : changed === 0 && scope === 'changes' ? t('preview.noDifferences') : t('preview.noMatches')}</strong>
-      {!query.trim() && scope === 'changes' && <Button size="small" onClick={() => { setScope('all'); setStatus('all') }}>{t('preview.viewAll')}</Button>}
-    </div>}
+    <div className="backup-preview-browser">
+      <section className="backup-preview-browser-tree" aria-label={t('preview.files')}>
+        {visibleTree.length ? <div className="backup-preview-tree" role="tree" aria-label={t('preview.files')}>
+          <div className="backup-preview-tree-result">{t('preview.matching', { count: matchingCount.toLocaleString(locale) })}</div>
+          {displayedRoots.map(root => renderNode(root, 0))}
+        </div> : <div className="backup-preview-tree-empty" role="status">
+          <UiIcon name={query.trim() ? 'search' : 'status-success'} size={20}/>
+          <strong>{query.trim() ? t('preview.noMatches') : changed === 0 && scope === 'changes' ? t('preview.noDifferences') : t('preview.noMatches')}</strong>
+          {!query.trim() && scope === 'changes' && <Button size="small" onClick={() => { setScope('all'); setStatus('all') }}>{t('preview.viewAll')}</Button>}
+        </div>}
+      </section>
+      <BackupRestoreFileInspector api={api} snapshotId={preview.snapshotId} item={selected}
+        onOpenPath={onOpenPath} onPathError={onPathError}/>
+    </div>
     <p className="backup-preview-workbench-note">{t('preview.noteTitle')} {t('preview.noteDescription')} {t('preview.notRestoreReady')}</p>
   </section>
 }
