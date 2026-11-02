@@ -115,7 +115,8 @@ export async function initializeLocalHermesApi(): Promise<HermesLocalApiSetup> {
     || randomBytes(32).toString('hex')
   const enabledInFile = ['true', '1'].includes((values.API_SERVER_ENABLED ?? '').toLowerCase())
   const enabledInYaml = yamlApi.enabled === true
-  const needsEnabled = !enabledInFile && !enabledInYaml
+  // A false .env value overrides an enabled YAML setting.
+  const needsEnabled = !enabledInFile && (values.API_SERVER_ENABLED !== undefined || !enabledInYaml)
   const needsKey = !values.API_SERVER_KEY?.trim() && !configValue(yamlApi.key)
   if (!needsEnabled && !needsKey) return { changed: false }
 
