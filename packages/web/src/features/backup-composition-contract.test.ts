@@ -176,3 +176,14 @@ test('创建并校验必须执行完整性校验，失败时不得报告成功',
   assert.match(backupPage, /if \(!checked\.valid\) throw new Error\(t\('create\.verifyFailed'/)
   assert.match(backupPage, /setCreateOpen\(false\)[\s\S]*?await refresh\(\)[\s\S]*?checked = await api\.verifyBackup/)
 })
+
+
+test('导入成功才显示完成反馈，开始导入时清理上一操作提示', () => {
+  const start = backupPage.indexOf('const importBackup = async (file: File) => {')
+  const end = backupPage.indexOf('const confirmCriticalOperation', start)
+  assert.ok(start >= 0 && end > start)
+  const operation = backupPage.slice(start, end)
+  assert.match(operation, /setSuccess\(''\)/)
+  assert.match(operation, /const imported = await api\.importBackup\(file\)/)
+  assert.match(operation, /setSuccess\(t\('importSucceeded', \{ count: imported\.snapshot\.files\.length/)
+})
