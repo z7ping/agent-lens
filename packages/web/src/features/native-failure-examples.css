@@ -40,9 +40,7 @@
 .native-failure-item.is-repeated { border-left-color: var(--al-danger); }
 .native-failure-item:hover { background: var(--al-soft-2); }
 .native-failure-item.is-selected { border-color: color-mix(in srgb, var(--al-danger) 28%, var(--al-line)); border-left-color: var(--al-danger); background: var(--al-danger-soft); }
-.native-failure-item:focus-visible,
-.tool-drill-stat-action:focus-visible,
-.insight-kpi-action:focus-visible { outline: 2px solid var(--al-accent); outline-offset: 2px; }
+.native-failure-item:focus-visible { outline: 2px solid var(--al-accent); outline-offset: 2px; }
 .native-failure-item-main { display: flex; min-width: 0; align-items: center; gap: 7px; }
 .native-failure-item-main svg { flex: 0 0 auto; color: var(--al-danger); }
 .native-failure-item-main b { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; }
