@@ -9,6 +9,7 @@ import {
   listManagedDirectory,
   normalizeManagedRelativePath,
   previewManagedTextFile,
+  previewSafeArchivedBytes,
 } from './managed-files'
 
 function errorCode(error: unknown): string | undefined {
@@ -133,4 +134,19 @@ test('managed text preview enforces size limit before returning content', async 
   } finally {
     await rm(root, { recursive: true, force: true })
   }
+})
+test('archived preview enforces redaction, runtime exclusions, binary and image signatures', () => {
+  const safe = previewSafeArchivedBytes('AGENTS.md', Buffer.from('# instructions\\n'))
+  assert.equal(safe.content, '# instructions\\n')
+  const secret = previewSafeArchivedBytes('settings.json', Buffer.from('{"apiKey":"sensitive-secret-value"}'))
+  assert.equal(secret.previewStatus, 'redacted')
+  assert.match(secret.content ?? '', /\\[REDACTED\\]/)
+  assert.doesNotMatch(secret.content ?? '', /sensitive-secret-value/)
+  assert.equal(previewSafeArchivedBytes('.env', Buffer.from('value')).blockedReason, 'sensitive')
+  assert.equal(previewSafeArchivedBytes('history.jsonl', Buffer.from('session')).blockedReason, 'protected-data')
+  assert.equal(previewSafeArchivedBytes('binary.bin', Buffer.from([0, 1, 2])).blockedReason, 'binary')
+  assert.equal(previewSafeArchivedBytes('big.txt', Buffer.alloc(512 * 1024 + 1)).blockedReason, 'too-large')
+  const png = previewSafeArchivedBytes('image.png', Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]))
+  assert.equal(png.mimeType, 'image/png')
+  assert.match(png.dataUrl ?? '', /^data:image\\/png;base64,/)
 })
