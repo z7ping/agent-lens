@@ -718,7 +718,7 @@ export const TaskSurface = forwardRef<HTMLElement, TaskSurfaceProps>(function Ta
     const target=railItems.find(item=>item.ordinal===focusTurnTarget.ordinal)
     if(target?.element && scrollRailItemToAnchor(target))return
     pendingTurnRailTargetRef.current={id:focusTurnTarget.key,ordinal:focusTurnTarget.ordinal}
-  },[focusTurnTarget?.key,focusTurnTarget?.ordinal,railItems,scrollRailItemToAnchor])
+  },[focusTurnTarget,railItems,scrollRailItemToAnchor])
 
   const jumpToRound = (item: TaskTurnRailItem) => {
     if (scrollRailItemToAnchor(item)) return
