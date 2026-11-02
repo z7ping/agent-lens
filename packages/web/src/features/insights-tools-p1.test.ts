@@ -119,6 +119,26 @@ test('failure workbench keeps equal desktop panes, independent scrolling, and re
   assert.doesNotMatch(view,/<Drawer/)
 })
 
+test('error radar is succinct; partial observations remain separate from certified totals',async()=>{
+  const [insights,zh,en]=await Promise.all([
+    source('./InsightsPage.tsx'),
+    source('../i18n/zh-CN/insights-tools.ts'),
+    source('../i18n/en-US/insights-tools.ts'),
+  ])
+  assert.match(insights,/verifiedNative && verifiedNative\.readySessions > 0/)
+  assert.match(insights,/verifiedNative\?\.observed && <section/)
+  assert.match(insights,/≥\{verifiedNative\.observed\.errorCount\}/)
+  assert.match(insights,/const verified = metric\?\.readySessions/)
+  assert.match(insights,/const observed = metric\?\.partialSessions/)
+  assert.match(insights,/const primary = observed !== null && observed > 0/)
+  assert.doesNotMatch(insights,/\(verified \?\? 0\) \+ \(observed \?\? 0\)/)
+  for(const translation of [zh,en]){
+    for(const key of ['radarTitle','radarCoverage','radarVerifiedLabel','radarObservedLabel','radarPending','radarUnavailable']){
+      assert.ok(translation.includes(key+':'),key)
+    }
+  }
+})
+
 test('native statistics navigate to failure reading while unverified counters stay distinct',async()=>{
   const [insights,tools,styles,zh,en]=await Promise.all([
     source('./InsightsPage.tsx'),

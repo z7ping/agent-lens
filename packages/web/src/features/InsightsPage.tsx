@@ -1,13 +1,15 @@
-import { useEffect, useMemo, useSyncExternalStore } from 'react'
+import { useEffect, useMemo, useState, useSyncExternalStore } from 'react'
 import { useNavigate } from 'react-router-dom'
 import type { TFunction } from 'i18next'
 import { useTranslation } from 'react-i18next'
 import { createPortal } from 'react-dom'
-import type { InsightMetricDeltaDto } from '@agent-lens/protocol'
+import type { InsightMetricDeltaDto, NativeMetricOverviewResponseDto } from '@agent-lens/protocol'
 import type { AgentLensClientModel } from '../client/model'
+import { AgentLensApi, rangeStart } from '../client/api'
 import { InsightsClientModel } from '../client/insights-model'
 import { useClientSnapshotField } from '../client/use-client-snapshot'
 import { agentLabel, useOrderedAgents } from '../components/AgentScope'
+import { AgentLogo } from '../components/AgentLogo'
 import { BackgroundDataNotice } from '../components/BackgroundDataNotice'
 import { EmptyStatePanel, ErrorStateBanner, WorkspaceSkeleton } from '../components/StateViews'
 import { SidebarFilterDisclosure } from '../components/SidebarFilterDisclosure'
@@ -74,6 +76,8 @@ function MetricDelta({ label, value }: { label: string; value: number | null }) 
   return <div className="insight-comparison-item"><span>{label}</span><b className={deltaClass(value)}>{deltaLabel(value, t)}</b></div>
 }
 
+const radarApi = new AgentLensApi()
+
 export function InsightsPage({ model, toolbarHost }: { model: AgentLensClientModel; toolbarHost?: HTMLDivElement | null }) {
   const { t, i18n } = useTranslation('insights')
   const navigate = useNavigate()
@@ -84,6 +88,42 @@ export function InsightsPage({ model, toolbarHost }: { model: AgentLensClientMod
   const liveConnected = useClientSnapshotField(model, 'liveConnected')
   const insightsModel = useMemo(() => new InsightsClientModel(undefined, model.getSnapshot().usage.filters), [model])
   const insights = useSyncExternalStore(insightsModel.subscribe, insightsModel.getSnapshot, insightsModel.getSnapshot)
+  // The radar has its own all-Agent query. Never change the shared single-Agent scope.
+  const [radarSnapshot, setRadarSnapshot] = useState<{ key: string; response: NativeMetricOverviewResponseDto } | null>(null)
+  const [radarError, setRadarError] = useState<{ key: string; message: string } | null>(null)
+  const [radarRefresh, setRadarRefresh] = useState(0)
+  const radarScopeKey = JSON.stringify([usage.filters.projectId, usage.filters.range])
+  useEffect(() => {
+    const controller = new AbortController()
+    setRadarError(null)
+    void radarApi.nativeMetricsOverview({
+      projectId: usage.filters.projectId || undefined,
+      from: rangeStart(usage.filters.range),
+      signal: controller.signal,
+    }).then(
+      response => {
+        if (!controller.signal.aborted) setRadarSnapshot({ key: radarScopeKey, response })
+      },
+      reason => {
+        if (!controller.signal.aborted) setRadarError({
+          key: radarScopeKey,
+          message: reason instanceof Error ? reason.message : String(reason),
+        })
+      },
+    )
+    return () => controller.abort()
+  }, [radarScopeKey, radarRefresh, insights.response?.meta.generatedAt])
+  const radar = radarError?.key === radarScopeKey ? null
+    : radarSnapshot?.key === radarScopeKey ? radarSnapshot.response : null
+  const radarItems = new Map(
+    radar?.state === 'available' ? radar.items.map(item => [item.sourceId, item] as const) : [],
+  )
+  const radarUnavailable = radar?.state === 'unavailable' || radar?.state === 'unsupported'
+    || radarError?.key === radarScopeKey
+  const refreshInsights = () => {
+    setRadarRefresh(value => value + 1)
+    void insightsModel.refresh()
+  }
 
   useEffect(() => {
     void insightsModel.start(listener => model.subscribeLiveEvents(listener))
@@ -137,9 +177,8 @@ export function InsightsPage({ model, toolbarHost }: { model: AgentLensClientMod
       ]}/>
     </div>
     <div className="workspace-view-filter-actions">
-      {data?.meta.mode==='native-only'&&<Button onClick={()=>navigate('/tools?view=failures')}>{t('page.failureExamples')}</Button>}
       {canRelaxFilters && <Button className="workspace-view-clear-filter" onClick={relaxFilters}>{t('page.relaxFilters')}</Button>}
-      <IconButton size="small" onClick={() => void insightsModel.refresh()} title={t('filters.refresh')} aria-label={t('filters.refresh')}><UiIcon name="refresh" size={14}/></IconButton>
+      <IconButton size="small" onClick={refreshInsights} title={t('filters.refresh')} aria-label={t('filters.refresh')}><UiIcon name="refresh" size={14}/></IconButton>
     </div>
   </div>
 
@@ -147,12 +186,61 @@ export function InsightsPage({ model, toolbarHost }: { model: AgentLensClientMod
     {toolbarHost ? createPortal(toolbarFilters, toolbarHost) : null}
     <main className="workspace-page insights-page">
       <div className="page-content insights-content">
-        {insights.error && <ErrorStateBanner message={insights.error} onRetry={() => void insightsModel.refresh()}/>} 
+        {insights.error && <ErrorStateBanner message={insights.error} onRetry={refreshInsights}/>} 
         {data?.meta.mode==='native-only' && data.meta.native?.state!=='available' &&
           <ErrorStateBanner message={t('page.nativeMetricsUnavailable')}
             onRetry={() => void insightsModel.refresh()}/> }
 
-        {data?.meta.native && <section className="insight-coverage-strip" role="status"
+        {agents.length > 0 && <section className="insight-agent-radar" aria-label={t('page.radarTitle')}>
+          <div className="insight-agent-radar-head">
+            <h2>{t('page.radarTitle')}</h2>
+            {radar?.state === 'available'
+              ? <span>
+                  {t('page.radarCoverage', { ready: radar.totals.readySessions, eligible: radar.totals.eligibleSessions })}
+                </span>
+              : radarUnavailable
+                ? <span className="is-warning" title={radarError?.message || (radar && 'reason' in radar ? radar.reason : '')}>{t('page.radarUnavailable')}</span>
+                : <span>{t('page.radarLoading')}</span>}
+          </div>
+          <div className="insight-agent-radar-grid">
+            {agents.map(agent => {
+              const metric = radarItems.get(agent.sourceId)
+              const verified = metric?.readySessions ? metric.totals.errorCount : null
+              const observed = metric?.partialSessions ? metric.observed?.errorCount ?? null : null
+              const primary = observed !== null && observed > 0 ? `≥${observed}`
+                : verified !== null ? String(verified)
+                : observed !== null ? `≥${observed}` : '—'
+              const hasErrors = (verified ?? 0) > 0 || (observed ?? 0) > 0
+              const detail = observed !== null && observed > 0
+                ? t('page.radarVerified', { count: metric?.totals.errorCount ?? 0 })
+                : verified !== null ? t('page.radarVerifiedLabel')
+                  : observed !== null ? t('page.radarObservedLabel')
+                    : metric?.eligibleSessions ? t('page.radarPending')
+                      : metric ? t('page.radarNoSessions') : t('page.radarUnavailable')
+              return <Button key={agent.sourceId} className={`insight-agent-radar-item${selectedSourceId === agent.sourceId ? ' is-selected' : ''}${hasErrors ? ' has-errors' : ''}`}
+                aria-pressed={selectedSourceId === agent.sourceId}
+                title={metric ? t('page.radarTooltip', {
+                  ready: metric.readySessions, eligible: metric.eligibleSessions,
+                  verified: metric.totals.errorCount, observed: metric.observed?.errorCount ?? 0,
+                }) : t('page.radarUnavailable')}
+                onClick={() => model.setUsageFilters({ sourceIds: [agent.sourceId] })}>
+                <span className="insight-agent-radar-identity">
+                  <AgentLogo sourceId={agent.sourceId} size="compact"/>
+                  <span>{agentLabel(agent.sourceId, agent.displayName)}</span>
+                </span>
+                <strong>{primary}</strong>
+                <small>{detail}</small>
+              </Button>
+            })}
+          </div>
+        </section>}
+        {data?.meta.mode === 'native-only' && <div className="insight-detail-heading">
+          <h2>{agentSelectionSummary}</h2>
+          <Button size="small" variant="quiet" onClick={()=>navigate('/tools?view=failures')}>
+            {t('page.failureExamples')}<UiIcon name="chevron-right" size={14}/>
+          </Button>
+        </div>}
+        {data?.meta.native && <section className={`insight-coverage-strip${data.meta.mode === 'native-only' ? ' is-native' : ''}`} role="status"
           aria-label={t('page.nativeCoverageTitle')}>
           <div><span>{t('page.nativeCoverageTitle')}</span>
             <b>{data.meta.native.state === 'available'
@@ -160,10 +248,8 @@ export function InsightsPage({ model, toolbarHost }: { model: AgentLensClientMod
                 eligible: data.meta.native.eligibleSessions })
               : t('page.nativeCoverageUnavailable')}</b></div>
           {data.meta.native.state === 'available' && <>
-            <div><span>{t('page.nativeVerifiedCalls')}</span>
-              <b>{data.meta.native.toolCallCount}</b></div>
-            <div><span>{t('page.nativeVerifiedErrors')}</span>
-              <b>{data.meta.native.errorCount}</b></div>
+            <div><span>{t('page.nativeObservedSessions')}</span>
+              <b>{data.meta.native.partialSessions}</b></div>
             <div><span>{t('page.nativeCoverageStatus')}</span>
               <b className={data.meta.native.coverage === 'partial' ? 'is-warning' : ''}
                 title={t(data.meta.mode === 'native-only' ? 'page.nativeOnlyModeNote' : 'page.nativeSeparateNote')}>
@@ -174,12 +260,8 @@ export function InsightsPage({ model, toolbarHost }: { model: AgentLensClientMod
 
 
         {insights.loading && !data ? <WorkspaceSkeleton kind="insights"/> : data?.meta.mode==='native-only' ? <>
-          {verifiedNative && <section className="insight-kpi-grid"
+          {verifiedNative && verifiedNative.readySessions > 0 && <section className="insight-kpi-grid is-native"
             aria-label={t('page.nativeCoverageTitle')}>
-            <div className="workspace-metric-card insight-kpi">
-              <span>{t('page.nativeVerifiedSessions')}</span>
-              <strong>{verifiedNative.readySessions}</strong>
-            </div>
             <div className="workspace-metric-card insight-kpi">
               <span>{t('page.interactions')}</span>
               <strong>{verifiedNative.interactionCount}</strong>
@@ -209,23 +291,19 @@ export function InsightsPage({ model, toolbarHost }: { model: AgentLensClientMod
               </div>)}
             </div>
           </section>}
-          {verifiedNative?.observed && <section className="insight-kpi-grid"
+          {verifiedNative?.observed && <section className="insight-kpi-grid is-native"
             aria-label={t('page.nativeObservedTitle')}>
             <div className="workspace-metric-card insight-kpi">
-              <span>{t('page.nativeObservedSessions')}</span>
-              <strong>{verifiedNative.partialSessions}</strong>
-            </div>
-            <div className="workspace-metric-card insight-kpi">
               <span>{t('page.nativeObservedInteractions')}</span>
-              <strong>{verifiedNative.observed.interactionCount}</strong>
+              <strong>≥{verifiedNative.observed.interactionCount}</strong>
             </div>
             <div className="workspace-metric-card insight-kpi">
               <span>{t('page.nativeObservedCalls')}</span>
-              <strong>{verifiedNative.observed.toolCallCount}</strong>
+              <strong>≥{verifiedNative.observed.toolCallCount}</strong>
             </div>
             <div className="workspace-metric-card insight-kpi">
               <span>{t('page.nativeObservedErrors')}</span>
-              <strong>{verifiedNative.observed.errorCount}</strong>
+              <strong>≥{verifiedNative.observed.errorCount}</strong>
             </div>
           </section>}
         </> : data && data.summary.sessionCount > 0 ? <>

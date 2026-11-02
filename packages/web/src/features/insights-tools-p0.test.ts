@@ -25,6 +25,31 @@ test('both Insights tabs use a single shared Agent scope, never All Agents', asy
   assert.match(app, /localStorage\.getItem\('agent-lens\.insights-tools\.source-id'\)/)
 })
 
+test('global error radar reuses one indexed overview and keeps the single-Agent detail scope', async () => {
+  const [insights, api, protocol, handler, css] = await Promise.all([
+    source('./InsightsPage.tsx'),
+    source('../client/api.ts'),
+    source('../../../protocol/src/native-review.ts'),
+    source('../../../surface-http/src/native-session-metrics-overview-http.ts'),
+    source('../insights.css'),
+  ])
+  assert.match(insights, /radarApi\.nativeMetricsOverview\(\{/)
+  assert.match(insights, /projectId: usage\.filters\.projectId \|\| undefined/)
+  assert.match(insights, /from: rangeStart\(usage\.filters\.range\)/)
+  assert.match(insights, /controller\.abort\(\)/)
+  assert.match(insights, /radarSnapshot\?\.key === radarScopeKey/)
+  assert.match(insights, /radarItems\.get\(agent\.sourceId\)/)
+  assert.match(insights, /model\.setUsageFilters\(\{ sourceIds: \[agent\.sourceId\] \}\)/)
+  assert.match(insights, /aria-pressed=\{selectedSourceId === agent\.sourceId\}/)
+  assert.match(insights, /<AgentLogo sourceId=\{agent\.sourceId\} size="compact"\/>/)
+  assert.match(api, /nativeMetricsOverview\(options:/)
+  assert.match(api, /if\(options\.projectId\)params\.set\('projectId',options\.projectId\)/)
+  assert.match(handler, /const items=await Promise\.all\(sourceDefs\.map/)
+  assert.match(protocol, /Partial session observations are independent lower bounds/)
+  assert.match(css, /\.insight-agent-radar-grid \{/)
+  assert.doesNotMatch(css, /!important/)
+})
+
 test('unverified native tool observations are a separate lower-bound group', async () => {
   const tools = await source('./ToolsPage.tsx')
   assert.match(tools, /if\(left\.partial!==right\.partial\)/)

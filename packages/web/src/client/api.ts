@@ -395,10 +395,11 @@ export class AgentLensApi {
    * A partial coverage response is NOT a complete global usage count.
    */
   nativeMetricsOverview(options:{
-    sourceId?:string;from?:string;to?:string;signal?:AbortSignal
+    sourceId?:string;projectId?:string;from?:string;to?:string;signal?:AbortSignal
   }={}):Promise<NativeMetricOverviewResponseDto>{
     const params=new URLSearchParams()
     if(options.sourceId)params.set('sourceId',options.sourceId)
+    if(options.projectId)params.set('projectId',options.projectId)
     if(options.from)params.set('from',options.from)
     if(options.to)params.set('to',options.to)
     return requestJson<NativeMetricOverviewResponseDto>(
