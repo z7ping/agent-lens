@@ -104,6 +104,7 @@ export interface NativeErrorIndexQuery {
   offset:number
 }
 export interface NativeErrorIndexResult {
+  indexedSessions:number
   total:number
   hasMore:boolean
   items:Array<NativeErrorIndexEntry & {
@@ -156,7 +157,11 @@ export type NativeSessionMetricReadResult =
 
 export interface NativeSessionMetricsStore {
   /** Atomically replace the derived snapshot only for a Catalog-matching revision. */
-  replace(snapshot: NativeSessionMetricSnapshot, errors?: readonly NativeErrorIndexEntry[]): Promise<boolean>
+  replace(snapshot: NativeSessionMetricSnapshot): Promise<boolean>
+  /** Bounded staging batches; rows remain invisible until a matching revision publishes. */
+  stageErrors?(identity:{sourceId:string;installationId:string;nativeSessionId:string},
+    generation:string,errors:readonly NativeErrorIndexEntry[]):Promise<void>
+  publishErrors?(snapshot:NativeSessionMetricSnapshot,generation:string):Promise<boolean>
   /** Indexed source-only errors; query scope must match the current parser. */
   queryErrors?(query:NativeErrorIndexQuery):Promise<NativeErrorIndexResult>
   /** Never serve stale metrics as current after a known source revision change. */
