@@ -77,14 +77,7 @@ export class SqliteNativeSessionMetrics implements NativeSessionMetricsStore {
   constructor(private readonly executor: SqliteExecutor) {}
 
   /** An exact Catalog revision is required before overwriting derived totals. */
-  async replace(input: NativeSessionMetricSnapshot, errors: readonly NativeErrorIndexEntry[] = []): Promise<boolean> {
-    if (errors.some(entry => !entry.eventKey || entry.eventKey.length!==64
-      || !entry.fingerprint || entry.fingerprint.length!==64
-      || !Number.isFinite(Date.parse(entry.occurredAt))
-      || entry.summary.length>240 || entry.toolName!==null && entry.toolName.length>128
-      || entry.errorCode!==null && entry.errorCode.length>80)) {
-      throw new TypeError('Invalid native error index entry')
-    }
+  async replace(input: NativeSessionMetricSnapshot): Promise<boolean> {
     assertSnapshot(input)
     return this.executor.transaction(async () => {
       const exists = this.executor.db.prepare(`
@@ -132,19 +125,6 @@ export class SqliteNativeSessionMetrics implements NativeSessionMetricsStore {
         input.sourceId,input.installationId,input.nativeSessionId,tool.nativeToolName,
         tool.callCount,tool.resultCount,tool.errorCount,tool.totalDurationMs,
         tool.durationSampleCount??0,tool.maxDurationMs??null,
-      )
-      // Atomic replacement only after the Catalog revision has been validated.
-      this.executor.db.prepare(`DELETE FROM native_error_index
-        WHERE source_id=? AND installation_id=? AND native_session_id=?`)
-        .run(input.sourceId,input.installationId,input.nativeSessionId)
-      const insertError=this.executor.db.prepare(`INSERT INTO native_error_index (
-        source_id,installation_id,native_session_id,event_key,occurred_at,
-        turn_ordinal,native_event_id,tool_name,error_kind,error_code,summary,fingerprint
-      ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`)
-      for(const error of errors)insertError.run(
-        input.sourceId,input.installationId,input.nativeSessionId,error.eventKey,
-        error.occurredAt,error.turnOrdinal,error.nativeEventId,error.toolName,
-        error.kind,error.errorCode,error.summary,error.fingerprint,
       )
       return true
     })
