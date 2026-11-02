@@ -136,7 +136,7 @@ export const chineseInsightsToolsMessages: LocaleMessagesDto = {
 
       description:'按当前智能体、项目和会话活跃时间范围，从原生记录按需读取明确失败。样本只在当前视图内存中保留；用于复盘，不自动认定根因或任务最终失败。',
       scan:'查找错误样本',continue:'继续扫描',stop:'停止查找',pause:'暂停扫描',
-      copy:'复制结构化样本',copied:'已复制',copyFailed:'复制失败，重试',
+      copy:'复制结构化样本',copyError:'复制错误',copied:'已复制',copyFailed:'复制失败，重试',
       progress:'{{sessions}} 个会话 · {{pages}} 页 · {{count}} 条失败',
       samples:'失败样本（{{count}}）',details:'失败详情',selectExample:'请选择左侧错误样本',
       skippedCount:'{{count}} 个会话跳过',budgetReached:'已达扫描预算',paused:'已暂停',partialShort:'上下文不完整',
