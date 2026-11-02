@@ -1,4 +1,7 @@
 import { randomUUID } from 'node:crypto'
+import { setTimeout as sleep } from 'node:timers/promises'
+import type { LiveSnapshotWindow, LiveSnapshotPage } from '@agent-lens/core'
+import { hermesHistoryPage, hermesHistoryQuery } from './history-page.js'
 import { readFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
@@ -195,12 +198,40 @@ export class HermesApiClient {
     return id
   }
 
+  /** Bounded, bidirectional paging through Hermes' native offset API. */
+  async sessionMessagesPage(
+    sessionId: string,
+    window: LiveSnapshotWindow = {},
+  ): Promise<{ entries: unknown[]; page: LiveSnapshotPage }> {
+    const query = hermesHistoryQuery(window)
+    const base = `/api/sessions/${encodeURIComponent(sessionId)}/messages`
+    const read = async (offset: number, limit: number): Promise<unknown[]> => {
+      const params = new URLSearchParams({
+        order: query.order,
+        offset: String(offset),
+        limit: String(limit),
+        include_compacted: 'true',
+      })
+      const response = asRecord(await this.requestJson(`${base}?${params}`))
+      const rows = Array.isArray(response.data) ? response.data
+        : Array.isArray(response.messages) ? response.messages : []
+      return rows.map(value => {
+        const record = asRecord(value)
+        const id = record.id
+        return typeof id === 'number' && Number.isSafeInteger(id)
+          ? { ...record, id: String(id) } : value
+      })
+    }
+    const entries = await read(query.offset, query.limit)
+    // A full last page is not proof older/newer rows exist.
+    const more = entries.length === query.limit
+      && (await read(query.offset + entries.length, 1)).length > 0
+    return { entries, page: hermesHistoryPage(query, entries, more) }
+  }
+
+  /** Compatibility helper: most recent bounded page, in chronological order. */
   async sessionMessages(sessionId: string): Promise<unknown[]> {
-    const response = asRecord(await this.requestJson(
-      `/api/sessions/${encodeURIComponent(sessionId)}/messages?order=latest&limit=500&include_compacted=true`,
-    ))
-    return Array.isArray(response.data) ? response.data
-      : Array.isArray(response.messages) ? response.messages : []
+    return (await this.sessionMessagesPage(sessionId, { edge: 'latest', limit: 500 })).entries
   }
 
   async createRun(sessionId: string, input: string): Promise<string> {
@@ -251,13 +282,14 @@ export class HermesApiClient {
     let lastSequence = -1
     let attempts = 0
     const path = `/v1/runs/${encodeURIComponent(runId)}/events`
-    while (!signal?.aborted) {
+    const streamSignal = signal ?? new AbortController().signal
+    while (!streamSignal.aborted) {
       let failure: unknown
       let reader: ReadableStreamDefaultReader<Uint8Array> | undefined
       try {
         const response = await this.request(path, {
           method: 'GET',
-          ...(signal ? { signal } : {}),
+          signal: streamSignal,
           ...(lastSequence >= 0 ? { headers: { 'Last-Event-ID': String(lastSequence) } } : {}),
         })
         if (!response.body) throw new HermesApiError('Hermes run event stream has no response body')
@@ -307,12 +339,19 @@ export class HermesApiClient {
       } finally {
         reader?.releaseLock()
       }
-      if (signal?.aborted) return
+      if (streamSignal.aborted) return
       attempts += 1
       if (attempts > 3 || (failure instanceof HermesApiError
         && failure.message.includes('replay window truncated'))) {
         if (failure) throw failure
         throw new HermesApiError('Hermes event stream ended without a terminal run event')
+      }
+      // Avoid a tight reconnect loop on gateway restarts or dropped sockets.
+      try {
+        await sleep(Math.min(attempts * 250, 1_000), undefined, { signal: streamSignal })
+      } catch {
+        if (streamSignal.aborted) return
+        throw new HermesApiError('Hermes SSE reconnect wait failed')
       }
     }
   }

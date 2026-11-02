@@ -3,6 +3,7 @@ import type {
   LiveAvailability,
   LiveRuntimeState,
   LiveSnapshot,
+  LiveSnapshotWindow,
 } from '@agent-lens/core'
 import { formatLiveError, LiveEventChannel } from '@agent-lens/live-support'
 import { HermesApiClient } from './client.js'
@@ -130,15 +131,16 @@ export class DefaultHermesLiveService {
     return this.runtimeState(runtime)
   }
 
-  async snapshot(runtimeSessionId: string): Promise<LiveSnapshot> {
+  async snapshot(runtimeSessionId: string, _since?: string, window?: LiveSnapshotWindow): Promise<LiveSnapshot> {
     const runtime = this.runtime(runtimeSessionId)
     await this.refreshActiveRun(runtime)
-    const entries = runtime.nativeSessionId
-      ? await this.client.sessionMessages(runtime.nativeSessionId)
-      : []
+    const history = runtime.nativeSessionId
+      ? await this.client.sessionMessagesPage(runtime.nativeSessionId, window)
+      : { entries: [], page: { hasEarlier: false, hasLater: false } }
     return {
       state: this.runtimeState(runtime),
-      entries,
+      entries: history.entries,
+      page: history.page,
     }
   }
 
