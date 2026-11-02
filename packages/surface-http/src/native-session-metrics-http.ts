@@ -1,5 +1,6 @@
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { stat } from 'node:fs/promises'
+import { randomUUID } from 'node:crypto'
 import { NATIVE_SESSION_METRIC_PROJECTION_VERSION } from '@agent-lens/core'
 import type {
   CapturePolicyService, NativeSessionCatalogStore, NativeSessionMetricsStore,
@@ -238,8 +239,20 @@ export async function rebuildNativeSessionMetrics(
     projectionVersion:PROJECTION_VERSION,computedAt:new Date().toISOString(),
     complete:exhausted&&!pendingTail&&sourceCoverageCertified,
   })
-  if(!await metrics.replace(snapshot,errorIndex.errors)){
+  if(!await metrics.replace(snapshot)){
     return {state:'drifted' as const,reason:'native-metrics-catalog-revision-changed'}
+  }
+  if(metrics.stageErrors && metrics.publishErrors){
+    const generation=randomUUID()
+    // IPC requests are capped at 256KiB; the source-derived index is not.
+    for(let i=0;i<errorIndex.errors.length;i+=50){
+      signal.throwIfAborted()
+      await metrics.stageErrors(identity,generation,errorIndex.errors.slice(i,i+50))
+    }
+    signal.throwIfAborted()
+    if(!await metrics.publishErrors(snapshot,generation)){
+      return {state:'drifted' as const,reason:'native-error-index-catalog-revision-changed'}
+    }
   }
   return {
     state:'available' as const,
