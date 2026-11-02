@@ -6,6 +6,7 @@ import type {
 } from '@agent-lens/core'
 import { formatLiveError, LiveEventChannel } from '@agent-lens/live-support'
 import { HermesApiClient } from './client.js'
+import { HermesRunTranscriptAssembler } from './run-events.js'
 
 export interface HermesLiveStartInput {
   title?: string
@@ -21,6 +22,7 @@ interface OwnedRuntime {
   streamRunId: string | undefined
   streamAbort: AbortController | undefined
   streamTask: Promise<void> | undefined
+  transcript: HermesRunTranscriptAssembler | undefined
 }
 
 const TERMINAL_RUN_STATUSES = new Set([
@@ -95,6 +97,7 @@ export class DefaultHermesLiveService {
       streamRunId: undefined,
       streamAbort: undefined,
       streamTask: undefined,
+      transcript: undefined,
     }
     this.runtimes.set(runtime.id, runtime)
 
@@ -161,6 +164,7 @@ export class DefaultHermesLiveService {
 
     const runId = await this.client.createRun(runtime.nativeSessionId, message)
     runtime.activeRunId = runId
+    runtime.transcript = new HermesRunTranscriptAssembler(runId)
     const controller = new AbortController()
     runtime.streamRunId = runId
     runtime.streamAbort = controller
@@ -227,7 +231,7 @@ export class DefaultHermesLiveService {
     try {
       for await (const event of this.client.runEvents(runId, signal)) {
         if (runtime.activeRunId !== runId) return
-        runtime.events.publish(event)
+        this.publishRunEvent(runtime, event)
         const name = typeof event.event === 'string' ? event.event : ''
         if (['run.completed', 'run.failed', 'run.cancelled', 'run.interrupted'].includes(name)) {
           terminalEventSeen = true
@@ -261,7 +265,7 @@ export class DefaultHermesLiveService {
     if (!runId) return
     const state = await this.client.runState(runId)
     if (TERMINAL_RUN_STATUSES.has(state.status)) {
-      runtime.events.publish({
+      this.publishRunEvent(runtime, {
         ...state,
         event: `run.${state.status}`,
       })
@@ -269,9 +273,15 @@ export class DefaultHermesLiveService {
     }
   }
 
+  private publishRunEvent(runtime: OwnedRuntime, event: Readonly<Record<string, unknown>>): void {
+    const derived = runtime.transcript?.ingest(event) ?? [event]
+    for (const item of derived) runtime.events.publish(item)
+  }
+
   private finishRun(runtime: OwnedRuntime, runId: string): void {
     if (runtime.activeRunId !== runId) return
     runtime.activeRunId = undefined
+    runtime.transcript = undefined
   }
 
   private runtime(runtimeSessionId: string): OwnedRuntime {
