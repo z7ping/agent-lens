@@ -101,6 +101,24 @@ test('failure workbench reads the complete indexed population by pages, not a 20
   assert.doesNotMatch(view,/<Drawer/)
 })
 
+test('failure workbench keeps equal desktop panes, independent scrolling, and readable full error text',async()=>{
+  const [view,css]=await Promise.all([
+    source('./NativeFailureExamples.tsx'),
+    source('./native-failure-examples.css'),
+  ])
+  assert.match(css,/height: clamp\(360px, 68vh, 780px\)/)
+  assert.match(css,/\.native-failure-list-pane \{ display: flex; flex-direction: column; overflow: hidden; \}/)
+  assert.match(css,/\.native-failure-detail-pane \{ overflow: auto; \}/)
+  assert.match(css,/\.native-failure-list \{[^}]*overflow-y: auto/)
+  assert.match(css,/\.native-failure-raw-error \{[^}]*white-space: pre-wrap/s)
+  assert.match(css,/@media \(max-width: 1199\.98px\)/)
+  assert.match(view,/className="native-failure-raw-error"/)
+  assert.match(view,/onClick=\{\(\)=>void copyError\(\)\}/)
+  assert.match(view,/item\.coverage==='partial'\?t\('failures\.partial'\):undefined/)
+  assert.doesNotMatch(view,/<CopyableCodeBlock/)
+  assert.doesNotMatch(view,/<Drawer/)
+})
+
 test('native statistics navigate to failure reading while unverified counters stay distinct',async()=>{
   const [insights,tools,styles,zh,en]=await Promise.all([
     source('./InsightsPage.tsx'),
