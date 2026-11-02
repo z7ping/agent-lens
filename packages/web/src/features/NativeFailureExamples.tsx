@@ -20,7 +20,7 @@ const SCAN_BATCH_SIZE = 4
 export function NativeFailureExamples({filters,toolName}: {filters:QueryFilters;toolName?:string}) {
   const {t,i18n} = useTranslation('tools')
   const navigate = useNavigate()
-  const sourceIdsKey = JSON.stringify(filters.sourceIds)
+  const sourceIdsKey = JSON.stringify(filters.sourceIds ?? null)
   const scanner = useMemo(()=>new NativeFailureScanner(api,{
     sourceIds:JSON.parse(sourceIdsKey) as string[] | null,
     projectId:filters.projectId,range:filters.range,
@@ -176,7 +176,7 @@ export function NativeFailureExamples({filters,toolName}: {filters:QueryFilters;
       <section className="native-failure-detail-pane" aria-label={t('failures.details')}>
         {active?<div className="native-failure-detail">
           <div className="native-failure-detail-heading">
-            <span><StatusBadge tone="danger" dot>{t('failures.error')}</StatusBadge>
+            <span><StatusBadge tone="danger" dot>{t('failures.failure')}</StatusBadge>
               <strong>{active.toolName??t(active.kind==='tool'?'failures.unknownTool':'failures.runtime')}</strong></span>
             <Button size="small" onClick={()=>navigate(`/review/${encodeURIComponent(active.sessionId)}?range=all&status=all&focusTurn=${encodeURIComponent(String(active.ordinal))}`)}>
               <UiIcon name="link" size={14}/>{t('failures.openSession')}</Button>
