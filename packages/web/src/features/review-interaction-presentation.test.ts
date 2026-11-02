@@ -36,6 +36,19 @@ function unknownEvent(id: string, sourceRecordId: string): ReviewEventNodeDto {
   } as ReviewEventNodeDto
 }
 
+test('空思考不生成正文或计数，但仍打断相邻工具分组', () => {
+  for (const sourceId of ['codex', 'pi', 'hermes']) {
+    const hidden = { ...reasoning('empty'), sourceId, text: '', payload: { summaryAvailable: false } }
+    const entries = projectReviewInteractionPresentation([
+      { ...tool('before'), sourceId }, hidden, { ...tool('after'), sourceId },
+    ])
+    const process = entries.find(entry => entry.type === 'process')
+    assert.ok(process?.type === 'process')
+    assert.deepEqual(process.items.map(item => item.type), ['tool-group', 'tool-group'])
+    assert.deepEqual(process.items.flatMap(item => item.type === 'tool-group' ? item.items.map(tool => tool.id) : []), ['before', 'after'])
+  }
+})
+
 test('Tool 显式指向 reasoning 时标记归属、保持原序且不连带相邻无归属工具', () => {
   const think = reasoning('think-1', 'native-think-1')
   const child = tool('tool-child', { native: 'native-think-1' })

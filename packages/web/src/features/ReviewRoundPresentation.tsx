@@ -478,6 +478,7 @@ export function ReviewRoundAdapter({
   fileChangesEnabled,
   onForkAt,
   forkPending = false,
+  contentIncomplete = false,
 }: {
   sessionId: string
   interaction: ReviewInteractionDto
@@ -493,6 +494,7 @@ export function ReviewRoundAdapter({
   fileChangesEnabled?: boolean
   onForkAt?: ((nativeEventId: string) => void) | undefined
   forkPending?: boolean | undefined
+  contentIncomplete?: boolean | undefined
 }) {
   const { t } = useTranslation('review')
   const [roundFileChanges, setRoundFileChanges] = useState<TaskFileChangesResponseDto | null>(null)
@@ -521,7 +523,7 @@ export function ReviewRoundAdapter({
   }, [fileChangesEnabled, sessionId, interaction.id, interaction.startedAt, interaction.endedAt, interaction.observationRange, fileChangeObservationIds])
   const summary = interaction.processSummary
   const lazy = interaction.processMode === 'summary' && Boolean(summary?.itemCount)
-  const [loadedProcess, setLoadedProcess] = useState<ReviewInteractionDto | null>(lazy ? null : interaction)
+  const [loadedProcess, setLoadedProcess] = useState<ReviewInteractionDto | null>(null)
   const [processLoadState, setProcessLoadState] = useState<'idle' | 'loading' | 'loaded' | 'error'>(lazy ? 'idle' : 'loaded')
   const [processLoadError, setProcessLoadError] = useState('')
   const processAbortRef = useRef<AbortController | null>(null)
@@ -556,7 +558,7 @@ export function ReviewRoundAdapter({
   useEffect(() => {
     processAbortRef.current?.abort()
     processAbortRef.current = null
-    setLoadedProcess(lazy ? null : interaction)
+    setLoadedProcess(null)
     setProcessLoadError('')
     if (lazy && summary && expansionStore.get(summary.id) === true) {
       startProcessLoad(summary)
@@ -578,10 +580,11 @@ export function ReviewRoundAdapter({
     setProcessLoadState('idle')
   }
 
-  const effectiveInteraction = loadedProcess ?? interaction
+  // 原生分页会增量更新同一轮次；非惰性数据必须直接跟随 props，不能锁住首屏快照。
+  const effectiveInteraction = lazy ? loadedProcess ?? interaction : interaction
   // A successful Detail fetch cannot turn an already incomplete source into
   // "complete" merely because a bounded response happened to be returned.
-  const fetchedSummary = loadedProcess?.processSummary
+  const fetchedSummary = lazy ? loadedProcess?.processSummary : undefined
   const sourceDegraded = summary && !['complete', 'available'].includes(summary.availability)
   const fetchedComplete = fetchedSummary && ['complete', 'available'].includes(fetchedSummary.availability)
   const effectiveSummary = sourceDegraded && fetchedComplete
@@ -616,7 +619,7 @@ export function ReviewRoundAdapter({
   )
   const lastAssistantId = lastAssistantEntry?.node.id
   const hasFinalAnswer = Boolean(lastAssistantId)
-  const missingFinalAnswer = !hasFinalAnswer && interaction.trigger === 'user'
+  const missingFinalAnswer = !contentIncomplete && !hasFinalAnswer && interaction.trigger === 'user'
     && round.state !== 'running' && Boolean(effectiveSummary?.itemCount || processEntry)
     && (!effectiveSummary || ['complete', 'available'].includes(effectiveSummary.availability))
   // 只统计当前已经加载的原始事件，避免把未展开的惰性过程误报为 0。

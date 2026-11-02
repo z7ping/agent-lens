@@ -20,8 +20,8 @@ function record(entry: unknown, sourceSequence: number): SourceRecord {
   }
 }
 
-test('current Codex parser version is 23 so earlier semantic derivations replay', () => {
-  assert.equal(CODEX_CURRENT_PARSER_VERSION, '23')
+test('Codex 解析版本升级后重新派生旧的工具关联语义', () => {
+  assert.equal(CODEX_CURRENT_PARSER_VERSION, '24')
 })
 
 test('event_msg.agent_message becomes canonical assistant output instead of background unknown', async () => {

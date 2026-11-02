@@ -231,6 +231,8 @@ export function projectReviewInteractionPresentation(nodes: ReviewNodeDto[]): Re
     flushRawEvents()
     flushRuntimeEvents()
     if (node.type === 'message') {
+      // 必须在 flushTools 之后隐藏：没有可见摘要的思考同样是工具组边界。
+      if (node.role === 'reasoning' && !node.text.trim() && !node.attachments?.length) continue
       if (node.role === 'assistant' && [...sourceRecordIds(node)].some(id => commentarySourceRecords.has(id))) continue
       if (node.role === 'reasoning') result.push({ type: 'reasoning', node, tools: [] })
       else result.push({ type: 'message', node })

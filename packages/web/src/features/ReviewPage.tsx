@@ -913,7 +913,7 @@ export function ReviewPage({ model, embedded = false, latestRequest = 0 }: { mod
                 {review.detailLoadingMore
                   ? t('local.roundNav.loadingOlder')
                   : review.error
-                    ? <button onClick={() => void loadOlder()}>{t('local.roundNav.loadFailedRetry')}</button>
+                    ? <Button size="small" variant="quiet" onClick={() => void loadOlder()}>{t('local.roundNav.loadFailedRetry')}</Button>
                     : null}
               </div>}
               {annotatedInteractions.map((item, index) => <VirtualRoundMount
@@ -923,6 +923,8 @@ export function ReviewPage({ model, embedded = false, latestRequest = 0 }: { mod
               >
                 <ReviewRoundAdapter
                   sessionId={detail.id}
+                  contentIncomplete={detail.nativeTurnIncomplete === true
+                    && item.interaction.id === detail.interactions.at(-1)?.id}
                   fileChangesEnabled={detail.statisticsCompleteness !== 'window' && (item.round.toolCount > 0
                      || item.interaction.nodes.some(node => node.type === 'event' && node.kind === 'artifact.action'))}
                   interaction={item.interaction}
@@ -943,9 +945,9 @@ export function ReviewPage({ model, embedded = false, latestRequest = 0 }: { mod
                 {review.detailLoadingMore
                   ? t('local.roundNav.loadingFollowing', { scope: isFiltered ? t('local.roundNav.followingMatches') : t('local.roundNav.following') })
                   : detail.page.hasMore
-                    ? review.error
-                      ? <button onClick={() => void loadFollowing()}>{t('local.roundNav.loadFailedRetry')}</button>
-                      : t('local.roundNav.autoLoadFollowing', { scope: isFiltered ? t('local.roundNav.followingMatches') : t('local.roundNav.following') })
+                    ? <Button size="small" variant="quiet" onClick={() => void loadFollowing()}>
+                        {t(review.error ? 'local.roundNav.loadFailedRetry' : 'local.roundNav.loadFollowing')}
+                      </Button>
                     : isFiltered
                       ? t('local.roundNav.allMatchesLoaded', { count: detail.interactions.length })
                       : t('local.roundNav.allLoaded', { count: detail.interactions.length })}

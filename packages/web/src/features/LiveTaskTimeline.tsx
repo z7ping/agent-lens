@@ -154,17 +154,19 @@ export const GenericLiveRound = memo(function GenericLiveRound({
       || (item.kind === 'message' && item.role === 'assistant'))
   // Only native commentary/reasoning/tool stages enter processing.
   // Unknown-phase assistant text stays visible; never infer a final from prose.
-  const reading = projectTaskReading(projection.items.map(item => {
-    const kind: TaskReadingFact<LiveTaskProjectionItem>['kind'] = item.kind === 'thinking'
-      ? 'reasoning'
-      : item.kind === 'tool' ? 'tool'
-        : item.role === 'user' ? 'prompt'
-          : item.phase === 'commentary' ? 'commentary'
-            : item.phase === 'final' ? 'answer' : 'unclassified-answer'
-    return { id: item.id, kind, value: item,
-      ...((item.kind === 'tool' && item.status === 'error') || (item.kind === 'message' && item.error) ? { error: true } : {}),
-    }
-  }))
+  const reading = projectTaskReading(projection.items
+    .filter(item => item.kind !== 'thinking' || item.streaming || Boolean(item.text.trim()))
+    .map(item => {
+      const kind: TaskReadingFact<LiveTaskProjectionItem>['kind'] = item.kind === 'thinking'
+        ? 'reasoning'
+        : item.kind === 'tool' ? 'tool'
+          : item.role === 'user' ? 'prompt'
+            : item.phase === 'commentary' ? 'commentary'
+              : item.phase === 'final' ? 'answer' : 'unclassified-answer'
+      return { id: item.id, kind, value: item,
+        ...((item.kind === 'tool' && item.status === 'error') || (item.kind === 'message' && item.error) ? { error: true } : {}),
+      }
+    }))
   const processItems = reading.process.map(fact => fact.value)
   const visibleItems = [...reading.prompts, ...reading.answers, ...reading.auxiliary].map(fact => fact.value)
   const lastAnswerId = reading.answers.at(-1)?.id
