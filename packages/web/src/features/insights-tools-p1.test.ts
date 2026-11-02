@@ -85,6 +85,7 @@ test('failure workbench reads the complete indexed population by pages, not a 20
     source('./native-failure-examples.ts'),
   ])
   assert.match(view,/api\.nativeErrors\(/)
+  assert.match(view,/setFingerprint\(active\.fingerprint\)/)
   assert.match(view,/const PAGE_SIZE=50/)
   assert.match(view,/setOffset\(offset\+PAGE_SIZE\)/)
   assert.match(view,/setTimeout\(\(\)=>\{void load\(\)\},4000\)/)
