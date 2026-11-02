@@ -137,7 +137,8 @@
   cursor: pointer;
 }
 .tool-table .tool-table-sort:hover { color: var(--al-ink); }
-.tool-native-summary { display: flex; flex-direction: column; gap: 6px; }
+.tool-native-summary { display: flex; flex-direction: column; gap: 4px; }
+.tool-native-summary-heading { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
 .tool-native-summary small { color: var(--al-muted); font-size: 12px; line-height: 1.6; }
 .tool-table .tool-native-observed-group th {
   border-top: 1px solid var(--al-line);
