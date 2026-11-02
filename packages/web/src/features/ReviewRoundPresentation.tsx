@@ -176,7 +176,6 @@ function MessageBubble({
       author: node.role === 'user' ? t('local.role.you') : agentLabel(node.sourceId),
       ...(node.role === 'assistant' && modelLabel ? { modelLabel } : {}),
       ...(messageTime ? { time: messageTime } : {}),
-      ...(node.evidence.length > 0 ? { evidence: <EvidenceBadges evidence={node.evidence}/> } : {}),
     }}
     showContentActions={node.role === 'assistant' && showContentActions}
     actions={Boolean(node.nativeLazyText)||node.evidence.length > 0 || (showContentActions && node.role === 'assistant' && node.nativeEventId && onForkAt) ? <>
@@ -200,7 +199,13 @@ function MessageBubble({
         </Button>}
         {bodyError&&<span role="alert">{bodyError}</span>}
       </>}
-      {node.evidence.length > 0 && <button onClick={() => inspect(node)}>{t('local.evidence.evidenceDetail', { count: node.evidence.length })}</button>}
+      {node.evidence.length > 0 && <IconButton
+        size="small"
+        className="task-message-evidence-action"
+        aria-label={t('local.evidence.evidenceDetail', { count: node.evidence.length })}
+        title={t('local.evidence.evidenceDetail', { count: node.evidence.length })}
+        onClick={() => inspect(node)}
+      ><UiIcon name="info" size={14}/></IconButton>}
       {showContentActions && node.role === 'assistant' && node.nativeEventId && onForkAt && <IconButton
         size="small"
         disabled={forkPending}
