@@ -1266,7 +1266,7 @@ export class LocalBackupService implements BackupService {
             const view = /\.(?:png|jpe?g|gif|webp)$/i.test(name)
               ? await previewManagedImageFile(root, relativePath)
               : await previewManagedTextFile(root, relativePath)
-            current = { ...view, previewStatus: view.redacted ? 'redacted' : 'readable' }
+            current = { ...view, previewStatus: 'redacted' in view && view.redacted ? 'redacted' : 'readable' }
           } catch (error) {
             if (error instanceof ManagedFileError) {
               const reason = error.code
