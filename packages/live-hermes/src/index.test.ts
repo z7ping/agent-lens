@@ -117,3 +117,31 @@ test('Hermes exposes object-shaped transport and terminal diagnostics without gu
     code: 'NATIVE_FAILURE',
   })
 })
+
+
+test('Hermes Live passes native bounded snapshot windows through the existing Live contract', async () => {
+  const calls: Array<Record<string, unknown> | undefined> = []
+  const client = {
+    createSession: async () => 'session-1',
+    sessionMessagesPage: async (_native: string, window: Record<string, unknown> | undefined) => {
+      calls.push(window)
+      return {
+        entries: [{ id: '53', role: 'user', content: 'older turn' }],
+        page: { hasEarlier: true, before: 'hermes-history:latest:240', hasLater: true,
+          after: 'hermes-history:latest:119' },
+      }
+    },
+  } as unknown as HermesApiClient
+  const service = new DefaultHermesLiveService(client)
+  try {
+    const state = await service.start({})
+    const page = await service.snapshot(state.runtimeSessionId, undefined,
+      { before: 'hermes-history:latest:120', limit: 120 })
+    assert.deepEqual(calls, [{ before: 'hermes-history:latest:120', limit: 120 }])
+    assert.equal(page.entries.length, 1)
+    assert.equal(page.page?.before, 'hermes-history:latest:240')
+    assert.equal(page.page?.hasLater, true)
+  } finally {
+    await service.dispose()
+  }
+})

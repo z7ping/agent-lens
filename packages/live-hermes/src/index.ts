@@ -5,6 +5,7 @@ import type {
   LiveEvent,
   LiveMessageInput,
   LiveRuntimeEvent,
+  LiveSnapshotWindow,
   LiveSendOptions,
 } from '@agent-lens/core'
 import {
@@ -222,8 +223,8 @@ export class HermesLiveAdapter implements LiveAdapter {
     return this.service.state(runtimeSessionId)
   }
 
-  snapshot(runtimeSessionId: string) {
-    return this.service.snapshot(runtimeSessionId)
+  snapshot(runtimeSessionId: string, since?: string, window?: LiveSnapshotWindow) {
+    return this.service.snapshot(runtimeSessionId, since, window)
   }
 
   send(
