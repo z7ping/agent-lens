@@ -98,7 +98,7 @@ export function NativeFailureExamples({filters,toolName}: {filters:QueryFilters;
         <div><strong>{t('failures.error')}</strong><CopyableCodeBlock>{example.error}</CopyableCodeBlock></div>
         {(example.truncated||example.contextPartial)&&<p className="native-failure-note">{t('failures.partial')}</p>}
         <p className="native-failure-note">{t('failures.evidence',{observations:example.observationIds.length,evidence:example.evidenceIds.length})}</p>
-        <Button onClick={()=>navigate(`/review/${encodeURIComponent(example.sessionId)}?range=all&status=all`)}>{t('failures.openSession')}</Button>
+        <Button onClick={()=>navigate(`/review/${encodeURIComponent(example.sessionId)}?range=all&status=all&focusTurn=${encodeURIComponent(String(example.ordinal))}`)}>{t('failures.openSession')}</Button>
       </div>
     </Disclosure>)}
   </section>
