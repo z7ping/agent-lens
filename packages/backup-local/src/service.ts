@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from 'node:crypto'
 import {
   lstat,
+  stat,
   mkdir,
   readFile,
   readdir,
@@ -21,12 +22,21 @@ import { gunzipSync, gzipSync } from 'node:zlib'
 import {
   containsConfigSecretAssignment,
   containsHighConfidenceSecret,
+  DEFAULT_MANAGED_FILE_PREVIEW_BYTES,
+  ManagedFileError,
+  isEnvironmentSecretFileName,
+  isProtectedRuntimeDataFile,
+  previewManagedImageFile,
+  previewManagedTextFile,
+  previewSafeArchivedBytes,
   isPathInside,
   isSensitiveFileName,
 } from '@agent-lens/source-support'
 import type {
   AgentInstallation,
   BackupAssetKind,
+  BackupFilePreview,
+  BackupFilePreviewSide,
   BackupCreateInput,
   BackupExcludedEntry,
   BackupManifestFile,
@@ -1184,6 +1194,95 @@ export class LocalBackupService implements BackupService {
       await rm(stagePath, { recursive: true, force: true })
       throw error
     }
+  }
+
+  /**
+   * On-demand file inspection. The caller supplies an archive key, never a
+   * filesystem path. Snapshot content is checked against its manifest hash.
+   * Current content is resolved again through installation roots and the
+   * managed-file reader's no-symlink, secret and size policies.
+   */
+  async previewRestoreFile(id: string, archivePath: string): Promise<BackupFilePreview> {
+    const manifest = await this.getSnapshot(id)
+    if (!manifest) throw new Error(`找不到快照：${id}`)
+    const file = manifest.files.find(entry => entry.archivePath === archivePath)
+    if (!file) throw new Error('快照中找不到该文件')
+    const name = posix.basename(file.sourceRelativePath)
+    const unavailable = (reason: string): BackupFilePreviewSide => ({ previewStatus: 'unavailable', reason })
+    const metadata = (blockedReason: NonNullable<BackupFilePreviewSide['blockedReason']>): BackupFilePreviewSide =>
+      ({ previewStatus: 'metadata-only', blockedReason, size: file.size })
+
+    let snapshot: BackupFilePreviewSide
+    if (isSensitiveFileName(name) || isEnvironmentSecretFileName(name)) snapshot = metadata('sensitive')
+    else if (isProtectedRuntimeDataFile(name)) snapshot = metadata('protected-data')
+    else {
+      const image = /\.(?:png|jpe?g|gif|webp)$/i.test(name)
+      const limit = image ? 10 * 1024 * 1024 : DEFAULT_MANAGED_FILE_PREVIEW_BYTES
+      if (file.size > limit) snapshot = metadata('too-large')
+      else {
+        let location = this.blobPath(file.sha256)
+        try {
+          await stat(location)
+        } catch (error) {
+          if ((error as NodeJS.ErrnoException)?.code !== 'ENOENT') throw error
+          location = join(this.snapshotsPath, id, 'files', ...safePortableRelative(file.archivePath).split('/'))
+        }
+        const info = await lstat(location)
+        if (!info.isFile() || info.size !== file.size || info.size > limit) {
+          throw new Error('快照文件不完整或不可安全读取')
+        }
+        const bytes = await readFile(location)
+        if (bytes.byteLength !== file.size || sha256(bytes) !== file.sha256) {
+          throw new Error('快照内容校验失败，拒绝文件预览')
+        }
+        snapshot = { ...previewSafeArchivedBytes(name, bytes), size: bytes.byteLength }
+      }
+    }
+
+    const targets = await this.targets({ sourceIds: [file.sourceId] })
+    const candidates = targets.filter(candidate =>
+      candidate.source.manifest.sourceId === file.sourceId
+      && candidate.detected.productId === file.productId)
+    const historical = new Set(manifest.files.filter(entry =>
+      entry.sourceId === file.sourceId && entry.productId === file.productId
+    ).map(entry => entry.installationId))
+    const target = candidates.find(candidate => candidate.installation.id === file.installationId)
+      ?? (historical.size === 1 && candidates.length === 1 ? candidates[0] : undefined)
+    const root = file.sourceScope === 'data' ? target?.detected.dataRoot : target?.detected.configRoot
+    let current = unavailable('当前无法唯一确定智能体恢复目录')
+    let targetPath: string | undefined
+    if (target && root) {
+      try {
+        const relativePath = safePortableRelative(file.sourceRelativePath)
+        const resolved = resolve(root, ...relativePath.split('/'))
+        if (!isPathInside(root, resolved)) throw new Error('目标路径超出智能体根目录')
+        targetPath = resolved
+        const state = await restoreTargetState(root, relativePath)
+        if (state === 'missing') current = { previewStatus: 'missing' }
+        else if (state !== 'file') current = unavailable(state === 'symlink'
+          ? '目标路径包含符号链接，禁止读取' : '目标不是可读取的普通文件')
+        else {
+          try {
+            const view = /\.(?:png|jpe?g|gif|webp)$/i.test(name)
+              ? await previewManagedImageFile(root, relativePath)
+              : await previewManagedTextFile(root, relativePath)
+            current = { ...view, previewStatus: view.redacted ? 'redacted' : 'readable' }
+          } catch (error) {
+            if (error instanceof ManagedFileError) {
+              const reason = error.code
+              current = reason === 'sensitive' || reason === 'protected-data'
+                || reason === 'too-large' || reason === 'binary' || reason === 'unreadable'
+                ? { previewStatus: 'metadata-only', blockedReason: reason }
+                : unavailable('当前文件已变化或无法安全读取')
+            } else throw error
+          }
+        }
+      } catch {
+        current = unavailable('目标路径不安全或无法读取')
+      }
+    }
+    return { snapshotId: id, archivePath: file.archivePath, sourceId: file.sourceId,
+      ...(targetPath ? { targetPath } : {}), snapshot, current }
   }
 
   async previewRestore(id: string): Promise<BackupRestorePreview> {
