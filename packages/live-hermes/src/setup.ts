@@ -74,7 +74,15 @@ function configureEnv(original: string, key: string, enabled: boolean): string {
   return lines.join(eol) + eol
 }
 
-export async function initializeLocalHermesApi(): Promise<HermesLocalApiSetup> {
+let setupInFlight: Promise<HermesLocalApiSetup> | undefined
+
+export function initializeLocalHermesApi(): Promise<HermesLocalApiSetup> {
+  if (setupInFlight) return setupInFlight
+  setupInFlight = initializeLocalHermesApiOnce().finally(() => { setupInFlight = undefined })
+  return setupInFlight
+}
+
+async function initializeLocalHermesApiOnce(): Promise<HermesLocalApiSetup> {
   if (process.env.HERMES_API_URL || process.env.HERMES_API_KEY) {
     throw new Error('Hermes uses a custom API endpoint or key; configure that connection manually')
   }
