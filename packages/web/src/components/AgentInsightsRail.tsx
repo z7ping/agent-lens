@@ -7,7 +7,7 @@ import { agentLabel, sourceDot, useOrderedAgents } from './AgentScope'
 import { Disclosure } from './ui'
 
 type JsonRecord = Record<string, unknown>
-type CoverageStatus = 'used' | 'discoverable' | 'configured' | 'discovered' | 'unobserved'
+type CoverageStatus = 'used' | 'discoverable' | 'configured' | 'discovered' | 'unobserved' | 'unknown'
 
 function recordValue(value: unknown): JsonRecord | null {
   return value && typeof value === 'object' && !Array.isArray(value) ? value as JsonRecord : null
@@ -66,6 +66,7 @@ function stateValue(asset: AgentAssetInventoryDto, state: string): boolean | 'un
 }
 
 function coverageStatus(agent: AgentCoverageItemDto, type: 'skill' | 'mcp', canonicalName: string): CoverageStatus {
+  if (agent.usedAssetsStatus === 'unavailable') return 'unknown'
   if (agent.usedAssets.some(item => item.type === type && item.canonicalName === canonicalName && item.callCount > 0)) return 'used'
   const asset = agent.assetInventory.find(item => item.type === type && item.canonicalName === canonicalName)
   if (!asset) return 'unobserved'
@@ -80,6 +81,7 @@ const coverageStatusKey: Record<CoverageStatus, string> = {
   configured: 'insightsRail.coverageStatus.configured',
   discovered: 'insightsRail.coverageStatus.discovered',
   unobserved: 'insightsRail.coverageStatus.unobserved',
+  unknown: 'insightsRail.coverageStatus.unknown',
 }
 
 const stageKey: Record<string, string> = {
