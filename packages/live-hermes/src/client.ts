@@ -158,10 +158,16 @@ export class HermesApiError extends Error {
 }
 
 export class HermesApiClient {
-  private readonly apiUrl: string
-  private readonly apiKey: string | undefined
+  private apiUrl: string
+  private apiKey: string | undefined
 
   constructor(config: ResolvedHermesApiClientConfig) {
+    this.apiUrl = config.apiUrl.replace(/\/+$/, '')
+    this.apiKey = config.apiKey
+  }
+
+  /** Refresh credentials after explicit initialization without restarting AgentLens. */
+  reconfigure(config: ResolvedHermesApiClientConfig): void {
     this.apiUrl = config.apiUrl.replace(/\/+$/, '')
     this.apiKey = config.apiKey
   }
@@ -308,6 +314,7 @@ export class HermesApiClient {
     try {
       response = await fetch(`${this.apiUrl}${path}`, {
         ...init,
+        ...(init.signal ? {} : { signal: AbortSignal.timeout(5_000) }),
         headers: {
           Authorization: `Bearer ${this.apiKey}`,
           ...(init.body === undefined ? {} : { 'Content-Type': 'application/json' }),
