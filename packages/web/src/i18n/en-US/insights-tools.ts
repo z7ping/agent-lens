@@ -197,7 +197,7 @@ export const englishInsightsToolsMessages: LocaleMessagesDto = {
       nativeTitle: 'Native tool metrics',
       nativeScope: '{{ready}} / {{eligible}} sessions verified',
       nativeMetricsUnavailable: 'Native tool metrics are unavailable. Refresh or check the source status.',
-      nativeTimeBasis: 'Filtered by the native session's last activity time: tool calls and error examples belong to that session, not their individual event dates.',
+      nativeTimeBasis: 'Filtered by the native session last activity time: tool calls and error examples belong to that session, not their individual event dates.',
       nativePartialStatus: 'Partial data',
       nativeCompleteStatus: 'Verified',
       nativeObservedShort: 'Partial: {{sessions}} sessions · ≥{{calls}} calls',
