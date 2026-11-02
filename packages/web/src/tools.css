@@ -109,7 +109,7 @@
 .tool-table-card > .table-section-head p { margin: 3px 0 0; color: var(--al-muted-2); font-size: 12px; }
 
 .table-scroll { overflow-x: auto; }
-.tool-table { width: 100%; border-collapse: collapse; font-size: 13px; text-align: left; }
+.tool-table { width: 100%; border-collapse: collapse; color: var(--al-ink-2); font-size: 13px; text-align: left; }
 .tool-table th {
   padding: 10px 13px;
   background: var(--al-soft-2);
@@ -121,7 +121,6 @@
 .tool-table td {
   padding: 10px 13px;
   border-top: 1px solid var(--al-line);
-  color: var(--al-ink-2);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
@@ -164,9 +163,6 @@
 .tool-rate-cell[data-rate='mid'] { color: var(--al-warning); font-weight: 640; }
 .tool-rate-cell[data-rate='unknown'] { color: var(--al-muted-2); }
 .cell-danger { color: var(--al-danger); font-weight: 640; }
-/* Table cell owns a more specific foreground rule; retain semantic status colors. */
-.tool-table td.cell-danger { color: var(--al-danger); font-weight: 640; }
-.tool-table td.cell-muted { color: var(--al-muted-2); }
 .cell-slow { color: color-mix(in srgb, var(--al-warning) 78%, var(--al-muted)); font-weight: 560; }
 .cell-muted { color: var(--al-muted-2); }
 
