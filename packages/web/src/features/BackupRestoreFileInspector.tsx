@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { MultiFileDiff } from '@pierre/diffs/react'
 import { useTranslation } from 'react-i18next'
+import type { TFunction } from 'i18next'
 import type { BackupFilePreviewResponseDto, BackupRestorePreviewItemDto } from '@agent-lens/protocol'
 import type { AgentLensApi } from '../client/api'
 import { CopyableCodeBlock } from '../components/CopyableCodeBlock'
@@ -16,17 +17,14 @@ type PreviewSide = BackupFilePreviewResponseDto['snapshot']
 function fileName(path: string) {
   return path.replace(/\\/g, '/').split('/').at(-1) || path
 }
-function previewReason(side: PreviewSide, t: (key: string) => string): string {
+function previewReason(side: PreviewSide, t: TFunction): string {
   if (side.previewStatus === 'missing') return t('preview.inspectMissing')
   if (side.previewStatus === 'unavailable') return side.reason || t('preview.inspectUnavailable')
   return t(`preview.inspectBlocked.${side.blockedReason ?? 'unreadable'}`)
 }
 
-function FileBody({ side, name, t }: {
-  side: PreviewSide
-  name: string
-  t(key: string): string
-}) {
+function FileBody({ side, name }: { side: PreviewSide; name: string }) {
+  const { t } = useTranslation('backup')
   if (side.dataUrl) return <div className="backup-preview-inspector-image">
     <ImagePreview src={side.dataUrl} alt={name}/>
   </div>
@@ -105,6 +103,19 @@ export function BackupRestoreFileInspector({
     return values
   }, [textDiff, imageCompare, current?.previewStatus])
   const visibleMode = result && availableModes.includes(mode) ? mode : availableModes[0]!
+  const diffFiles = useMemo(() => {
+    if (!item || snapshot?.content === undefined || current?.content === undefined) return null
+    const key = (value: string) => {
+      let hash = 2166136261
+      for (let i = 0; i < value.length; i++) hash = Math.imul(hash ^ value.charCodeAt(i), 16777619)
+      return (hash >>> 0).toString(16)
+    }
+    return {
+      oldFile: { name, contents: snapshot.content, cacheKey: `${snapshotId}:${item.archivePath}:snapshot:${key(snapshot.content)}` },
+      newFile: { name, contents: current.content, cacheKey: `${snapshotId}:${item.archivePath}:current:${key(current.content)}` },
+    }
+  }, [name, snapshot?.content, current?.content, snapshotId, item?.archivePath])
+
 
   return <section className="backup-preview-inspector" aria-label={t('preview.inspectTitle')}>
     {!item ? <div className="backup-preview-inspector-empty">
@@ -139,15 +150,15 @@ export function BackupRestoreFileInspector({
           {(snapshot.redacted || current.redacted) && <p className="backup-preview-inspector-note">{t('preview.redactedNotice')}</p>}
           <div className="backup-preview-inspector-content">
             {visibleMode === 'diff' && textDiff
-              ? <MultiFileDiff key={item.archivePath} oldFile={{ name, contents: snapshot.content!, cacheKey: `${snapshotId}:${item.archivePath}:snapshot` }}
-                  newFile={{ name, contents: current.content!, cacheKey: `${snapshotId}:${item.archivePath}:current:${current.content!.length}` }}
+              ? <MultiFileDiff key={item.archivePath} oldFile={diffFiles!.oldFile}
+                  newFile={diffFiles!.newFile}
                   options={{ diffStyle: layout, theme: theme === 'dark' ? 'pierre-dark' : 'pierre-light' }}/>
               : visibleMode === 'diff' && imageCompare
                 ? <div className="backup-preview-inspector-image-pair">
                     <div><small>{t('preview.inspectModes.snapshot')}</small><ImagePreview src={snapshot.dataUrl!} alt={name}/></div>
                     <div><small>{t('preview.inspectModes.current')}</small><ImagePreview src={current.dataUrl!} alt={name}/></div>
                   </div>
-                : <FileBody side={visibleMode === 'current' ? current : snapshot} name={name} t={t}/>}
+                : <FileBody side={visibleMode === 'current' ? current : snapshot} name={name}/>}
           </div>
           {item.reason && <p className="backup-preview-inspector-note">{item.reason}</p>}
         </> : null}
