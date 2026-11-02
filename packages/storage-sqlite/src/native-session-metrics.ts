@@ -6,6 +6,7 @@ import type {
   NativeSessionMetricOverviewQuery,
   NativeSessionMetricRebuildCandidate,
   NativeSessionMetricRebuildCursor,
+  NativeErrorIndexEntry, NativeErrorIndexQuery, NativeErrorIndexResult,
 } from '@agent-lens/core'
 import { NATIVE_SESSION_METRIC_PROJECTION_VERSION } from '@agent-lens/core'
 import type { SqliteExecutor } from './executor'
@@ -126,6 +127,166 @@ export class SqliteNativeSessionMetrics implements NativeSessionMetricsStore {
         tool.durationSampleCount??0,tool.maxDurationMs??null,
       )
       return true
+    })
+  }
+
+
+
+  /** Small IPC-safe batches; only the published generation becomes queryable. */
+  async stageErrors(identity:Identity,generation:string,errors:readonly NativeErrorIndexEntry[]):Promise<void>{
+    if(!/^[0-9a-f-]{36}$/.test(generation)||errors.length>50)throw new RangeError('Invalid error batch')
+    for(const entry of errors){
+      if(!/^[0-9a-f]{64}$/.test(entry.eventKey)||!/^[0-9a-f]{64}$/.test(entry.fingerprint)
+        ||!Number.isFinite(Date.parse(entry.occurredAt))
+        ||entry.summary.length>240||entry.toolName!==null&&entry.toolName.length>128
+        ||entry.errorCode!==null&&entry.errorCode.length>80){
+        throw new TypeError('Invalid native error index entry')
+      }
+    }
+    await this.executor.transaction(async()=>{
+      const db=this.executor.db
+      // Clean interrupted staging generations but preserve the published one.
+      db.prepare(`DELETE FROM native_error_index WHERE source_id=? AND installation_id=?
+        AND native_session_id=? AND scan_generation<>?
+        AND scan_generation<>COALESCE((SELECT scan_generation FROM native_error_index_state
+          WHERE source_id=? AND installation_id=? AND native_session_id=?),'')`)
+        .run(identity.sourceId,identity.installationId,identity.nativeSessionId,generation,
+          identity.sourceId,identity.installationId,identity.nativeSessionId)
+      const insert=db.prepare(`INSERT OR IGNORE INTO native_error_index (
+        source_id,installation_id,native_session_id,scan_generation,event_key,
+        occurred_at,turn_ordinal,native_event_id,tool_name,error_kind,
+        error_code,summary,fingerprint
+      ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`)
+      for(const entry of errors)insert.run(identity.sourceId,identity.installationId,
+        identity.nativeSessionId,generation,entry.eventKey,entry.occurredAt,
+        entry.turnOrdinal,entry.nativeEventId,entry.toolName,entry.kind,
+        entry.errorCode,entry.summary,entry.fingerprint)
+    })
+  }
+
+  /** Atomic publish: both the metric and Catalog revisions must still match. */
+  async publishErrors(input:NativeSessionMetricSnapshot,generation:string):Promise<boolean>{
+    if(!/^[0-9a-f-]{36}$/.test(generation))throw new RangeError('Invalid error generation')
+    return this.executor.transaction(async()=>{
+      const identity=[input.sourceId,input.installationId,input.nativeSessionId]
+      const match=this.executor.db.prepare(`SELECT 1 FROM native_session_metrics m
+        JOIN native_session_catalog c ON c.source_id=m.source_id
+          AND c.installation_id=m.installation_id AND c.native_session_id=m.native_session_id
+        WHERE m.source_id=? AND m.installation_id=? AND m.native_session_id=?
+          AND c.location_kind='native'
+          AND c.file_identity=? AND c.file_size=? AND c.file_mtime_ms=?
+          AND m.file_identity=? AND m.file_size=? AND m.file_mtime_ms=?
+          AND m.parser_version=? AND m.projection_version=? LIMIT 1`)
+        .get(...identity,input.fileIdentity,input.fileSize,input.fileMtimeMs,
+          input.fileIdentity,input.fileSize,input.fileMtimeMs,input.parserVersion,input.projectionVersion)
+      if(!match)return false
+      this.executor.db.prepare(`INSERT INTO native_error_index_state(
+        source_id,installation_id,native_session_id,scan_generation,
+        file_identity,file_size,file_mtime_ms,parser_version,projection_version,indexed_at
+      ) VALUES (?,?,?,?,?,?,?,?,?,?)
+      ON CONFLICT(source_id,installation_id,native_session_id) DO UPDATE SET
+        scan_generation=excluded.scan_generation,file_identity=excluded.file_identity,
+        file_size=excluded.file_size,file_mtime_ms=excluded.file_mtime_ms,
+        parser_version=excluded.parser_version,projection_version=excluded.projection_version,
+        indexed_at=excluded.indexed_at`)
+        .run(...identity,generation,input.fileIdentity,input.fileSize,input.fileMtimeMs,
+          input.parserVersion,input.projectionVersion,new Date().toISOString())
+      this.executor.db.prepare(`DELETE FROM native_error_index WHERE
+        source_id=? AND installation_id=? AND native_session_id=? AND scan_generation<>?`)
+        .run(...identity,generation)
+      return true
+    })
+  }
+
+  /** Search only current, parser-matching Source facts. Never serve stale rows. */
+  queryErrors(query:NativeErrorIndexQuery):Promise<NativeErrorIndexResult> {
+    if(!query.sourceId || !query.parserVersion || query.limit<1 || query.limit>100
+      || query.offset<0 || !Number.isSafeInteger(query.offset))throw new RangeError('Invalid error index query')
+    return this.executor.run(()=>{
+      const where=[
+        'e.source_id=?', 'm.parser_version=?', 'm.projection_version=?',
+      ]
+      const params:(string|number)[]=[
+        query.sourceId,query.parserVersion,NATIVE_SESSION_METRIC_PROJECTION_VERSION,
+      ]
+      if(query.projectId){where.push('COALESCE(ctx.project_id,ws.project_id)=?');params.push(query.projectId)}
+      if(query.toolName){where.push('e.tool_name=?');params.push(query.toolName)}
+      if(query.from){where.push('e.occurred_at>=?');params.push(query.from)}
+      if(query.to){where.push('e.occurred_at<=?');params.push(query.to)}
+      if(query.fingerprint){
+        if(!/^[0-9a-f]{64}$/.test(query.fingerprint))throw new RangeError('Invalid error fingerprint')
+        where.push('e.fingerprint=?');params.push(query.fingerprint)
+      }
+      if(query.search){
+        where.push('(instr(lower(e.summary),lower(?))>0 OR instr(lower(e.error_code),lower(?))>0 OR instr(lower(e.tool_name),lower(?))>0)')
+        params.push(query.search,query.search,query.search)
+      }
+      const base=`FROM native_error_index e
+        JOIN native_session_metrics m ON m.source_id=e.source_id
+          AND m.installation_id=e.installation_id AND m.native_session_id=e.native_session_id
+        JOIN native_error_index_state st ON st.source_id=e.source_id
+          AND st.installation_id=e.installation_id AND st.native_session_id=e.native_session_id
+          AND st.scan_generation=e.scan_generation
+          AND st.file_identity=m.file_identity AND st.file_size=m.file_size
+          AND st.file_mtime_ms=m.file_mtime_ms
+          AND st.parser_version=m.parser_version AND st.projection_version=m.projection_version
+        JOIN native_session_catalog c ON c.source_id=e.source_id
+          AND c.installation_id=e.installation_id AND c.native_session_id=e.native_session_id
+          AND c.location_kind='native'
+          AND c.file_identity=m.file_identity AND c.file_size=m.file_size
+          AND c.file_mtime_ms=m.file_mtime_ms
+        LEFT JOIN native_session_context ctx ON ctx.source_id=e.source_id
+          AND ctx.installation_id=e.installation_id AND ctx.native_session_id=e.native_session_id
+        LEFT JOIN workspaces ws ON ws.id=ctx.workspace_id
+        WHERE ${where.join(' AND ')}`
+      const total=(this.executor.db.prepare(`SELECT COUNT(*) AS value ${base}`)
+        .get(...params) as {value:number}).value
+      const rows=this.executor.db.prepare(`SELECT
+          e.event_key,e.occurred_at,e.turn_ordinal,e.native_event_id,e.tool_name,
+          e.error_kind,e.error_code,e.summary,e.fingerprint,
+          c.review_session_id,m.coverage
+        ${base}
+        ORDER BY e.occurred_at DESC,e.event_key DESC
+        LIMIT ? OFFSET ?`).all(...params,query.limit,query.offset) as Array<{
+          event_key:string;occurred_at:string;turn_ordinal:number|null
+          native_event_id:string|null;tool_name:string|null;error_kind:'tool'|'runtime'
+          error_code:string|null;summary:string;fingerprint:string
+          review_session_id:string|null;coverage:'complete'|'partial'
+        }>
+      const scope=['m.source_id=?','m.parser_version=?','m.projection_version=?']
+      const scopeArgs:(string|number)[]=[
+        query.sourceId,query.parserVersion,NATIVE_SESSION_METRIC_PROJECTION_VERSION,
+      ]
+      if(query.projectId){scope.push('COALESCE(ctx.project_id,ws.project_id)=?');scopeArgs.push(query.projectId)}
+      if(query.from){scope.push('c.last_activity_at>=?');scopeArgs.push(query.from)}
+      if(query.to){scope.push('c.last_activity_at<=?');scopeArgs.push(query.to)}
+      const indexedSessions=(this.executor.db.prepare(`SELECT COUNT(*) AS value
+        FROM native_error_index_state st
+        JOIN native_session_metrics m ON st.source_id=m.source_id
+          AND st.installation_id=m.installation_id AND st.native_session_id=m.native_session_id
+          AND st.file_identity=m.file_identity AND st.file_size=m.file_size
+          AND st.file_mtime_ms=m.file_mtime_ms
+          AND st.parser_version=m.parser_version AND st.projection_version=m.projection_version
+        JOIN native_session_catalog c ON c.source_id=m.source_id
+          AND c.installation_id=m.installation_id AND c.native_session_id=m.native_session_id
+          AND c.location_kind='native'
+          AND c.file_identity=m.file_identity AND c.file_size=m.file_size
+          AND c.file_mtime_ms=m.file_mtime_ms
+        LEFT JOIN native_session_context ctx ON ctx.source_id=m.source_id
+          AND ctx.installation_id=m.installation_id AND ctx.native_session_id=m.native_session_id
+        LEFT JOIN workspaces ws ON ws.id=ctx.workspace_id
+        WHERE ${scope.join(' AND ')}`).get(...scopeArgs) as {value:number}).value
+      return {
+        indexedSessions,total,hasMore:query.offset+rows.length<total,
+        items:rows.map(row=>({
+          eventKey:row.event_key,occurredAt:row.occurred_at,
+          turnOrdinal:row.turn_ordinal,nativeEventId:row.native_event_id,
+          toolName:row.tool_name,kind:row.error_kind,errorCode:row.error_code,
+          summary:row.summary,fingerprint:row.fingerprint,
+          sessionId:row.review_session_id??'',
+          sourceId:query.sourceId,coverage:row.coverage,
+        })),
+      }
     })
   }
 
@@ -373,6 +534,10 @@ export class SqliteNativeSessionMetrics implements NativeSessionMetricsStore {
           ON metrics.source_id=catalog.source_id
           AND metrics.installation_id=catalog.installation_id
           AND metrics.native_session_id=catalog.native_session_id
+        LEFT JOIN native_error_index_state AS error_state
+          ON error_state.source_id=catalog.source_id
+          AND error_state.installation_id=catalog.installation_id
+          AND error_state.native_session_id=catalog.native_session_id
         WHERE catalog.location_kind='native'
           
           AND catalog.source_id=?
@@ -391,7 +556,13 @@ export class SqliteNativeSessionMetrics implements NativeSessionMetricsStore {
             OR metrics.file_mtime_ms<>catalog.file_mtime_ms
             OR metrics.parser_version<>?
             OR metrics.projection_version<>?
-            OR (metrics.coverage='partial' AND ?=1))
+            OR (metrics.coverage='partial' AND ?=1)
+            OR error_state.source_id IS NULL
+            OR error_state.file_identity<>catalog.file_identity
+            OR error_state.file_size<>catalog.file_size
+            OR error_state.file_mtime_ms<>catalog.file_mtime_ms
+            OR error_state.parser_version<>metrics.parser_version
+            OR error_state.projection_version<>metrics.projection_version)
           ${before ? `AND (
             catalog.last_activity_at < ?
             OR (catalog.last_activity_at = ? AND catalog.installation_id > ?)

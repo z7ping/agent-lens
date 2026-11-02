@@ -1,7 +1,7 @@
 import type Database from 'better-sqlite3'
-import { SLIM_SCHEMA_SQL, SLIM_SCHEMA_V2_SQL } from './slim-schema-sql'
+import { SLIM_SCHEMA_SQL, SLIM_SCHEMA_V2_SQL, SLIM_SCHEMA_V3_SQL } from './slim-schema-sql'
 
-export const SLIM_SCHEMA_VERSION = 2
+export const SLIM_SCHEMA_VERSION = 3
 
 /** Only create the replacement schema in an EMPTY staging database.
  * An existing v38 installation cannot receive replacement DDL during startup.
@@ -32,6 +32,9 @@ export async function initializeSlimSchema(db: Database.Database): Promise<void>
       INSERT INTO schema_migrations(version,name,applied_at)
       VALUES (?,?,?)
     `).run(2, 'slim-tool-duration-v2', new Date().toISOString())
+    db.exec(SLIM_SCHEMA_V3_SQL)
+    db.prepare(`INSERT INTO schema_migrations(version,name,applied_at) VALUES (?,?,?)`)
+      .run(3,'slim-native-error-index-v3',new Date().toISOString())
     const violations = db.pragma('foreign_key_check') as unknown[]
     if (violations.length > 0) throw new Error('Slim database has foreign-key violations')
     db.exec('COMMIT')
@@ -49,13 +52,18 @@ export function upgradeSlimSchema(db: Database.Database): void {
   const row=db.prepare('SELECT MAX(version) AS version FROM schema_migrations')
     .get() as {version:number|null}
   if(row.version===SLIM_SCHEMA_VERSION)return
-  if(row.version!==1)throw new Error('Unexpected slim schema version')
-  if(db.readonly)throw new Error('Slim v1 tool duration migration requires writable access')
+  if(row.version!==1 && row.version!==2)throw new Error('Unexpected slim schema version')
+  if(db.readonly)throw new Error('Slim migration requires writable access')
   db.exec('BEGIN IMMEDIATE')
   try{
-    db.exec(SLIM_SCHEMA_V2_SQL)
+    if(row.version===1){
+      db.exec(SLIM_SCHEMA_V2_SQL)
+      db.prepare(`INSERT INTO schema_migrations(version,name,applied_at)
+        VALUES (?,?,?)`).run(2,'slim-tool-duration-v2',new Date().toISOString())
+    }
+    db.exec(SLIM_SCHEMA_V3_SQL)
     db.prepare(`INSERT INTO schema_migrations(version,name,applied_at)
-      VALUES (?,?,?)`).run(2,'slim-tool-duration-v2',new Date().toISOString())
+      VALUES (?,?,?)`).run(3,'slim-native-error-index-v3',new Date().toISOString())
     db.exec('COMMIT')
   }catch(error){
     db.exec('ROLLBACK')
@@ -87,7 +95,8 @@ export function assertSlimSchema(db: Database.Database): void {
   const tables = new Set(rows.map(row => row.name))
   if (!tables.has('schema_migrations') || !tables.has('native_session_catalog')
       || !tables.has('native_session_metrics') || !tables.has('native_session_context')
-      || !tables.has('asset_bindings') || !tables.has('runtime_profiles')) {
+      || !tables.has('asset_bindings') || !tables.has('runtime_profiles')
+      || !tables.has('native_error_index')) {
     throw new Error('Slim database is missing required metadata tables')
   }
   for (const table of FORBIDDEN_LEGACY_TABLES) {

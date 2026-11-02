@@ -1,11 +1,12 @@
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { stat } from 'node:fs/promises'
+import { randomUUID } from 'node:crypto'
 import { NATIVE_SESSION_METRIC_PROJECTION_VERSION } from '@agent-lens/core'
 import type {
   CapturePolicyService, NativeSessionCatalogStore, NativeSessionMetricsStore,
   SourceService, SourceNativeSessionCursor, NativeSessionCatalogEntry, SourceDefinition,
 } from '@agent-lens/core'
-import { NativeSessionMetricAccumulator } from '@agent-lens/projection-usage'
+import { NativeSessionMetricAccumulator, NativeErrorIndexAccumulator } from '@agent-lens/projection-usage'
 import { nativeSqliteRevision } from '@agent-lens/source-support'
 import { badRequest, writeJson } from './http-utils'
 import type { NativeSessionWindowReader } from './native-session-http'
@@ -103,6 +104,7 @@ export interface NativeMetricRebuildProgress {
   sourceId:string; installationId:string; nativeSessionId:string
   fileIdentity:string; fileSize:number; fileMtimeMs:number; parserVersion:string
   accumulator:NativeSessionMetricAccumulator
+  errorIndex:NativeErrorIndexAccumulator
   cursor:SourceNativeSessionCursor
   scannedRecords:number
 }
@@ -142,6 +144,7 @@ export async function rebuildNativeSessionMetrics(
     && prior.fileMtimeMs===entry.fileMtimeMs
     && prior.parserVersion===source.manifest.parserVersion
   const accumulator=reusable && prior?prior.accumulator:new NativeSessionMetricAccumulator()
+  const errorIndex=reusable && prior?prior.errorIndex:new NativeErrorIndexAccumulator()
   let cursor:SourceNativeSessionCursor|undefined=reusable && prior?prior.cursor:undefined
   let exhausted=false
   let pendingTail=false
@@ -166,7 +169,15 @@ export async function rebuildNativeSessionMetrics(
       && result.nextCursor.sequence===(cursor?.sequence??0)){
       return {state:'unsupported' as const,reason:'native-metrics-source-cursor-not-advancing'}
     }
-    for(const observation of result.observations)accumulator.add(observation)
+    const localRecordIndices=new Map<string,number>()
+    for(let index=0;index<result.observations.length;index++){
+      const observation=result.observations[index]!
+      const recordId=result.observationRecordIds[index]!
+      const position=localRecordIndices.get(recordId)??0
+      localRecordIndices.set(recordId,position+1)
+      accumulator.add(observation)
+      errorIndex.add(observation,recordId,position)
+    }
     scannedRecords+=result.observations.length
     cursor=result.nextCursor
     pendingTail=result.pendingTail
@@ -183,7 +194,7 @@ export async function rebuildNativeSessionMetrics(
       reviewSessionId:reviewSessionId!,
       ...identity,fileIdentity:entry.fileIdentity,fileSize:entry.fileSize,
       fileMtimeMs:entry.fileMtimeMs,parserVersion:source.manifest.parserVersion,
-      accumulator,cursor,scannedRecords,
+      accumulator,errorIndex,cursor,scannedRecords,
     } satisfies NativeMetricRebuildProgress}
   }
   // Native SQLite can change entirely in -wal while the main database
@@ -230,6 +241,18 @@ export async function rebuildNativeSessionMetrics(
   })
   if(!await metrics.replace(snapshot)){
     return {state:'drifted' as const,reason:'native-metrics-catalog-revision-changed'}
+  }
+  if(metrics.stageErrors && metrics.publishErrors){
+    const generation=randomUUID()
+    // IPC requests are capped at 256KiB; the source-derived index is not.
+    for(let i=0;i<errorIndex.errors.length;i+=50){
+      signal.throwIfAborted()
+      await metrics.stageErrors(identity,generation,errorIndex.errors.slice(i,i+50))
+    }
+    signal.throwIfAborted()
+    if(!await metrics.publishErrors(snapshot,generation)){
+      return {state:'drifted' as const,reason:'native-error-index-catalog-revision-changed'}
+    }
   }
   return {
     state:'available' as const,

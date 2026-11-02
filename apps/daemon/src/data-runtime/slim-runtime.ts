@@ -11,7 +11,7 @@ import type {
   NativeSessionMetricOverviewQuery,
   NativeSessionMetricSnapshot, NativeSessionMetricReadResult,
   NativeSessionMetricRebuildCandidate,
-  NativeSessionMetricsStore,
+  NativeSessionMetricsStore, NativeErrorIndexResult,
   NativeSessionListReader, NativeFacetReader,
   StorageHealth, LaunchableProjectReader, AssetService, AssetInventoryReader,
 } from '@agent-lens/core'
@@ -57,9 +57,9 @@ export class SlimDataRuntime {
 
   async start():Promise<void>{
     if(this.started)return
-    // Reject v38 and absent DB before allocating worker threads or creating
-    // any file. All migration/backup actions are separate explicit operations.
-    const verified=SqliteSlimStorage.openExisting(this.options.dbPath,true)
+    // Reject Legacy v38 and missing files. Existing authenticated Slim v1/v2
+    // receive only the additive v3 schema migration before readers start.
+    const verified=SqliteSlimStorage.openExisting(this.options.dbPath,false)
     try{await verified.health()}finally{await verified.close()}
     try{
       await this.writer.start()
@@ -201,6 +201,13 @@ export class SlimDataRuntime {
           return self.read<NativeSessionMetricRebuildCandidate[]>(['nativeSessionMetrics','findRebuildCandidates'],[
             input,limit,...(before?[before]:[]),
           ])
+        },
+        queryErrors(input){return self.read<NativeErrorIndexResult>(['nativeSessionMetrics','queryErrors'],[input])},
+        stageErrors(input,generation,errors){
+          return self.write<void>(['nativeSessionMetrics','stageErrors'],[input,generation,errors])
+        },
+        publishErrors(input,generation){
+          return self.write<boolean>(['nativeSessionMetrics','publishErrors'],[input,generation])
         },
         replace(input){return self.write<boolean>(['nativeSessionMetrics','replace'],[input])},
         invalidate(input){return self.write<void>(['nativeSessionMetrics','invalidate'],[input])},

@@ -126,6 +126,13 @@ export const chineseInsightsToolsMessages: LocaleMessagesDto = {
       repeatedSampleNote:'仅统计已读取样本中错误文本完全相同的次数，不代表全量故障频率或共同根因。',
       repeatedSampleCount:'样本中 {{count}} 次',
       title:'错误样本',
+      indexing:'索引构建中',indexed:'错误索引',
+      indexCoverage:'已索引 {{ready}} / {{eligible}} 个会话',
+      pageRange:'{{from}}–{{to}} / {{total}}',
+      previous:'上一页',next:'下一页',search:'搜索错误',
+      selectAgent:'请选择单个智能体',
+      sameFingerprint:'查看同类错误',clearFingerprint:'清除同类筛选',
+
       description:'按当前智能体、项目和会话活跃时间范围，从原生记录按需读取明确失败。样本只在当前视图内存中保留；用于复盘，不自动认定根因或任务最终失败。',
       scan:'查找错误样本',continue:'继续扫描',stop:'停止查找',pause:'暂停扫描',
       copy:'复制结构化样本',copied:'已复制',copyFailed:'复制失败，重试',

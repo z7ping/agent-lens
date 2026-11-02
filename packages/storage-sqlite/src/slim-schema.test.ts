@@ -5,11 +5,11 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import Database from 'better-sqlite3'
 import { assertSlimSchema, FORBIDDEN_LEGACY_TABLES, initializeSlimSchema, isSlimDatabase } from './slim-schema'
-import { SLIM_SCHEMA_SQL, SLIM_SCHEMA_V2_SQL } from './slim-schema-sql'
+import { SLIM_SCHEMA_SQL, SLIM_SCHEMA_V2_SQL, SLIM_SCHEMA_V3_SQL } from './slim-schema-sql'
 import { inspectLegacyCutover } from './slim-cutover-preflight'
 import { SqliteSlimStorage } from './slim-storage'
 
-test('slim v2 is a separate fresh schema without old event or replication tables', async () => {
+test('slim v3 is a separate fresh schema without old event or replication tables', async () => {
   const db = new Database(':memory:')
   try {
     await initializeSlimSchema(db)
@@ -17,13 +17,13 @@ test('slim v2 is a separate fresh schema without old event or replication tables
     const actual = (db.prepare(`SELECT name FROM sqlite_master
       WHERE type='table' AND name NOT LIKE 'sqlite_%'`).all() as { name: string }[])
       .map(row => row.name)
-    assert.equal(actual.length, 18)
+    assert.equal(actual.length, 20)
     for (const forbidden of FORBIDDEN_LEGACY_TABLES) {
       assert.equal(actual.includes(forbidden), false, forbidden)
     }
     assert.deepEqual(db.pragma('foreign_key_check'), [])
     assert.equal((db.prepare('SELECT MAX(version) AS v FROM schema_migrations')
-      .get() as {v:number}).v, 2)
+      .get() as {v:number}).v, 3)
     // Data provenance and numeric aggregation are represented without content.
     db.prepare(`INSERT INTO native_session_catalog(
       source_id,installation_id,native_session_id,location_kind,file_path,
@@ -116,6 +116,8 @@ test('bundled slim schema exactly matches the reviewed standalone SQL file', asy
   assert.equal(SLIM_SCHEMA_SQL.replaceAll('\r\n','\n'), diskSql.replaceAll('\r\n','\n'))
   const diskV2 = await readFile(new URL('../slim/002-tool-duration.sql', import.meta.url), 'utf8')
   assert.equal(SLIM_SCHEMA_V2_SQL.replaceAll('\r\n','\n'),diskV2.replaceAll('\r\n','\n'))
+  const diskV3 = await readFile(new URL('../slim/003-native-errors.sql', import.meta.url), 'utf8')
+  assert.equal(SLIM_SCHEMA_V3_SQL.replaceAll('\r\n','\n'),diskV3.replaceAll('\r\n','\n'))
   const legacy = new Database(':memory:')
   try {
     legacy.exec(`CREATE TABLE schema_migrations(version INTEGER PRIMARY KEY,name TEXT,applied_at TEXT);
@@ -155,9 +157,28 @@ test('existing slim v1 upgrades atomically without losing historical tool counts
       assert.equal(data.duration_sample_count,0)
       assert.equal(data.max_duration_ms,null)
       assert.equal((upgraded.db.prepare('SELECT MAX(version) AS version FROM schema_migrations')
-        .get() as {version:number}).version,2)
+        .get() as {version:number}).version,3)
     } finally {await upgraded.close()}
     const again=SqliteSlimStorage.openExisting(path)
     await again.close()
   }finally{await rm(dir,{recursive:true,force:true})}
+})
+
+test('existing slim v2 upgrades to v3 without losing numerical aggregates',async()=>{
+  const db=new Database(':memory:')
+  db.exec(SLIM_SCHEMA_SQL)
+  db.prepare('INSERT INTO schema_migrations(version,name,applied_at) VALUES (?,?,?)')
+    .run(1,'slim-native-session-v1','2026-10-25')
+  db.exec(SLIM_SCHEMA_V2_SQL)
+  db.prepare('INSERT INTO schema_migrations(version,name,applied_at) VALUES (?,?,?)')
+    .run(2,'slim-tool-duration-v2','2026-10-26')
+  const storage=new SqliteSlimStorage(db)
+  try{
+    assertSlimSchema(db)
+    assert.equal((db.prepare('SELECT MAX(version) AS v FROM schema_migrations')
+      .get() as {v:number}).v,3)
+    assert.equal((db.prepare(`SELECT COUNT(*) AS c FROM sqlite_master
+      WHERE type='table' AND name IN ('native_error_index','native_error_index_state')`)
+      .get() as {c:number}).c,2)
+  }finally{await storage.close()}
 })

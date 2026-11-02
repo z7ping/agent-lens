@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { resolve } from 'node:path'
-import type { NativeSessionMetricSnapshot } from '@agent-lens/core'
+import { NATIVE_SESSION_METRIC_PROJECTION_VERSION, type NativeSessionMetricSnapshot } from '@agent-lens/core'
 import { SqliteSlimStorage } from './slim-storage'
 
 async function createFixture() {
@@ -139,5 +139,53 @@ test('native metric replacement is atomic if tool inserts fail',async()=>{
       assert.equal(old.snapshot.interactionCount,12)
       assert.equal(old.snapshot.tools.length,2)
     }
+  }finally{await storage.close()}
+})
+
+test('native error index retains every diagnostic, paginates and rejects stale source claims',async()=>{
+  const storage=await createFixture()
+  try {
+    await storage.nativeSessionCatalog.upsert(location)
+    const index=Array.from({length:31},(_,i)=>({
+      eventKey:i.toString(16).padStart(64,'0'),
+      occurredAt:at,
+      turnOrdinal:null,nativeEventId:'event-'+i,toolName:'shell',
+      kind:'tool' as const,errorCode:'E_TEST',summary:'exit code 1',
+      fingerprint:'a'.repeat(64),
+    }))
+    const latest={...snapshot(),projectionVersion:NATIVE_SESSION_METRIC_PROJECTION_VERSION}
+    const generation='a'.repeat(36)
+    assert.equal(await storage.nativeSessionMetrics.replace(latest),true)
+    await storage.nativeSessionMetrics.stageErrors(identity,generation,index.slice(0,20))
+    assert.equal((await storage.nativeSessionMetrics.queryErrors({
+      sourceId:'pi',parserVersion:'pi-v1',limit:20,offset:0,
+    })).total,0,'unpublished pages must remain invisible')
+    await storage.nativeSessionMetrics.stageErrors(identity,generation,index.slice(20))
+    assert.equal(await storage.nativeSessionMetrics.publishErrors(latest,generation),true)
+    const query={sourceId:'pi',parserVersion:'pi-v1',limit:20,offset:0}
+    const first=await storage.nativeSessionMetrics.queryErrors(query)
+    const second=await storage.nativeSessionMetrics.queryErrors({...query,offset:20})
+    assert.equal(first.total,31)
+    assert.equal(first.items.length,20)
+    assert.equal(first.hasMore,true)
+    assert.equal(second.items.length,11)
+    assert.equal(second.hasMore,false)
+    assert.equal(new Set([...first.items,...second.items].map(x=>x.eventKey)).size,31)
+    assert.equal((await storage.nativeSessionMetrics.queryErrors({...query,search:'exit'})).total,31)
+    assert.equal((await storage.nativeSessionMetrics.queryErrors({...query,fingerprint:'a'.repeat(64)})).total,31)
+    assert.equal((await storage.nativeSessionMetrics.queryErrors({...query,fingerprint:'b'.repeat(64)})).total,0)
+    assert.equal((await storage.nativeSessionMetrics.queryErrors({...query,toolName:'read'})).total,0)
+    await storage.nativeSessionCatalog.upsert({...location,fileSize:1001,fileMtimeMs:201})
+    assert.equal((await storage.nativeSessionMetrics.queryErrors(query)).total,0,
+      'outdated Source revision must not leak indexed errors')
+    assert.equal(await storage.nativeSessionMetrics.replace({
+      ...snapshot(),projectionVersion:NATIVE_SESSION_METRIC_PROJECTION_VERSION,
+    }),false)
+    const newer={...snapshot(),fileSize:1001,fileMtimeMs:201,
+      projectionVersion:NATIVE_SESSION_METRIC_PROJECTION_VERSION}
+    assert.equal(await storage.nativeSessionMetrics.replace(newer),true)
+    assert.equal((await storage.nativeSessionMetrics.queryErrors(query)).total,0)
+    assert.equal(await storage.nativeSessionMetrics.publishErrors(newer,'b'.repeat(36)),true)
+    assert.equal((await storage.nativeSessionMetrics.queryErrors(query)).total,0)
   }finally{await storage.close()}
 })

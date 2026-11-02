@@ -4,7 +4,7 @@
  * IDs, prompts, arguments, outputs, raw errors, evidence, or payload JSON.
  */
 /** A projection rule change requires rebuilding the affected Source sessions. */
-export const NATIVE_SESSION_METRIC_PROJECTION_VERSION='native-source-metrics-v2'
+export const NATIVE_SESSION_METRIC_PROJECTION_VERSION='native-source-metrics-v3'
 
 export interface NativeSessionMetricOverviewQuery {
   sourceId:string
@@ -91,6 +91,43 @@ export interface NativeSessionMetricTool {
   maxDurationMs?: number | null
 }
 
+/** Explicit, compact, recomputable source error fact; NEVER raw event output. */
+export interface NativeErrorIndexQuery {
+  sourceId:string
+  parserVersion:string
+  projectId?:string
+  toolName?:string
+  from?:string
+  to?:string
+  search?:string
+  fingerprint?:string
+  limit:number
+  offset:number
+}
+export interface NativeErrorIndexResult {
+  indexedSessions:number
+  total:number
+  hasMore:boolean
+  items:Array<NativeErrorIndexEntry & {
+    sessionId:string
+    sourceId:string
+    coverage:'complete'|'partial'
+  }>
+}
+
+export interface NativeErrorIndexEntry {
+  eventKey:string
+  occurredAt:string
+  nativeEventId:string|null
+  /** Null until source-specific branch/turn identity has been verified. */
+  turnOrdinal:number|null
+  toolName:string|null
+  kind:'tool'|'runtime'
+  errorCode:string|null
+  summary:string
+  fingerprint:string
+}
+
 export interface NativeSessionMetricSnapshot {
   sourceId: string
   installationId: string
@@ -122,6 +159,12 @@ export type NativeSessionMetricReadResult =
 export interface NativeSessionMetricsStore {
   /** Atomically replace the derived snapshot only for a Catalog-matching revision. */
   replace(snapshot: NativeSessionMetricSnapshot): Promise<boolean>
+  /** Bounded staging batches; rows remain invisible until a matching revision publishes. */
+  stageErrors?(identity:{sourceId:string;installationId:string;nativeSessionId:string},
+    generation:string,errors:readonly NativeErrorIndexEntry[]):Promise<void>
+  publishErrors?(snapshot:NativeSessionMetricSnapshot,generation:string):Promise<boolean>
+  /** Indexed source-only errors; query scope must match the current parser. */
+  queryErrors?(query:NativeErrorIndexQuery):Promise<NativeErrorIndexResult>
   /** Never serve stale metrics as current after a known source revision change. */
   get(identity: {
     sourceId: string; installationId: string; nativeSessionId: string

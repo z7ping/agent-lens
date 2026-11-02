@@ -5,7 +5,7 @@
 const methods:Readonly<Record<string,readonly string[]>>={
   nativeSessionCatalog:['upsert','get','getByReviewSessionId','query',
     'isNativeMetricsEligible'],
-  nativeSessionMetrics:['replace','get','overview','findRebuildCandidates','invalidate'],
+  nativeSessionMetrics:['replace','get','overview','queryErrors','stageErrors','publishErrors','findRebuildCandidates','invalidate'],
   nativeSessionList:['query'],
   nativeFacets:['query'],
   nativeSessionContexts:['get','upsert'],
