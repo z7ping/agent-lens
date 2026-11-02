@@ -72,6 +72,7 @@ function hermesNumber(value: unknown): number | undefined {
  */
 export function normalizeHermesLiveEvent(event: Readonly<Record<string, unknown>>): LiveEvent | undefined {
   const name = hermesText(event.event) || hermesText(event.type)
+  if (event.agentLensDeferred === true) return undefined
 
   if (name === 'task.title.updated') {
     const title = hermesText(event.title)
@@ -140,7 +141,7 @@ export function normalizeHermesLiveEvent(event: Readonly<Record<string, unknown>
     return delta ? { type: 'reasoning.delta', delta,
       ...(messageId ? { messageId } : {}) } : undefined
   }
-  if (name === 'reasoning.available'
+  if (name === 'reasoning.available' || name === 'hermes.reasoning.verified'
     || (name === 'tool.progress' && hermesText(event.tool_name) === '_thinking')) {
     // A completed reasoning preview is a replacement, not an append-only chunk.
     const value = hermesText(event.text) || hermesText(event.delta) || hermesText(event.preview)

@@ -92,8 +92,8 @@ test('completed reasoning preview never becomes user-visible answer text', () =>
     { event: 'run.completed', output: 'There are 5 files' },
   )
   assert.deepEqual(result.map(item => item?.type),
-    ['reasoning.end', 'text.delta', 'text.end', 'completed'])
-  assert.equal(result[0]?.type === 'reasoning.end' ? result[0].text : '', 'Inspect the directory')
+    ['text.delta', 'reasoning.end', 'text.end', 'completed'])
+  assert.equal(result[1]?.type === 'reasoning.end' ? result[1].text : '', 'Inspect the directory')
 })
 
 test('legacy session-chat frames remain compatible', () => {
@@ -104,4 +104,24 @@ test('legacy session-chat frames remain compatible', () => {
   )
   assert.deepEqual(result.map(item => item?.type), ['message.start', 'text.delta', 'text.end'])
   assert.equal(result[1] && 'messageId' in result[1] ? result[1].messageId : '', 'legacy-1')
+})
+
+test('older Hermes reply preview is not rendered as thinking when final output matches', () => {
+  const result = events(
+    { event: 'reasoning.available', text: 'This is the answer.' },
+    { event: 'message.delta', delta: 'This is the answer.' },
+    { event: 'run.completed', output: 'This is the answer.' },
+  )
+  assert.deepEqual(result.map(item => item?.type), ['text.delta', 'text.end', 'completed'])
+})
+
+test('reasoning previews are released before tools when they differ from assistant commentary', () => {
+  const result = events(
+    { event: 'reasoning.available', text: 'Need to inspect files' },
+    { event: 'message.delta', delta: 'Checking...' },
+    { event: 'tool.started', tool: 'terminal' },
+    { event: 'run.completed', output: 'Finished' },
+  )
+  assert.deepEqual(result.map(item => item?.type),
+    ['text.delta', 'reasoning.end', 'message.end', 'tool.start', 'text.end', 'completed'])
 })

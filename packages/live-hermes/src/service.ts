@@ -239,11 +239,26 @@ export class DefaultHermesLiveService {
       }
     } catch (error) {
       if (!signal.aborted && runtime.status !== 'terminated') {
-        runtime.events.publish({
-          event: 'transport.error',
-          run_id: runId,
-          error: formatLiveError(error, 1_000),
-        })
+        // An SSE replay gap or dropped connection is not proof that the run
+        // failed. The durable run status can still carry the final reply.
+        let recovered = false
+        try {
+          const state = await this.client.runState(runId)
+          if (TERMINAL_RUN_STATUSES.has(state.status)) {
+            this.publishRunEvent(runtime, { ...state, event: `run.${state.status}` })
+            terminalEventSeen = true
+            recovered = true
+          }
+        } catch {
+          // Preserve the original transport failure if status polling also fails.
+        }
+        if (!recovered) {
+          runtime.events.publish({
+            event: 'transport.error',
+            run_id: runId,
+            error: formatLiveError(error, 1_000),
+          })
+        }
       }
     } finally {
       if (runtime.activeRunId === runId && terminalEventSeen) {
@@ -275,7 +290,7 @@ export class DefaultHermesLiveService {
 
   private publishRunEvent(runtime: OwnedRuntime, event: Readonly<Record<string, unknown>>): void {
     const derived = runtime.transcript?.ingest(event) ?? [event]
-    for (const item of derived) runtime.events.publish(item)
+    for (const item of derived) runtime.events.publish({ ...item })
   }
 
   private finishRun(runtime: OwnedRuntime, runId: string): void {

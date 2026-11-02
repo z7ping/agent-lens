@@ -12,6 +12,7 @@ export class HermesRunTranscriptAssembler {
   private activeId: string | undefined
   private segmentText = ''
   private lastInterim: { id: string; text: string } | undefined
+  private pendingReasoning: Readonly<Record<string, unknown>>[] = []
 
   constructor(private readonly runId: string) {}
 
@@ -25,8 +26,32 @@ export class HermesRunTranscriptAssembler {
     this.segmentText = ''
   }
 
+  private releaseReasoning(visibleText = ''): Readonly<Record<string, unknown>>[] {
+    const result = this.pendingReasoning.flatMap(event => {
+      const preview = typeof event.text === 'string' ? event.text
+        : typeof event.preview === 'string' ? event.preview : ''
+      const thinking = preview.trim()
+      const visible = visibleText.trim()
+      // Older Hermes versions relayed the visible reply (truncated to 500
+      // chars) as reasoning.available. Only discard a source-verified match.
+      if (visible && thinking && (visible === thinking
+        || (thinking.length >= 490 && visible.startsWith(thinking)))) return []
+      return [{ ...event, event: 'hermes.reasoning.verified',
+        derived_from: event.event, text: preview }]
+    })
+    this.pendingReasoning = []
+    return result
+  }
+
   ingest(event: Readonly<Record<string, unknown>>): Readonly<Record<string, unknown>>[] {
     const name = typeof event.event === 'string' ? event.event : event.type
+    if (name === 'reasoning.available'
+      || (name === 'tool.progress' && event.tool_name === '_thinking')) {
+      this.pendingReasoning.push(event)
+      // Keep the original event for diagnostics; verify the preview before
+      // projecting it, because old Hermes builds mislabeled plain replies.
+      return [{ ...event, agentLensDeferred: true }]
+    }
     if (name === 'message.started') {
       const message = event.message && typeof event.message === 'object'
         ? event.message as Record<string, unknown> : {}
@@ -63,15 +88,18 @@ export class HermesRunTranscriptAssembler {
         })
       }
       events.push({ ...event, message_id: id })
+      const reasoning = this.releaseReasoning(value || this.segmentText)
       this.lastInterim = { id, text: value || this.segmentText }
       this.advance()
-      return events
+      return [...reasoning, ...events]
     }
 
     // Some providers send ordinary assistant deltas before a tool without
     // emitting message.interim. Preserve that text as commentary instead of
     // leaving a stray final answer before the tool.
-    if (name === 'tool.started' && this.segmentText) {
+    if (name === 'tool.started') {
+      const reasoning = this.releaseReasoning(this.segmentText)
+      if (!this.segmentText) return [...reasoning, event]
       const boundary = {
         event: 'message.interim', run_id: this.runId,
         message_id: this.messageId(), already_streamed: true,
@@ -79,7 +107,7 @@ export class HermesRunTranscriptAssembler {
       }
       this.lastInterim = { id: this.messageId(), text: this.segmentText }
       this.advance()
-      return [boundary, event]
+      return [...reasoning, boundary, event]
     }
 
     if (name === 'assistant.completed') {
@@ -87,26 +115,32 @@ export class HermesRunTranscriptAssembler {
         ? event.message_id : this.messageId()
       this.activeId = id
       if (typeof event.content === 'string') this.segmentText = event.content
-      return [{ ...event, message_id: id }]
+      return [...this.releaseReasoning(this.segmentText), { ...event, message_id: id }]
     }
 
     if (name === 'run.completed') {
       const output = typeof event.output === 'string' ? event.output : ''
-      if (!output) return [event]
+      const reasoning = this.releaseReasoning(output)
+      if (!output) return [...reasoning, event]
       // Hermes may repeat the pre-tool interim as its final answer. Promote
       // the SAME message rather than appending a duplicate final bubble.
       if (!this.segmentText && this.lastInterim?.text === output) {
         return [
+          ...reasoning,
           { event: 'hermes.reply.promote', message_id: this.lastInterim.id,
             run_id: this.runId, derived_from: 'run.completed' },
           event,
         ]
       }
       return [
+        ...reasoning,
         { event: 'hermes.reply.final', message_id: this.messageId(),
           content: output, run_id: this.runId, derived_from: 'run.completed' },
         event,
       ]
+    }
+    if (name === 'run.failed' || name === 'run.interrupted' || name === 'run.cancelled') {
+      return [...this.releaseReasoning(), event]
     }
     return [event]
   }
