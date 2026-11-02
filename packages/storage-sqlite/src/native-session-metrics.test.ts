@@ -189,3 +189,31 @@ test('native error index retains every diagnostic, paginates and rejects stale s
     assert.equal((await storage.nativeSessionMetrics.queryErrors(query)).total,0)
   }finally{await storage.close()}
 })
+
+test('error examples and tool metrics use the same last-activity session cohort',async()=>{
+  const storage=await createFixture()
+  try {
+    const recentActivity='2026-11-02T10:00:00.000Z'
+    await storage.nativeSessionCatalog.upsert({...location,lastActivityAt:recentActivity})
+    const latest={...snapshot(),projectionVersion:NATIVE_SESSION_METRIC_PROJECTION_VERSION}
+    assert.equal(await storage.nativeSessionMetrics.replace(latest),true)
+    const generation='c'.repeat(36)
+    await storage.nativeSessionMetrics.stageErrors(identity,generation,[{
+      eventKey:'d'.repeat(64),occurredAt:at,turnOrdinal:1,
+      nativeEventId:'old-error',toolName:'shell',kind:'tool',
+      errorCode:'E_OLD',summary:'Occurred before the session last activity',
+      fingerprint:'e'.repeat(64),
+    }])
+    assert.equal(await storage.nativeSessionMetrics.publishErrors(latest,generation),true)
+    const scope={sourceId:'pi',parserVersion:'pi-v1',coverageCertified:true}
+    const page={sourceId:'pi',parserVersion:'pi-v1',limit:50,offset:0}
+    const from='2026-11-01T00:00:00.000Z'
+    assert.equal((await storage.nativeSessionMetrics.overview({...scope,from})).totals.errorCount,2)
+    const errors=await storage.nativeSessionMetrics.queryErrors({...page,from})
+    assert.equal(errors.total,1)
+    assert.equal(errors.items[0]?.occurredAt,at,'retain original error occurrence time')
+    const to='2026-10-26T00:00:00.000Z'
+    assert.equal((await storage.nativeSessionMetrics.overview({...scope,to})).readySessions,0)
+    assert.equal((await storage.nativeSessionMetrics.queryErrors({...page,to})).total,0)
+  }finally{await storage.close()}
+})
