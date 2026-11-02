@@ -209,7 +209,7 @@ export class SqliteNativeSessionMetrics implements NativeSessionMetricsStore {
       const params:(string|number)[]=[
         query.sourceId,query.parserVersion,NATIVE_SESSION_METRIC_PROJECTION_VERSION,
       ]
-      if(query.projectId){where.push('ctx.project_id=?');params.push(query.projectId)}
+      if(query.projectId){where.push('COALESCE(ctx.project_id,ws.project_id)=?');params.push(query.projectId)}
       if(query.toolName){where.push('e.tool_name=?');params.push(query.toolName)}
       if(query.from){where.push('e.occurred_at>=?');params.push(query.from)}
       if(query.to){where.push('e.occurred_at<=?');params.push(query.to)}
@@ -233,6 +233,7 @@ export class SqliteNativeSessionMetrics implements NativeSessionMetricsStore {
           AND c.file_mtime_ms=m.file_mtime_ms
         LEFT JOIN native_session_context ctx ON ctx.source_id=e.source_id
           AND ctx.installation_id=e.installation_id AND ctx.native_session_id=e.native_session_id
+        LEFT JOIN workspaces ws ON ws.id=ctx.workspace_id
         WHERE ${where.join(' AND ')}`
       const total=(this.executor.db.prepare(`SELECT COUNT(*) AS value ${base}`)
         .get(...params) as {value:number}).value
@@ -252,7 +253,7 @@ export class SqliteNativeSessionMetrics implements NativeSessionMetricsStore {
       const scopeArgs:(string|number)[]=[
         query.sourceId,query.parserVersion,NATIVE_SESSION_METRIC_PROJECTION_VERSION,
       ]
-      if(query.projectId){scope.push('ctx.project_id=?');scopeArgs.push(query.projectId)}
+      if(query.projectId){scope.push('COALESCE(ctx.project_id,ws.project_id)=?');scopeArgs.push(query.projectId)}
       if(query.from){scope.push('c.last_activity_at>=?');scopeArgs.push(query.from)}
       if(query.to){scope.push('c.last_activity_at<=?');scopeArgs.push(query.to)}
       const indexedSessions=(this.executor.db.prepare(`SELECT COUNT(*) AS value
@@ -269,6 +270,7 @@ export class SqliteNativeSessionMetrics implements NativeSessionMetricsStore {
           AND c.file_mtime_ms=m.file_mtime_ms
         LEFT JOIN native_session_context ctx ON ctx.source_id=m.source_id
           AND ctx.installation_id=m.installation_id AND ctx.native_session_id=m.native_session_id
+        LEFT JOIN workspaces ws ON ws.id=ctx.workspace_id
         WHERE ${scope.join(' AND ')}`).get(...scopeArgs) as {value:number}).value
       return {
         indexedSessions,total,hasMore:query.offset+rows.length<total,
