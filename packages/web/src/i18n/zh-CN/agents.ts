@@ -449,6 +449,7 @@ export const chineseAgentsMessages: LocaleMessagesDto = {
         configured: '已配置',
         discovered: '已发现',
         unobserved: '未观察到',
+        unknown: '状态未知',
       },
       stage: {
         history: '历史采集',
