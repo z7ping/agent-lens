@@ -169,7 +169,15 @@
     justify-content: center;
   }
 
-  .preview-summary { grid-template-columns: repeat(2, 1fr); }
+  .backup-preview-workbench-header { gap: 8px; padding: 10px 12px; }
+  .backup-preview-workbench-heading { flex-basis: 70%; }
+  .backup-preview-workbench-summary { padding: 12px; }
+  .backup-preview-workbench-tools { align-items: stretch; padding: 10px 12px; }
+  .backup-preview-workbench-tools .ui-field { width: 100%; }
+  .backup-preview-tree { padding: 0 12px 12px; }
+  .backup-preview-tree-children { margin-left: 9px; padding-left: 6px; }
+  .backup-preview-status-filter.btn { min-width: 70px; }
+  .backup-preview-tree-file .local-path-actions { margin-left: auto; }
   .backup-confirm-content { grid-template-columns: 1fr; }
   .backup-confirm-icon { width: 36px; height: 36px; }
   .backup-confirm-overlay .ui-overlay-footer > .btn { flex: 1; justify-content: center; }
