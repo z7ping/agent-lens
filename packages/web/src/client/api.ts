@@ -31,6 +31,7 @@ import {
   type ManagedAssetRoot,
   type NativeBodySearchResponseDto,
   type NativeMetricOverviewResponseDto,
+  type NativeErrorIndexResponseDto,
   type NativeMetricStatusDto,
   type NativeSessionCatalogResponseDto,
   type NativeSessionSummaryDto,
@@ -402,6 +403,25 @@ export class AgentLensApi {
     if(options.to)params.set('to',options.to)
     return requestJson<NativeMetricOverviewResponseDto>(
       `/api/v1/native-sessions/metrics/overview${params.size?`?${params}`:''}`,
+      options.signal?{signal:options.signal}:{},
+    )
+  }
+
+  /** SQL-only indexed error facts. Page all failures; full source payload stays in Review. */
+  nativeErrors(options:{
+    sourceId:string;projectId?:string;toolName?:string;search?:string
+    from?:string;to?:string;limit?:number;offset?:number;signal?:AbortSignal
+  }):Promise<NativeErrorIndexResponseDto>{
+    const params=new URLSearchParams({sourceId:options.sourceId})
+    if(options.projectId)params.set('projectId',options.projectId)
+    if(options.toolName)params.set('toolName',options.toolName)
+    if(options.search)params.set('q',options.search)
+    if(options.from)params.set('from',options.from)
+    if(options.to)params.set('to',options.to)
+    params.set('limit',String(Math.min(100,Math.max(1,options.limit??50))))
+    params.set('offset',String(Math.max(0,options.offset??0)))
+    return requestJson<NativeErrorIndexResponseDto>(
+      `/api/v1/native-errors?${params}`,
       options.signal?{signal:options.signal}:{},
     )
   }
