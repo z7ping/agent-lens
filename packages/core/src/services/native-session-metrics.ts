@@ -91,6 +91,20 @@ export interface NativeSessionMetricTool {
   maxDurationMs?: number | null
 }
 
+/** Explicit, compact, recomputable source error fact; NEVER raw event output. */
+export interface NativeErrorIndexEntry {
+  eventKey:string
+  occurredAt:string
+  nativeEventId:string|null
+  /** Null until source-specific branch/turn identity has been verified. */
+  turnOrdinal:number|null
+  toolName:string|null
+  kind:'tool'|'runtime'
+  errorCode:string|null
+  summary:string
+  fingerprint:string
+}
+
 export interface NativeSessionMetricSnapshot {
   sourceId: string
   installationId: string
@@ -121,7 +135,7 @@ export type NativeSessionMetricReadResult =
 
 export interface NativeSessionMetricsStore {
   /** Atomically replace the derived snapshot only for a Catalog-matching revision. */
-  replace(snapshot: NativeSessionMetricSnapshot): Promise<boolean>
+  replace(snapshot: NativeSessionMetricSnapshot, errors?: readonly NativeErrorIndexEntry[]): Promise<boolean>
   /** Never serve stale metrics as current after a known source revision change. */
   get(identity: {
     sourceId: string; installationId: string; nativeSessionId: string
