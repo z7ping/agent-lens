@@ -1,4 +1,4 @@
-import type { AgentCoverageResponseDto, AgentDetailResponseDto, AgentEnrichmentResponseDto, AgentOverviewResponseDto, AgentRescanResponseDto, AgentSummaryResponseDto, CapturePolicyResponseDto, FacetResponseDto, HealthResponseDto, HostFilePreviewResponseDto, IntegrationManagementResponseDto, IntegrationPreferencesResponseDto, IntegrationToolDiscoveryResponseDto, ManagedAssetDirectoryResponseDto, ManagedAssetFilePreviewResponseDto, ManagedAssetRoot, LiveUpdateEventDto, ReviewInteractionDto, ReviewMessageAttachmentDto, ReviewResponseDto, ReviewSessionDetailDto, NativeSessionCatalogResponseDto, SessionRelationshipResponseDto, SourceRecordResponseDto, TaskFileChangesResponseDto, ToolAssetUsageResponseDto } from '@agent-lens/protocol'
+import type { AgentCoverageResponseDto, AgentDetailResponseDto, AgentEnrichmentResponseDto, AgentOverviewResponseDto, AgentWorkspaceResponseDto, AgentRescanResponseDto, AgentSummaryResponseDto, CapturePolicyResponseDto, FacetResponseDto, HealthResponseDto, HostFilePreviewResponseDto, IntegrationManagementResponseDto, IntegrationPreferencesResponseDto, IntegrationToolDiscoveryResponseDto, ManagedAssetDirectoryResponseDto, ManagedAssetFilePreviewResponseDto, ManagedAssetRoot, LiveUpdateEventDto, ReviewInteractionDto, ReviewMessageAttachmentDto, ReviewResponseDto, ReviewSessionDetailDto, NativeSessionCatalogResponseDto, SessionRelationshipResponseDto, SourceRecordResponseDto, TaskFileChangesResponseDto, ToolAssetUsageResponseDto } from '@agent-lens/protocol'
 import { AgentLensApi, type QueryFilters, type ReviewFilters } from './api'
 import { loadNativeImagePreview } from './native-media-preview'
 import { translateProduct } from '../i18n/runtime'
@@ -24,6 +24,7 @@ export interface ClientSnapshot {
   agents: AgentOverviewResponseDto | null
   agentDetailLoadingSourceId: string
   agentDetailError: string
+  agentWorkspace: {sourceId:string;response:AgentWorkspaceResponseDto|null;loading:boolean;error:string}
   capturePolicy: CapturePolicyResponseDto | null
   agentsLoading: boolean
   agentsError: string
@@ -139,6 +140,7 @@ export abstract class AgentLensModelBase {
     agents: null,
     agentDetailLoadingSourceId: '',
     agentDetailError: '',
+    agentWorkspace: {sourceId:'',response:null,loading:false,error:''},
     capturePolicy: null,
     agentsLoading: false,
     agentsError: '',
@@ -205,6 +207,7 @@ export abstract class AgentLensModelBase {
   protected facetsLastLoadedAt = 0
   protected agentsInFlight: Promise<void> | null = null
   protected readonly agentDetailInFlight = new Map<string, Promise<void>>()
+  protected workspaceGeneration = 0
   protected readonly agentEnrichmentInFlight = new Map<string, Promise<void>>()
   protected agentCoverageInFlight: Promise<void> | null = null
   protected agentsRescanInFlight: Promise<AgentRescanResponseDto> | null = null
@@ -486,6 +489,31 @@ export abstract class AgentLensModelBase {
     } else if (discovery?.status === 'complete') {
       this.integrationDiscoveryPolls = 0
     }
+  }
+
+  async refreshAgentWorkspace(
+    sourceId: string,
+    options: {board?:string;offset?:number;limit?:number} = {},
+  ): Promise<void> {
+    const generation = ++this.workspaceGeneration
+    this.patch({agentWorkspace:{sourceId,response:this.snapshot.agentWorkspace.sourceId===sourceId
+      ? this.snapshot.agentWorkspace.response : null,loading:true,error:''}})
+    try {
+      const response = await this.api.agentWorkspace(sourceId,options)
+      if (generation === this.workspaceGeneration) this.patch({
+        agentWorkspace:{sourceId,response,loading:false,error:''},
+      })
+    } catch (error) {
+      if (generation === this.workspaceGeneration) this.patch({
+        agentWorkspace:{sourceId,response:null,loading:false,error:error instanceof Error?error.message:String(error)},
+      })
+    }
+  }
+
+  ensureAgentWorkspace(sourceId: string): Promise<void> {
+    if (!sourceId || this.snapshot.agentWorkspace.sourceId === sourceId &&
+      (this.snapshot.agentWorkspace.response !== null || this.snapshot.agentWorkspace.loading)) return Promise.resolve()
+    return this.refreshAgentWorkspace(sourceId)
   }
 
   ensureAgentDetail(sourceId: string): Promise<void> {

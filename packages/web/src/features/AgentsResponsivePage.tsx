@@ -11,8 +11,9 @@ import { AgentLogo } from '../components/AgentLogo'
 import { SelectMenu } from '../components/ui'
 import { AgentsPage } from './AgentsPage'
 import { IntegrationManagementPage } from './IntegrationManagementPage'
+import { AgentWorkPage } from './AgentWorkPage'
 
-type AgentWorkspaceView = 'overview' | 'ecosystem' | 'management'
+type AgentWorkspaceView = 'overview' | 'ecosystem' | 'management' | 'work'
 
 export function AgentsResponsivePage({
   model,
@@ -35,9 +36,13 @@ export function AgentsResponsivePage({
   const hasSelectedOverview = Boolean(snapshot.agents?.items.some(item => item.sourceId === sourceId))
   const hasSelectedSummary = Boolean(snapshot.agentSummaries?.items.some(item => item.sourceId === sourceId))
   const isPi = sourceId === 'pi'
+  const workspaceState = snapshot.agentWorkspace
+  const hasWork = workspaceState.sourceId === sourceId &&
+    Boolean(workspaceState.response?.features.some(feature => feature.availability === 'available'))
   const requestedView = searchParams.get('view')
   const activeView: AgentWorkspaceView = requestedView === 'management'
     ? 'management'
+    : hasWork && requestedView === 'work' ? 'work'
     : isPi && requestedView === 'ecosystem'
       ? 'ecosystem'
       : 'overview'
@@ -47,6 +52,11 @@ export function AgentsResponsivePage({
     if (!sourceId || !hasSelectedSummary) return
     void model.ensureAgentDetail(sourceId).catch(() => undefined)
   }, [model, sourceId, hasSelectedSummary])
+
+  useEffect(() => {
+    if (!sourceId || !hasSelectedSummary) return
+    void model.ensureAgentWorkspace(sourceId)
+  }, [model,sourceId,hasSelectedSummary])
 
   useEffect(() => {
     if (!hasSelectedOverview || activeView !== 'overview') return
@@ -65,7 +75,7 @@ export function AgentsResponsivePage({
     onSelectAgent(nextSourceId)
     const next = new URLSearchParams(searchParams)
     next.set('agent', nextSourceId)
-    if (next.get('view') === 'ecosystem' && nextSourceId !== 'pi') next.delete('view')
+    if (nextSourceId !== sourceId) next.delete('view')
     setSearchParams(next, { replace: true })
   }
 
@@ -95,6 +105,7 @@ export function AgentsResponsivePage({
     <div ref={shellRef} className={`agents-responsive-shell ${showInsights ? '' : 'without-insights'} ${activeView === 'management' ? 'is-management' : ''}`.trim()}>
       {activeView === 'management'
         ? <IntegrationManagementPage model={model} toolbarHost={toolbarHost ?? null}/>
+        : activeView === 'work' ? <AgentWorkPage key={sourceId} sourceId={sourceId} model={model}/>
         : <div className={`agents-overview-layout ${showInsights ? '' : 'without-insights'}`.trim()}>
           <AgentsPage model={model} sourceId={sourceId} piView={activeView}/>
           {showInsights && <AgentInsightsRail snapshot={snapshot} sourceId={sourceId}/>}

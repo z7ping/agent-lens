@@ -235,6 +235,7 @@ export const chineseCoreMessages: LocaleMessagesDto = {
     sessionDetail: '会话详情',
     overview: '概览',
     agentOverview: '智能体概览',
+    agentWork: '工作',
     settings: '设置',
     agentIntegration: '智能体接入',
     integrationManagement: '接入管理',

@@ -398,6 +398,9 @@ function Shell({ model }: { model: AgentLensClientModel }) {
   }
 
   const currentView = new URLSearchParams(location.search).get('view')
+  const workspaceState = snapshot.agentWorkspace
+  const hasAgentWork = workspaceState.sourceId === resolvedAgentOverviewSourceId &&
+    Boolean(workspaceState.response?.features.some(feature => feature.availability === 'available'))
   const workspaceTabs = onTools || onInsights
     ? [
         { value: 'overview', label: t('navigation:usageOverview'), to: '/insights' },
@@ -406,6 +409,7 @@ function Shell({ model }: { model: AgentLensClientModel }) {
     : onAgents
       ? [
           { value: 'overview', label: t('navigation:overview'), to: `/agents${resolvedAgentOverviewSourceId ? `?agent=${encodeURIComponent(resolvedAgentOverviewSourceId)}` : ''}` },
+          ...(hasAgentWork ? [{value:'work',label:t('navigation:agentWork'),to:`/agents?view=work&agent=${encodeURIComponent(resolvedAgentOverviewSourceId)}`}] : []),
           { value: 'management', label: t('navigation:integrationManagement'), to: `/agents?view=management${resolvedAgentOverviewSourceId ? `&agent=${encodeURIComponent(resolvedAgentOverviewSourceId)}` : ''}` },
         ]
       : [
@@ -413,7 +417,7 @@ function Shell({ model }: { model: AgentLensClientModel }) {
           { value: 'history', label: t('backup:assetView.historyTab'), to: '/backup?view=history' },
         ]
   const selectedWorkspaceTab = onTools ? 'tools'
-    : onAgents ? (currentView === 'management' ? 'management' : 'overview')
+    : onAgents ? (currentView === 'management' ? 'management' : currentView === 'work' && hasAgentWork ? 'work' : 'overview')
       : onBackup ? (currentView === 'history' ? 'history' : 'assets') : 'overview'
 
   return <PinnedAgentsProvider agents={agents}>

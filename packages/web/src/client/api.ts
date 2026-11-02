@@ -1,6 +1,7 @@
 import {
   parseLiveUpdateEvent,
   type AgentCoverageResponseDto,
+  type AgentWorkspaceResponseDto,
   type AgentDetailResponseDto,
   type AgentEnrichmentResponseDto,
   type AgentOverviewResponseDto,
@@ -206,6 +207,14 @@ export class AgentLensApi {
       'agent-coverage',
       () => requestJson('/api/v1/agents/coverage'),
     )
+  }
+  agentWorkspace(sourceId: string, options: {board?:string;offset?:number;limit?:number} = {}): Promise<AgentWorkspaceResponseDto> {
+    const params = new URLSearchParams()
+    if (options.board) params.set('board', options.board)
+    if (options.offset) params.set('offset', String(options.offset))
+    if (options.limit) params.set('limit', String(options.limit))
+    const suffix = params.size ? '?' + params : ''
+    return requestJson<AgentWorkspaceResponseDto>('/api/v1/agents/' + encodeURIComponent(sourceId) + '/workspace' + suffix)
   }
   agentDetail(sourceId: string): Promise<AgentDetailResponseDto | null> {
     const requestPath = `/api/v1/agents/${encodeURIComponent(sourceId)}`
