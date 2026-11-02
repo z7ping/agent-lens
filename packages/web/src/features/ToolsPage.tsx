@@ -142,11 +142,11 @@ export function ToolsPage({ model, toolbarHost }: { model: AgentLensClientModel;
   const projectionPercent = projection ? Math.max(0, Math.min(100, Math.round(projection.coverageRatio * 100))) : 0
   const agents = useOrderedAgents(facets?.agents ?? [])
   const projects = facets?.projects ?? []
-  const agentSelectionSummary = usage.filters.sourceIds === null
-    ? t('filters.allAgents')
-    : usage.filters.sourceIds.length
-      ? t('filters.selectedAgents', { count: usage.filters.sourceIds.length })
-      : t('filters.none')
+  const selectedSourceId = usage.filters.sourceIds?.[0] ?? ''
+  const selectedAgent = agents.find(agent => agent.sourceId === selectedSourceId)
+  const agentSelectionSummary = selectedSourceId
+    ? agentLabel(selectedSourceId, selectedAgent?.displayName)
+    : t('filters.none')
   const tools = data?.tools ?? []
   const assets = data?.assets ?? []
   const mostUsed = [...tools].sort((a, b) => b.callCount - a.callCount)[0]
@@ -159,7 +159,7 @@ export function ToolsPage({ model, toolbarHost }: { model: AgentLensClientModel;
   const attributionCoverage = totalCalls ? Math.round(attributedCalls / totalCalls * 100) : 0
   const maxCalls = Math.max(1, ...tools.map(tool => tool.callCount))
   const maxAssetCalls = Math.max(1, ...assets.map(asset => asset.callCount))
-  const canRelaxFilters = Boolean(usage.filters.sourceIds !== null || usage.filters.projectId || usage.filters.range !== 'all')
+  const canRelaxFilters = Boolean(usage.filters.projectId || usage.filters.range !== 'all')
   const blockingError = Boolean(usage.error && !data)
   const [selectedToolKey, setSelectedToolKey] = useState<string | null>(null)
   const [selectedNativeTool,setSelectedNativeTool]=useState<(typeof nativeToolRows)[number]|null>(null)
@@ -260,7 +260,7 @@ export function ToolsPage({ model, toolbarHost }: { model: AgentLensClientModel;
   const sortIcon = (key: SortKey) => sort.key === key
     ? <UiIcon name={sort.direction === 'descending' ? 'sort-down' : 'sort-up'} size={12}/>
     : null
-  const relaxFilters = () => model.setUsageFilters({ sourceIds: null, projectId: '', range: 'all' })
+  const relaxFilters = () => model.setUsageFilters({ projectId: '', range: 'all' })
   const openReviewSession = (logicalSessionId: string) => {
     const params = new URLSearchParams()
     for (const sourceId of usage.filters.sourceIds ?? []) params.append('source', sourceId)
@@ -275,7 +275,7 @@ export function ToolsPage({ model, toolbarHost }: { model: AgentLensClientModel;
   ]
   const toolbarFilters = <div className="workspace-view-controls" aria-label={t('filters.aria')}>
     <div className="workspace-view-filter">
-      <SidebarFilterDisclosure summary={agentSelectionSummary} agents={agents} agentSelection={{ mode: 'multiple', value: usage.filters.sourceIds, onChange: sourceIds => model.setUsageFilters({ sourceIds }) }}/>
+      <SidebarFilterDisclosure summary={agentSelectionSummary} agents={agents} allowUndetectedSelection agentSelection={{ mode: 'single', value: selectedSourceId, onChange: sourceId => model.setUsageFilters({ sourceIds: [sourceId], projectId: '' }) }}/>
     </div>
     <div className="workspace-view-filter">
       <SelectMenu value={usage.filters.projectId} onChange={projectId => model.setUsageFilters({ projectId })} ariaLabel={t('filters.projectAria')} placeholder={t('filters.allProjects')} searchable searchPlaceholder={t('filters.searchProject')} options={projectFilterOptions}/>
