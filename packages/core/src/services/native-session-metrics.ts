@@ -100,6 +100,7 @@ export interface NativeErrorIndexQuery {
   from?:string
   to?:string
   search?:string
+  fingerprint?:string
   limit:number
   offset:number
 }
