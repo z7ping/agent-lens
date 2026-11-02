@@ -188,13 +188,15 @@ export class SqliteNativeSessionMetrics implements NativeSessionMetricsStore {
       || (input.from!==undefined && !Number.isFinite(Date.parse(input.from)))
       || (input.to!==undefined && !Number.isFinite(Date.parse(input.to)))
       || (input.from && input.to && Date.parse(input.from)>Date.parse(input.to))
-      || (input.coverageCertified!==undefined && typeof input.coverageCertified!=='boolean')){
+      || (input.coverageCertified!==undefined && typeof input.coverageCertified!=='boolean')
+      || (input.includeTrend!==undefined && typeof input.includeTrend!=='boolean')){
       throw new TypeError('Invalid Native-only metrics aggregate query')
     }
     return this.executor.run(()=>{
       const cte=`
         WITH selected AS (
           SELECT catalog.source_id,catalog.installation_id,catalog.native_session_id,
+                 catalog.last_activity_at,
                  metrics.interaction_count,metrics.tool_call_count,metrics.tool_result_count,
                  metrics.tool_error_count,metrics.error_count,metrics.input_tokens,metrics.output_tokens,
                  CASE
@@ -306,8 +308,23 @@ export class SqliteNativeSessionMetrics implements NativeSessionMetricsStore {
         GROUP BY tool.native_tool_name
         ORDER BY callCount DESC,tool.native_tool_name ASC LIMIT 257
       `).all(...params,...(input.nativeToolName?[input.nativeToolName]:[])) as NativeSessionMetricOverview['tools']:[]
+      // Derived from the already indexed session summary. Assign a complete
+      // session's totals to its last activity day; never claim these are event-day
+      // counts or include partial/stale/missing metrics.
+      const trend=input.includeTrend?this.executor.db.prepare(`${cte}
+        SELECT substr(last_activity_at,1,10) AS date,
+          COUNT(*) AS sessionCount,
+          SUM(interaction_count) AS interactionCount,
+          SUM(tool_call_count) AS toolCallCount,
+          SUM(error_count) AS errorCount
+        FROM selected
+        WHERE metric_status='complete' AND last_activity_at IS NOT NULL
+        GROUP BY substr(last_activity_at,1,10)
+        ORDER BY date DESC LIMIT 32
+      `).all(...params).reverse() as NonNullable<NativeSessionMetricOverview['trend']>:undefined
       return {
         sourceId:input.sourceId,
+        ...(trend?{trend}:{}),
         eligibleSessions:row.eligibleSessions,readySessions:row.readySessions,
         missingSessions:row.missingSessions,staleSessions:row.staleSessions,
         partialSessions:row.partialSessions,
