@@ -180,6 +180,7 @@ export const englishInsightsToolsMessages: LocaleMessagesDto = {
       nativeScope: '{{ready}} / {{eligible}} Native-only sessions verified',
       nativeObservedSummary: '{{sessions}} partially observed sessions, at least {{calls}} calls',
       nativeObservedSuffix: ' · partial observation',
+      nativeObservedGroup: 'Partial observations (lower bounds; excluded from verified tool rankings)',
       nativeResults: 'Results',
       maxDuration: 'Longest duration',
       longestBadge: 'Longest call',
