@@ -176,6 +176,7 @@ export const chineseInsightsToolsMessages: LocaleMessagesDto = {
       description: '只展示可验证的调用事实：用了什么、失败多少、耗时如何，以及有多少调用能够可靠归因到具体能力资产。',
       projectionTitle: '历史工具索引正在回填，当前结果不完整',
       projectionDescription: '已投影 {{projected}} / {{total}} 条工具事件（{{percent}}%），当前统计会随回填继续增长。',
+      backToTools: '返回工具列表',
       nativeTitle: '原生工具统计',
       nativeScope: '完整校验 {{ready}} / {{eligible}} 个 Native-only 会话',
       nativeObservedSummary: '{{sessions}} 个会话部分可读，已观察至少 {{calls}} 次调用',
