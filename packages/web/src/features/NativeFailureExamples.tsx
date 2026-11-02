@@ -20,6 +20,7 @@ export function NativeFailureExamples({filters,toolName}: {filters:QueryFilters;
   const from=useMemo(()=>rangeStart(filters.range),[filters.range])
   const [query,setQuery]=useState('')
   const [search,setSearch]=useState('')
+  const [fingerprint,setFingerprint]=useState('')
   const [offset,setOffset]=useState(0)
   const [data,setData]=useState<NativeErrorIndexResponseDto|null>(null)
   const [selectedKey,setSelectedKey]=useState<string|null>(null)
@@ -31,7 +32,7 @@ export function NativeFailureExamples({filters,toolName}: {filters:QueryFilters;
   useEffect(()=>{
     setOffset(0)
     setSelectedKey(null)
-  },[sourceId,filters.projectId,filters.range,toolName,search])
+  },[sourceId,filters.projectId,filters.range,toolName,search,fingerprint])
 
   useEffect(()=>{
     const controller=new AbortController()
@@ -46,7 +47,8 @@ export function NativeFailureExamples({filters,toolName}: {filters:QueryFilters;
       try{
         const result=await api.nativeErrors({
           sourceId,projectId:filters.projectId||undefined,toolName,
-          search:search||undefined,from,limit:PAGE_SIZE,offset,
+          search:search||undefined,fingerprint:fingerprint||undefined,
+          from,limit:PAGE_SIZE,offset,
           signal:controller.signal,
         })
         if(controller.signal.aborted)return
@@ -67,7 +69,7 @@ export function NativeFailureExamples({filters,toolName}: {filters:QueryFilters;
     setData(null)
     void load()
     return ()=>{controller.abort();if(timer)clearTimeout(timer)}
-  },[sourceId,filters.projectId,from,toolName,search,offset,retry])
+  },[sourceId,filters.projectId,from,toolName,search,fingerprint,offset,retry])
 
   const entries=data?.items??[]
   const active=entries.find(item=>item.eventKey===selectedKey)??entries[0]
@@ -81,7 +83,7 @@ export function NativeFailureExamples({filters,toolName}: {filters:QueryFilters;
   const copy=async()=>{
     try{
       await copyText(JSON.stringify({schemaVersion:1,scope:{sourceId,toolName:toolName??null,search},
-        indexed:data?.indexedSessions,eligible:data?.eligibleSessions,
+        indexed:data?.indexedSessions,eligible:data?.eligibleSessions,fingerprint,
         total:data?.total,offset,items:entries},null,2))
       setCopyState('copied')
     }catch{setCopyState('error')}
@@ -94,6 +96,8 @@ export function NativeFailureExamples({filters,toolName}: {filters:QueryFilters;
         </StatusBadge>
         {data&&<span>{t('failures.indexCoverage',{ready:data.indexedSessions,eligible:data.eligibleSessions})}</span>}
         {data&&<b>{t('failures.samples',{count:data.total})}</b>}
+        {fingerprint&&<Button size="small" variant="quiet" onClick={()=>setFingerprint('')}>
+          {t('failures.clearFingerprint')}</Button>}
       </span>
       <Toolbar aria-label={t('failures.title')}>
         <ToolbarGroup>
@@ -154,7 +158,9 @@ export function NativeFailureExamples({filters,toolName}: {filters:QueryFilters;
           <div className="native-failure-error-block"><strong>{t('failures.error')}</strong>
             <CopyableCodeBlock>{active.summary||active.errorCode||'—'}</CopyableCodeBlock></div>
           <div className="native-failure-detail-footer">
-            <span title={active.fingerprint}>{t('failures.sameFingerprint')}</span>
+            <Button size="small" variant="quiet" disabled={fingerprint===active.fingerprint}
+              onClick={()=>setFingerprint(active.fingerprint)} title={active.fingerprint}>
+              {t('failures.sameFingerprint')}</Button>
             {active.coverage==='partial'&&<StatusBadge tone="warning">{t('page.nativePartialStatus')}</StatusBadge>}
           </div>
         </div>:<div className="native-failure-placeholder">{loading?t('failures.loading'):t('failures.selectExample')}</div>}
