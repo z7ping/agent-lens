@@ -63,3 +63,8 @@
   .native-failure-list-pane { min-height: 0; max-height: 240px; }
   .native-failure-detail-pane { min-height: 240px; max-height: none; overflow: visible; }
 }
+
+.native-failure-search { display: inline-flex; min-width: 0; align-items: center; gap: 5px; }
+.native-failure-search .ui-field { width: min(230px, 32vw); }
+.native-failure-pagination { display: flex; justify-content: space-between; gap: 8px; padding: 8px; border-top: 1px solid var(--al-line); }
+.native-failure-item-meta { overflow-wrap: anywhere; }
