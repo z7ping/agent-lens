@@ -148,6 +148,9 @@ export function InsightsPage({ model, toolbarHost }: { model: AgentLensClientMod
     <main className="workspace-page insights-page">
       <div className="page-content insights-content">
         {insights.error && <ErrorStateBanner message={insights.error} onRetry={() => void insightsModel.refresh()}/>} 
+        {data?.meta.mode==='native-only' && data.meta.native?.state!=='available' &&
+          <ErrorStateBanner message={t('page.nativeMetricsUnavailable')}
+            onRetry={() => void insightsModel.refresh()}/> }
 
         {data?.meta.native && <section className="insight-coverage-strip" role="status"
           aria-label={t('page.nativeCoverageTitle')}>

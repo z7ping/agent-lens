@@ -211,8 +211,8 @@ export class SqliteNativeSessionMetrics implements NativeSessionMetricsStore {
       ]
       if(query.projectId){where.push('COALESCE(ctx.project_id,ws.project_id)=?');params.push(query.projectId)}
       if(query.toolName){where.push('e.tool_name=?');params.push(query.toolName)}
-      if(query.from){where.push('e.occurred_at>=?');params.push(query.from)}
-      if(query.to){where.push('e.occurred_at<=?');params.push(query.to)}
+      if(query.from){where.push('c.last_activity_at>=?');params.push(query.from)}
+      if(query.to){where.push('c.last_activity_at<=?');params.push(query.to)}
       if(query.fingerprint){
         if(!/^[0-9a-f]{64}$/.test(query.fingerprint))throw new RangeError('Invalid error fingerprint')
         where.push('e.fingerprint=?');params.push(query.fingerprint)

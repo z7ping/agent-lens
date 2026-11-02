@@ -99,7 +99,7 @@ export function NativeFailureExamples({filters,toolName}: {filters:QueryFilters;
             :data.indexedSessions<data.eligibleSessions?t('failures.indexing')
             :data.partialSessions>0?t('page.nativePartialStatus'):t('failures.indexed')}
         </StatusBadge>
-        {data&&<span>{t('failures.indexCoverage',{ready:data.indexedSessions,eligible:data.eligibleSessions})}</span>}
+        {data&&<span title={t('page.nativeTimeBasis')}>{t('failures.indexCoverage',{ready:data.indexedSessions,eligible:data.eligibleSessions})}</span>}
         {data&&<b>{t('failures.samples',{count:data.total})}</b>}
         {fingerprint&&<Button size="small" variant="quiet" onClick={()=>setFingerprint('')}>
           {t('failures.clearFingerprint')}</Button>}

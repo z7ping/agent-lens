@@ -120,3 +120,29 @@ test('native statistics navigate to failure reading while unverified counters st
     }
   }
 })
+
+
+test('native Usage and indexed errors use one last-activity cohort, not mixed event dates',async()=>{
+  const [storage,tools,errors,zh,en]=await Promise.all([
+    source('../../../storage-sqlite/src/native-session-metrics.ts'),
+    source('./ToolsPage.tsx'),source('./NativeFailureExamples.tsx'),
+    source('../i18n/zh-CN/insights-tools.ts'),source('../i18n/en-US/insights-tools.ts'),
+  ])
+  assert.match(storage,/where\.push\('c\.last_activity_at>=\?'\)/)
+  assert.match(storage,/where\.push\('c\.last_activity_at<=\?'\)/)
+  assert.doesNotMatch(storage,/where\.push\('e\.occurred_at[<>]=\?'\)/)
+  assert.match(tools,/title=\{t\('page\.nativeTimeBasis'\)\}/)
+  assert.match(errors,/title=\{t\('page\.nativeTimeBasis'\)\}/)
+  for(const translation of [zh,en])assert.match(translation,/nativeTimeBasis:/)
+})
+
+test('native analytics expose unavailable status and refresh open tool details',async()=>{
+  const [tools,insights]=await Promise.all([
+    source('./ToolsPage.tsx'),source('./InsightsPage.tsx'),
+  ])
+  assert.match(tools,/nativeMetrics\?\.state!=='available' \|\| nativeHasSessions/)
+  assert.match(tools,/nativeOnlyMode && nativeMetrics\?\.state!=='available'/)
+  assert.match(insights,/data\?\.meta\.mode==='native-only' && data\.meta\.native\?\.state!=='available'/)
+  assert.match(tools,/if\(lastToolRoute\.current===location\.search\)\{/)
+  assert.match(tools,/setSelectedNativeTool\(current=>currentRow&&current/)
+})
