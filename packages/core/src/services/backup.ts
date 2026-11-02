@@ -159,6 +159,26 @@ export interface BackupRestorePreview {
   blocked: number
 }
 
+export type BackupFilePreviewSide = {
+  previewStatus: 'readable' | 'redacted' | 'metadata-only' | 'missing' | 'unavailable'
+  blockedReason?: 'sensitive' | 'protected-data' | 'too-large' | 'binary' | 'unreadable'
+  reason?: string
+  size?: number
+  content?: string
+  dataUrl?: string
+  mimeType?: string
+  redacted?: boolean
+}
+
+export interface BackupFilePreview {
+  snapshotId: string
+  archivePath: string
+  sourceId: string
+  targetPath?: string
+  snapshot: BackupFilePreviewSide
+  current: BackupFilePreviewSide
+}
+
 export interface BackupService {
   overview(input?: BackupCreateInput): Promise<BackupOverview>
   /** 只读取已持久化索引；不存在时返回 null，不得触发第三方目录扫描。 */
@@ -171,4 +191,5 @@ export interface BackupService {
   exportSnapshot(id: string): Promise<Uint8Array>
   importSnapshot(bundle: Uint8Array): Promise<BackupSnapshotManifest>
   previewRestore(id: string): Promise<BackupRestorePreview>
+  previewRestoreFile(id: string, archivePath: string): Promise<BackupFilePreview>
 }

@@ -7,6 +7,7 @@ import {
   type AgentRescanResponseDto,
   type AgentSummaryResponseDto,
   type BackupCreateRequestDto,
+  type BackupFilePreviewResponseDto,
   type BackupOverviewResponseDto,
   type BackupRestorePreviewResponseDto,
   type BackupSnapshotResponseDto,
@@ -876,6 +877,15 @@ export class AgentLensApi {
 
   backupRestorePreview(id: string, signal?: AbortSignal): Promise<BackupRestorePreviewResponseDto> {
     return requestJson(`/api/v1/backups/${encodeURIComponent(id)}/restore-preview`, { signal })
+  }
+
+  backupRestoreFilePreview(id: string, archivePath: string, signal?: AbortSignal): Promise<BackupFilePreviewResponseDto> {
+    return requestJson(`/api/v1/backups/${encodeURIComponent(id)}/file-preview`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ archivePath }),
+      ...(signal ? { signal } : {}),
+    })
   }
 
   exportBackup(id: string): Promise<Blob> {

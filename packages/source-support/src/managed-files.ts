@@ -418,3 +418,44 @@ export async function previewManagedTextFile(
     ...(sanitized.redacted ? { redacted: true } : {}),
   }
 }
+
+/** Same redaction and preview policy for immutable, content-addressed backup blobs. */
+export type SafeArchivedPreview = {
+  previewStatus: 'readable' | 'redacted' | 'metadata-only'
+  blockedReason?: 'sensitive' | 'protected-data' | 'too-large' | 'binary'
+  content?: string
+  dataUrl?: string
+  mimeType?: string
+  redacted?: boolean
+}
+
+export function previewSafeArchivedBytes(name: string, bytes: Uint8Array): SafeArchivedPreview {
+  const metadataOnly = (blockedReason: NonNullable<SafeArchivedPreview['blockedReason']>): SafeArchivedPreview =>
+    ({ previewStatus: 'metadata-only', blockedReason })
+  if (isSensitiveFileName(name) || isEnvironmentSecretFileName(name)) return metadataOnly('sensitive')
+  if (isProtectedRuntimeDataFile(name)) return metadataOnly('protected-data')
+  const image = /\.(?:png|jpe?g|gif|webp)$/i.test(name)
+  if (bytes.byteLength > (image ? 10 * 1024 * 1024 : DEFAULT_MANAGED_FILE_PREVIEW_BYTES)) return metadataOnly('too-large')
+  if (image) {
+    const buffer = Buffer.from(bytes)
+    const mimeType = buffer.subarray(0, 8).equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]))
+      ? 'image/png'
+      : buffer[0] === 255 && buffer[1] === 216 && buffer[2] === 255
+        ? 'image/jpeg'
+        : /^(GIF87a|GIF89a)$/.test(buffer.subarray(0, 6).toString('ascii'))
+          ? 'image/gif'
+          : buffer.subarray(0, 4).toString('ascii') === 'RIFF' && buffer.subarray(8, 12).toString('ascii') === 'WEBP'
+            ? 'image/webp' : undefined
+    return mimeType ? { previewStatus: 'readable', mimeType, dataUrl: `data:${mimeType};base64,${buffer.toString('base64')}` } : metadataOnly('binary')
+  }
+  const content = decodeUtf8(bytes)
+  if (content === null) return metadataOnly('binary')
+  const sanitized = redactKnownConfigSecrets(content)
+  if (containsConfigSecretAssignment(bytes) && !sanitized.redacted) return metadataOnly('sensitive')
+  if (containsHighConfidenceSecret(Buffer.from(sanitized.content, 'utf8'))) return metadataOnly('sensitive')
+  return {
+    previewStatus: sanitized.redacted ? 'redacted' : 'readable',
+    content: sanitized.content,
+    ...(sanitized.redacted ? { redacted: true } : {}),
+  }
+}

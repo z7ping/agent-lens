@@ -551,6 +551,7 @@ export function BackupPage({
           preview && preview.snapshotId === previewSnapshotId
             ? <BackupRestorePreviewWorkbench
                 key={preview.snapshotId}
+                api={api}
                 preview={preview}
                 snapshot={snapshots.find(snapshot => snapshot.id === preview.snapshotId)}
                 onBack={closeRestorePreview}

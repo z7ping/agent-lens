@@ -159,6 +159,27 @@ export interface BackupRestorePreviewItemDto {
   reason?: string
 }
 
+export interface BackupFilePreviewSideDto {
+  previewStatus: 'readable' | 'redacted' | 'metadata-only' | 'missing' | 'unavailable'
+  blockedReason?: 'sensitive' | 'protected-data' | 'too-large' | 'binary' | 'unreadable'
+  reason?: string
+  size?: number
+  content?: string
+  dataUrl?: string
+  mimeType?: string
+  redacted?: boolean
+}
+
+export interface BackupFilePreviewResponseDto {
+  snapshotId: string
+  archivePath: string
+  sourceId: string
+  targetPath?: string
+  snapshot: BackupFilePreviewSideDto
+  current: BackupFilePreviewSideDto
+  meta: { protocolVersion: typeof AGENT_LENS_PROTOCOL_VERSION }
+}
+
 export interface BackupRestorePreviewResponseDto {
   snapshotId: string
   generatedAt: string

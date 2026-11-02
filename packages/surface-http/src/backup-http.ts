@@ -3,6 +3,7 @@ import type { BackupAssetKind, BackupCreateInput, BackupService } from '@agent-l
 import {
   AGENT_LENS_PROTOCOL_VERSION,
   type BackupCreateRequestDto,
+  type BackupFilePreviewResponseDto,
   type BackupOverviewResponseDto,
   type BackupRestorePreviewResponseDto,
   type BackupSnapshotResponseDto,
@@ -157,7 +158,7 @@ export async function handleBackupRequest(
     return true
   }
 
-  const match = url.pathname.match(/^\/api\/v1\/backups\/([^/]+)(?:\/(verify|restore-preview|export))?$/)
+  const match = url.pathname.match(/^\/api\/v1\/backups\/([^/]+)(?:\/(verify|restore-preview|file-preview|export))?$/)
   if (!match) {
     writeJson(response, 404, { error: 'not_found' })
     return true
@@ -190,6 +191,21 @@ export async function handleBackupRequest(
       meta: { protocolVersion: AGENT_LENS_PROTOCOL_VERSION },
     }
     writeJson(response, 200, body)
+    return true
+  }
+
+  if (action === 'file-preview' && request.method === 'POST') {
+    const body = await readJsonBody(request, { maxBytes: 8192 })
+    if (!body || typeof body !== 'object' || Array.isArray(body)) throw badRequest('archivePath is required')
+    const archivePath = (body as Record<string, unknown>).archivePath
+    if (typeof archivePath !== 'string' || !archivePath || archivePath.length > 4096) {
+      throw badRequest('archivePath must be a non-empty archive file key')
+    }
+    const file = await backup.previewRestoreFile(id, archivePath)
+    const result: BackupFilePreviewResponseDto = {
+      ...file, meta: { protocolVersion: AGENT_LENS_PROTOCOL_VERSION },
+    }
+    writeJson(response, 200, result)
     return true
   }
 
