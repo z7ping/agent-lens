@@ -40,10 +40,6 @@ export const chineseBackupMessages: LocaleMessagesDto = {
       factReadonly: '不会修改原始文件',
       factProgressive: '完成一个立即展示一个',
     },
-    create: {
-      verifyNotCompleted: '快照 {{id}} 已创建，但完整性校验未完成：{{error}}。请在备份记录中重新校验。',
-      verifyFailed: '快照 {{id}} 已创建，但完整性校验失败。请在备份记录中检查。',
-    },
     builder: {
       files: '{{count}} 文件',
       logicalFiles: '{{logical}} 项 · {{files}} 文件',
@@ -186,6 +182,8 @@ export const chineseBackupMessages: LocaleMessagesDto = {
       previewOnly: '当前版本只开放预演，不直接写回',
     },
     create: {
+      verifyNotCompleted: '快照 {{id}} 已创建，但完整性校验未完成：{{error}}。请在备份记录中重新校验。',
+      verifyFailed: '快照 {{id}} 已创建，但完整性校验失败。请在备份记录中检查。',
       title: '创建快照',
       local: '本地',
       agents: '智能体',
