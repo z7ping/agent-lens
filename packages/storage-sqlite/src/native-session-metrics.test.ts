@@ -153,9 +153,15 @@ test('native error index retains every diagnostic, paginates and rejects stale s
       kind:'tool' as const,errorCode:'E_TEST',summary:'exit code 1',
       fingerprint:'a'.repeat(64),
     }))
-    assert.equal(await storage.nativeSessionMetrics.replace({
-      ...snapshot(),projectionVersion:NATIVE_SESSION_METRIC_PROJECTION_VERSION,
-    },index),true)
+    const latest={...snapshot(),projectionVersion:NATIVE_SESSION_METRIC_PROJECTION_VERSION}
+    const generation='a'.repeat(36)
+    assert.equal(await storage.nativeSessionMetrics.replace(latest),true)
+    await storage.nativeSessionMetrics.stageErrors(identity,generation,index.slice(0,20))
+    assert.equal((await storage.nativeSessionMetrics.queryErrors({
+      sourceId:'pi',parserVersion:'pi-v1',limit:20,offset:0,
+    })).total,0,'unpublished pages must remain invisible')
+    await storage.nativeSessionMetrics.stageErrors(identity,generation,index.slice(20))
+    assert.equal(await storage.nativeSessionMetrics.publishErrors(latest,generation),true)
     const query={sourceId:'pi',parserVersion:'pi-v1',limit:20,offset:0}
     const first=await storage.nativeSessionMetrics.queryErrors(query)
     const second=await storage.nativeSessionMetrics.queryErrors({...query,offset:20})
@@ -172,11 +178,12 @@ test('native error index retains every diagnostic, paginates and rejects stale s
       'outdated Source revision must not leak indexed errors')
     assert.equal(await storage.nativeSessionMetrics.replace({
       ...snapshot(),projectionVersion:NATIVE_SESSION_METRIC_PROJECTION_VERSION,
-    },index),false)
-    assert.equal(await storage.nativeSessionMetrics.replace({
-      ...snapshot(),fileSize:1001,fileMtimeMs:201,
-      projectionVersion:NATIVE_SESSION_METRIC_PROJECTION_VERSION,
-    },[]),true)
+    }),false)
+    const newer={...snapshot(),fileSize:1001,fileMtimeMs:201,
+      projectionVersion:NATIVE_SESSION_METRIC_PROJECTION_VERSION}
+    assert.equal(await storage.nativeSessionMetrics.replace(newer),true)
+    assert.equal((await storage.nativeSessionMetrics.queryErrors(query)).total,0)
+    assert.equal(await storage.nativeSessionMetrics.publishErrors(newer,'b'.repeat(36)),true)
     assert.equal((await storage.nativeSessionMetrics.queryErrors(query)).total,0)
   }finally{await storage.close()}
 })
