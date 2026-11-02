@@ -45,8 +45,10 @@ export function BackupRestorePreviewWorkbench({
   )
   const matchingCount = visibleTree.reduce((sum, node) => sum + previewCount(node.counts), 0)
   const changed = preview.blocked + preview.modified + preview.missing
-  const autoExpand = (node: PreviewTreeNode, depth: number) =>
-    depth === 0 || ((scope === 'changes' || Boolean(query.trim())) && previewCount(node.counts) <= 200)
+  // Automatic expansion is bounded by the whole visible result, not per-directory.
+  // Thousands of small folders must not render thousands of rows at once.
+  const autoExpand = (_node: PreviewTreeNode, depth: number) =>
+    depth === 0 || ((scope === 'changes' || Boolean(query.trim())) && matchingCount <= 200)
   const isOpen = (node: PreviewTreeNode, depth: number) =>
     !closed.has(node.id) && (opened.has(node.id) || autoExpand(node, depth))
 
@@ -106,7 +108,7 @@ export function BackupRestorePreviewWorkbench({
       <button type="button" className="backup-preview-tree-folder-toggle"
         onClick={() => toggleNode(node, depth)} title={node.path || rowLabel}>
         <UiIcon name={expanded ? 'chevron-down' : 'chevron-right'} size={14}/>
-        <UiIcon name={expanded ? 'folder-open' : 'folder-open'} size={14}/>
+        <UiIcon name="folder-open" size={14}/>
         <span className="backup-preview-tree-folder-name">{markedName(rowLabel, query)}</span>
         <span className="backup-preview-tree-folder-count">{t('tree.files', { count: previewCount(node.counts).toLocaleString(locale) })}</span>
         {changes > 0 && <span className="backup-preview-tree-folder-diff">{t('preview.differenceCount', { count: changes.toLocaleString(locale) })}</span>}
