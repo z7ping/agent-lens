@@ -2,6 +2,27 @@ import type { LocaleMessagesDto } from '@agent-lens/protocol'
 
 export const chineseAgentsMessages: LocaleMessagesDto = {
   agents: {
+    work: {
+      title: '工作',
+      retry: '重试',
+      loading: '正在读取工作数据…',
+      refresh: '刷新',
+      boardTasks: '看板任务',
+      boards: '看板',
+      schedules: '定时任务',
+      noTasks: '当前看板暂无任务',
+      selectBoard: '选择看板',
+      runs: '执行记录',
+      noSchedules: '暂无定时任务',
+      scriptOnly: '脚本任务',
+      delivery: '投递：',
+      previous: '上一页',
+      next: '下一页',
+      noRuns: '暂无执行记录',
+      taskId: '任务 ID',
+      nextRun: '下次',
+      loaded: '已加载',
+    },
     capability: {
       session: '会话',
       transcript: '对话记录',

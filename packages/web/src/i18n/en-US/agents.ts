@@ -2,6 +2,27 @@ import type { LocaleMessagesDto } from '@agent-lens/protocol'
 
 export const englishAgentsMessages: LocaleMessagesDto = {
   agents: {
+    work: {
+      title: 'Work',
+      retry: 'Retry',
+      loading: 'Loading work data…',
+      refresh: 'Refresh',
+      boardTasks: 'Board tasks',
+      boards: 'Boards',
+      schedules: 'Scheduled jobs',
+      noTasks: 'No tasks on this board',
+      selectBoard: 'Select board',
+      runs: 'Executions',
+      noSchedules: 'No scheduled jobs',
+      scriptOnly: 'Script-only',
+      delivery: 'Delivery:',
+      previous: 'Previous',
+      next: 'Next',
+      noRuns: 'No execution records',
+      taskId: 'Task ID',
+      nextRun: 'Next',
+      loaded: 'Loaded',
+    },
     capability: {
       session: 'Sessions',
       transcript: 'Transcripts',

@@ -24,7 +24,7 @@ const epoch = (value: unknown): string | undefined => {
 }
 async function fileExists(path: string): Promise<boolean> {
   try { return (await stat(path)).isFile() } catch (e) {
-    if ((e as NodeJS.ErrnoException).code === 'ENOENT') return false
+    if (['ENOENT','ENOTDIR'].includes((e as NodeJS.ErrnoException).code ?? '')) return false
     throw e
   }
 }
@@ -35,7 +35,7 @@ async function dirs(path: string): Promise<string[]> {
       .map(entry => entry.name)
       .sort()
   } catch (e) {
-    if ((e as NodeJS.ErrnoException).code === 'ENOENT') return []
+    if (['ENOENT','ENOTDIR'].includes((e as NodeJS.ErrnoException).code ?? '')) return []
     throw e
   }
 }
@@ -74,7 +74,11 @@ async function readBoards(root: string, requestedBoard: string | undefined, offs
     try {
       const tc = columns(db, 'tasks')
       if (!tc.has('id') || !tc.has('title') || !tc.has('status')) throw new Error('Unsupported Hermes kanban schema')
-      const info = await fileExists(board.metadata) ? obj(await jsonFile(board.metadata, 256 * 1024)) : {}
+      let info: Record<string, unknown> = {}
+      if (await fileExists(board.metadata)) {
+        try { info = obj(await jsonFile(board.metadata, 256 * 1024)) }
+        catch { /* Metadata is optional; task rows remain authoritative. */ }
+      }
       const count = Number((db.prepare('SELECT COUNT(*) AS n FROM tasks').get() as {n:number}).n)
       boards.push({ id: board.id, name: text(info.name) ?? board.id, archived: info.archived === true, taskCount: count,
         ...(text(info.project_id) ? {projectId: text(info.project_id)} : {}) })
@@ -121,7 +125,7 @@ async function readSchedules(root: string) {
   const schedules: AgentWorkScheduleDto[] = []
   const executions: AgentWorkExecutionDto[] = []
   let discovered = false
-  for (const profile of profiles) {
+  for (const profile of profiles.slice(0, 32)) {
     const jobsPath = join(profile.home, 'cron', 'jobs.json')
     const executionPath = join(profile.home, 'cron', 'executions.db')
     if (await fileExists(jobsPath)) {
