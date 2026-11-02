@@ -207,19 +207,23 @@ export function InsightsPage({ model, toolbarHost }: { model: AgentLensClientMod
               const metric = radarItems.get(agent.sourceId)
               const verified = metric?.readySessions ? metric.totals.errorCount : null
               const observed = metric?.partialSessions ? metric.observed?.errorCount ?? null : null
-              // Certified and partial cohorts remain separate: never replace a larger
-              // confirmed count with a smaller partial lower bound.
-              const primary = verified !== null && verified > 0 ? String(verified)
-                : observed !== null && observed > 0 ? `≥${observed}`
-                : verified !== null && !metric?.partialSessions ? String(verified) : '—'
+              // Each cohort is independent. Lead with its larger known failure count;
+              // the other remains visible as secondary context, never a fabricated sum.
+              const showObserved = observed !== null && observed > 0 && observed >= (verified ?? 0)
+              const primary = showObserved ? `≥${observed}`
+                : verified !== null && (verified > 0 || !metric?.partialSessions) ? String(verified)
+                  : '—'
               const hasErrors = (verified ?? 0) > 0 || (observed ?? 0) > 0
-              const detail = verified !== null && verified > 0 && observed !== null && observed > 0
-                ? t('page.radarAdditionalObserved', { count: observed })
-                : observed !== null
-                  ? t('page.radarObservedLabel')
-                  : verified !== null ? t('page.radarVerifiedLabel')
-                    : metric?.eligibleSessions ? t('page.radarPending')
-                      : metric ? t('page.radarNoSessions') : t('page.radarUnavailable')
+              const detail = showObserved
+                ? verified !== null && verified > 0
+                  ? t('page.radarVerified', { count: verified })
+                  : t('page.radarObservedLabel')
+                : observed !== null && observed > 0
+                  ? t('page.radarAdditionalObserved', { count: observed })
+                  : observed !== null ? t('page.radarObservedLabel')
+                    : verified !== null ? t('page.radarVerifiedLabel')
+                      : metric?.eligibleSessions ? t('page.radarPending')
+                        : metric ? t('page.radarNoSessions') : t('page.radarUnavailable')
               return <Button key={agent.sourceId} variant="tile" className={`insight-agent-radar-item${hasErrors ? ' has-errors' : ''}`}
                 aria-pressed={selectedSourceId === agent.sourceId}
                 title={metric ? t('page.radarTooltip', {
