@@ -2,7 +2,7 @@ import { readFile, readdir, stat } from 'node:fs/promises'
 import { basename, dirname, join } from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
 import { resolveHermesConfigRoots } from '@agent-lens/runtime-cordis'
-import { AGENT_LENS_PROTOCOL_VERSION, type AgentWorkspaceResponseDto, type AgentWorkBoardDto, type AgentWorkTaskDto, type AgentWorkRunDto, type AgentWorkScheduleDto, type AgentWorkExecutionDto, type AgentWorkFeatureDto } from '@agent-lens/protocol'
+import { AGENT_LENS_PROTOCOL_VERSION, type AgentWorkspaceResponseDto, type AgentWorkBoardDto, type AgentWorkTaskDto, type AgentWorkRunDto, type AgentWorkScheduleDto, type AgentWorkExecutionDto, type AgentWorkFeatureDto, type AgentWorkProjectDto } from '@agent-lens/protocol'
 
 const MAX_BOARDS = 24
 const MAX_SCHEDULES = 200
@@ -120,6 +120,28 @@ async function readBoards(root: string, requestedBoard: string | undefined, offs
   }
   return { boards, selectedBoard, tasks, runs, tasksHasMore }
 }
+async function readProjects(root: string): Promise<AgentWorkProjectDto[]> {
+  const profiles = [{name:'default',home:root}, ...(await dirs(join(root,'profiles'))).map(name => ({name,home:join(root,'profiles',name)}))]
+  const projects:AgentWorkProjectDto[]=[]
+  for (const profile of profiles.slice(0,32)) {
+    const path = join(profile.home,'projects.db')
+    if (!await fileExists(path)) continue
+    const db = openReadOnly(path)
+    try {
+      const pc=columns(db,'projects')
+      if (!pc.has('id') || !pc.has('slug') || !pc.has('name')) throw new Error('Unsupported Hermes projects schema')
+      const rows=db.prepare('SELECT '+select(pc,['id','slug','name','archived','board_slug','primary_path'])+
+        ' FROM projects ORDER BY name ASC LIMIT 200').all() as Record<string,unknown>[]
+      for (const row of rows) projects.push({
+        id:String(row.id),profile:profile.name,slug:String(row.slug),name:String(row.name),
+        archived:Number(row.archived??0)!==0,
+        ...(text(row.board_slug)?{boardId:text(row.board_slug)}:{}),
+        ...(text(row.primary_path)?{primaryPath:text(row.primary_path)}:{}),
+      })
+    }finally{db.close()}
+  }
+  return projects
+}
 async function readSchedules(root: string) {
   const profiles = [{name:'default',home:root}, ...(await dirs(join(root,'profiles'))).map(name => ({name, home:join(root,'profiles',name)}))]
   const schedules: AgentWorkScheduleDto[] = []
@@ -187,7 +209,7 @@ export async function readHermesWorkspace(options: {
     {id:'boards',availability:'unknown'},
     {id:'schedules',availability:'unknown'},
   ]
-  const result: Workspace = {features,boards:[],tasks:[],runs:[],tasksHasMore:false,schedules:[],executions:[]}
+  const result: Workspace = {features,projects:[],boards:[],tasks:[],runs:[],tasksHasMore:false,schedules:[],executions:[]}
   const limit = Math.min(100,Math.max(1,Math.floor(options.limit ?? 40)))
   const offset = Math.max(0,Math.min(100000,Math.floor(options.offset ?? 0)))
   const candidates = [...new Set(roots.map(root => basename(dirname(root)) === 'profiles' ? dirname(dirname(root)) : root))]
@@ -216,6 +238,17 @@ export async function readHermesWorkspace(options: {
     } catch (error) {
       features[1] = {id:'schedules',availability:'error',reason:error instanceof Error ? error.message : 'read failed'}
       break
+    }
+  }
+  for (const root of candidates) {
+    try {
+      const projects = await readProjects(root)
+      if (projects.length) {
+        result.projects = projects
+        break
+      }
+    } catch {
+      // Project metadata does not gate Board/Cron availability.
     }
   }
   return {sourceId:'hermes',...result,meta:{protocolVersion:AGENT_LENS_PROTOCOL_VERSION,generatedAt:new Date().toISOString()}}

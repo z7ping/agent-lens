@@ -39,7 +39,7 @@ export async function handleAgentWorkspaceRequest(
   const provider = providers?.[sourceId]
   if (!provider) {
     // No workspace provider does not mean the Agent's other functionality is broken.
-    writeJson(response,200,{sourceId,features:[],boards:[],tasks:[],runs:[],
+    writeJson(response,200,{sourceId,features:[],projects:[],boards:[],tasks:[],runs:[],
       tasksHasMore:false,schedules:[],executions:[],meta:{protocolVersion:AGENT_LENS_PROTOCOL_VERSION,generatedAt:new Date().toISOString()}})
     return true
   }

@@ -64,9 +64,19 @@ export interface AgentWorkExecutionDto {
   error?: string
   deliveryOutcome?: string
 }
+export interface AgentWorkProjectDto {
+  id: string
+  profile: string
+  slug: string
+  name: string
+  archived: boolean
+  boardId?: string
+  primaryPath?: string
+}
 export interface AgentWorkspaceResponseDto {
   sourceId: string
   features: AgentWorkFeatureDto[]
+  projects: AgentWorkProjectDto[]
   boards: AgentWorkBoardDto[]
   selectedBoard?: string
   tasks: AgentWorkTaskDto[]
