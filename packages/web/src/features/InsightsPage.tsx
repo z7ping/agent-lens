@@ -230,7 +230,7 @@ export function InsightsPage({ model, toolbarHost }: { model: AgentLensClientMod
                 title={metric ? t('page.radarTooltip', {
                   ready: metric.readySessions, eligible: metric.eligibleSessions,
                   verified: metric.totals.errorCount, observed: metric.observed?.errorCount ?? 0,
-                }) : t('page.radarUnavailable')}
+                }) : radar === null && !radarUnavailable ? t('page.radarLoading') : t('page.radarUnavailable')}
                 onClick={() => model.setUsageFilters({ sourceIds: [agent.sourceId] })}>
                 <span className="insight-agent-radar-identity">
                   <AgentLogo sourceId={agent.sourceId} size="compact"/>
