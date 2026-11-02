@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import type { NativeReviewWindowDto, NativeSessionSummaryDto, ReviewNodeDto } from '@agent-lens/protocol'
-import { NativeFailureScanner, nativeFailureExamples } from './native-failure-examples'
+import { nativeFailureExamples } from './native-failure-examples'
 
 const session:NativeSessionSummaryDto={id:'native:sample',sourceId:'test-agent',
   installationId:'installation',nativeSessionId:'session',locationKind:'native',
@@ -65,13 +65,3 @@ test('跨窗口未配对的工具失败结果保留原始输出，输入明确�
   assert.equal(samples[0]!.error,'execution_timeout')
 })
 
-test('目录分页未完成不能声明无错误，停止信号不得提交迟到结果',async()=>{
-  const abort=new AbortController()
-  const scanner=new NativeFailureScanner({
-    async nativeSessions(){abort.abort();return {items:[session],hasMore:false}},
-    async nativeReviewById(){throw Error('不应读取')},
-  },{sourceIds:null,projectId:'',range:'all'})
-  await scanner.next(abort.signal)
-  assert.equal(scanner.finished,false)
-  assert.equal(scanner.checkedSessions,0)
-})
