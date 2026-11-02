@@ -79,7 +79,7 @@ test('精简运行时显示真实采集状态、包管理缺失与授权结果',
   assert.match(page, /managementPage\.packageLifecycleUnavailableHint/)
   assert.match(page, /managementPage\.authorizationSaved/)
   assert.match(page, /managementPage\.authorizationRefreshFailed/)
-  assert.doesNotMatch(page, /refreshIntegrationManagement\(\)\.catch\(\(\) => undefined\)/)
+  assert.match(page, /await model\.refreshIntegrationManagement\(\)/)
 })
 
 test('授权状态常驻；仅真实待授权出现按钮，禁用接入不能越权授权', () => {
