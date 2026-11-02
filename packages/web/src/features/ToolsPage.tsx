@@ -550,7 +550,7 @@ export function ToolsPage({ model, toolbarHost }: { model: AgentLensClientModel;
             <div className="tool-drill-stat"><b>{activeNativeTool.resultCount}</b><span>{t('page.nativeResults')}</span></div>
             <button type="button" className="tool-drill-stat tool-drill-stat-action"
               disabled={activeNativeTool.errorCount===0}
-              onClick={()=>failureSamplesRef.current?.scrollIntoView({block:'start',behavior:'smooth'})}
+              onClick={()=>{failureSamplesRef.current?.scrollIntoView({block:'start'});failureSamplesRef.current?.focus({preventScroll:true})}}
               title={t('page.failureScene')}>
               <b className={activeNativeTool.errorCount>0?'cell-danger':''}>{activeNativeTool.errorCount}</b>
               <span>{t('page.failureCount')}</span>
@@ -561,7 +561,7 @@ export function ToolsPage({ model, toolbarHost }: { model: AgentLensClientModel;
           </div>
           {nativeDetailLoading&&<div className="tool-drill-note">{t('page.loadingSessions')}</div>}
           {nativeDetailError&&<div className="tool-drill-note">{nativeDetailError}</div>}
-          <div ref={failureSamplesRef} className="tool-native-failure-target">
+          <div ref={failureSamplesRef} tabIndex={-1} className="tool-native-failure-target">
             <NativeFailureExamples filters={{...usage.filters,sourceIds:[activeNativeTool.sourceId]}}
               toolName={activeNativeTool.nativeToolName}/>
           </div>
