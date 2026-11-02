@@ -121,6 +121,9 @@ export const englishInsightsToolsMessages: LocaleMessagesDto = {
   },
   tools: {
     failures: {
+      repeatedSampleTitle:'Identical errors in scanned samples',
+      repeatedSampleNote:'Exact text matches in the bounded sample only; not a global failure rate or root cause.',
+      repeatedSampleCount:'{{count}} in sample',
       title:'Failure examples',
       description:'Read confirmed failures on demand from native sessions using the current agent, project and session activity range. Examples stay in this view’s memory; they do not establish a root cause or final task failure.',
       scan:'Find failures',continue:'Continue search',stop:'Stop search',
