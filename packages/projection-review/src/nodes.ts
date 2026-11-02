@@ -183,7 +183,8 @@ export function buildNodes(items: TimelineItemDto[], registry = new ToolRegistra
         at: item.effectiveAt,
         sourceId: item.sourceId,
         ...reviewNodeSource(item),
-        text: text ?? (hasDisplayableAttachment ? '' : '（无可显示文本）'),
+        // 不可见思考仍保留节点和证据，以打断工具分组，但不制造正文。
+        text: text ?? (hasDisplayableAttachment || item.kind === 'message.reasoning' ? '' : '（无可显示文本）'),
         ...(attachments.length ? { attachments } : {}),
         payload: lightweightMessagePayload(item.payload),
         evidence: item.evidence,

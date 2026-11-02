@@ -17,6 +17,21 @@ function fragment(id: string, semanticId: string, kind: 'answer' | 'tool' | 'com
   }
 }
 
+test('Live 已结束的空思考不显示且保持两侧工具分组边界', () => {
+  const items = [
+    { id: 'request', kind: 'message' as const, role: 'user' as const, text: '检查文件', streaming: false },
+    { id: 'before', kind: 'tool' as const, callId: 'before', name: 'read', status: 'success' as const },
+    { id: 'empty-thinking', kind: 'thinking' as const, text: '', streaming: false },
+    { id: 'after', kind: 'tool' as const, callId: 'after', name: 'read', status: 'success' as const },
+  ]
+  const html = renderToStaticMarkup(createElement(GenericLiveRound, {
+    projection: projectLiveTaskRounds(items)[0]!, agentLabel: 'Agent', eager: true,
+    messageActions: [], actionPending: null, runtimeStreaming: false, onMessageAction: () => undefined,
+  }))
+  assert.equal((html.match(/data-tool-fact="true"/g) ?? []).length, 2)
+  assert.doesNotMatch(html, /task-process-thinking-card|empty-thinking/)
+})
+
 test('同一个长轮次跨虚拟块只把操作放在最后一段可读答复', () => {
   const items = [
     fragment('a', 'semantic:1', 'answer'),

@@ -157,6 +157,7 @@ async function readCompleteNativeTurn(
   const observationCursors: string[] = []
   const evidenceCandidates: EvidenceCandidate[] = []
   const pendingTools = new Set<string>()
+  let turnSettled = false
   let current = initial
   let pages = 0
   let bytes = 0
@@ -276,6 +277,16 @@ async function readCompleteNativeTurn(
         const callId = toolCallId(item)
         if (item.kind === 'tool.call' && callId) pendingTools.add(callId)
         if (item.kind === 'tool.result' && callId) pendingTools.delete(callId)
+        if (item.kind === 'tool.call' || item.kind === 'message.user') turnSettled = false
+        if (item.kind === 'session.lifecycle' && item.payload
+          && typeof item.payload === 'object' && !Array.isArray(item.payload)) {
+          const payload = item.payload as Record<string, unknown>
+          const event = payload.event ?? payload.action
+          if (event === 'turn.started') turnSettled = false
+          if (['turn.completed', 'turn.stopped', 'turn.aborted', 'turn.error'].includes(String(event))) {
+            turnSettled = true
+          }
+        }
       }
       lastRecordStart = cursor
       index = last
@@ -283,10 +294,10 @@ async function readCompleteNativeTurn(
     pages++
     if (current.pendingTail) return finish(current.nextCursor, false, true)
     if (!current.hasMore) {
-      // EOF is not proof that a running tool settled. A continued fragment
-      // may also have an unresolved call in an earlier fragment.
+      // 跨页 EOF 本身不证明结束；明确的原生结算事件可解除分片状态。
+      // 没有结算事件时，前一片仍可能持有未返回的调用。
       return finish(current.nextCursor, false,
-        pendingTools.size > 0 || Boolean(query.cursor && 'turnStart' in query.cursor))
+        pendingTools.size > 0 || (Boolean(query.cursor && 'turnStart' in query.cursor) && !turnSettled))
     }
     if (pages >= MAX_REVIEW_PAGES || observations.length >= MAX_REVIEW_OBSERVATIONS
       || bytes >= MAX_REVIEW_INPUT_BYTES) {

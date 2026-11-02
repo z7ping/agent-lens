@@ -13,7 +13,7 @@ import { assistantMessageProvenance, contextClassification } from './provenance'
 
 // Increment whenever a persisted Codex wire shape gains a new semantic
 // projection so existing SourceRecords are replayed through the adapter.
-export const CODEX_CURRENT_PARSER_VERSION = '23'
+export const CODEX_CURRENT_PARSER_VERSION = '24'
 
 const NON_ACTIVITY_ROLLOUT_TYPES = new Set([
   'world_state',

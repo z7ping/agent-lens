@@ -16,6 +16,22 @@ const page = {
   nextCursor: 'opaque-cursor',
 }
 
+test('不可见思考保留原生证据节点，不伪造占位正文', () => {
+  const result = projectNativeReviewWindow({
+    ...page, observations: [candidate('message.reasoning', 1, { summaryAvailable: false })],
+    observationRecordIds: ['reasoning-record'],
+    evidenceCandidates: [{ sourceRecordId: 'reasoning-record', capturedAt: at,
+      captureMethod: 'native-log', derivation: 'reported', confidenceHint: 'exact' }],
+  })
+  const node = result.interactions[0]?.nodes[0]
+  assert.equal(node?.type, 'message')
+  if (node?.type !== 'message') return
+  assert.equal(node.role, 'reasoning')
+  assert.equal(node.text, '')
+  assert.equal(node.evidence.length, 1)
+  assert.equal(node.observationIds.length, 1)
+})
+
 test('同一原生消息身份的双记录合并展示并保留证据，独立消息不按文本去重', () => {
   const message = (sequence: number, nativeEventId?: string): ObservationCandidate => ({
     ...candidate('message.assistant', sequence, {text:'相同回复',phase:'final_answer'}),

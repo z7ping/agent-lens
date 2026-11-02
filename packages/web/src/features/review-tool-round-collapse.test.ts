@@ -3,10 +3,24 @@ import test from 'node:test'
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import type { ReviewMessageNodeDto, ReviewToolNodeDto } from '@agent-lens/protocol'
-import { ReviewProcessGroup } from './ReviewRoundPresentation'
+import { ReviewProcessGroup, ReviewRoundAdapter } from './ReviewRoundPresentation'
+import { agentLensI18n } from '../i18n/runtime'
 import type { ReviewProcessPresentationItem } from './review-interaction-presentation'
 
 const at = '2026-10-19T12:00:00.000Z'
+
+test('尚未读完的历史轮次不宣告最终回复缺失', () => {
+  const render = (contentIncomplete: boolean) => renderToStaticMarkup(createElement(ReviewRoundAdapter, {
+    sessionId: 'native-session', contentIncomplete,
+    interaction: { id: 'same-turn', ordinal: 1, trigger: 'user', startedAt: at, endedAt: at, nodes: [tool(1)] },
+    round: { id: 'same-turn', label: '轮次', state: 'settled', toolCount: 1, errorCount: 0, durationMs: 0, highLatency: false },
+    inspect: () => undefined, loadAttachments: async () => [], loadProcess: async () => null,
+    expansionStore: new Map(), showAllEvents: false, onShowAllEvents: () => undefined,
+  }))
+  const missing = agentLensI18n.t('review:local.process.missingFinalAnswer')
+  assert.equal(render(true).includes(missing), false)
+  assert.equal(render(false).includes(missing), true)
+})
 
 function tool(index: number): ReviewToolNodeDto {
   return {

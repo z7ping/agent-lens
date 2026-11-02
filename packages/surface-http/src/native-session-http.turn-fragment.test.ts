@@ -322,3 +322,44 @@ test('a giant record in a subsequent wide page narrows to one SourceRecord befor
     await new Promise<void>(resolve=>server.close(()=>resolve()))
   }
 })
+
+
+for (const terminal of ['turn.completed', 'turn.aborted', undefined, 'turn.started']) {
+  test(`跨页尾轮只有明确结算才能完成：${terminal ?? '没有结束事件'}`, async () => {
+    const continuedRows: ObservationCandidate[] = [
+      { kind: 'message.assistant', capturedAt: timestamp, payload: { text: '最终答复' } },
+      ...(terminal ? [{ kind: 'session.lifecycle' as const, capturedAt: timestamp, payload: { event: terminal } }] : []),
+    ]
+    const reader: NativeSessionWindowReader = { async read() {
+      return {
+        state: 'available', observations: continuedRows,
+        observationRecordIds: continuedRows.map((_, index) => `record-${index + 10}`),
+        observationCursors: continuedRows.map((_, index) => ({ offset: index + 10, sequence: index + 10, fileIdentity })),
+        evidenceCandidates: [], nextCursor: { offset: 10 + continuedRows.length, sequence: 10 + continuedRows.length, fileIdentity },
+        hasMore: false, pendingTail: false,
+      }
+    } }
+    const server = createServer((request, response) => {
+      void handleNativeSessionWindowRequest(request, response,
+        new URL(request.url ?? '/', 'http://127.0.0.1'), reader)
+        .catch(error => { response.statusCode = 500; response.end(String(error)) })
+    })
+    await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve))
+    try {
+      const address = server.address()
+      assert.ok(address && typeof address !== 'string')
+      const cursor = encodeNativeSessionCursor({ offset: 10, sequence: 10, fileIdentity,
+        mode: 'review-turns', turnOrdinal: 1, turnStart: 0 })
+      const response = await fetch(`http://127.0.0.1:${address.port}/api/v1/native-sessions/window?sourceId=codex&installationId=inst&nativeSessionId=session&format=review-turns&cursor=${cursor}`)
+      const page = await response.json() as NativeReviewWindowDto
+      assert.equal(response.status, 200)
+      assert.equal(page.hasMore, false)
+      const settled = terminal === 'turn.completed' || terminal === 'turn.aborted'
+      assert.equal(page.turnFragment, settled ? 'complete' : 'partial')
+      assert.equal(page.pendingTail, !settled)
+      assert.equal(decodeNativeSessionCursor(page.nextCursor)?.turnOrdinal, settled ? 2 : 1)
+    } finally {
+      await new Promise<void>(resolve => server.close(() => resolve()))
+    }
+  })
+}

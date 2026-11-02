@@ -96,16 +96,6 @@
   text-align: center;
 }
 .detail-load-sentinel-top { min-height: 40px; border-bottom: 1px solid var(--al-line); }
-.detail-load-sentinel button {
-  min-height: 28px;
-  padding: 0 10px;
-  border: 1px solid var(--al-line);
-  border-radius: 7px;
-  background: var(--al-surface);
-  color: var(--al-ink-2);
-  font-size: 12px;
-}
-.detail-load-sentinel button:hover { border-color: var(--al-line-strong); background: var(--al-soft); }
 
 /* 会话尾部只保留 Review 布局间距；组件本身统一由 components/task-continuation.css 负责。 */
 .review-page .task-session-tail-actions-host {

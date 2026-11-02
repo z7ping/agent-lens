@@ -151,14 +151,14 @@ test('Paginated CommandExecution becomes one tool call/result pair', async () =>
   const [call, result] = output.observations
   const callPayload = asRecord(call?.payload)
   const resultPayload = asRecord(result?.payload)
-  assert.equal(call?.nativeEventId, 'command-item-1')
-  assert.equal(result?.nativeEventId, 'command-item-1')
+  assert.equal(call?.nativeEventId, undefined)
+  assert.equal(result?.nativeEventId, undefined)
   assert.equal(callPayload.nativeToolName, 'command_execution')
-  assert.equal(callPayload.callId, undefined)
-  assert.equal(call?.nativeCallId, undefined)
-  assert.equal(result?.nativeCallId, undefined)
-  assert.equal(call?.dedupHints?.sharedEventKey, 'codex-call:r-1')
-  assert.equal(result?.dedupHints?.sharedEventKey, 'codex-call:r-1')
+  assert.equal(callPayload.callId, 'codex-item:["turn-1","command-item-1"]')
+  assert.equal(call?.nativeCallId, callPayload.callId)
+  assert.equal(result?.nativeCallId, callPayload.callId)
+  assert.equal(call?.dedupHints?.nativeCallId, callPayload.callId)
+  assert.equal(result?.dedupHints?.nativeCallId, callPayload.callId)
   assert.equal(resultPayload.success, true)
   assert.equal(resultPayload.output, 'all tests passed')
   assert.equal(resultPayload.turnId, 'turn-1')
@@ -175,6 +175,32 @@ test('Paginated FunctionCallOutput is a tool result instead of raw background ac
   assert.equal(fact.nativeEventId, 'function-output-1')
   assert.equal(payload.nativeToolName, 'read_file')
   assert.equal(payload.namespace, 'workspace')
+  assert.equal(fact.nativeCallId, undefined, '独立结果 id 不等于调用 id')
+})
+
+test('无 call_id 的已完成操作按轮次和 item.id 配对，显式 call_id 优先', async () => {
+  for (const item of [
+    { type: 'CommandExecution', id: 'same-item', command: ['echo', 'ok'], status: 'completed', exit_code: 0 },
+    { type: 'McpToolCall', id: 'same-item', tool: 'read', status: 'completed', result: { ok: true } },
+    { type: 'Extension', kind: 'web.search', id: 'same-item', results: [] },
+  ]) {
+    const output = await normalizePaginatedCodexRecord(itemCompleted(item), ctx)
+    assert.ok(output)
+    const [call, result] = output.observations
+    assert.equal(call?.kind, 'tool.call')
+    assert.equal(result?.kind, 'tool.result')
+    assert.ok(call?.nativeCallId)
+    assert.equal(call.nativeCallId, result?.nativeCallId)
+    const other = itemCompleted(item)
+    asRecord(asRecord(other.payload).entry).payload = {
+      type: 'item_completed', turn_id: 'turn-2', item,
+    }
+    const next = await normalizePaginatedCodexRecord(other, ctx)
+    assert.notEqual(next?.observations[0]?.nativeCallId, call.nativeCallId)
+    const explicit = await normalizePaginatedCodexRecord(itemCompleted({ ...item, call_id: 'original-call' }), ctx)
+    assert.equal(explicit?.observations[0]?.nativeCallId, 'original-call')
+    assert.equal(explicit?.observations[1]?.nativeCallId, 'original-call')
+  }
 })
 
 test('Paginated CollabAgentToolCall remains a visible tool operation', async () => {
