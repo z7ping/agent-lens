@@ -167,11 +167,8 @@ export class SqliteNativeSessionMetrics implements NativeSessionMetricsStore {
       if(query.from){where.push('e.occurred_at>=?');params.push(query.from)}
       if(query.to){where.push('e.occurred_at<=?');params.push(query.to)}
       if(query.search){
-        // Literal substring search: escape LIKE wildcard characters.
-        where.push(`(e.summary LIKE ? ESCAPE '\\' OR e.error_code LIKE ? ESCAPE '\\'
-          OR e.tool_name LIKE ? ESCAPE '\\')`)
-        const escaped=query.search.replace(/[\\%_]/g, match => '\\\\'+match)
-        params.push(...Array(3).fill(`%${escaped}%`))
+        where.push('(instr(lower(e.summary),lower(?))>0 OR instr(lower(e.error_code),lower(?))>0 OR instr(lower(e.tool_name),lower(?))>0)')
+        params.push(query.search,query.search,query.search)
       }
       const base=`FROM native_error_index e
         JOIN native_session_metrics m ON m.source_id=e.source_id
