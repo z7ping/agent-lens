@@ -131,7 +131,7 @@ export const chineseInsightsToolsMessages: LocaleMessagesDto = {
       pageRange:'{{from}}–{{to}} / {{total}}',
       previous:'上一页',next:'下一页',search:'搜索错误',
       selectAgent:'请选择单个智能体',
-      sameFingerprint:'同类错误指纹',
+      sameFingerprint:'查看同类错误',clearFingerprint:'清除同类筛选',
 
       description:'按当前智能体、项目和会话活跃时间范围，从原生记录按需读取明确失败。样本只在当前视图内存中保留；用于复盘，不自动认定根因或任务最终失败。',
       scan:'查找错误样本',continue:'继续扫描',stop:'停止查找',pause:'暂停扫描',
