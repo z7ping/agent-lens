@@ -14,7 +14,7 @@ const CHILDREN_STEP = 80
 type StatusFilter = PreviewFileStatus | 'all'
 
 function markedName(label: string, query: string): ReactNode {
-  const needle = query.trim().toLocaleLowerCase()
+  const needle = query.trim().replace(/\\/g, '/').toLocaleLowerCase()
   const index = label.toLocaleLowerCase().indexOf(needle)
   if (!needle || index < 0) return label
   return <>{label.slice(0, index)}<mark>{label.slice(index, index + needle.length)}</mark>{label.slice(index + needle.length)}</>
