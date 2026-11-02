@@ -54,7 +54,7 @@ export function NativeFailureExamples({filters,toolName}: {filters:QueryFilters;
         setError('')
         // The existing lazy metric refresh runs server-side. Poll only while
         // unindexed sessions remain, without inserting a second Source scanner.
-        if(result.readySessions<result.eligibleSessions){
+        if(result.indexedSessions<result.eligibleSessions){
           timer=setTimeout(()=>{void load()},4000)
         }
       }catch(reason){
@@ -89,10 +89,10 @@ export function NativeFailureExamples({filters,toolName}: {filters:QueryFilters;
   return <section className="native-failure-examples" aria-label={t('failures.title')}>
     <div className="native-failure-scan-bar">
       <span className="native-failure-scan-status" role="status" aria-live="polite">
-        <StatusBadge dot tone={data&&data.readySessions<data.eligibleSessions?'warning':'neutral'}>
-          {data&&data.readySessions<data.eligibleSessions?t('failures.indexing'):t('failures.indexed')}
+        <StatusBadge dot tone={data&&data.indexedSessions<data.eligibleSessions||data.partialSessions>0?'warning':'neutral'}>
+          {data&&data.indexedSessions<data.eligibleSessions||data.partialSessions>0?t('failures.indexing'):t('failures.indexed')}
         </StatusBadge>
-        {data&&<span>{t('failures.indexCoverage',{ready:data.readySessions,eligible:data.eligibleSessions})}</span>}
+        {data&&<span>{t('failures.indexCoverage',{ready:data.indexedSessions,eligible:data.eligibleSessions})}</span>}
         {data&&<b>{t('failures.samples',{count:data.total})}</b>}
       </span>
       <Toolbar aria-label={t('failures.title')}>
