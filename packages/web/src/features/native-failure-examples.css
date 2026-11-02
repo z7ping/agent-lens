@@ -30,3 +30,9 @@
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
 }
+
+.native-failure-repeats { margin: 14px 0; border-top: 1px solid var(--al-line); padding-top: 12px; }
+.native-failure-repeat { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; border-top: 1px solid var(--al-line); padding: 9px 0; }
+.native-failure-repeat > span { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.native-failure-repeat small { overflow-wrap: anywhere; color: var(--al-muted); font-size: 12px; }
+.native-failure-repeat > b { flex: none; font-size: 12px; color: var(--al-muted); }
