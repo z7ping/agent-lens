@@ -17,7 +17,7 @@ test('slim v3 is a separate fresh schema without old event or replication tables
     const actual = (db.prepare(`SELECT name FROM sqlite_master
       WHERE type='table' AND name NOT LIKE 'sqlite_%'`).all() as { name: string }[])
       .map(row => row.name)
-    assert.equal(actual.length, 19)
+    assert.equal(actual.length, 20)
     for (const forbidden of FORBIDDEN_LEGACY_TABLES) {
       assert.equal(actual.includes(forbidden), false, forbidden)
     }
