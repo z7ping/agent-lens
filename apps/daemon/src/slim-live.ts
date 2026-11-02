@@ -61,7 +61,9 @@ export async function startSlimLive(
     if(enabled('hermes')){
       const config=await resolveHermesApiClientConfig({})
       const client=new HermesApiClient(config)
-      const adapter=new HermesLiveAdapter(new DefaultHermesLiveService(client))
+      const adapter=new HermesLiveAdapter(new DefaultHermesLiveService(
+        client,async()=>client.reconfigure(await resolveHermesApiClientConfig({})),
+      ))
       hermesSetup=async()=>{
         await initializeLocalHermesApi()
         client.reconfigure(await resolveHermesApiClientConfig({}))
