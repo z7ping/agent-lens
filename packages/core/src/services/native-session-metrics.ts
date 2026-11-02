@@ -4,7 +4,7 @@
  * IDs, prompts, arguments, outputs, raw errors, evidence, or payload JSON.
  */
 /** A projection rule change requires rebuilding the affected Source sessions. */
-export const NATIVE_SESSION_METRIC_PROJECTION_VERSION='native-source-metrics-v2'
+export const NATIVE_SESSION_METRIC_PROJECTION_VERSION='native-source-metrics-v3'
 
 export interface NativeSessionMetricOverviewQuery {
   sourceId:string
@@ -92,6 +92,27 @@ export interface NativeSessionMetricTool {
 }
 
 /** Explicit, compact, recomputable source error fact; NEVER raw event output. */
+export interface NativeErrorIndexQuery {
+  sourceId:string
+  parserVersion:string
+  projectId?:string
+  toolName?:string
+  from?:string
+  to?:string
+  search?:string
+  limit:number
+  offset:number
+}
+export interface NativeErrorIndexResult {
+  total:number
+  hasMore:boolean
+  items:Array<NativeErrorIndexEntry & {
+    sessionId:string
+    sourceId:string
+    coverage:'complete'|'partial'
+  }>
+}
+
 export interface NativeErrorIndexEntry {
   eventKey:string
   occurredAt:string
@@ -136,6 +157,8 @@ export type NativeSessionMetricReadResult =
 export interface NativeSessionMetricsStore {
   /** Atomically replace the derived snapshot only for a Catalog-matching revision. */
   replace(snapshot: NativeSessionMetricSnapshot, errors?: readonly NativeErrorIndexEntry[]): Promise<boolean>
+  /** Indexed source-only errors; query scope must match the current parser. */
+  queryErrors?(query:NativeErrorIndexQuery):Promise<NativeErrorIndexResult>
   /** Never serve stale metrics as current after a known source revision change. */
   get(identity: {
     sourceId: string; installationId: string; nativeSessionId: string
