@@ -214,15 +214,40 @@ test('runtime availability error is presented only after Installed/Detected/Enab
   )
 })
 
-test('missing Package Lifecycle remains unknown instead of pretending uninstalled', () => {
+test('slim runtime without Package Lifecycle reports actual Source state, never a fake package error', () => {
   const item = management({
     tool: discovery('present'),
     packageState: null,
+    capabilities: [{ capability: 'live', availability: 'unavailable', authorization: 'granted' }],
   })
 
+  assert.equal(integrationManagementLifecycleState(item, t).label, 'status.enabled')
+  assert.equal(integrationLifecycleState(undefined, item, item.tool, false, t).label, 'status.enabled')
+  assert.equal(integrationAuthorizationSummary(item.capabilities).phase, 'granted')
+
+  const disabled = management({
+    ...item,
+    enabled: { ...item.enabled, configured: false, effective: false },
+    availability: 'unavailable',
+  })
+  assert.equal(integrationManagementLifecycleState(disabled, t).label, 'status.disabled')
+  assert.equal(integrationLifecycleState(undefined, disabled, disabled.tool, false, t).label, 'status.disabled')
+
+  const restart = management({
+    ...item,
+    enabled: { ...item.enabled, configured: false, effective: true, restartRequired: true },
+  })
+  assert.equal(integrationManagementLifecycleState(restart, t).label, 'status.pendingRestart')
+
+  const unavailable = management({ ...item, availability: 'unavailable' })
+  assert.equal(integrationManagementLifecycleState(unavailable, t).label, 'status.unavailable')
+
+  const failed = management({ ...item, availability: 'error' })
+  assert.equal(integrationManagementLifecycleState(failed, t).label, 'status.abnormal')
+
   assert.equal(
-    integrationLifecycleState(undefined, item, item.tool, false, t).label,
-    'status.managementUnavailable',
+    integrationLifecycleState(undefined, item, discovery('absent'), false, t).label,
+    'status.notDetected',
   )
 })
 

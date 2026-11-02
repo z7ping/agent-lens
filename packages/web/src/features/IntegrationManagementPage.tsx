@@ -46,6 +46,7 @@ function isDetected(item: IntegrationManagementItemDto): boolean {
 
 function isPrimaryRow(item: IntegrationManagementItemDto): boolean {
   return Boolean(item.packageState?.installed)
+    || (item.packageState === null && item.enabled.effective)
     || isDetected(item)
     || item.tool?.presence === 'error'
 }
@@ -179,9 +180,15 @@ function IntegrationManagementDetail({
     if (!authorization.pending.length || !item.enabled.configured || saving) return
     setSaving(true)
     setError('')
+    setUpdateNotice('')
     try {
       await model.authorizeIntegration(item.productId, authorization.pending)
-      await model.refreshIntegrationManagement().catch(() => undefined)
+      setUpdateNotice(t('managementPage.authorizationSaved'))
+      try {
+        await model.refreshIntegrationManagement()
+      } catch {
+        setError(t('managementPage.authorizationRefreshFailed'))
+      }
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : String(cause))
     } finally {
@@ -274,14 +281,14 @@ function IntegrationManagementDetail({
           <div className="integration-management-fact">
             <span>{t('installation.integrationVersion')}</span>
             <strong>{!packageState
-              ? t('installation.versionUnavailable')
+              ? t('managementPage.packageVersionUnmanaged')
               : !packageState.installed
                 ? t('installation.notAdded')
                 : packageState.installedVersion || t('installation.versionUnavailable')}</strong>
           </div>
           <div className="integration-management-fact">
             <span>{t('managementPage.availableIntegrationVersion')}</span>
-            <strong>{packageState?.availableVersion || t('installation.versionUnavailable')}</strong>
+            <strong>{!packageState ? t('managementPage.packageVersionUnmanaged') : packageState.availableVersion || t('installation.versionUnavailable')}</strong>
           </div>
         </div>
 
@@ -361,6 +368,7 @@ function IntegrationManagementDetail({
           </div>
         </div>
 
+        {!packageState && <p className="integration-management-note" role="status">{t('managementPage.packageLifecycleUnavailableHint')}</p>}
         <div className="integration-management-actions" aria-label={t('managementPage.actionsLabel')}>
           <div className="integration-management-actions-info">
             <span className="integration-management-actions-label">{t('managementPage.actionsLabel')}</span>
@@ -558,6 +566,8 @@ export function IntegrationManagementPage({ model, toolbarHost }: { model: Agent
   const supportedItems = discoveryFailed ? [] : filteredItems.filter(item => !isPrimaryRow(item))
   const detectedCount = items.filter(isDetected).length
   const installedCount = items.filter(item => item.packageState?.installed).length
+  // Package lifecycle may be absent in the slim runtime: unknown is not zero.
+  const packageLifecycleComplete = items.every(item => item.packageState !== null)
   const enabledCount = items.filter(item => item.enabled.configured).length
   const selectedItem = filteredItems.find(item =>
     item.integrationId === targetIntegrationId || item.productId === targetIntegrationId
@@ -593,7 +603,7 @@ export function IntegrationManagementPage({ model, toolbarHost }: { model: Agent
           <SelectMenu value={statusFilter} onChange={value => { setStatusFilter(value as typeof statusFilter); setOrdering(false) }} ariaLabel={t('managementPage.statusFilterAria')} options={[
             { value: 'all', label: t('managementPage.allStatuses') },
             { value: 'detected', label: t('managementPage.detected') },
-            { value: 'installed', label: t('managementPage.added') },
+            ...(packageLifecycleComplete ? [{ value: 'installed', label: t('managementPage.added') }] : []),
             { value: 'enabled', label: t('managementPage.enabled') },
           ]}/>
         </div>
@@ -641,7 +651,7 @@ export function IntegrationManagementPage({ model, toolbarHost }: { model: Agent
             </div>
             <div className="integration-management-summary" aria-label={t('managementPage.summaryAria')}>
               <span><strong>{discoveryFailed ? '—' : detectedCount}</strong> {t('managementPage.detected')}</span>
-              <span><strong>{installedCount}</strong> {t('managementPage.added')}</span>
+              <span title={!packageLifecycleComplete ? t('managementPage.packageLifecycleUnavailableHint') : undefined}><strong>{packageLifecycleComplete ? installedCount : '—'}</strong> {t('managementPage.added')}</span>
               <span><strong>{enabledCount}</strong> {t('managementPage.enabled')}</span>
             </div>
             <nav className="integration-management-navigator-list" aria-label={t('managementPage.agentListAria')}>

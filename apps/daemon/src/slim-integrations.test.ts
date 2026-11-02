@@ -34,6 +34,7 @@ test('Slim Integration management reuses persisted preferences, source policy an
     assert.deepEqual(integrations.authorization.available('unknown'),[])
     const before=await integrations.management.query()
     const pi=before.items.find(item=>item.integrationId==='pi')
+    assert.equal(pi?.packageState, null) // Slim mode has no independent Integration package lifecycle
     assert.equal(pi?.enabled.effective,true)
     assert.equal(pi?.enabled.editable,true)
     assert.equal(pi?.capabilities.find(x=>x.capability==='live')?.authorization,'required')
