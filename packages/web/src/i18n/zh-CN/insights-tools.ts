@@ -121,6 +121,9 @@ export const chineseInsightsToolsMessages: LocaleMessagesDto = {
   },
   tools: {
     failures: {
+      repeatedSampleTitle:'样本内重复的相同错误',
+      repeatedSampleNote:'仅统计已读取样本中错误文本完全相同的次数，不代表全量故障频率或共同根因。',
+      repeatedSampleCount:'样本中 {{count}} 次',
       title:'错误样本',
       description:'按当前智能体、项目和会话活跃时间范围，从原生记录按需读取明确失败。样本只在当前视图内存中保留；用于复盘，不自动认定根因或任务最终失败。',
       scan:'查找错误样本',continue:'继续查找',stop:'停止查找',
