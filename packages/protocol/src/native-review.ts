@@ -146,6 +146,10 @@ export type NativeMetricContributionDto =
         resultCount:number
         errorCount:number
         sessionCount:number
+        /** Only set for actually observed tool-result duration samples. */
+        durationSampleCount?:number
+        averageDurationMs?:number|null
+        maxDurationMs?:number|null
       }>
       toolsTruncated?:boolean
     }
