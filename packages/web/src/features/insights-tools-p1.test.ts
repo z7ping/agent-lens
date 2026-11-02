@@ -45,7 +45,7 @@ test('native error samples preserve verified round navigation and virtual anchor
     source('./TaskSurface.tsx'),
     source('../client/useReviewUrlSync.ts'),
   ])
-  assert.match(failures,/focusTurn=\$\{encodeURIComponent\(String\(example\.ordinal\)\)\}/)
+  assert.match(failures,/focusTurn=\$\{encodeURIComponent\(String\(active\.ordinal\)\)\}/)
   assert.match(review,/focusTurnTarget=\{/)
   assert.match(session,/jumpToReviewInteraction\(item\.ordinal\)/)
   assert.match(surface,/pendingTurnRailTargetRef\.current=\{id:focusTurnTarget\.key,ordinal:focusTurnTarget\.ordinal\}/)
@@ -74,5 +74,52 @@ test('native statistics show compact status and date basis without repeated expl
     assert.match(translations,/nativePartialStatus:/)
     assert.match(translations,/nativeCompleteStatus:/)
     assert.match(translations,/nativeObservedShort:/)
+  }
+})
+
+test('failure workbench is two-pane, scans automatically in bounded batches and retains native evidence',async()=>{
+  const [view,scanner,css]=await Promise.all([
+    source('./NativeFailureExamples.tsx'),
+    source('./native-failure-examples.ts'),
+    source('./native-failure-examples.css'),
+  ])
+  assert.match(view,/void scan\(\)/)
+  assert.match(view,/const AUTO_SCAN_BUDGET = 80/)
+  assert.match(view,/const SCAN_BATCH_SIZE = 4/)
+  assert.match(view,/setTimeout\(resolve,0\)/)
+  assert.match(view,/controller\.current\?\.abort\(\)/)
+  assert.match(view,/scanner\.finished\|\|scanner\.capped/)
+  assert.match(view,/scanBudgetReached:budgetReached/)
+  assert.match(view,/setSelectedId\(key\)/)
+  assert.match(view,/className="native-failure-split"/)
+  assert.match(view,/className="native-failure-list-pane"/)
+  assert.match(view,/className="native-failure-detail-pane"/)
+  assert.match(view,/active\.evidenceIds\.length/)
+  assert.match(view,/active\.truncated\|\|active\.contextPartial/)
+  assert.match(scanner,/const MAX_EXAMPLES = 20/)
+  assert.match(scanner,/turnLimit:2/)
+  assert.match(css,/grid-template-columns: minmax\(280px, 35fr\) minmax\(0, 65fr\)/)
+  assert.match(css,/@media \(max-width: 1199\.98px\)/)
+  assert.doesNotMatch(view,/<Drawer/)
+  assert.doesNotMatch(view,/scanner\.next\([^)]*\)\.then\(/)
+})
+
+test('native statistics navigate to failure reading while unverified counters stay distinct',async()=>{
+  const [insights,tools,styles,zh,en]=await Promise.all([
+    source('./InsightsPage.tsx'),
+    source('./ToolsPage.tsx'),
+    source('../insights.css'),
+    source('../i18n/zh-CN/insights-tools.ts'),
+    source('../i18n/en-US/insights-tools.ts'),
+  ])
+  assert.match(insights,/onClick=\{\(\)=>navigate\('\/tools\?view=failures'\)\}/)
+  assert.match(tools,/failureSamplesRef\.current\?\.scrollIntoView/)
+  assert.match(tools,/activeNativeTool\.errorCount===0/)
+  assert.match(styles,/\.insight-kpi-action\.is-failure > strong/)
+  assert.doesNotMatch(insights,/verifiedNative\.observed\.errorCount\}<\/strong>\s*<\/button>/)
+  for(const content of [zh,en]){
+    for(const field of ['budgetReached','paused','partialShort','samples','details','selectExample']){
+      assert.ok(content.includes(field+':'),field)
+    }
   }
 })
