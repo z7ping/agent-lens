@@ -312,6 +312,17 @@ export const chineseTaskMessages: LocaleMessagesDto = {
         agentUnavailableReason: '{{agent}} 不可用 · {{reason}}',
         agentUnavailableShort: '当前不可用',
         openIntegrationManagement: '前往接入管理',
+        hermesSetup: {
+          open: '一键启用 Hermes Live',
+          check: '重新检测',
+          title: '初始化 Hermes Live',
+          description: 'AgentLens 将在你的确认后修改本机 Hermes 配置，不会关闭认证或读取并展示密钥。',
+          hint: '可以自动启用本机 API 并生成或复用访问密钥。',
+          needsGateway: '配置已保存。请重启 Hermes Gateway，然后点击“重新检测”。',
+          scope: '仅修改本机 Hermes .env 的 API_SERVER_ENABLED 和必要的 API_SERVER_KEY；不会修改远程服务、已有密钥或其他 Profile。',
+          cancel: '取消',
+          confirm: '确认初始化',
+        },
         unregisteredLive: {
           'not-installed': '{{agent}} 集成包未安装，请在接入管理中安装。',
           'needs-update': '{{agent}} 集成包需要修复或升级，请在接入管理中更新。',
