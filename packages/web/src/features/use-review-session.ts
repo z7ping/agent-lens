@@ -670,8 +670,9 @@ export function useReviewSession(model: AgentLensClientModel, embedded: boolean)
     handledFocusTurnRef.current=identity
     // Existing navigation reads only the bounded native turn window and lets
     // TaskSurface anchor the selected round after the virtual shell mounts.
-    void onTurnRailSelect({ordinal})
-  },[location.search,detail?.id,sessionId,roundFilterLoading])
+    nativeNavigationRevisionRef.current++
+    void model.jumpToReviewInteraction(ordinal)
+  },[location.search,detail?.id,sessionId,roundFilterLoading,model])
 
   const showFromStart = async () => {
     nativeNavigationRevisionRef.current++
