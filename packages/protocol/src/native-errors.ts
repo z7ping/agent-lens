@@ -19,4 +19,6 @@ export interface NativeErrorIndexResponseDto {
   hasMore:boolean
   eligibleSessions:number
   readySessions:number
+  indexedSessions:number
+  partialSessions:number
 }
