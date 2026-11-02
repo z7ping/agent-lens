@@ -165,6 +165,19 @@ test('indexes once, reuses content-addressed blobs, and keeps legacy snapshots c
     const imported = await importedService.importSnapshot(exported)
     assert.equal(imported.manifestSha256, manifest.manifestSha256)
     assert.equal((await importedService.verifySnapshot(imported.id)).valid, true)
+    // A duplicate import must restore verified content, not silently accept a
+    // matching manifest pointing to missing or corrupt local blobs.
+    const importedFile = imported.files[0]!
+    const importedBlobPath = join(vaultB, 'blobs', importedFile.sha256.slice(0, 2), importedFile.sha256)
+    await writeFile(importedBlobPath, Buffer.alloc(importedFile.size, 120))
+    assert.equal((await importedService.verifySnapshot(imported.id)).valid, false)
+    const repaired = await importedService.importSnapshot(exported)
+    assert.equal(repaired.id, imported.id)
+    assert.equal((await importedService.verifySnapshot(imported.id)).valid, true)
+    await rm(importedBlobPath)
+    assert.equal((await importedService.verifySnapshot(imported.id)).valid, false)
+    await importedService.importSnapshot(exported)
+    assert.equal((await importedService.verifySnapshot(imported.id)).valid, true)
     assert.deepEqual(await listBlobHashes(vaultB), manifest.files.map(file => file.sha256).sort())
 
     await writeFile(join(skillRoot, 'SKILL.md'), '# Review changed\n', 'utf8')
