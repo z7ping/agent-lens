@@ -376,6 +376,7 @@ export const englishAgentsMessages: LocaleMessagesDto = {
       noRuntimeConfig: 'No runtime or configuration paths available',
       showMorePaths: 'Show {{count}} more paths',
       captureSupport: 'AgentLens capture support',
+      captureSupportUnavailable: 'Verified capture capability details are unavailable for this source.',
       captureSupportTitle: 'This shows capture support declared by AgentLens adapters, not product capabilities self-reported by the current agent installation.',
     },
     managedFiles: {
