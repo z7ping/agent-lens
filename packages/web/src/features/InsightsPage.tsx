@@ -207,17 +207,20 @@ export function InsightsPage({ model, toolbarHost }: { model: AgentLensClientMod
               const metric = radarItems.get(agent.sourceId)
               const verified = metric?.readySessions ? metric.totals.errorCount : null
               const observed = metric?.partialSessions ? metric.observed?.errorCount ?? null : null
-              const primary = observed !== null && observed > 0 ? `≥${observed}`
-                : verified !== null ? String(verified)
-                : observed !== null ? `≥${observed}` : '—'
+              // Certified and partial cohorts remain separate: never replace a larger
+              // confirmed count with a smaller partial lower bound.
+              const primary = verified !== null && verified > 0 ? String(verified)
+                : observed !== null && observed > 0 ? `≥${observed}`
+                : verified !== null && !metric?.partialSessions ? String(verified) : '—'
               const hasErrors = (verified ?? 0) > 0 || (observed ?? 0) > 0
-              const detail = observed !== null && observed > 0
-                ? t('page.radarVerified', { count: metric?.totals.errorCount ?? 0 })
-                : verified !== null ? t('page.radarVerifiedLabel')
-                  : observed !== null ? t('page.radarObservedLabel')
+              const detail = verified !== null && verified > 0 && observed !== null && observed > 0
+                ? t('page.radarAdditionalObserved', { count: observed })
+                : observed !== null
+                  ? t('page.radarObservedLabel')
+                  : verified !== null ? t('page.radarVerifiedLabel')
                     : metric?.eligibleSessions ? t('page.radarPending')
                       : metric ? t('page.radarNoSessions') : t('page.radarUnavailable')
-              return <Button key={agent.sourceId} variant="tile" className={`insight-agent-radar-item${selectedSourceId === agent.sourceId ? ' is-selected' : ''}${hasErrors ? ' has-errors' : ''}`}
+              return <Button key={agent.sourceId} variant="tile" className={`insight-agent-radar-item${hasErrors ? ' has-errors' : ''}`}
                 aria-pressed={selectedSourceId === agent.sourceId}
                 title={metric ? t('page.radarTooltip', {
                   ready: metric.readySessions, eligible: metric.eligibleSessions,
@@ -226,7 +229,8 @@ export function InsightsPage({ model, toolbarHost }: { model: AgentLensClientMod
                 onClick={() => model.setUsageFilters({ sourceIds: [agent.sourceId] })}>
                 <span className="insight-agent-radar-identity">
                   <AgentLogo sourceId={agent.sourceId} size="compact"/>
-                  <span>{agentLabel(agent.sourceId, agent.displayName)}</span>
+                  <span className="insight-agent-radar-name">{agentLabel(agent.sourceId, agent.displayName)}</span>
+                  <UiIcon name="chevron-right" size={14} className="insight-agent-radar-arrow"/>
                 </span>
                 <strong>{primary}</strong>
                 <small>{detail}</small>
@@ -240,24 +244,32 @@ export function InsightsPage({ model, toolbarHost }: { model: AgentLensClientMod
             {t('page.failureExamples')}<UiIcon name="chevron-right" size={14}/>
           </Button>
         </div>}
-        {data?.meta.native && <section className={`insight-coverage-strip${data.meta.mode === 'native-only' ? ' is-native' : ''}`} role="status"
-          aria-label={t('page.nativeCoverageTitle')}>
-          <div><span>{t('page.nativeCoverageTitle')}</span>
-            <b>{data.meta.native.state === 'available'
-              ? t('page.nativeCoverageCount', { ready: data.meta.native.readySessions,
-                eligible: data.meta.native.eligibleSessions })
-              : t('page.nativeCoverageUnavailable')}</b></div>
-          {data.meta.native.state === 'available' && <>
-            <div><span>{t('page.nativeObservedSessions')}</span>
-              <b>{data.meta.native.partialSessions}</b></div>
-            <div><span>{t('page.nativeCoverageStatus')}</span>
-              <b className={data.meta.native.coverage === 'partial' ? 'is-warning' : ''}
-                title={t(data.meta.mode === 'native-only' ? 'page.nativeOnlyModeNote' : 'page.nativeSeparateNote')}>
-                {data.meta.native.coverage === 'partial'
-                  ? t('page.nativePartialCoverage') : t('page.nativeCompleteCoverage')}</b></div>
-          </>}
-        </section>}
-
+        {data?.meta.native && (data.meta.mode === 'native-only'
+          ? <section className="insight-native-coverage" role="status"
+              aria-label={t('page.nativeCoverageTitle')}
+              title={t(data.meta.mode === 'native-only' ? 'page.nativeOnlyModeNote' : 'page.nativeSeparateNote')}>
+              <span>{data.meta.native.state === 'available'
+                ? t('page.nativeCoverageCount', { ready: data.meta.native.readySessions,
+                  eligible: data.meta.native.eligibleSessions })
+                : t('page.nativeCoverageUnavailable')}</span>
+              {data.meta.native.state === 'available' && data.meta.native.partialSessions > 0 &&
+                <span className="is-warning">{t('page.radarPartialSessions', { count: data.meta.native.partialSessions })}</span>}
+            </section>
+          : <section className="insight-coverage-strip" role="status"
+              aria-label={t('page.nativeCoverageTitle')}>
+              <div><span>{t('page.nativeCoverageTitle')}</span><b>{data.meta.native.state === 'available'
+                ? t('page.nativeCoverageCount', { ready: data.meta.native.readySessions,
+                  eligible: data.meta.native.eligibleSessions })
+                : t('page.nativeCoverageUnavailable')}</b></div>
+              {data.meta.native.state === 'available' && <>
+                <div><span>{t('page.nativeObservedSessions')}</span><b>{data.meta.native.partialSessions}</b></div>
+                <div><span>{t('page.nativeCoverageStatus')}</span>
+                  <b className={data.meta.native.coverage === 'partial' ? 'is-warning' : ''}
+                    title={t('page.nativeSeparateNote')}>
+                    {data.meta.native.coverage === 'partial'
+                      ? t('page.nativePartialCoverage') : t('page.nativeCompleteCoverage')}</b></div>
+              </>}
+            </section>)}
 
         {insights.loading && !data ? <WorkspaceSkeleton kind="insights"/> : data?.meta.mode==='native-only' ? <>
           {verifiedNative && verifiedNative.readySessions > 0 && <section className="insight-kpi-grid is-native"
@@ -268,12 +280,12 @@ export function InsightsPage({ model, toolbarHost }: { model: AgentLensClientMod
             </div>
             <button type="button" className="workspace-metric-card insight-kpi insight-kpi-action"
               onClick={()=>navigate('/tools')} title={t('page.toolCalls')}>
-              <span>{t('page.toolCalls')}</span>
+              <span>{t('page.toolCalls')}<UiIcon name="chevron-right" size={14}/></span>
               <strong>{verifiedNative.toolCallCount}</strong>
             </button>
             <button type="button" className="workspace-metric-card insight-kpi insight-kpi-action is-failure"
               onClick={()=>navigate('/tools?view=failures')} title={t('page.failureExamples')}>
-              <span>{t('page.explicitFailures')}</span>
+              <span>{t('page.explicitFailures')}<UiIcon name="chevron-right" size={14}/></span>
               <strong>{verifiedNative.errorCount}</strong>
             </button>
           </section>}
