@@ -199,7 +199,7 @@ function MessageBubble({
               :t('local.roundNav.nativeBodyLoad')}
         </Button>}
         {bodyError&&<span role="alert">{bodyError}</span>}
-      </>
+      </>}
       {node.evidence.length > 0 && <button onClick={() => inspect(node)}>{t('local.evidence.evidenceDetail', { count: node.evidence.length })}</button>}
       {showContentActions && node.role === 'assistant' && node.nativeEventId && onForkAt && <IconButton
         size="small"
