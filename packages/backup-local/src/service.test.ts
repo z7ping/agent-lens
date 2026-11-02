@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, readdir, rename, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import test from 'node:test'
@@ -267,6 +267,34 @@ test('restore preview matches each installation and blocks ambiguous cross-insta
     assert.equal(changed.unchanged, 1)
     assert.equal(changed.blocked, 1)
     assert.match(changed.items.find(item => item.archivePath.includes('installation-two'))?.reason ?? '', /多个安装实例/)
+  } finally {
+    await rm(root, { recursive: true, force: true })
+  }
+})
+
+
+test('restore preview refuses a symlinked ancestor before reading current target', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'agentlens-backup-restore-symlink-'))
+  const configRoot = join(root, 'config')
+  const dataRoot = join(root, 'data')
+  const nested = join(dataRoot, 'nested')
+  const moved = join(root, 'outside')
+  try {
+    await mkdir(nested, { recursive: true })
+    await mkdir(configRoot, { recursive: true })
+    await writeFile(join(nested, 'session.jsonl'), 'original\n')
+    const deps = fixtureServices(configRoot, dataRoot)
+    const service = new LocalBackupService(deps.storage, deps.sources, deps.identity, {
+      vaultPath: join(root, 'vault'),
+    })
+    await service.refreshIndex()
+    const snapshot = await service.createSnapshot({ kinds: ['session'] })
+    assert.equal(snapshot.files.length, 1)
+    await rename(nested, moved)
+    try { await symlink(moved, nested, 'dir') } catch { return } // Windows symlink privilege
+    const preview = await service.previewRestore(snapshot.id)
+    assert.equal(preview.blocked, 1)
+    assert.match(preview.items[0]?.reason ?? '', /符号链接/)
   } finally {
     await rm(root, { recursive: true, force: true })
   }
