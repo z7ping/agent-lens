@@ -59,7 +59,7 @@ type OversizedFragmentState = {
 export function ReviewPage({ model, embedded = false, latestRequest = 0 }: { model: AgentLensClientModel; embedded?: boolean; latestRequest?: number }) {
   const location=useLocation()
   const focusTurnText=new URLSearchParams(location.search).get('focusTurn')
-  const parsedFocusTurn=focusTurnText && /^[1-9]\\d*$/.test(focusTurnText)?Number(focusTurnText):0
+  const parsedFocusTurn=focusTurnText && /^[1-9]\d*$/.test(focusTurnText)?Number(focusTurnText):0
   const focusTurnOrdinal=Number.isSafeInteger(parsedFocusTurn)&&parsedFocusTurn>0?parsedFocusTurn:0
   const {
     t,
