@@ -72,6 +72,16 @@ test('安装方式使用共享下划线 Tab，操作栏醒目但保留原有接�
   assert.doesNotMatch(integrationCss, /!important/)
 })
 
+test('精简运行时显示真实采集状态、包管理缺失与授权结果', () => {
+  assert.match(page, /packageLifecycleComplete = items\.every/)
+  assert.match(page, /packageLifecycleComplete \? installedCount : '—'/)
+  assert.match(page, /managementPage\.packageVersionUnmanaged/)
+  assert.match(page, /managementPage\.packageLifecycleUnavailableHint/)
+  assert.match(page, /managementPage\.authorizationSaved/)
+  assert.match(page, /managementPage\.authorizationRefreshFailed/)
+  assert.doesNotMatch(page, /refreshIntegrationManagement\(\)\.catch\(\(\) => undefined\)/)
+})
+
 test('授权状态常驻；仅真实待授权出现按钮，禁用接入不能越权授权', () => {
   assert.match(page, /const authorization = integrationAuthorizationSummary\(item\.capabilities\)/)
   assert.match(page, /className="integration-management-authorization-status" role="status"/)
