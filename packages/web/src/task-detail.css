@@ -428,6 +428,7 @@
 .task-surface .task-message-assistant .markdown > .markdown-streaming-tail { margin: .35em 0; }
 .task-surface .task-message-assistant .markdown > :is(h1, h2, h3, h4, h5, h6) {
   margin: .72em 0 .25em;
+  font-size: var(--text-task-heading);
   line-height: 1.32;
 }
 .task-surface .task-message-assistant .markdown > :is(ul, ol) { margin: .4em 0; }
@@ -456,7 +457,7 @@
   font: var(--text-task-code)/1.5 var(--font-mono);
   white-space: pre-wrap;
 }
-.task-surface .markdown :not(pre) > code { padding: 1px 4px; border-radius: 4px; background: var(--al-soft); color: var(--al-ink-2); font-family: var(--font-mono); font-size: .9em; }
+.task-surface .markdown :not(pre) > code { padding: 1px 4px; border-radius: 4px; background: var(--al-soft); color: var(--al-ink-2); font-family: var(--font-mono); font-size: var(--text-task-code); }
 .task-surface .markdown-fade { position: absolute; right: 0; bottom: 0; left: 0; height: 2.7em; pointer-events: none; background: linear-gradient(to bottom, transparent, var(--al-surface)); }
 .task-surface .task-message-bubble-user .markdown,
 .task-surface .task-message-bubble-user .markdown p,
