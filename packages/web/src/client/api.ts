@@ -416,6 +416,7 @@ export class AgentLensApi {
     if(options.projectId)params.set('projectId',options.projectId)
     if(options.toolName)params.set('toolName',options.toolName)
     if(options.search)params.set('q',options.search)
+    if(options.fingerprint)params.set('fingerprint',options.fingerprint)
     if(options.from)params.set('from',options.from)
     if(options.to)params.set('to',options.to)
     params.set('limit',String(Math.min(100,Math.max(1,options.limit??50))))
