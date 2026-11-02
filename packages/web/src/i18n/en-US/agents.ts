@@ -449,6 +449,7 @@ export const englishAgentsMessages: LocaleMessagesDto = {
         configured: 'Configured',
         discovered: 'Discovered',
         unobserved: 'Not observed',
+        unknown: 'Unknown',
       },
       stage: {
         history: 'History capture',
