@@ -410,7 +410,7 @@ export class AgentLensApi {
   /** SQL-only indexed error facts. Page all failures; full source payload stays in Review. */
   nativeErrors(options:{
     sourceId:string;projectId?:string;toolName?:string;search?:string
-    from?:string;to?:string;limit?:number;offset?:number;signal?:AbortSignal
+    from?:string;to?:string;fingerprint?:string;limit?:number;offset?:number;signal?:AbortSignal
   }):Promise<NativeErrorIndexResponseDto>{
     const params=new URLSearchParams({sourceId:options.sourceId})
     if(options.projectId)params.set('projectId',options.projectId)
