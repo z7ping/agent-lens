@@ -59,7 +59,7 @@ export function AgentsResponsivePage({
   // Each view starts at its own beginning; deep links may subsequently reveal a specific row.
   useLayoutEffect(() => {
     if (shellRef.current) shellRef.current.scrollTop = 0
-  }, [activeView])
+  }, [activeView, sourceId])
 
   const selectAgent = (nextSourceId: string) => {
     onSelectAgent(nextSourceId)
