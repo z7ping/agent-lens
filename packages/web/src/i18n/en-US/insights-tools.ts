@@ -131,7 +131,7 @@ export const englishInsightsToolsMessages: LocaleMessagesDto = {
       pageRange:'{{from}}–{{to}} / {{total}}',
       previous:'Previous',next:'Next',search:'Search errors',
       selectAgent:'Select one agent',
-      sameFingerprint:'Error fingerprint',
+      sameFingerprint:'Similar errors',clearFingerprint:'Clear group filter',
 
       description:'Read confirmed failures on demand from native sessions using the current agent, project and session activity range. Examples stay in this view’s memory; they do not establish a root cause or final task failure.',
       scan:'Find failures',continue:'Continue scan',stop:'Stop search',pause:'Pause scan',
