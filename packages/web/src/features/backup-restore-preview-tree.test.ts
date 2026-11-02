@@ -11,7 +11,7 @@ function leafNames(nodes: readonly PreviewTreeNode[]): string[] {
 }
 
 test('Windows, Unix and archive-only paths remain separated without assuming a destination', () => {
-  const rows = [
+  const rows: BackupRestorePreviewItemDto[] = [
     file('C:\\Users\\Demo\\.codex\\AGENTS.md', 'unchanged'),
     file('C:\\Users\\Demo\\.codex\\hooks.json', 'modified'),
     file('/home/demo/.config/config.json', 'missing', 'pi'),
@@ -27,7 +27,7 @@ test('Windows, Unix and archive-only paths remain separated without assuming a d
 })
 
 test('diff scope hides unchanged paths but preserves ancestry, blocked reasons, and state counts', () => {
-  const rows = [
+  const rows: BackupRestorePreviewItemDto[] = [
     file('C:\\agent\\config\\AGENTS.md', 'unchanged'),
     file('C:\\agent\\config\\hooks.json', 'modified'),
     file('C:\\agent\\data\\missing.txt', 'missing'),
