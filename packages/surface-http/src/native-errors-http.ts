@@ -13,7 +13,7 @@ export async function handleNativeErrorIndexRequest(
     writeJson(response,405,{error:'method_not_allowed'})
     return true
   }
-  const accepted=new Set(['sourceId','projectId','toolName','q','from','to','offset','limit'])
+  const accepted=new Set(['sourceId','projectId','toolName','q','from','to','offset','limit','fingerprint'])
   for(const key of url.searchParams.keys()){
     if(!accepted.has(key)||url.searchParams.getAll(key).length!==1)throw badRequest('Invalid filter')
   }
