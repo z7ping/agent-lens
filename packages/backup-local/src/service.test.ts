@@ -205,6 +205,11 @@ test('indexes once, reuses content-addressed blobs, and keeps legacy snapshots c
     await rm(join(skillRoot, 'SKILL.md'))
     const missing = await importedService.previewRestoreFile(imported.id, skill!.archivePath)
     assert.equal(missing.current.previewStatus, 'missing')
+    const blobFile = imported.files.find(file => file.archivePath === skill!.archivePath)!
+    const blobLocation = join(vaultB, 'blobs', blobFile.sha256.slice(0, 2), blobFile.sha256)
+    await writeFile(blobLocation, Buffer.alloc(blobFile.size, 120))
+    await assert.rejects(importedService.previewRestoreFile(imported.id, skill!.archivePath),
+      /快照内容校验失败/)
 
     const stored = await readFile(join(vaultB, 'snapshots', imported.id, 'manifest.json'), 'utf8')
     assert.equal(stored.includes('secretsecret'), false)
