@@ -11,7 +11,7 @@ import type {
   NativeSessionMetricOverviewQuery,
   NativeSessionMetricSnapshot, NativeSessionMetricReadResult,
   NativeSessionMetricRebuildCandidate,
-  NativeSessionMetricsStore,
+  NativeSessionMetricsStore, NativeErrorIndexEntry, NativeErrorIndexResult,
   NativeSessionListReader, NativeFacetReader,
   StorageHealth, LaunchableProjectReader, AssetService, AssetInventoryReader,
 } from '@agent-lens/core'
@@ -127,8 +127,8 @@ export class SlimDataRuntime {
     return this.write(['nativeSessionCatalog','upsert'],[entry])
   }
 
-  replaceMetrics(snapshot:NativeSessionMetricSnapshot):Promise<boolean>{
-    return this.write(['nativeSessionMetrics','replace'],[snapshot])
+  replaceMetrics(snapshot:NativeSessionMetricSnapshot,errors:readonly NativeErrorIndexEntry[]=[]):Promise<boolean>{
+    return this.write(['nativeSessionMetrics','replace'],[snapshot,errors])
   }
 
   /** Create the same trusted NativeSessionReader used by historical Review,
@@ -202,7 +202,8 @@ export class SlimDataRuntime {
             input,limit,...(before?[before]:[]),
           ])
         },
-        replace(input){return self.write<boolean>(['nativeSessionMetrics','replace'],[input])},
+        queryErrors(input){return self.read<NativeErrorIndexResult>(['nativeSessionMetrics','queryErrors'],[input])},
+        replace(input,errors){return self.write<boolean>(['nativeSessionMetrics','replace'],[input,errors??[]])},
         invalidate(input){return self.write<void>(['nativeSessionMetrics','invalidate'],[input])},
       },
       checkpoints:{
