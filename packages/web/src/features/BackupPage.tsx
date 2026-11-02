@@ -17,6 +17,7 @@ import { AgentLensApi } from '../client/api'
 import { agentLabel, useOrderedAgents } from '../components/AgentScope'
 import { AgentLogo } from '../components/AgentLogo'
 import { BackupDataRootTree } from '../components/BackupDirectoryTree'
+import { BackupRestorePreviewWorkbench } from './BackupRestorePreviewWorkbench'
 import { LocalPathActions } from '../components/LocalPathActions'
 import { SidebarFilterDisclosure } from '../components/SidebarFilterDisclosure'
 import { ErrorStateBanner, PageLoadingState } from '../components/StateViews'
@@ -105,13 +106,6 @@ function sourceLabel(sourceId: string, displayName?: string): string {
   return cleaned || agentLabel(sourceId)
 }
 
-function previewStatusLabel(status: string, t: TFunction): string {
-  if (status === 'unchanged') return t('previewStatus.unchanged')
-  if (status === 'missing') return t('previewStatus.missing')
-  if (status === 'modified') return t('previewStatus.modified')
-  return t('previewStatus.blocked')
-}
-
 function kindFiles(source: BackupProtectionSourceDto, kind: BackupAssetKindDto): number {
   return source.kindDetails?.[kind]?.fileCount ?? source.kinds[kind] ?? 0
 }
@@ -174,19 +168,53 @@ export function BackupPage({
   const [success, setSuccess] = useState('')
   const [selectedSourceIds, setSelectedSourceIds] = useState<string[] | null>(null)
   const [selectedKinds, setSelectedKinds] = useState<BackupAssetKindDto[]>(RECOMMENDED_KINDS)
-  const [searchParams] = useSearchParams()
+  const [searchParams, setSearchParams] = useSearchParams()
   const activeView = searchParams.get('view') === 'history' ? 'history' : 'assets'
+  const previewSnapshotId = activeView === 'history' ? searchParams.get('preview') ?? '' : ''
   const contentRef = useRef<HTMLDivElement>(null)
   useLayoutEffect(() => {
     // Views share one page node, so reset their reading position on tab changes.
     if (contentRef.current) contentRef.current.scrollTop = 0
-  }, [activeView])
+  }, [activeView, previewSnapshotId])
   const [createOpen, setCreateOpen] = useState(false)
   const [verification, setVerification] = useState<Record<string, BackupVerifyResponseDto>>({})
   const [physicalPathSnapshot, setPhysicalPathSnapshot] = useState<BackupSnapshotManifestDto | null>(null)
   const [preview, setPreview] = useState<BackupRestorePreviewResponseDto | null>(null)
+  const [previewLoading, setPreviewLoading] = useState(false)
+  const [previewError, setPreviewError] = useState('')
+  const [previewRetry, setPreviewRetry] = useState(0)
   const [confirmation, setConfirmation] = useState<PendingConfirmation | null>(null)
   const importInput = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    if (!previewSnapshotId) {
+      setPreview(null)
+      setPreviewError('')
+      setPreviewLoading(false)
+      return
+    }
+    let disposed = false
+    setPreview(null)
+    setPreviewError('')
+    setPreviewLoading(true)
+    void api.backupRestorePreview(previewSnapshotId).then(result => {
+      if (!disposed) setPreview(result)
+    }).catch(reason => {
+      if (!disposed) setPreviewError(reason instanceof Error ? reason.message : String(reason))
+    }).finally(() => {
+      if (!disposed) setPreviewLoading(false)
+    })
+    return () => { disposed = true }
+  }, [api, previewSnapshotId, previewRetry])
+
+  const closeRestorePreview = () => {
+    setSearchParams(current => {
+      const next = new URLSearchParams(current)
+      next.delete('preview')
+      next.set('view', 'history')
+      return next
+    })
+  }
 
   const physicalRoots = useMemo(
     () => physicalPathSnapshot ? snapshotPhysicalRoots(physicalPathSnapshot) : [],
@@ -401,17 +429,15 @@ export function BackupPage({
     }
   }
 
-  const showRestorePreview = async (id: string) => {
+  const showRestorePreview = (id: string) => {
     if (busy) return
-    setBusy(`preview:${id}`)
     setError('')
-    try {
-      setPreview(await api.backupRestorePreview(id))
-    } catch (reason) {
-      setError(reason instanceof Error ? reason.message : String(reason))
-    } finally {
-      setBusy('')
-    }
+    setSearchParams(current => {
+      const next = new URLSearchParams(current)
+      next.set('view', 'history')
+      next.set('preview', id)
+      return next
+    })
   }
 
   const selectImportBackup = (event: ChangeEvent<HTMLInputElement>) => {
@@ -498,7 +524,7 @@ export function BackupPage({
 
   return <>
     <main className="workspace-page backup-page">
-    {toolbarHost ? createPortal(<div className="workspace-view-controls">
+    {toolbarHost && !previewSnapshotId ? createPortal(<div className="workspace-view-controls">
       <div className="workspace-view-filter">{backupScopeFilter}</div>
       <div className="workspace-view-filter-actions">
         {activeView === 'history' && visibleSnapshots.length > 0 && <Button aria-label={t('snapshots.verifyAll')} title={t('snapshots.verifyAll')} loading={busy === 'verify-all'} disabled={Boolean(busy)} onClick={() => void verifyAll()}><UiIcon name="check" size={14}/><span className="backup-toolbar-label">{t('snapshots.verifyAll')}</span></Button>}
@@ -512,7 +538,30 @@ export function BackupPage({
       {error && <div className="backup-error" role="alert"><b>{t('page.operationFailed')}</b><span>{error}</span><Button size="small" onClick={() => setError('')}>{t('page.close')}</Button></div>}
       {success && <div className="backup-success" role="status">{success}</div>}
 
-        {activeView === 'assets' ? <div className="backup-assets-surface">
+        {previewSnapshotId ? (
+          preview && preview.snapshotId === previewSnapshotId
+            ? <BackupRestorePreviewWorkbench
+                key={preview.snapshotId}
+                preview={preview}
+                snapshot={snapshots.find(snapshot => snapshot.id === preview.snapshotId)}
+                onBack={closeRestorePreview}
+                onOpenPath={openPhysicalPath}
+                onPathError={reportPathError}
+              />
+            : previewError
+              ? <div className="backup-preview-load-state">
+                  <Button size="small" variant="quiet" onClick={closeRestorePreview}>
+                    <UiIcon name="arrow-left" size={14}/>{t('preview.back')}
+                  </Button>
+                  <ErrorStateBanner message={previewError} onRetry={() => setPreviewRetry(value => value + 1)} showDoctor={false}/>
+                </div>
+              : <PageLoadingState
+                  eyebrow={t('preview.title')}
+                  statusLabel={t('loading.status')}
+                  title={t('preview.loading')}
+                  description={t('preview.noteDescription')}
+                />
+        ) : activeView === 'assets' ? <div className="backup-assets-surface">
           <div className="backup-asset-overview">
             <div className="backup-asset-overview-primary">
               <strong>{protectedFiles.toLocaleString(locale)}</strong>
@@ -712,22 +761,6 @@ export function BackupPage({
           </section>
         })}
         {!physicalRoots.length && <div className="backup-history-empty">{t('snapshots.noPhysicalPaths')}</div>}
-      </div>
-    </Drawer>}
-
-    {preview && <Drawer
-      open
-      className="backup-preview-drawer"
-      title={<span className="backup-overlay-title">{t('preview.title')} <StatusBadge tone={preview.blocked ? 'warning' : 'success'}>{preview.blocked ? t('preview.blocked', { count: preview.blocked }) : t('preview.passed')}</StatusBadge></span>}
-      description={preview.snapshotId}
-      onClose={() => { if (!busy) setPreview(null) }}
-      closeDisabled={Boolean(busy)}
-      closeOnBackdrop={!busy}
-    >
-      <div className="backup-drawer-body">
-        <section className="backup-drawer-section"><h3>{t('preview.summary')}</h3><div className="preview-summary"><span><b>{preview.unchanged}</b> {t('preview.unchanged')}</span><span><b>{preview.missing}</b> {t('preview.missing')}</span><span><b>{preview.modified}</b> {t('preview.modified')}</span><span><b>{preview.blocked}</b> {t('preview.blockedLabel')}</span></div></section>
-        <section className="backup-drawer-section"><h3>{t('preview.files')}</h3><div className="backup-drawer-file-list">{preview.items.map(item => <div key={`${item.sourceId}:${item.archivePath}`} className="backup-drawer-file preview-file"><StatusBadge tone={item.status === 'blocked' ? 'danger' : item.status === 'modified' ? 'warning' : item.status === 'unchanged' ? 'success' : 'accent'}>{previewStatusLabel(item.status, t)}</StatusBadge><code>{item.targetPath ?? item.archivePath}</code>{item.targetPath && <LocalPathActions path={item.targetPath} onOpen={openPhysicalPath} onError={reportPathError}/>} {item.reason && <small>{item.reason}</small>}</div>)}</div></section>
-        <section className="backup-drawer-section"><div className="backup-preview-note"><b>{t('preview.noteTitle')}</b> {t('preview.noteDescription')}</div></section>
       </div>
     </Drawer>}
 
