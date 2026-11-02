@@ -31,10 +31,14 @@ function hash(value:string):string {
 }
 function diagnostic(payload:Record<string,unknown>):{code:string|null;summary:string} {
   const nested=object(payload.error)
+  const output=object(payload.output)
+  const result=object(payload.result)
   const code=first(payload,['errorCode','error_code','code'])
     ??first(nested,['code','type'])
-  const message=first(payload,['message','reason','error'])
-    ??first(nested,['message','reason'])
+  const message=first(payload,['errorMessage','error_message','message','reason','error'])
+    ??first(nested,['errorMessage','message','reason'])
+    ??first(output,['errorMessage','message','error','reason'])
+    ??first(result,['errorMessage','message','error','reason'])
     ?? (typeof payload.output==='string' ? payload.output: undefined)
   return {
     code:code?redact(code).slice(0,MAX_CODE):null,
@@ -49,9 +53,16 @@ function diagnostic(payload:Record<string,unknown>):{code:string|null;summary:st
  */
 export class NativeErrorIndexAccumulator {
   readonly errors:NativeErrorIndexEntry[]=[]
+  private readonly toolNamesByCall=new Map<string,string>()
 
   add(observation:ObservationCandidate,recordId:string,recordLocalIndex:number):void {
     const payload=object(observation.payload)
+    const callId=observation.nativeCallId
+      ??first(payload,['callId','call_id','toolUseId','tool_use_id'])
+    if(observation.kind==='tool.call' && callId && this.toolNamesByCall.size<8192){
+      const name=first(payload,['nativeToolName','toolName','tool_name','name'])
+      if(name)this.toolNamesByCall.set(callId,name)
+    }
     const tool=observation.kind==='tool.result'
     const lifecycle=observation.kind==='session.lifecycle'
     const failed=tool
@@ -60,7 +71,8 @@ export class NativeErrorIndexAccumulator {
         .includes(String(payload.event??payload.action??''))
     if(!failed)return
     const {code,summary}=diagnostic(payload)
-    const name=tool?first(payload,['nativeToolName','toolName','tool_name','name']):undefined
+    const name=tool?(first(payload,['nativeToolName','toolName','tool_name','name'])
+      ??(callId?this.toolNamesByCall.get(callId):undefined)):undefined
     const kind=tool?'tool' as const:'runtime' as const
     const fingerprint=hash(JSON.stringify([kind,name??null,code,summary.toLowerCase()]))
     this.errors.push({
