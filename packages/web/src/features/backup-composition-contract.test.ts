@@ -195,7 +195,7 @@ test('恢复预演使用 URL 可返回的主视图和差异树，不再用滚动
   assert.match(backupPage, /next\.set\('preview', id\)/)
   assert.match(backupPage, /next\.delete\('preview'\)/)
   assert.match(backupPage, /<BackupRestorePreviewWorkbench/)
-  assert.match(backupPage, /api\.backupRestorePreview\(previewSnapshotId\)/)
+  assert.match(backupPage, /api\.backupRestorePreview\(previewSnapshotId, controller\.signal\)/)
   assert.doesNotMatch(backupPage, /className="backup-preview-drawer"/)
   assert.doesNotMatch(backupPage, /preview\.items\.map\(/)
   assert.match(workbench, /scope === 'changes'/)
