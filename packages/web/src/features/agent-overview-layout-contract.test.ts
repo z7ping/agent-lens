@@ -80,7 +80,7 @@ test('Agent overview preserves truthful unavailable states and provides recovery
   assert.match(management, /model\.refreshIntegrationManagement\(\)/)
   assert.match(rail, /agentDiagnosticsAvailable = runtime\.length > 0 \|\| unknownCount > 0/)
   assert.match(rail, /globalDiagnosticsAvailable/)
-  assert.match(rail, /agent\.usedAssetsStatus === 'unavailable'\) return 'unknown'/)
+  assert.match(rail, /if \(!asset\) return agent\.usedAssetsStatus === 'unavailable' \? 'unknown' : 'unobserved'/)
   assert.match(rail, /formatKnownBytes\(growth\?\.databaseBytes/)
   for (const locale of [zh, en]) {
     assert.match(locale, /captureSupportUnavailable:/)
