@@ -180,6 +180,7 @@ export const chineseInsightsToolsMessages: LocaleMessagesDto = {
       nativeScope: '完整校验 {{ready}} / {{eligible}} 个 Native-only 会话',
       nativeObservedSummary: '{{sessions}} 个会话部分可读，已观察至少 {{calls}} 次调用',
       nativeObservedSuffix: ' · 部分观察（非全部）',
+      nativeObservedGroup: '部分观察（数量仅为下限，不计入已校验工具排行）',
       nativeResults: '结果',
       maxDuration: '最长耗时',
       longestBadge: '单次最慢',
