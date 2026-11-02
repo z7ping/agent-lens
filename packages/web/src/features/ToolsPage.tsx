@@ -467,7 +467,7 @@ export function ToolsPage({ model, toolbarHost }: { model: AgentLensClientModel;
         </section>}
 
         {blockingError ? null : usage.loading && !data ? <WorkspaceSkeleton kind="tools"/> : nativeOnlyMode ? (
-          nativeHasSessions
+          nativeMetrics?.state!=='available' || nativeHasSessions
             ? null
             : <div className="tools-empty-state"><EmptyStatePanel
               icon={<UiIcon name="search" size={20}/>}
