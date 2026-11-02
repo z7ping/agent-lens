@@ -285,6 +285,20 @@ export type LiveProductMetadata = Pick<
 >
 
 export const liveApi = {
+  async initializeHermes(): Promise<{ status: 'ready' | 'needs-gateway'; reason?: string }> {
+    const result = await requestJson<{ status: 'ready' | 'needs-gateway'; reason?: string }>(
+      livePath('hermes', '/initialize'), jsonRequest('POST', { confirm: true }),
+    )
+    liveProductCache = null
+    return result
+  },
+
+  /** Re-probe availability after a gateway restart without stale product metadata. */
+  async refreshProducts(): Promise<LiveProductDto[]> {
+    liveProductCache = null
+    return this.products()
+  },
+
   async products(): Promise<LiveProductDto[]> {
     if (liveProductCache && Date.now() - liveProductCache.at < LIVE_PRODUCT_CACHE_MS) {
       return liveProductCache.items

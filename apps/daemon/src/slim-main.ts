@@ -184,6 +184,7 @@ export async function startSlimNativeDaemon(options:SlimDaemonOptions){
       backup:options.backup??vault!.service,
       lives:options.lives??live!.lives,
       liveAttachments:options.liveAttachments??live!.attachments,
+      ...(!options.lives && live?.hermesSetup ? {hermesLiveSetup:live.hermesSetup} : {}),
       staticDir:resolveSlimWebRoot(options.webRoot),
       ...(options.localePackDirectory?{localePackDirectory:options.localePackDirectory}:{}),
       reader:nativeReader,

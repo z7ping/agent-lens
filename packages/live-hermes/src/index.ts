@@ -264,3 +264,4 @@ export const hermesLivePlugin = defineAgentLensPlugin(
 
 export * from './client.js'
 export * from './service.js'
+export * from './setup.js'

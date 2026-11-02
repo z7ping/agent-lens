@@ -105,13 +105,15 @@ function clientHost(value: string | undefined): string {
 export async function resolveHermesApiClientConfig(
   config: HermesApiClientConfig = {},
 ): Promise<ResolvedHermesApiClientConfig> {
-  const roots = unique([
-    process.env.HERMES_HOME,
-    join(homedir(), '.hermes'),
-    process.platform === 'win32' && process.env.LOCALAPPDATA
-      ? join(process.env.LOCALAPPDATA, 'hermes')
-      : undefined,
-  ])
+  // An explicit Hermes home/profile must never inherit credentials from another installation.
+  const roots = unique(process.env.HERMES_HOME
+    ? [process.env.HERMES_HOME]
+    : [
+      join(homedir(), '.hermes'),
+      process.platform === 'win32' && process.env.LOCALAPPDATA
+        ? join(process.env.LOCALAPPDATA, 'hermes')
+        : undefined,
+    ])
   const envFiles = unique([
     ...(config.envFiles ?? []),
     ...roots.map(root => join(root, '.env')),
@@ -158,10 +160,16 @@ export class HermesApiError extends Error {
 }
 
 export class HermesApiClient {
-  private readonly apiUrl: string
-  private readonly apiKey: string | undefined
+  private apiUrl: string
+  private apiKey: string | undefined
 
   constructor(config: ResolvedHermesApiClientConfig) {
+    this.apiUrl = config.apiUrl.replace(/\/+$/, '')
+    this.apiKey = config.apiKey
+  }
+
+  /** Refresh credentials after explicit initialization without restarting AgentLens. */
+  reconfigure(config: ResolvedHermesApiClientConfig): void {
     this.apiUrl = config.apiUrl.replace(/\/+$/, '')
     this.apiKey = config.apiKey
   }
@@ -308,6 +316,7 @@ export class HermesApiClient {
     try {
       response = await fetch(`${this.apiUrl}${path}`, {
         ...init,
+        ...(init.signal ? {} : { signal: AbortSignal.timeout(5_000) }),
         headers: {
           Authorization: `Bearer ${this.apiKey}`,
           ...(init.body === undefined ? {} : { 'Content-Type': 'application/json' }),

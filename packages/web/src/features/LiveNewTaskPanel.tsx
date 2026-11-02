@@ -5,7 +5,7 @@ import { useNavigate } from 'react-router-dom'
 import { liveApi } from '../client/live'
 import { AgentLensApi } from '../client/api'
 import { selectHostProjectDirectory, validateHostProjectDirectory } from '../client/host-directory'
-import { Button, Input, SelectMenu, StatusBadge } from '../components/ui'
+import { Button, Dialog, Input, SelectMenu, StatusBadge } from '../components/ui'
 import { UiIcon } from '../components/UiIcon'
 import { AgentLogo } from '../components/AgentLogo'
 import { HostDirectoryBrowser } from './HostDirectoryBrowser'
@@ -74,6 +74,10 @@ export function LiveNewTaskPanel({
   const [taskTitle, setTaskTitle] = useState('')
   const [launchMode, setLaunchMode] = useState<'existing' | 'directory'>('existing')
   const [error, setError] = useState('')
+  const [hermesSetupOpen, setHermesSetupOpen] = useState(false)
+  const [hermesSettingUp, setHermesSettingUp] = useState(false)
+  const [hermesSetupError, setHermesSetupError] = useState('')
+  const [hermesSetupResult, setHermesSetupResult] = useState<{status: 'ready' | 'needs-gateway'; reason?: string} | null>(null)
 
   useEffect(() => {
     let cancelled = false
@@ -192,6 +196,37 @@ export function LiveNewTaskPanel({
   const missingIntegration = integrationManagement.find(item =>
     selectedProduct?.liveId === unregisteredLiveId(item))
   const missingIntegrationEntry = Boolean(missingIntegration)
+  const showHermesSetup = selectedProduct?.liveId === 'hermes' && !available && !missingIntegrationEntry
+
+  const refreshHermes = async () => {
+    setProductsLoading(true)
+    setProductsError('')
+    try {
+      const next = await liveApi.refreshProducts()
+      setRegisteredProducts(createProducts(next))
+      if (next.find(item => item.liveId === 'hermes')?.availability.available) setHermesSetupResult(null)
+    } catch (reason) {
+      setProductsError(reason instanceof Error ? reason.message : String(reason))
+    } finally {
+      setProductsLoading(false)
+    }
+  }
+
+  const initializeHermes = async () => {
+    if (hermesSettingUp) return
+    setHermesSettingUp(true)
+    setHermesSetupError('')
+    try {
+      const result = await liveApi.initializeHermes()
+      setHermesSetupResult(result)
+      setHermesSetupOpen(false)
+      await refreshHermes()
+    } catch (reason) {
+      setHermesSetupError(reason instanceof Error ? reason.message : String(reason))
+    } finally {
+      setHermesSettingUp(false)
+    }
+  }
   const readiness = productsLoading
     ? { state: 'checking', label: t('center.newTask.checkingAgents') }
     : available
@@ -299,6 +334,18 @@ export function LiveNewTaskPanel({
             </Button>
           </div>}
 
+        {showHermesSetup && <div className="task-center-project-hint" role="status">
+          <span>{hermesSetupResult?.status === 'needs-gateway'
+            ? t('center.newTask.hermesSetup.needsGateway')
+            : t('center.newTask.hermesSetup.hint')}</span>
+          <Button size="small" disabled={hermesSettingUp || productsLoading} onClick={() => {setHermesSetupError('');setHermesSetupOpen(true)}}>
+            {t('center.newTask.hermesSetup.open')}
+          </Button>
+          <Button size="small" disabled={hermesSettingUp || productsLoading} onClick={() => void refreshHermes()}>
+            {t('center.newTask.hermesSetup.check')}
+          </Button>
+        </div>}
+
         {titleSupported && <label className="task-center-new-task-title">
           <span>{t('center.newTask.taskTitle')}</span>
           <Input value={taskTitle} onChange={event => setTaskTitle(event.target.value)} placeholder={t('center.newTask.taskTitlePlaceholder')} disabled={starting} aria-label={t('center.newTask.taskTitleAria')}/>
@@ -393,6 +440,20 @@ export function LiveNewTaskPanel({
       {workspaceSupported && !options.length && !projectLoading && !projectDiscoveryError && !projectSearchActive && <div className="task-center-project-hint">{t('center.newTask.noLocalProjects')}</div>}
       {!productsLoading && products.length === 0 && !productsError && <div className="task-center-project-hint">{t('center.newTask.noLiveAgents')}</div>}
     </section>
+    <Dialog
+      open={hermesSetupOpen}
+      title={t('center.newTask.hermesSetup.title')}
+      description={t('center.newTask.hermesSetup.description')}
+      onClose={() => { if (!hermesSettingUp) setHermesSetupOpen(false) }}
+      closeDisabled={hermesSettingUp}
+      footer={<>
+        <Button disabled={hermesSettingUp} onClick={() => setHermesSetupOpen(false)}>{t('center.newTask.hermesSetup.cancel')}</Button>
+        <Button variant="primary" loading={hermesSettingUp} onClick={() => void initializeHermes()}>{t('center.newTask.hermesSetup.confirm')}</Button>
+      </>}
+    >
+      <p>{t('center.newTask.hermesSetup.scope')}</p>
+      {hermesSetupError && <div role="alert" className="task-center-project-hint">{hermesSetupError}</div>}
+    </Dialog>
     {browserOpen && <HostDirectoryBrowser
       open
       initialPath={directoryIsVerified ? directoryPath : recentDirectories[0]?.cwd}

@@ -53,9 +53,14 @@ export class DefaultHermesLiveService {
   private readonly runtimes = new Map<string, OwnedRuntime>()
   private disposed = false
 
-  constructor(readonly client: HermesApiClient) {}
+  constructor(readonly client: HermesApiClient, private readonly refreshConfiguration?: () => Promise<void>) {}
 
   async availability(): Promise<LiveAvailability> {
+    try {
+      await this.refreshConfiguration?.()
+    } catch (error) {
+      return { available: false, reason: formatLiveError(error, 1_000) }
+    }
     if (!this.client.configured) {
       return {
         available: false,
