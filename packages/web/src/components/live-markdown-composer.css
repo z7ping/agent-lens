@@ -21,13 +21,13 @@
 
 .live-markdown-placeholder {
   position: absolute;
-  top: 15px;
+  top: 12px;
   right: 98px;
   left: 18px;
   overflow: hidden;
   color: var(--al-muted);
-  font-size: 15px;
-  line-height: 1.55;
+  font-size: var(--text-control);
+  line-height: 1.5;
   text-overflow: ellipsis;
   white-space: nowrap;
   pointer-events: none;
@@ -82,9 +82,9 @@
   line-height: 1.5;
   font-weight: 680;
 }
-.live-md-h1 { font-size: 15.5px; }
-.live-md-h2 { font-size: 15px; }
-.live-md-h3, .live-md-h4, .live-md-h5, .live-md-h6 { font-size: 14.5px; }
+.live-md-h1 { font-size: var(--text-body); }
+.live-md-h2 { font-size: var(--text-control); }
+.live-md-h3, .live-md-h4, .live-md-h5, .live-md-h6 { font-size: var(--text-control); }
 
 .live-md-ul, .live-md-ol {
   margin: 2px 0;
