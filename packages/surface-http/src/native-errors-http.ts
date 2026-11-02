@@ -55,7 +55,7 @@ export async function handleNativeErrorIndexRequest(
   ])
   writeJson(response,200,{...page,eligibleSessions:overview.eligibleSessions,
     readySessions:overview.readySessions,
-    indexedSessions:overview.readySessions+overview.partialSessions,
+    indexedSessions:page.indexedSessions,
     partialSessions:overview.partialSessions})
   return true
 }
