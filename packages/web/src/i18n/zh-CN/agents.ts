@@ -469,6 +469,7 @@ export const chineseAgentsMessages: LocaleMessagesDto = {
       showRemaining: '查看其余 {{count}} 类原生事件',
       aria: '智能体洞察',
       diagnosticsTitle: '采集诊断',
+      globalStorageScope: '以下为全局存储状态，不代表当前智能体的单独用量或健康情况。',
       diagnosticsDescription: '{{agent}} · 采集链路与本地数据状态。',
       issueSummary: '{{failed}} 异常 · {{unknown}} 待适配',
       healthy: '运行正常',
