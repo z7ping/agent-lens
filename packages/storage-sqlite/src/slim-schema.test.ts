@@ -163,3 +163,22 @@ test('existing slim v1 upgrades atomically without losing historical tool counts
     await again.close()
   }finally{await rm(dir,{recursive:true,force:true})}
 })
+
+test('existing slim v2 upgrades to v3 without losing numerical aggregates',async()=>{
+  const db=new Database(':memory:')
+  db.exec(SLIM_SCHEMA_SQL)
+  db.prepare('INSERT INTO schema_migrations(version,name,applied_at) VALUES (?,?,?)')
+    .run(1,'slim-native-session-v1','2026-10-25')
+  db.exec(SLIM_SCHEMA_V2_SQL)
+  db.prepare('INSERT INTO schema_migrations(version,name,applied_at) VALUES (?,?,?)')
+    .run(2,'slim-tool-duration-v2','2026-10-26')
+  const storage=new SqliteSlimStorage(db)
+  try{
+    assertSlimSchema(db)
+    assert.equal((db.prepare('SELECT MAX(version) AS v FROM schema_migrations')
+      .get() as {v:number}).v,3)
+    assert.equal((db.prepare(`SELECT COUNT(*) AS c FROM sqlite_master
+      WHERE type='table' AND name IN ('native_error_index','native_error_index_state')`)
+      .get() as {c:number}).c,2)
+  }finally{await storage.close()}
+})
