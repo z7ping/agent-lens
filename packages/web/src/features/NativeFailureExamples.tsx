@@ -38,10 +38,11 @@ export function NativeFailureExamples({filters,toolName}: {filters:QueryFilters;
     if(!sourceId){setData(null);return ()=>controller.abort()}
     let timer:ReturnType<typeof setTimeout>|undefined
     let busy=false
+    let first=true
     const load=async()=>{
       if(busy||controller.signal.aborted)return
       busy=true
-      if(!data)setLoading(true)
+      if(first){setLoading(true);first=false}
       try{
         const result=await api.nativeErrors({
           sourceId,projectId:filters.projectId||undefined,toolName,
@@ -117,9 +118,9 @@ export function NativeFailureExamples({filters,toolName}: {filters:QueryFilters;
             to:offset+entries.length,total:data.total}):t('failures.title')}
         </div>
         {!sourceId?<EmptyStatePanel compact icon={<UiIcon name="search" size={20}/>}
-          title={t('failures.selectAgent')}/>:
+          title={t('failures.selectAgent')} description={t('failures.selectAgent')}/>:
           !entries.length&&!loading&&<EmptyStatePanel compact icon={<UiIcon name="search" size={20}/>}
-            title={t('failures.empty')}/>}
+            title={t('failures.empty')} description={t('failures.indexed')}/>}
         <ul className="native-failure-list">{entries.map(item=><li key={item.eventKey}>
           <button type="button" className={`native-failure-item${active===item?' is-selected':''}`}
             aria-pressed={active===item} onClick={()=>setSelectedKey(item.eventKey)}>
