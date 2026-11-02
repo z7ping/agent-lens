@@ -100,7 +100,7 @@ export function BackupRestorePreviewWorkbench({
     if (node.kind === 'file') {
       const item = node.item!
       return <div key={node.id} className="backup-preview-tree-file" role="treeitem"
-        aria-level={depth + 1} title={node.path} data-status={item.status}>
+        aria-level={depth + 1} title={node.path} data-status={item.status} data-selected={selectedKey === item.archivePath}>
         <button type="button" className="backup-preview-tree-file-name"
           aria-pressed={selectedKey === item.archivePath} onClick={() => setSelectedKey(item.archivePath)}
           title={t('preview.openFile')}>
