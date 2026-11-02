@@ -81,7 +81,7 @@ export function NativeFailureExamples({filters,toolName}: {filters:QueryFilters;
   const copy=async()=>{
     try{
       await copyText(JSON.stringify({schemaVersion:1,scope:{sourceId,toolName:toolName??null,search},
-        indexed:data?.readySessions,eligible:data?.eligibleSessions,
+        indexed:data?.indexedSessions,eligible:data?.eligibleSessions,
         total:data?.total,offset,items:entries},null,2))
       setCopyState('copied')
     }catch{setCopyState('error')}
@@ -90,7 +90,7 @@ export function NativeFailureExamples({filters,toolName}: {filters:QueryFilters;
     <div className="native-failure-scan-bar">
       <span className="native-failure-scan-status" role="status" aria-live="polite">
         <StatusBadge dot tone={data&&(data.indexedSessions<data.eligibleSessions||data.partialSessions>0)?'warning':'neutral'}>
-          {data&&data.indexedSessions<data.eligibleSessions||data.partialSessions>0?t('failures.indexing'):t('failures.indexed')}
+          {data&&(data.indexedSessions<data.eligibleSessions||data.partialSessions>0)?t('failures.indexing'):t('failures.indexed')}
         </StatusBadge>
         {data&&<span>{t('failures.indexCoverage',{ready:data.indexedSessions,eligible:data.eligibleSessions})}</span>}
         {data&&<b>{t('failures.samples',{count:data.total})}</b>}
