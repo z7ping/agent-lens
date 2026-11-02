@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { useLocation } from 'react-router-dom'
 import { AgentScope, agentLabel, sourceDot } from '../components/AgentScope'
 import { AgentLogo } from '../components/AgentLogo'
 import type { LiveMarkdownComposerDraft, LiveMarkdownComposerHandle } from '../components/LiveMarkdownComposer'
@@ -56,6 +57,10 @@ type OversizedFragmentState = {
 }
 
 export function ReviewPage({ model, embedded = false, latestRequest = 0 }: { model: AgentLensClientModel; embedded?: boolean; latestRequest?: number }) {
+  const location=useLocation()
+  const focusTurnText=new URLSearchParams(location.search).get('focusTurn')
+  const parsedFocusTurn=focusTurnText && /^[1-9]\\d*$/.test(focusTurnText)?Number(focusTurnText):0
+  const focusTurnOrdinal=Number.isSafeInteger(parsedFocusTurn)&&parsedFocusTurn>0?parsedFocusTurn:0
   const {
     t,
     sessionId,
@@ -605,6 +610,7 @@ export function ReviewPage({ model, embedded = false, latestRequest = 0 }: { mod
           && nativeTurnIndex?.state==='available'
           ?nativeTurnIndex.knownTurns:undefined}
         onTurnRailSelect={onTurnRailSelect}
+        focusTurnTarget={detail&&focusTurnOrdinal?{key:`${detail.id}:${focusTurnOrdinal}`,ordinal:focusTurnOrdinal}:undefined}
       >
         {detail && <TaskHeader
           marker={<AgentLogo sourceId={detail.productId || detail.sourceIds[0] || ''} size="normal"/>}
