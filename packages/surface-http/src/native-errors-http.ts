@@ -52,7 +52,8 @@ export async function handleNativeErrorIndexRequest(
   const [page,overview]=await Promise.all([
     metrics.queryErrors({sourceId,parserVersion:source.manifest.parserVersion,
       limit,offset,...(projectId?{projectId}:{}),...(toolName?{toolName}:{}),
-      ...(search?{search}:{}),...(from?{from}:{}),...(to?{to}:{})}),
+      ...(search?{search}:{}),...(fingerprint?{fingerprint}:{}),
+      ...(from?{from}:{}),...(to?{to}:{})}),
     metrics.overview(scope),
   ])
   writeJson(response,200,{...page,eligibleSessions:overview.eligibleSessions,
