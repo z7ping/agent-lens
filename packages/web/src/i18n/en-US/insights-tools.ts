@@ -195,6 +195,7 @@ export const englishInsightsToolsMessages: LocaleMessagesDto = {
       backToTools: 'Back to tools',
       nativeTitle: 'Native tool metrics',
       nativeScope: '{{ready}} / {{eligible}} sessions verified',
+      nativeTimeBasis: 'Filtered by the native session's last activity time: tool calls and error examples belong to that session, not their individual event dates.',
       nativePartialStatus: 'Partial data',
       nativeCompleteStatus: 'Verified',
       nativeObservedShort: 'Partial: {{sessions}} sessions · ≥{{calls}} calls',
