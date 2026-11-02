@@ -162,12 +162,11 @@ export function InsightsPage({ model, toolbarHost }: { model: AgentLensClientMod
             <div><span>{t('page.nativeVerifiedErrors')}</span>
               <b>{data.meta.native.errorCount}</b></div>
             <div><span>{t('page.nativeCoverageStatus')}</span>
-              <b className={data.meta.native.coverage === 'partial' ? 'is-warning' : ''}>
+              <b className={data.meta.native.coverage === 'partial' ? 'is-warning' : ''}
+                title={t(data.meta.mode === 'native-only' ? 'page.nativeOnlyModeNote' : 'page.nativeSeparateNote')}>
                 {data.meta.native.coverage === 'partial'
                   ? t('page.nativePartialCoverage') : t('page.nativeCompleteCoverage')}</b></div>
           </>}
-          <small>{data.meta.mode==='native-only'
-            ? t('page.nativeOnlyModeNote') : t('page.nativeSeparateNote')}</small>
         </section>}
 
 
@@ -192,8 +191,10 @@ export function InsightsPage({ model, toolbarHost }: { model: AgentLensClientMod
             </div>
           </section>}
           {nativeTrend.length>0 && <section className="insight-card">
-            <div className="insight-card-head"><h2>{t('page.nativeTrendTitle')}</h2></div>
-            <p className="insight-trend-caption">{t('page.nativeTrendDescription')}</p>
+            <div className="insight-card-head insight-native-trend-heading">
+              <h2>{t('page.nativeTrendTitle')}</h2>
+              <span title={t('page.nativeTrendDescription')}>{t('page.nativeTrendBasis')}</span>
+            </div>
             <div className="insight-trend" role="img" aria-label={t('page.nativeTrendTitle')}>
               {nativeTrend.map(point=><div key={point.date} className="insight-trend-column"
                 title={t('page.nativeTrendPoint',{date:point.date,sessions:point.sessionCount,calls:point.toolCallCount})}>
@@ -222,11 +223,6 @@ export function InsightsPage({ model, toolbarHost }: { model: AgentLensClientMod
               <strong>{verifiedNative.observed.errorCount}</strong>
             </div>
           </section>}
-          <section className="insight-method-note" role="status">
-            <span>{verifiedNative?.observed
-              ?t('page.nativeObservedNote')
-              :t('page.nativeOnlyModeNote')}</span>
-          </section>
         </> : data && data.summary.sessionCount > 0 ? <>
           <section className="insight-coverage-strip" aria-label={t('page.coverageAria')}>
             <div><span>{t('page.statisticsRange')}</span><b>{rangeLabel(usage.filters.range, t, locale, data.meta.from, data.meta.to)}</b></div>

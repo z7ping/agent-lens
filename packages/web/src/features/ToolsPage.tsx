@@ -11,7 +11,7 @@ import { agentLabel, useOrderedAgents } from '../components/AgentScope'
 import { EmptyStatePanel, ErrorStateBanner, WorkspaceSkeleton } from '../components/StateViews'
 import { ToolKindIcon, toolVisualKind } from '../components/ToolKindIcon'
 import { SidebarFilterDisclosure } from '../components/SidebarFilterDisclosure'
-import { Button, IconButton, SelectMenu, UiIcon } from '../components/ui'
+import { Button, IconButton, SelectMenu, StatusBadge, UiIcon } from '../components/ui'
 import { projectSelectOption } from './project-presentation'
 import { NativeFailureExamples } from './NativeFailureExamples'
 
@@ -385,13 +385,23 @@ export function ToolsPage({ model, toolbarHost }: { model: AgentLensClientModel;
 
         {nativeHasSessions && nativeMetrics?.state==='available' && <section className="tool-table-card"
           aria-label={t('page.nativeTitle')}>
-          <div className="table-section-head"><div className="tool-native-summary"><h2>{t('page.nativeTitle')}</h2>
+          <div className="table-section-head"><div className="tool-native-summary">
+            <div className="tool-native-summary-heading">
+              <h2>{t('page.nativeTitle')}</h2>
+              <StatusBadge tone={nativeMetrics.coverage==='partial'||nativeMetrics.toolsTruncated?'warning':'success'}
+                title={nativeMetrics.coverage==='partial'||nativeMetrics.toolsTruncated
+                  ?t('page.nativePartialNote')
+                  :t(nativeOnlyMode?'page.nativeOnlyModeNote':'page.nativeSeparateNote')}>
+                {t(nativeMetrics.coverage==='partial'||nativeMetrics.toolsTruncated?'page.nativePartialStatus':'page.nativeCompleteStatus')}
+              </StatusBadge>
+            </div>
             <small>{t('page.nativeScope', {ready:nativeMetrics.readySessions,
               eligible:nativeMetrics.eligibleSessions})}</small>
-            {nativeMetrics.partialSessions>0 && <small>{t('page.nativeObservedSummary',{
-              sessions:nativeMetrics.partialSessions,
-              calls:observedNative?.toolCallCount??0,
-            })}</small>}</div></div>
+            {nativeMetrics.partialSessions>0 && <small title={t('page.nativeObservedGroup')}>
+              {t('page.nativeObservedShort', {
+                sessions:nativeMetrics.partialSessions,
+                calls:observedNative?.toolCallCount??0,
+              })}</small>}</div></div>
           <div className="table-scroll">
             {nativeToolRows.length ? <table className="tool-table">
               <thead><tr>
@@ -401,7 +411,8 @@ export function ToolsPage({ model, toolbarHost }: { model: AgentLensClientModel;
                   ['errorCount','failure'],['sessionCount','sessions'],
                   ['averageDurationMs','averageDuration'],['maxDurationMs','maxDuration'],
                 ] as const).map(([key,label])=><th key={key} scope="col"
-                  aria-sort={nativeAriaSort(key)}>
+                  aria-sort={nativeAriaSort(key)}
+                  title={key==='averageDurationMs'||key==='maxDurationMs'?t('page.nativeDurationNote'):undefined}>
                   <button type="button" className="tool-table-sort"
                     onClick={()=>toggleNativeSort(key)}>{t(`page.${label}`)} {nativeSortIcon(key)}</button>
                 </th>)}
@@ -415,10 +426,6 @@ export function ToolsPage({ model, toolbarHost }: { model: AgentLensClientModel;
               </tbody>}
             </table> : <div className="tools-empty-state">{t('page.nativeNoCalls')}</div>}
           </div>
-          <small>{nativeMetrics.coverage==='partial' || nativeMetrics.toolsTruncated
-            ? t('page.nativePartialNote') : nativeOnlyMode
-               ? t('page.nativeOnlyModeNote') : t('page.nativeSeparateNote')}</small>
-          <small>{t('page.nativeDurationNote')}</small>
         </section>}
         {(nativeMostErrors||nativeSlowest||nativeLongest)&&<section className="tool-attention">
           <div className="section-heading-row"><div><h3>{t('page.attention')}</h3></div></div>
@@ -446,9 +453,7 @@ export function ToolsPage({ model, toolbarHost }: { model: AgentLensClientModel;
 
         {blockingError ? null : usage.loading && !data ? <WorkspaceSkeleton kind="tools"/> : nativeOnlyMode ? (
           nativeHasSessions
-            ? <div className="tool-projection-status" role="status">
-              <span>{t('page.nativeOnlyModeNote')}</span>
-            </div>
+            ? null
             : <div className="tools-empty-state"><EmptyStatePanel
               icon={<UiIcon name="search" size={20}/>}
               title={t('page.emptyTitle')}
@@ -549,7 +554,6 @@ export function ToolsPage({ model, toolbarHost }: { model: AgentLensClientModel;
           </div>
           {nativeDetailLoading&&<div className="tool-drill-note">{t('page.loadingSessions')}</div>}
           {nativeDetailError&&<div className="tool-drill-note">{nativeDetailError}</div>}
-          <div className="tool-drill-note">{t('page.nativeOnlyModeNote')}</div>
           <NativeFailureExamples filters={{...usage.filters,sourceIds:[activeNativeTool.sourceId]}}
             toolName={activeNativeTool.nativeToolName}/>
         </div>
