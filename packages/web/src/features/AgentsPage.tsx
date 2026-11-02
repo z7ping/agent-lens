@@ -557,7 +557,7 @@ function AgentCard({ model, agent, management, discovery, discoveryScanning, dis
     </> : <section className="agent-primary-section">
       <div className="section-heading-row"><div><h3>{t('sections.myAssets')}</h3></div><span className="section-total">{userAssetCount}</span></div>
       <div className="asset-kpis">
-        {userGrouped.length ? userGrouped.map(([type, items]) => <div key={type} className="asset-kpi"><strong>{items.length}</strong><span>{translatedLabel(assetTypeLabelKey, type, t)}</span></div>) : <div className="muted-empty compact">{t('sections.noUserAssets')}</div>}
+        {userGrouped.length ? userGrouped.map(([type, items]) => <div key={type} className="asset-kpi"><strong>{items.length}</strong><span>{translatedLabel(assetTypeLabelKey, type, t)}</span></div>) : <div className="muted-empty compact">{t(agent.assetInventoryStatus === 'unavailable' ? 'sections.inventoryUnavailable' : 'sections.noUserAssets')}</div>}
       </div>
       {userUsageCount > 0 && <div className="reliable-usage">{t('sections.reliableCalls', { count: userUsageCount })}</div>}
     </section>}
