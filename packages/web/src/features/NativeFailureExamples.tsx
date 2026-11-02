@@ -89,7 +89,7 @@ export function NativeFailureExamples({filters,toolName}: {filters:QueryFilters;
   return <section className="native-failure-examples" aria-label={t('failures.title')}>
     <div className="native-failure-scan-bar">
       <span className="native-failure-scan-status" role="status" aria-live="polite">
-        <StatusBadge dot tone={data&&data.indexedSessions<data.eligibleSessions||data.partialSessions>0?'warning':'neutral'}>
+        <StatusBadge dot tone={data&&(data.indexedSessions<data.eligibleSessions||data.partialSessions>0)?'warning':'neutral'}>
           {data&&data.indexedSessions<data.eligibleSessions||data.partialSessions>0?t('failures.indexing'):t('failures.indexed')}
         </StatusBadge>
         {data&&<span>{t('failures.indexCoverage',{ready:data.indexedSessions,eligible:data.eligibleSessions})}</span>}
