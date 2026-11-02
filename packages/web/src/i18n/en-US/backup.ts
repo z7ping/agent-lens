@@ -40,10 +40,6 @@ export const englishBackupMessages: LocaleMessagesDto = {
       factReadonly: 'Does not modify source files',
       factProgressive: 'Each agent appears as soon as it completes',
     },
-    create: {
-      verifyNotCompleted: 'Snapshot {{id}} was created but verification did not finish: {{error}}. Retry from Backup History.',
-      verifyFailed: 'Snapshot {{id}} was created but failed integrity verification. Check Backup History.',
-    },
     builder: {
       files: '{{count}} files',
       logicalFiles: '{{logical}} items · {{files}} files',
@@ -186,6 +182,8 @@ export const englishBackupMessages: LocaleMessagesDto = {
       previewOnly: 'This version supports preview only and does not write files back directly',
     },
     create: {
+      verifyNotCompleted: 'Snapshot {{id}} was created but verification did not finish: {{error}}. Retry from Backup History.',
+      verifyFailed: 'Snapshot {{id}} was created but failed integrity verification. Check Backup History.',
       title: 'Create snapshot',
       local: 'Local',
       agents: 'Agents',
