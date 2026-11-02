@@ -874,8 +874,8 @@ export class AgentLensApi {
     return this.openHostPath(path)
   }
 
-  backupRestorePreview(id: string): Promise<BackupRestorePreviewResponseDto> {
-    return requestJson(`/api/v1/backups/${encodeURIComponent(id)}/restore-preview`)
+  backupRestorePreview(id: string, signal?: AbortSignal): Promise<BackupRestorePreviewResponseDto> {
+    return requestJson(`/api/v1/backups/${encodeURIComponent(id)}/restore-preview`, { signal })
   }
 
   exportBackup(id: string): Promise<Blob> {
