@@ -312,6 +312,17 @@ export const englishTaskMessages: LocaleMessagesDto = {
         agentUnavailableReason: '{{agent}} unavailable · {{reason}}',
         agentUnavailableShort: 'Currently unavailable',
         openIntegrationManagement: 'Open integration management',
+        hermesSetup: {
+          open: 'Enable Hermes Live',
+          check: 'Recheck',
+          title: 'Initialize Hermes Live',
+          description: 'AgentLens will update local Hermes configuration only after confirmation. Authentication stays enabled and the key is never displayed.',
+          hint: 'Enable the local API and generate or reuse its access key.',
+          needsGateway: 'Configuration saved. Restart the Hermes gateway, then select Recheck.',
+          scope: 'Only API_SERVER_ENABLED and a missing API_SERVER_KEY in the local Hermes .env will be changed. Remote connections and unknown profiles are not modified.',
+          cancel: 'Cancel',
+          confirm: 'Initialize',
+        },
         unregisteredLive: {
           'not-installed': 'The {{agent}} integration is not installed. Install it in integration management.',
           'needs-update': 'The {{agent}} integration needs repair or update in integration management.',
