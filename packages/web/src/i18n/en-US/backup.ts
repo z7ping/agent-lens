@@ -28,6 +28,7 @@ export const englishBackupMessages: LocaleMessagesDto = {
     },
     files: '{{count}} files',
     logicalFiles: '{{logical}} items · {{files}} files',
+    importSucceeded: 'Backup imported: {{count}} files saved to the local snapshot vault.',
     snapshotCreated: 'Snapshot created: {{files}} files · {{size}}{{excluded}}',
     snapshotExcluded: ' · {{count}} items excluded by safety rules',
     copyPathFailed: 'Failed to copy path. Select and copy the path text manually.',
