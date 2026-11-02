@@ -1,3 +1,4 @@
+export * from './agent-workspace'
 export * from './agent-files'
 export * from './agent-rescan'
 export * from './background-activity'
