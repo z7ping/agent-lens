@@ -195,6 +195,7 @@ export const chineseInsightsToolsMessages: LocaleMessagesDto = {
       backToTools: '返回工具列表',
       nativeTitle: '原生工具统计',
       nativeScope: '已校验 {{ready}} / {{eligible}} 个会话',
+      nativeTimeBasis: '按原生会话最后活动时间筛选：工具调用及具体错误均归属该会话，而非各事件实际发生日。',
       nativePartialStatus: '部分数据',
       nativeCompleteStatus: '已校验',
       nativeObservedShort: '部分观察 {{sessions}} 会话 · ≥{{calls}} 次调用',
