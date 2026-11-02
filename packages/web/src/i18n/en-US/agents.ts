@@ -469,6 +469,7 @@ export const englishAgentsMessages: LocaleMessagesDto = {
       showRemaining: 'Show remaining {{count}} native event types',
       aria: 'Agent insights',
       diagnosticsTitle: 'Capture diagnostics',
+      globalStorageScope: 'Global storage metrics, not a per-agent usage or health measurement.',
       diagnosticsDescription: '{{agent}} · Capture pipeline and local data status.',
       issueSummary: '{{failed}} issues · {{unknown}} unadapted',
       healthy: 'Healthy',
