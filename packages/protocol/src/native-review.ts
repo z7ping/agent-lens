@@ -89,6 +89,10 @@ export interface NativeMetricOverviewSourceDto {
     durationSampleCount?:number;maxDurationMs?:number|null
   }>
   toolsTruncated:boolean
+  /** Partial session observations are independent lower bounds, never certified totals. */
+  observed?:{
+    interactionCount:number;toolCallCount:number;errorCount:number
+  }
 }
 export type NativeMetricOverviewResponseDto =
   | {
