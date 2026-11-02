@@ -376,6 +376,7 @@ export const chineseAgentsMessages: LocaleMessagesDto = {
       noRuntimeConfig: '暂无运行与配置路径',
       showMorePaths: '查看更多 {{count}} 条路径',
       captureSupport: 'AgentLens 采集支持',
+      captureSupportUnavailable: '当前来源尚未提供可核验的采集能力明细。',
       captureSupportTitle: '这里展示的是 AgentLens 适配器声明的采集支持，不代表当前智能体安装实例自报告的产品能力。',
     },
     managedFiles: {
@@ -448,6 +449,7 @@ export const chineseAgentsMessages: LocaleMessagesDto = {
         configured: '已配置',
         discovered: '已发现',
         unobserved: '未观察到',
+        unknown: '状态未知',
       },
       stage: {
         history: '历史采集',
@@ -468,6 +470,7 @@ export const chineseAgentsMessages: LocaleMessagesDto = {
       showRemaining: '查看其余 {{count}} 类原生事件',
       aria: '智能体洞察',
       diagnosticsTitle: '采集诊断',
+      globalStorageScope: '以下为全局存储状态，不代表当前智能体的单独用量或健康情况。',
       diagnosticsDescription: '{{agent}} · 采集链路与本地数据状态。',
       issueSummary: '{{failed}} 异常 · {{unknown}} 待适配',
       healthy: '运行正常',

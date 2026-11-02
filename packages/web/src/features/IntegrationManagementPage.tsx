@@ -13,6 +13,7 @@ import { AgentLogo } from '../components/AgentLogo'
 import { useIntegrationOrder } from '../components/IntegrationOrderProvider'
 import { AgentOrderActions, useAgentOrderDrag } from '../components/AgentOrderControls'
 import { Button, Dialog, SelectMenu, StatusBadge, UiIcon } from '../components/ui'
+import { ErrorStateBanner, WorkspaceSkeleton } from '../components/StateViews'
 import {
   agentUpgradeMethods,
   integrationAuthorizationSummary,
@@ -577,7 +578,10 @@ export function IntegrationManagementPage({ model, toolbarHost }: { model: Agent
   if (!management) {
     return <main className="workspace-page">
       <div className="page-content integration-management-content">
-        <div className="empty-state roomy">{snapshot.integrationManagementError || t('managementPage.loading')}</div>
+        {snapshot.integrationManagementError
+          ? <ErrorStateBanner message={snapshot.integrationManagementError}
+              onRetry={() => void model.refreshIntegrationManagement().catch(() => undefined)}/>
+          : <WorkspaceSkeleton kind="agents"/>}
       </div>
     </main>
   }
@@ -602,6 +606,8 @@ export function IntegrationManagementPage({ model, toolbarHost }: { model: Agent
       toolbarHost,
     ) : null}
     <div className="page-content integration-management-content">
+      {snapshot.integrationManagementError && <ErrorStateBanner message={snapshot.integrationManagementError}
+        onRetry={() => void model.refreshIntegrationManagement().catch(() => undefined)}/>}
       <div className="integration-management-surface">
         {ordering ? <section className="integration-management-section" aria-label={t('page.orderTitle')}>
           <div className="integration-management-section-head">

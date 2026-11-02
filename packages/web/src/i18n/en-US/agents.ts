@@ -376,6 +376,7 @@ export const englishAgentsMessages: LocaleMessagesDto = {
       noRuntimeConfig: 'No runtime or configuration paths available',
       showMorePaths: 'Show {{count}} more paths',
       captureSupport: 'AgentLens capture support',
+      captureSupportUnavailable: 'Verified capture capability details are unavailable for this source.',
       captureSupportTitle: 'This shows capture support declared by AgentLens adapters, not product capabilities self-reported by the current agent installation.',
     },
     managedFiles: {
@@ -448,6 +449,7 @@ export const englishAgentsMessages: LocaleMessagesDto = {
         configured: 'Configured',
         discovered: 'Discovered',
         unobserved: 'Not observed',
+        unknown: 'Unknown',
       },
       stage: {
         history: 'History capture',
@@ -468,6 +470,7 @@ export const englishAgentsMessages: LocaleMessagesDto = {
       showRemaining: 'Show remaining {{count}} native event types',
       aria: 'Agent insights',
       diagnosticsTitle: 'Capture diagnostics',
+      globalStorageScope: 'Global storage metrics, not a per-agent usage or health measurement.',
       diagnosticsDescription: '{{agent}} · Capture pipeline and local data status.',
       issueSummary: '{{failed}} issues · {{unknown}} unadapted',
       healthy: 'Healthy',

@@ -27,7 +27,7 @@ test('Pi inline tabs stay anchored beside agent identity as content width change
   assert.match(agent, /className=\{`agent-card-head \$\{isPi \? 'has-inline-tabs' : ''\}`\.trim\(\)\}/)
   assert.match(css, /\.agent-card-head\.has-inline-tabs \.agent-identity \{ flex: 0 1 auto; \}/)
   assert.match(css, /\.agent-card-head\.has-inline-tabs \.ui-status-badge \{ margin-left: auto; \}/)
-  assert.match(overview, /\[activeView\]/)
+  assert.match(overview, /\[activeView, sourceId\]/)
 })
 
 test('installation selector has actual dedup and one-line directory label', () => {
@@ -64,4 +64,27 @@ test('Slim Agent detail never renders unavailable usage as zero verified calls',
   assert.match(agent, /agent\.usedAssetsStatus === 'unavailable'/)
   assert.match(agent, /used === null \? 0/)
   assert.match(agent, /t\('usageUnavailable'\)/)
+})
+
+
+test('Agent overview preserves truthful unavailable states and provides recovery', () => {
+  const rail = read('../components/AgentInsightsRail.tsx')
+  const management = read('./IntegrationManagementPage.tsx')
+  const zh = read('../i18n/zh-CN/agents.ts')
+  const en = read('../i18n/en-US/agents.ts')
+  assert.match(agent, /snapshot\.agentDetailError/)
+  assert.match(agent, /model\.ensureAgentDetail\(selectedRow\.sourceId\)/)
+  assert.match(agent, /sections\.captureSupportUnavailable/)
+  assert.match(agent, /agent\.assetInventoryStatus === 'unavailable'/)
+  assert.match(management, /snapshot\.integrationManagementError/)
+  assert.match(management, /model\.refreshIntegrationManagement\(\)/)
+  assert.match(rail, /agentDiagnosticsAvailable = runtime\.length > 0 \|\| unknownCount > 0/)
+  assert.match(rail, /globalDiagnosticsAvailable/)
+  assert.match(rail, /if \(!asset\) return agent\.usedAssetsStatus === 'unavailable' \? 'unknown' : 'unobserved'/)
+  assert.match(rail, /formatKnownBytes\(growth\?\.databaseBytes/)
+  for (const locale of [zh, en]) {
+    assert.match(locale, /captureSupportUnavailable:/)
+    assert.match(locale, /globalStorageScope:/)
+    assert.match(locale, /unknown:/)
+  }
 })

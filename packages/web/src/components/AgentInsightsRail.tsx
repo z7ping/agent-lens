@@ -7,7 +7,7 @@ import { agentLabel, sourceDot, useOrderedAgents } from './AgentScope'
 import { Disclosure } from './ui'
 
 type JsonRecord = Record<string, unknown>
-type CoverageStatus = 'used' | 'discoverable' | 'configured' | 'discovered' | 'unobserved'
+type CoverageStatus = 'used' | 'discoverable' | 'configured' | 'discovered' | 'unobserved' | 'unknown'
 
 function recordValue(value: unknown): JsonRecord | null {
   return value && typeof value === 'object' && !Array.isArray(value) ? value as JsonRecord : null
@@ -33,6 +33,20 @@ function formatBytes(value: number): string {
   return `${scaled >= 100 || index === 0 ? scaled.toFixed(0) : scaled.toFixed(1)} ${units[index]}`
 }
 
+function knownNumber(value: unknown): number | null {
+  return typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : null
+}
+
+function formatKnownBytes(value: unknown, unavailable: string): string {
+  const number = knownNumber(value)
+  return number === null ? unavailable : formatBytes(number)
+}
+
+function formatKnownCount(value: unknown, locale: string, unavailable: string): string {
+  const number = knownNumber(value)
+  return number === null ? unavailable : number.toLocaleString(locale)
+}
+
 function formatTime(value: string, locale: string, t: TFunction): string {
   if (!value) return t('insightsRail.unavailable')
   const time = new Date(value)
@@ -54,7 +68,9 @@ function stateValue(asset: AgentAssetInventoryDto, state: string): boolean | 'un
 function coverageStatus(agent: AgentCoverageItemDto, type: 'skill' | 'mcp', canonicalName: string): CoverageStatus {
   if (agent.usedAssets.some(item => item.type === type && item.canonicalName === canonicalName && item.callCount > 0)) return 'used'
   const asset = agent.assetInventory.find(item => item.type === type && item.canonicalName === canonicalName)
-  if (!asset) return 'unobserved'
+  // A missing asset can only be marked unobserved when usage coverage is certified.
+  // Known installation/discoverability evidence remains valid even if usage is unknown.
+  if (!asset) return agent.usedAssetsStatus === 'unavailable' ? 'unknown' : 'unobserved'
   if (stateValue(asset, 'discoverable') === true) return 'discoverable'
   if (['installed', 'configured', 'enabled', 'exposed'].some(state => stateValue(asset, state) === true)) return 'configured'
   return 'discovered'
@@ -66,6 +82,7 @@ const coverageStatusKey: Record<CoverageStatus, string> = {
   configured: 'insightsRail.coverageStatus.configured',
   discovered: 'insightsRail.coverageStatus.discovered',
   unobserved: 'insightsRail.coverageStatus.unobserved',
+  unknown: 'insightsRail.coverageStatus.unknown',
 }
 
 const stageKey: Record<string, string> = {
@@ -174,7 +191,9 @@ export function AgentInsightsRail({ snapshot, sourceId }: { snapshot: ClientSnap
   const failedStages = runtime.filter(item => stringValue(item.state) === 'failed').length
   const unknownCount = unknown.reduce((sum, item) => sum + numberValue(item.count), 0)
   const capacityState = stringValue(capacity?.state)
-  const hasIssue = failedStages > 0 || unknownCount > 0 || capacityState === 'approaching' || capacityState === 'exceeded'
+  const agentDiagnosticsAvailable = runtime.length > 0 || unknownCount > 0
+  const globalDiagnosticsAvailable = Boolean(growth || checkpoints)
+  const hasIssue = failedStages > 0 || unknownCount > 0
 
   if (!selectedAgent) return null
 
@@ -182,18 +201,23 @@ export function AgentInsightsRail({ snapshot, sourceId }: { snapshot: ClientSnap
     <section className="agent-insight-card agent-diagnostics-card">
       <header className="agent-insight-head">
         <div><h2>{t('insightsRail.diagnosticsTitle')}</h2></div>
-        <span data-state={hasIssue ? 'warn' : 'ok'}>{hasIssue ? t('insightsRail.issueSummary', { failed: failedStages, unknown: unknownCount.toLocaleString(locale) }) : t('insightsRail.healthy')}</span>
+        <span data-state={!agentDiagnosticsAvailable ? 'unknown' : hasIssue ? 'warn' : 'ok'}>{!agentDiagnosticsAvailable
+          ? t('insightsRail.unavailable')
+          : hasIssue ? t('insightsRail.issueSummary', { failed: failedStages, unknown: unknownCount.toLocaleString(locale) }) : t('insightsRail.healthy')}</span>
       </header>
       <div className="agent-insight-body">
-        <div className="agent-diagnostic-summary-grid">
-          <span><small>{t('insightsRail.database')}</small><b>{formatBytes(numberValue(growth?.databaseBytes))}</b></span>
-          <span><small>WAL</small><b>{formatBytes(numberValue(growth?.walBytes))}</b></span>
-          <span><small>{t('insightsRail.footprint')}</small><b>{formatBytes(numberValue(capacity?.footprintBytes))}</b></span>
-          <span><small>{t('insightsRail.softLimit')}</small><b>{capacityState === 'exceeded' ? t('insightsRail.exceeded') : capacityState === 'approaching' ? t('insightsRail.approaching') : formatBytes(numberValue(capacity?.softLimitBytes))}</b></span>
-          <span><small>{t('insightsRail.reclaimable')}</small><b>{formatBytes(numberValue(growth?.reclaimableBytes))}</b></span>
-          <span><small>{t('insightsRail.checkpoints')}</small><b>{numberValue(checkpoints?.count).toLocaleString()}</b></span>
+        {globalDiagnosticsAvailable && <>
+          <small className="agent-insight-empty">{t('insightsRail.globalStorageScope')}</small>
+          <div className="agent-diagnostic-summary-grid">
+          <span><small>{t('insightsRail.database')}</small><b>{formatKnownBytes(growth?.databaseBytes, t('insightsRail.unavailable'))}</b></span>
+          <span><small>WAL</small><b>{formatKnownBytes(growth?.walBytes, t('insightsRail.unavailable'))}</b></span>
+          <span><small>{t('insightsRail.footprint')}</small><b>{formatKnownBytes(capacity?.footprintBytes, t('insightsRail.unavailable'))}</b></span>
+          <span><small>{t('insightsRail.softLimit')}</small><b>{capacityState === 'exceeded' ? t('insightsRail.exceeded') : capacityState === 'approaching' ? t('insightsRail.approaching') : formatKnownBytes(capacity?.softLimitBytes, t('insightsRail.unavailable'))}</b></span>
+          <span><small>{t('insightsRail.reclaimable')}</small><b>{formatKnownBytes(growth?.reclaimableBytes, t('insightsRail.unavailable'))}</b></span>
+          <span><small>{t('insightsRail.checkpoints')}</small><b>{formatKnownCount(checkpoints?.count, locale, t('insightsRail.unavailable'))}</b></span>
           <span><small>{t('insightsRail.lastUpdated')}</small><b>{formatTime(stringValue(checkpoints?.lastUpdatedAt), locale, t)}</b></span>
-        </div>
+          </div>
+        </>}
         {runtime.length > 0 && <div className="agent-diagnostic-stage-list">
           {runtime.map((item, index) => {
             const stage = stringValue(item.stage)
@@ -203,7 +227,7 @@ export function AgentInsightsRail({ snapshot, sourceId }: { snapshot: ClientSnap
           })}
         </div>}
         {unknownCount > 0 && <NativeEventSummary groups={unknown} total={unknownCount}/>} 
-        {!runtime.length && !growth && <div className="agent-insight-empty">{t('insightsRail.noDiagnostics')}</div>}
+        {!agentDiagnosticsAvailable && <div className="agent-insight-empty">{t('insightsRail.noDiagnostics')}</div>}
       </div>
     </section>
     <CoverageCard agents={coverageAgents}/>
