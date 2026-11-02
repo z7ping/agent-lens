@@ -606,6 +606,8 @@ export function IntegrationManagementPage({ model, toolbarHost }: { model: Agent
       toolbarHost,
     ) : null}
     <div className="page-content integration-management-content">
+      {snapshot.integrationManagementError && <ErrorStateBanner message={snapshot.integrationManagementError}
+        onRetry={() => void model.refreshIntegrationManagement().catch(() => undefined)}/>}
       <div className="integration-management-surface">
         {ordering ? <section className="integration-management-section" aria-label={t('page.orderTitle')}>
           <div className="integration-management-section-head">
