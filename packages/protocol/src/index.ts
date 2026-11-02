@@ -31,3 +31,5 @@ export * from './usage'
 export * from './host-file-preview'
 
 export * from './task-file-changes'
+
+export * from './native-errors'
