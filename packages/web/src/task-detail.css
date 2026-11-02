@@ -296,16 +296,16 @@
 .task-surface .task-round {
   min-width: 0;
   scroll-margin-top: 44px;
-  margin-top: 6px;
+  margin-top: 4px;
   border: 0;
   background: transparent;
   box-shadow: none;
 }
-.task-surface .task-round + .task-round { margin-top: 3px; }
+.task-surface .task-round + .task-round { margin-top: 2px; }
 .task-surface .task-round-has-error > .task-round-summary { color: var(--al-danger); }
 .task-surface .task-round-summary {
   display: flex;
-  min-height: 30px;
+  min-height: 26px;
   align-items: center;
   gap: 6px;
   padding: 0;
@@ -334,24 +334,24 @@
 .task-surface .task-round-live { color: var(--al-accent); }
 .task-surface .task-round-error { color: var(--al-danger); font-weight: 650; }
 .task-surface .task-round-latency { color: var(--al-warning); font-weight: 650; }
-.task-surface .task-round-flow { position: relative; display: flex; min-width: 0; flex-direction: column; gap: 4px; padding: 2px 8px 8px; }
+.task-surface .task-round-flow { position: relative; display: flex; min-width: 0; flex-direction: column; gap: 3px; padding: 2px 6px 6px; }
 
 /* Shared Live / Review reading shell: semantic rounds are navigation anchors, not disclosure cards. */
 .task-surface .task-reading-round {
   display: flex;
   min-width: 0;
   flex-direction: column;
-  gap: 4px;
-  padding: 6px 8px 12px;
-  margin-bottom: 8px;
+  gap: 3px;
+  padding: 4px 6px 6px;
+  margin-bottom: 4px;
   scroll-margin-top: 18px;
 }
 
 /* ── Message / Markdown ── */
-.task-surface .task-message-row { position: relative; z-index: 2; display: flex; width: 100%; min-width: 0; align-items: flex-start; margin: 4px 0; }
+.task-surface .task-message-row { position: relative; z-index: 2; display: flex; width: 100%; min-width: 0; align-items: flex-start; margin: 2px 0; }
 .task-surface .task-message-user { justify-content: flex-end; }
-.task-surface .task-message-assistant { display: block; margin: 4px 0; }
-.task-surface .task-message-bubble { position: relative; min-width: 0; font-size: var(--text-task-body); line-height: 1.62; }
+.task-surface .task-message-assistant { display: block; margin: 2px 0; }
+.task-surface .task-message-bubble { position: relative; min-width: 0; font-size: var(--text-task-body); line-height: 1.5; }
 .task-surface .task-message-bubble-user {
   max-width: min(64%, 760px);
   padding: 6px 10px 7px;
@@ -423,22 +423,22 @@
 /* Explicit Task roles beat the global Markdown default without a late override layer. */
 .task-surface .task-message-content .markdown { font-size: var(--text-task-body); }
 /* Assistant reading rhythm, not a second Markdown theme: keep user bubbles compact. */
-.task-surface .task-message-assistant .markdown { line-height: 1.72; }
+.task-surface .task-message-assistant .markdown { line-height: 1.5; }
 .task-surface .task-message-assistant .markdown > p,
-.task-surface .task-message-assistant .markdown > .markdown-streaming-tail { margin: .56em 0; }
+.task-surface .task-message-assistant .markdown > .markdown-streaming-tail { margin: .35em 0; }
 .task-surface .task-message-assistant .markdown > :is(h1, h2, h3, h4, h5, h6) {
-  margin: 1.06em 0 .4em;
-  line-height: 1.4;
+  margin: .72em 0 .25em;
+  line-height: 1.32;
 }
-.task-surface .task-message-assistant .markdown > :is(ul, ol) { margin: .62em 0; }
-.task-surface .task-message-assistant .markdown li { margin: .2em 0; }
-.task-surface .task-message-assistant .markdown > :is(.copyable-code-block, .markdown-table-scroll) { margin: 11px 0; }
-.task-surface .task-message-assistant .markdown > blockquote { margin: .72em 0; }
+.task-surface .task-message-assistant .markdown > :is(ul, ol) { margin: .4em 0; }
+.task-surface .task-message-assistant .markdown li { margin: .1em 0; }
+.task-surface .task-message-assistant .markdown > :is(.copyable-code-block, .markdown-table-scroll) { margin: 7px 0; }
+.task-surface .task-message-assistant .markdown > blockquote { margin: .48em 0; }
 .task-surface .task-message-assistant .markdown > :first-child { margin-top: 0; }
 .task-surface .task-message-assistant .markdown > :last-child { margin-bottom: 0; }
 /* Supporting evidence stays more compact than the assistant's final answer. */
-.task-surface .task-thinking-content .markdown { font-size: var(--text-task-thinking-markdown); line-height: 1.58; }
-.task-surface .markdown-surface { position: relative; min-width: 0; overflow: visible; line-height: 1.68; overflow-wrap: anywhere; }
+.task-surface .task-thinking-content .markdown { font-size: var(--text-task-thinking-markdown); line-height: 1.5; }
+.task-surface .markdown-surface { position: relative; min-width: 0; overflow: visible; line-height: 1.5; overflow-wrap: anywhere; }
 .task-surface .task-message-content .markdown-surface.is-collapsed { overflow: hidden; }
 .task-surface .markdown,
 .task-surface .markdown p,
@@ -446,14 +446,14 @@
 .task-surface .markdown pre,
 .task-surface .markdown-source {
   max-width: 100%;
-  margin: 9px 0;
-  padding: 9px 11px;
+  margin: 7px 0;
+  padding: 7px 9px;
   overflow: auto;
   border: 1px solid var(--al-line);
   border-radius: 8px;
   background: var(--al-soft-2);
   color: var(--al-ink-2);
-  font: var(--text-task-code)/1.6 var(--font-mono);
+  font: var(--text-task-code)/1.5 var(--font-mono);
   white-space: pre-wrap;
 }
 .task-surface .markdown :not(pre) > code { padding: 1px 4px; border-radius: 4px; background: var(--al-soft); color: var(--al-ink-2); font-family: var(--font-mono); font-size: .9em; }
@@ -607,11 +607,11 @@
 .task-surface .task-tool-group-header {
   display: flex;
   min-width: 0;
-  min-height: 36px;
+  min-height: 30px;
   flex-wrap: wrap;
   align-items: center;
-  gap: 6px 10px;
-  padding: 4px 8px 4px 10px;
+  gap: 6px 8px;
+  padding: 3px 8px;
   border-bottom: 1px solid color-mix(in srgb, var(--al-line) 55%, transparent);
   background: color-mix(in srgb, var(--al-soft) 64%, var(--al-surface));
 }
@@ -650,11 +650,11 @@
 .task-surface .task-tool-group .task-tool-call + .task-tool-call { border-top: 1px solid color-mix(in srgb, var(--al-line) 45%, transparent); }
 
 /* ── Tool: one compact default-closed call, with separate input and output ── */
-.task-surface .task-process-sequence { display: grid; gap: 5px; }
+.task-surface .task-process-sequence { display: grid; gap: 3px; }
 .task-surface .task-process-sequence > .task-process-message { min-width: 0; padding-inline-start: 8px; }
 .task-surface .task-process-sequence > .task-event-row { padding-inline-start: 8px; }
 .task-surface .task-process-message[data-message-role='commentary'] { color: var(--al-ink-2); }
-.task-surface .task-process-message .markdown { font-size: var(--text-task-process); line-height: 1.6; }
+.task-surface .task-process-message .markdown { font-size: var(--text-task-process); line-height: 1.5; }
 .task-surface .task-process-group > .task-thinking-content { margin-left: 0; margin-right: 0; }
 .task-surface .task-process-thinking-card { border: 0; border-radius: var(--radius-sm); background: color-mix(in srgb, var(--al-soft-2) 72%, transparent); }
 .task-surface .task-process-thinking-card > .task-thinking-summary { padding: 4px 8px; }
@@ -665,18 +665,18 @@
   display: grid;
   width: 100%;
   min-width: 0;
-  min-height: 30px;
+  min-height: 26px;
   grid-template-columns: 14px auto minmax(0, 1fr) auto 14px;
   align-items: center;
   gap: 7px;
-  padding: 4px 6px;
+  padding: 3px 6px;
   overflow: hidden;
   border: 0;
   border-radius: 6px;
   background: transparent;
   color: var(--al-ink-2);
   cursor: pointer;
-  font: var(--text-task-tool)/1.45 var(--font-ui);
+  font: var(--text-task-tool)/1.4 var(--font-ui);
   list-style: none;
   text-align: left;
 }
@@ -995,7 +995,7 @@
   border-radius: 8px;
   background: var(--al-soft-2);
   color: var(--al-ink-2);
-  font: var(--text-task-code)/1.6 var(--font-mono);
+  font: var(--text-task-code)/1.5 var(--font-mono);
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
