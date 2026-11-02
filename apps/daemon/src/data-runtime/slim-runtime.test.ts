@@ -49,6 +49,29 @@ test('dedicated slim worker port exposes bounded Native read/metadata writes onl
   }
 })
 
+test('Slim Data Runtime safely upgrades an authenticated v2 file before starting workers',async()=>{
+  const directory=await mkdtemp(join(tmpdir(),'al-slim-error-upgrade-'))
+  const dbPath=join(directory,'slim.sqlite')
+  const db=await SqliteSlimStorage.createFresh(dbPath)
+  db.db.exec(`DROP TABLE native_error_index_state;
+    DROP TABLE native_error_index;
+    DELETE FROM schema_migrations WHERE version=3`)
+  await db.close()
+  const writer=args('writer'),reader=args('reader')
+  const runtime=new SlimDataRuntime({
+    dbPath,writer:writer.port as never,reader:reader.port as never,
+  })
+  try{
+    await runtime.start()
+    const upgraded=SqliteSlimStorage.openExisting(dbPath,true)
+    try{assert.equal((await upgraded.health()).schemaVersion,3)}
+    finally{await upgraded.close()}
+  }finally{
+    await runtime.shutdown()
+    await rm(directory,{recursive:true,force:true})
+  }
+})
+
 test('slim runtime refuses legacy v38 and absent databases before worker start',async()=>{
   const directory=await mkdtemp(join(tmpdir(),'al-slim-guard-'))
   const dbPath=join(directory,'legacy.sqlite')
