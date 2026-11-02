@@ -130,7 +130,12 @@ test('error radar is succinct; partial observations remain separate from certifi
   assert.match(insights,/≥\{verifiedNative\.observed\.errorCount\}/)
   assert.match(insights,/const verified = metric\?\.readySessions/)
   assert.match(insights,/const observed = metric\?\.partialSessions/)
-  assert.match(insights,/const primary = observed !== null && observed > 0/)
+  assert.match(insights,/const showObserved = observed !== null && observed > 0/)
+  assert.match(insights,/const primary = showObserved \? `≥\$\{observed\}`/)
+  assert.match(insights,/page\.radarVerified/)
+  assert.match(insights,/page\.radarObservedLabel/)
+  assert.match(insights,/page\.radarAdditionalObserved/)
+  assert.match(insights,/page\.radarPartialSessions/)
   assert.doesNotMatch(insights,/\(verified \?\? 0\) \+ \(observed \?\? 0\)/)
   for(const translation of [zh,en]){
     for(const key of ['radarTitle','radarCoverage','radarVerifiedLabel','radarObservedLabel','radarPending','radarUnavailable']){
