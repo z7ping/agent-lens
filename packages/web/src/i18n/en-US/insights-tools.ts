@@ -52,6 +52,8 @@ export const englishInsightsToolsMessages: LocaleMessagesDto = {
       radarVerified: '{{count}} verified',
       radarVerifiedLabel: 'Verified',
       radarObservedLabel: 'Partially observed',
+      radarAdditionalObserved: 'Plus ≥{{count}} observed',
+      radarPartialSessions: '{{count}} partially observed',
       radarPending: 'Pending',
       radarNoSessions: 'No sessions',
       radarUnavailable: 'Unavailable',
