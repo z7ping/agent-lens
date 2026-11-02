@@ -122,6 +122,8 @@ export function ToolsPage({ model, toolbarHost }: { model: AgentLensClientModel;
     ...nativeTools.map(tool=>({...tool,partial:false})),
     ...(observedNative?.tools??[]).map(tool=>({...tool,partial:true})),
   ].sort((left,right)=>{
+    // Partial-file lower bounds are a separate cohort, never ranked as verified.
+    if(left.partial!==right.partial)return Number(left.partial)-Number(right.partial)
     const a=left[nativeSort.key]??null
     const b=right[nativeSort.key]??null
     if(a===null || b===null) {
@@ -269,6 +271,29 @@ export function ToolsPage({ model, toolbarHost }: { model: AgentLensClientModel;
     params.set('status', 'all')
     navigate(`/review/${encodeURIComponent(logicalSessionId)}?${params.toString()}`)
   }
+  const renderNativeToolRow = (tool:(typeof nativeToolRows)[number]) => <tr key={tool.sourceId+'::'+tool.nativeToolName+'::'+tool.partial}
+                tabIndex={0}
+                onClick={()=>{void selectNativeTool(tool)}}
+                onKeyDown={event=>{if(event.key==='Enter'||event.key===' '){
+                  event.preventDefault();void selectNativeTool(tool)
+                }}}> 
+                <td><span className="tool-table-name"><ToolKindIcon kind={toolVisualKind(tool.nativeToolName)}/>
+                  <span><b className="tool-name">{tool.nativeToolName}</b>
+                    <span className="tool-source">{sourceLabels([tool.sourceId])}
+                      {tool.partial ? t('page.nativeObservedSuffix') : ''}</span></span></span></td>
+                <td>{tool.callCount}</td>
+                <td>{tool.resultCount}</td>
+                <td className={tool.errorCount ? 'cell-danger' : 'cell-muted'}>{tool.errorCount}</td>
+                <td>{tool.sessionCount}</td>
+                <td className={tool.averageDurationMs!=null && tool.averageDurationMs>=NATIVE_SLOW_AVERAGE_MS?'cell-slow':''}
+                  title={t('page.nativeDurationSamples',{count:tool.durationSampleCount??0})}>
+                  {nativeDuration(tool.averageDurationMs,t)}
+                </td>
+                <td className={tool.maxDurationMs!=null && tool.maxDurationMs>=NATIVE_SLOW_MAX_MS?'cell-slow':''}
+                  title={t('page.nativeDurationSamples',{count:tool.durationSampleCount??0})}>
+                  {nativeDuration(tool.maxDurationMs,t)}
+                </td>
+              </tr>
   const projectFilterOptions = [
     { value: '', label: t('filters.allProjects') },
     ...projects.map(projectSelectOption),
@@ -324,29 +349,13 @@ export function ToolsPage({ model, toolbarHost }: { model: AgentLensClientModel;
                     onClick={()=>toggleNativeSort(key)}>{t(`page.${label}`)} {nativeSortIcon(key)}</button>
                 </th>)}
               </tr></thead>
-              <tbody>{nativeToolRows.map(tool=><tr key={tool.sourceId+'::'+tool.nativeToolName+'::'+tool.partial}
-                tabIndex={0}
-                onClick={()=>{void selectNativeTool(tool)}}
-                onKeyDown={event=>{if(event.key==='Enter'||event.key===' '){
-                  event.preventDefault();void selectNativeTool(tool)
-                }}}> 
-                <td><span className="tool-table-name"><ToolKindIcon kind={toolVisualKind(tool.nativeToolName)}/>
-                  <span><b className="tool-name">{tool.nativeToolName}</b>
-                    <span className="tool-source">{sourceLabels([tool.sourceId])}
-                      {tool.partial ? t('page.nativeObservedSuffix') : ''}</span></span></span></td>
-                <td>{tool.callCount}</td>
-                <td>{tool.resultCount}</td>
-                <td className={tool.errorCount ? 'cell-danger' : 'cell-muted'}>{tool.errorCount}</td>
-                <td>{tool.sessionCount}</td>
-                <td className={tool.averageDurationMs!=null && tool.averageDurationMs>=NATIVE_SLOW_AVERAGE_MS?'cell-slow':''}
-                  title={t('page.nativeDurationSamples',{count:tool.durationSampleCount??0})}>
-                  {nativeDuration(tool.averageDurationMs,t)}
-                </td>
-                <td className={tool.maxDurationMs!=null && tool.maxDurationMs>=NATIVE_SLOW_MAX_MS?'cell-slow':''}
-                  title={t('page.nativeDurationSamples',{count:tool.durationSampleCount??0})}>
-                  {nativeDuration(tool.maxDurationMs,t)}
-                </td>
-              </tr>)}</tbody>
+              <tbody>{nativeToolRows.filter(tool=>!tool.partial).map(renderNativeToolRow)}</tbody>
+              {nativeToolRows.some(tool=>tool.partial) && <tbody>
+                <tr className="tool-native-observed-group"><th scope="rowgroup" colSpan={7}>
+                  {t('page.nativeObservedGroup')}
+                </th></tr>
+                {nativeToolRows.filter(tool=>tool.partial).map(renderNativeToolRow)}
+              </tbody>}
             </table> : <div className="tools-empty-state">{t('page.nativeNoCalls')}</div>}
           </div>
           <small>{nativeMetrics.coverage==='partial' || nativeMetrics.toolsTruncated
