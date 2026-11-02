@@ -186,13 +186,13 @@ function assetKind(type: string): BackupAssetKind {
 }
 
 function selectedKind(kinds: Iterable<BackupAssetKind>, input: BackupCreateInput): boolean {
-  if (!input.kinds?.length) return true
+  if (!input.kinds) return true
   const available = new Set(kinds)
   return input.kinds.some(kind => available.has(kind))
 }
 
 function selectedSource(sourceId: string, input: BackupCreateInput): boolean {
-  return !input.sourceIds?.length || input.sourceIds.includes(sourceId)
+  return !input.sourceIds || input.sourceIds.includes(sourceId)
 }
 
 function sourceScope(
@@ -283,7 +283,9 @@ async function pathState(path: string): Promise<'file' | 'directory' | 'symlink'
   }
 }
 
-async function* walkFiles(root: string): AsyncIterable<{ path: string; symlink: boolean }> {
+async function* walkFiles(root: string, excludedVault?: string): AsyncIterable<{ path: string; symlink: boolean }> {
+  // A vault placed beneath an Agent data/config root must never back itself up.
+  if (excludedVault && isPathInside(excludedVault, root)) return
   const state = await pathState(root)
   if (state === 'file') {
     yield { path: root, symlink: false }
@@ -306,7 +308,7 @@ async function* walkFiles(root: string): AsyncIterable<{ path: string; symlink: 
     const path = join(root, entry.name)
     if (entry.isSymbolicLink()) yield { path, symlink: true }
     else if (entry.isFile()) yield { path, symlink: false }
-    else if (entry.isDirectory()) yield* walkFiles(path)
+    else if (entry.isDirectory()) yield* walkFiles(path, excludedVault)
   }
 }
 
@@ -468,7 +470,7 @@ export class LocalBackupService implements BackupService {
     const selected = new Set(input.sourceIds ?? [])
     const targets: BackupTarget[] = []
     for (const source of this.orderedSources()) {
-      if (selected.size && !selected.has(source.manifest.sourceId)) continue
+      if (input.sourceIds && !selected.has(source.manifest.sourceId)) continue
       let detected: DetectedSource[] = []
       try {
         detected = await source.detect({ host, env: process.env })
@@ -599,7 +601,7 @@ export class LocalBackupService implements BackupService {
             }
           }
         }
-        for await (const item of walkFiles(root.path)) {
+        for await (const item of walkFiles(root.path, this.options.vaultPath)) {
           if (item.symlink) {
             excluded.push(exclusion(target, item.path, root.kinds, 'symbolic-link'))
             continue
@@ -833,6 +835,9 @@ export class LocalBackupService implements BackupService {
   }
 
   async refreshIndex(input: BackupCreateInput = {}): Promise<BackupOverview> {
+    if (input.sourceIds?.length === 0 || input.kinds?.length === 0) {
+      throw new Error('备份扫描范围为空')
+    }
     return this.overviewFromInventory(await this.rebuildInventory(input), input)
   }
 
@@ -917,6 +922,9 @@ export class LocalBackupService implements BackupService {
   }
 
   async createSnapshot(input: BackupCreateInput = {}): Promise<BackupSnapshotManifest> {
+    if (input.sourceIds?.length === 0 || input.kinds?.length === 0) {
+      throw new Error('备份范围为空，拒绝创建快照')
+    }
     const inventory = await this.ensureInventory()
     const files = inventory.files.filter(file => selectedSource(file.sourceId, input) && selectedKind(file.kinds, input))
     const excluded = inventory.excluded
