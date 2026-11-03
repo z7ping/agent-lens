@@ -173,7 +173,7 @@ function MessageBubble({
     {...(loadImage?{loadImage:(attachment:ReviewMessageAttachmentDto,signal:AbortSignal)=>
       loadImage(node.id,attachment,signal)}:{})}
     presentation={{
-      author: node.role === 'user' ? t('local.role.you') : agentLabel(node.sourceId),
+      ...(node.role === 'assistant' ? { author: agentLabel(node.sourceId) } : {}),
       ...(node.role === 'assistant' && modelLabel ? { modelLabel } : {}),
       ...(messageTime ? { time: messageTime } : {}),
     }}
