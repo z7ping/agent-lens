@@ -713,10 +713,28 @@ test('Pi final failure upgrades the last failed attempt without duplicating it',
     const failures = settled.filter(item => item.kind === 'message' && item.error)
     assert.equal(failures.length, 1)
     assert.equal(failures[0]?.kind === 'message' ? failures[0].errorScope : null, undefined)
+    assert.equal(failures[0]?.kind === 'message' ? failures[0].terminalFailure : null, true)
     const round = projectLiveTaskRounds(settled)[0]
     assert.equal(round?.model.terminalFailure, true)
     assert.equal(round?.model.warningCount, 0)
   }
+})
+
+test('generic Live errors are visible warnings until a terminal failure is explicit', () => {
+  const user = { id: 'u', kind: 'message' as const, role: 'user' as const, text: 'task', streaming: false }
+  const transient = reduceLiveTaskEvent([user], event(1, {
+    type: 'error', message: 'Extension failed',
+  }))
+  const round = projectLiveTaskRounds(transient)[0]
+  assert.equal(round?.model.warningCount, 1)
+  assert.equal(round?.model.terminalFailure, false)
+
+  const ended = reduceLiveTaskEvent(transient, event(2, {
+    type: 'status', status: 'failed', message: 'Runtime exited',
+  }))
+  const failed = projectLiveTaskRounds(ended)[0]
+  assert.equal(failed?.model.terminalFailure, true)
+  assert.ok(ended.some(item => item.kind === 'message' && item.terminalFailure))
 })
 
 test('native snapshot last successful assistant supersedes an earlier failed attempt', () => {
