@@ -61,6 +61,7 @@ export const englishCoreMessages: LocaleMessagesDto = {
       stateInterrupted: 'Interrupted',
       notExecuted: 'Not executed',
       statusUnavailable: 'Background status unavailable',
+      loading: 'Loading background status…',
       agentSync: 'Agent history sync',
       syncSteps: 'Sync step timeline',
       syncTarget: 'Sync task {{index}}',
