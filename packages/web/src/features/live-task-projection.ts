@@ -717,12 +717,22 @@ export function reduceLiveTaskEvent(
       || ((event.type === 'error' || event.type === 'completed') ? event.code?.trim() ?? '' : '')
     const lastUser = findLastProjectionIndex(items, item =>
       item.kind === 'message' && item.role === 'user')
-    const alreadyFailed = items.slice(lastUser + 1).some(item =>
+    const priorErrorOffset = findLastProjectionIndex(items.slice(lastUser + 1), item =>
       item.kind === 'message' && item.role === 'assistant' && item.error
-      && (!detail || item.text === detail))
-    if (alreadyFailed) {
+      && (detail ? item.text === detail : event.type === 'completed'))
+    if (priorErrorOffset >= 0) {
+      const priorIndex = lastUser + 1 + priorErrorOffset
+      const prior = items[priorIndex]
+      // A terminal native settlement upgrades the earlier attempt rather than
+      // duplicating the same failure or leaving a misleading warning-only rail.
+      const shouldPromote = prior?.kind === 'message' && prior.errorScope === 'attempt'
+        && (event.type !== 'error' || event.scope !== 'attempt')
+      const reconciled = shouldPromote
+        ? items.map((item, index) => index === priorIndex && item.kind === 'message'
+          ? { ...item, errorScope: undefined } : item)
+        : [...items]
       return event.type === 'completed' || event.type === 'status'
-        ? settleLiveTaskProjectionItems(items, true) : [...items]
+        ? settleLiveTaskProjectionItems(reconciled, true) : reconciled
     }
     return [...(event.type === 'completed' || event.type === 'status'
       ? settleLiveTaskProjectionItems(items, true) : settleCurrentLiveText(items)), {
