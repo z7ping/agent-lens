@@ -3,6 +3,7 @@ import type { LocaleMessagesDto } from '@agent-lens/protocol'
 export const englishAgentsMessages: LocaleMessagesDto = {
   agents: {
     work: {
+      featurePartial: '{{name}} is partially available:',
       workerSession: 'Worker session',
       outputError: 'Could not read Cron output',
       noOutput: 'No output files available',

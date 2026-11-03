@@ -176,7 +176,7 @@ export function AgentWorkPage({model,sourceId}: {model:AgentLensClientModel;sour
       {sessionMessage && <div className="agent-path-error" role="status">{sessionMessage}</div>}
       {response && <div className="agent-detail-pane">
         {response.features.filter(f=>f.availability==='error' || f.availability==='partial').map(feature=><div key={feature.id} role="alert" className="agent-path-error">
-          {t('work.featureError',{name:feature.id})} {feature.reason}
+          {t(feature.availability==='partial'?'work.featurePartial':'work.featureError',{name:feature.id})} {feature.reason}
         </div>)}
         <div className="agent-primary-section">
           <div className="section-heading-row">

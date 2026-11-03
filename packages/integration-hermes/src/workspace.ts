@@ -88,8 +88,9 @@ async function readBoards(root: string, requestedBoard: string | undefined, offs
   const boardPage = availableBoards.slice(boardOffset,boardOffset+24)
   boardsHasMore = boardOffset+boardPage.length<boardsTotal
   for (const board of boardPage) {
-    const db = openReadOnly(board.path)
+    let db: DatabaseSync | undefined
     try {
+      db = openReadOnly(board.path)
       const tc = columns(db, 'tasks')
       if (!tc.has('id') || !tc.has('title') || !tc.has('status')) throw new Error('Unsupported Hermes kanban schema')
       let info: Record<string, unknown> = {}
@@ -195,9 +196,24 @@ async function readBoards(root: string, requestedBoard: string | undefined, offs
         }
       }
     } catch {
-      // An unreadable or incompatible Board must not suppress another valid Board.
+      // A single corrupt/locked Board must not hide the healthy Boards.
       failedBoards += 1
-    } finally { db.close() }
+      const index = boards.findIndex(item => item.id === board.id)
+      if (index >= 0) boards.splice(index, 1)
+      if (selectedBoard === board.id) {
+        selectedBoard = undefined
+        tasks = []
+        runs = []
+        taskLinks = []
+        taskComments = []
+        taskEvents = []
+        detailTaskId = undefined
+        tasksHasMore = false
+        runsHasMore = false
+        taskEventsHasMore = false
+        taskCommentsHasMore = false
+      }
+    } finally { db?.close() }
   }
   return { boards, boardsTotal, boardsHasMore, selectedBoard, tasks, runs, tasksHasMore,
     ...(detailTaskId?{detailTaskId}:{}),taskLinks,taskComments,taskEvents,taskEventsHasMore,runsHasMore,taskCommentsHasMore,failedBoards }
@@ -212,12 +228,14 @@ async function readProjects(root: string, offset=0): Promise<{
   const projects:AgentWorkProjectDto[]=[]
   let discovered=false
   let projectsTotal=0
+  let failedProjects=0
   for (const profile of profiles) {
     const path=join(profile.home,'projects.db')
     if (!await fileExists(path)) continue
     discovered=true
-    const db=openReadOnly(path)
+    let db: DatabaseSync | undefined
     try {
+      db = openReadOnly(path)
       const pc=columns(db,'projects')
       if (!pc.has('id') || !pc.has('slug') || !pc.has('name')) throw new Error('Unsupported Hermes projects schema')
       const count=Number((db.prepare('SELECT COUNT(*) AS n FROM projects').get() as {n:number}).n)
@@ -233,9 +251,11 @@ async function readProjects(root: string, offset=0): Promise<{
         ...(text(row.board_slug)?{boardId:text(row.board_slug)}:{}),
         ...(text(row.primary_path)?{primaryPath:text(row.primary_path)}:{}),
       })
-    } finally {db.close()}
+    } catch {
+      failedProjects += 1
+    } finally {db?.close()}
   }
-  return {discovered,projects,projectsTotal,projectsHasMore:projectsTotal>offset+projects.length}
+  return {discovered,projects,failedProjects,projectsTotal,projectsHasMore:projectsTotal>offset+projects.length}
 }
 async function readSchedules(root: string, jobId?:string, profileName?:string, executionOffset=0, scheduleOffset=0) {
   const profiles = [{name:'default',home:root}, ...(await dirs(join(root,'profiles'))).map(name => ({name, home:join(root,'profiles',name)}))]
@@ -243,12 +263,14 @@ async function readSchedules(root: string, jobId?:string, profileName?:string, e
   const executions: AgentWorkExecutionDto[] = []
   let executionsHasMore = false
   let schedulesTotal = 0
+  let failedCronSources = 0
   let discovered = false
   for (const profile of profiles) {
     const jobsPath = join(profile.home, 'cron', 'jobs.json')
     const executionPath = join(profile.home, 'cron', 'executions.db')
     if (await fileExists(jobsPath)) {
       discovered = true
+      try {
       const parsed = await jsonFile(jobsPath, MAX_JOB_BYTES)
       const value = Array.isArray(parsed) ? parsed : obj(parsed).jobs
       const records = Array.isArray(value) ? value : value && typeof value === 'object' ? Object.values(obj(value)) : []
@@ -272,12 +294,16 @@ async function readSchedules(root: string, jobId?:string, profileName?:string, e
           ...(text(job.workdir)? {workdir:text(job.workdir)} : {}),
         })
       }
+      } catch {
+        failedCronSources += 1
+      }
     }
     if (await fileExists(executionPath)) {
       discovered = true
       if (!jobId || profileName !== profile.name) continue
-      const db = openReadOnly(executionPath)
+      let db: DatabaseSync | undefined
       try {
+        db = openReadOnly(executionPath)
         const ec = columns(db, 'executions')
         if (!ec.has('job_id') || !ec.has('id') || !ec.has('status')) throw new Error('Unsupported Hermes cron executions schema')
         const records = db.prepare('SELECT ' + select(ec, ['id','job_id','status','claimed_at','started_at','finished_at','error','delivery_outcome']) +
@@ -294,10 +320,12 @@ async function readSchedules(root: string, jobId?:string, profileName?:string, e
             ...(text(row.delivery_outcome)?{deliveryOutcome:text(row.delivery_outcome)}:{}),
           })
         }
-      } finally { db.close() }
+      } catch {
+        failedCronSources += 1
+      } finally { db?.close() }
     }
   }
-  return { discovered, schedules, schedulesHasMore: schedulesTotal > scheduleOffset+schedules.length, schedulesTotal, executions, executionsHasMore }
+  return { discovered, failedCronSources, schedules, schedulesHasMore: schedulesTotal > scheduleOffset+schedules.length, schedulesTotal, executions, executionsHasMore }
 }
 /** Bounded, read-only Hermes work view. Features are independent so one broken source does not hide the other. */
 export async function readHermesWorkspace(options: {
@@ -355,7 +383,10 @@ export async function readHermesWorkspace(options: {
         result.schedulesTotal = info.schedulesTotal
         result.executions = info.executions
         result.executionsHasMore = info.executionsHasMore
-        features[1] = {id:'schedules',availability:'available'}
+        features[1] = info.failedCronSources
+          ? {id:'schedules',availability:info.schedules.length?'partial':'error',
+            reason:info.failedCronSources+' Hermes Cron source(s) could not be read'}
+          : {id:'schedules',availability:'available'}
         break
       }
     } catch (error) {
@@ -370,7 +401,10 @@ export async function readHermesWorkspace(options: {
         result.projects = info.projects
         result.projectsHasMore = info.projectsHasMore
         result.projectsTotal = info.projectsTotal
-        features[2] = {id:'projects',availability:'available'}
+        features[2] = info.failedProjects
+          ? {id:'projects',availability:info.projects.length?'partial':'error',
+            reason:info.failedProjects+' Hermes project source(s) could not be read'}
+          : {id:'projects',availability:'available'}
         break
       }
     } catch (error) {
