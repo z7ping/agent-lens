@@ -82,6 +82,7 @@ export const englishTaskMessages: LocaleMessagesDto = {
       roundContinuation: '{{label}} (cont.)',
       running: 'Running',
       hasError: 'Has errors',
+      hasWarning: 'Execution had warnings',
       jumpTo: 'Jump to {{tip}}',
       boundaryNavigation: 'Session boundary navigation',
       jumpStart: 'Jump to start',
