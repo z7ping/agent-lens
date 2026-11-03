@@ -81,6 +81,7 @@ export async function handleAgentWorkspaceRequest(
     }
   }
   if (match[2] === '/write-access') {
+    if (!mutationRunners?.[sourceId]) { writeJson(response, 404, {error:'Workspace writes not supported'}); return true }
     if (!installationId) throw badRequest('Installation is required')
     if ([...url.searchParams.keys()].some(key => key !== 'installationId')) throw badRequest('Unexpected permission parameters')
     const installation = await resolveInstallationRoot(sourceId, installationId)
@@ -215,6 +216,7 @@ export async function handleAgentWorkspaceRequest(
     return true
   }
   writeJson(response,200,{...result,installationId,
+    writeControlAvailable:Boolean(mutationRunners?.[sourceId] && writeAccess),
     availableActions:mutationRunners?.[sourceId] && writeAccess?.allowed({sourceId,installationId,root:root.root})
       ? AGENT_WORK_MUTATION_KINDS : []})
   return true
