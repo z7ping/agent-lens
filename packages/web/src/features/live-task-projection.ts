@@ -16,6 +16,8 @@ export type LiveTaskProjectionItem =
       text: string
       /** Native assistant failure, not a successful generated reply. */
       error?: true | undefined
+      /** Explicit failed runtime/turn settlement, never inferred from generic error text. */
+      terminalFailure?: true | undefined
       /** A native assistant attempt failed; the enclosing agent run may still continue. */
       errorScope?: 'attempt' | undefined
       /** Native adapter diagnostic facts; never inferred from HTTP codes or prose. */
@@ -199,7 +201,7 @@ export function projectLiveSnapshotEntries(entries: readonly unknown[]): LiveTas
         ? item.content
         : undefined
 
-    const pushError = (message: string, scope?: 'attempt') => {
+    const pushError = (message: string, scope?: 'attempt', terminal = false) => {
       const diagnostic = nativeErrorDiagnostic(item, nested)
       projected.push({
         id: `${baseId}:error`,
@@ -207,6 +209,7 @@ export function projectLiveSnapshotEntries(entries: readonly unknown[]): LiveTas
         role: 'assistant',
         text: message,
         error: true,
+        ...(terminal ? { terminalFailure: true } : {}),
         ...(scope ? { errorScope: scope } : {}),
         ...(diagnostic ? { errorDiagnostic: diagnostic } : {}),
         streaming: false,
@@ -220,7 +223,8 @@ export function projectLiveSnapshotEntries(entries: readonly unknown[]): LiveTas
       || item.type === 'runtime_exit' || (item.type === 'runtime_status' && item.status === 'failed')
       || item.kind === 'error'
     if (!rawRole && nativeFailure) {
-      pushError(errorMessage || errorText(item.message) || agentLensI18n.t('task:message.requestFailed'))
+      pushError(errorMessage || errorText(item.message) || agentLensI18n.t('task:message.requestFailed'),
+        undefined, item.type === 'runtime_exit' || (item.type === 'runtime_status' && item.status === 'failed'))
       return
     }
 
@@ -511,7 +515,8 @@ export function mergeLiveActiveProjectionItems(
           ? {
               ...item,
               ...(previous.errorDiagnostic && !item.errorDiagnostic ? { errorDiagnostic: previous.errorDiagnostic } : {}),
-              ...(previous.errorScope && !item.errorScope ? { errorScope: previous.errorScope } : {}),
+              ...(previous.errorScope && !item.errorScope && !previous.terminalFailure ? { errorScope: previous.errorScope } : {}),
+              ...(previous.terminalFailure && !item.terminalFailure ? { terminalFailure: true as const, errorScope: undefined } : {}),
             }
           : item
         indexes.set(item.id, transient)
@@ -717,9 +722,15 @@ export function reduceLiveTaskEvent(
       || ((event.type === 'error' || event.type === 'completed') ? event.code?.trim() ?? '' : '')
     const lastUser = findLastProjectionIndex(items, item =>
       item.kind === 'message' && item.role === 'user')
-    const priorErrorOffset = findLastProjectionIndex(items.slice(lastUser + 1), item =>
-      item.kind === 'message' && item.role === 'assistant' && item.error
-      && (detail ? item.text === detail : event.type === 'completed'))
+    const isTerminal = event.type === 'completed' || (event.type === 'status' && event.status === 'failed')
+    const candidates = items.slice(lastUser + 1)
+    const priorAttemptOffset = !detail && isTerminal
+      ? findLastProjectionIndex(candidates, item => item.kind === 'message' && item.errorScope === 'attempt')
+      : -1
+    const priorErrorOffset = priorAttemptOffset >= 0 ? priorAttemptOffset
+      : findLastProjectionIndex(candidates, item =>
+        item.kind === 'message' && item.role === 'assistant' && item.error
+        && (detail ? item.text === detail : isTerminal))
     if (priorErrorOffset >= 0) {
       const priorIndex = lastUser + 1 + priorErrorOffset
       const prior = items[priorIndex]
@@ -727,9 +738,13 @@ export function reduceLiveTaskEvent(
       // duplicating the same failure or leaving a misleading warning-only rail.
       const shouldPromote = prior?.kind === 'message' && prior.errorScope === 'attempt'
         && (event.type !== 'error' || event.scope !== 'attempt')
-      const reconciled = shouldPromote
+      const reconciled = shouldPromote || (isTerminal && prior?.kind === 'message' && !prior.terminalFailure)
         ? items.map((item, index) => index === priorIndex && item.kind === 'message'
-          ? { ...item, errorScope: undefined } : item)
+          ? {
+              ...item,
+              ...(shouldPromote ? { errorScope: undefined } : {}),
+              ...(isTerminal ? { terminalFailure: true as const } : {}),
+            } : item)
         : [...items]
       return event.type === 'completed' || event.type === 'status'
         ? settleLiveTaskProjectionItems(reconciled, true) : reconciled
@@ -741,6 +756,7 @@ export function reduceLiveTaskEvent(
       role: 'assistant' as const,
       text: detail || agentLensI18n.t('task:message.requestFailed'),
       error: true as const,
+      ...(isTerminal ? { terminalFailure: true as const } : {}),
       ...(event.type === 'error' && event.scope === 'attempt' ? { errorScope: 'attempt' as const } : {}),
       ...((event.type === 'error' || event.type === 'completed') && (event.code || event.category || event.retryable !== undefined)
         ? { errorDiagnostic: {
@@ -914,9 +930,9 @@ function buildRoundModel(
   const errorCount = items.filter(item => (item.kind === 'tool' && item.status === 'error')
     || (item.kind === 'message' && item.error === true)).length
   const warningCount = items.filter(item => (item.kind === 'tool' && item.status === 'error')
-    || (item.kind === 'message' && item.errorScope === 'attempt')).length
+    || (item.kind === 'message' && item.error === true && !item.terminalFailure)).length
   const terminalFailure = items.some(item =>
-    item.kind === 'message' && item.error === true && item.errorScope !== 'attempt')
+    item.kind === 'message' && item.terminalFailure === true)
   const running = items.some(item =>
     (item.kind === 'message' || item.kind === 'thinking') ? item.streaming : item.status === 'running',
   )
