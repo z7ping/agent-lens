@@ -1,7 +1,15 @@
 @reference "../styles.css";
 
-.copyable-code-block { position: relative; min-width: 0; }
-.copyable-code-block.copyable-code-block > pre { margin: 0; padding-right: 70px; }
+.copyable-code-block { display: flex; min-width: 0; flex-direction: column; }
+.copyable-code-block.copyable-code-block > pre { min-width: 0; margin: 0; }
+
+/* Keep the shared copy action in normal flow, above scrollable/wrapping code. */
+.code-block-copy-toolbar {
+  display: flex;
+  flex: 0 0 auto;
+  justify-content: flex-end;
+  padding: 0 7px 4px;
+}
 
 /* Shared readable code baseline (Markdown fences, Tool I/O, source previews).
  * Prism tokens are escaped React nodes, with colors derived from app theme. */
@@ -35,10 +43,7 @@ html body .markdown .copyable-code-block > pre,
 
 
 .code-block-copy {
-  position: absolute;
-  top: 7px;
-  right: 7px;
-  z-index: 2;
+  position: static;
   display: inline-flex;
   min-width: 54px;
   height: 26px;
@@ -73,7 +78,7 @@ html body .markdown .copyable-code-block > pre,
 .task-message-bubble-user .code-block-copy:focus-visible { color: var(--al-user-bubble-text); }
 
 @media (max-width: 767.98px) {
-  .copyable-code-block.copyable-code-block > pre { padding-right: 62px; }
-  .code-block-copy { top: 6px; right: 6px; min-width: 48px; height: 24px; padding-inline: 6px; }
+  .code-block-copy-toolbar { padding-right: 6px; }
+  .code-block-copy { min-width: 48px; height: 24px; padding-inline: 6px; }
 }
 @media (prefers-reduced-motion: reduce) { .code-block-copy { transition: none; } }
