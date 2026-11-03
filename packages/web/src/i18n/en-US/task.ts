@@ -48,6 +48,7 @@ export const englishTaskMessages: LocaleMessagesDto = {
       waitingResponse: 'Waiting for the agent to respond',
       requestFailed: 'Request failed',
       attemptFailureTitle: 'Model attempt failed',
+      executionFailureTitle: 'Execution issue',
       failure: {
         quota: 'Model service quota exhausted',
         quotaHint: 'The request did not complete. Check your model service account quota.',
