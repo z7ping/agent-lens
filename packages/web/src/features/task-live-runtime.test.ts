@@ -102,6 +102,12 @@ test('标准 Live SSE 事件只修改必要状态，并正确处理流式与结�
   assert.equal(runtimeStateFromEvent(titled, event({ type: 'title.update', title: 'New' })), titled)
   const running = runtimeStateFromEvent(initial, event({ type: 'status', status: 'running' }))
   assert.equal(running?.isStreaming, true)
+  // Provider-level attempt errors must not settle or fail a still-running logical run.
+  const attemptFailed = runtimeStateFromEvent(running, event({
+    type: 'error', scope: 'attempt', message: 'Connection error.',
+  }))
+  assert.equal(attemptFailed, running)
+  assert.equal(attemptFailed?.isStreaming, true)
   const idle = runtimeStateFromEvent(running, event({ type: 'status', status: 'idle' }))
   assert.equal(idle?.isStreaming, false)
   const terminal = runtimeStateFromEvent(running, event({ type: 'status', status: 'terminated' }))
