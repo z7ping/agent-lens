@@ -107,6 +107,7 @@ test('Cron output uses the same source policy boundary as the workspace',async()
 test('mutations require local confirmation and a registered single installation',async()=>{
   const commands:Array<unknown>=[]
   let enabled=true
+  let grant=false
   const server=createServer(async(req,res)=>{
     try{
       await handleAgentWorkspaceRequest(req,res,new URL(req.url??'/','http://localhost'),
@@ -118,6 +119,9 @@ test('mutations require local confirmation and a registered single installation'
             commands.push(options)
             return {accepted:true,message:'Native CLI accepted'}
           },
+        },{
+          allowed:scope=>grant && scope.installationId==='known' && scope.root==='/scope/hermes',
+          set:async (scope,value)=>{assert.equal(scope.root,'/scope/hermes');grant=value;return grant},
         })
     }catch(error){
       res.statusCode=error instanceof HttpError?error.statusCode:500
@@ -137,13 +141,24 @@ test('mutations require local confirmation and a registered single installation'
     assert.equal((await request(endpoint,false)).status,403)
     assert.equal((await request('/api/v1/agents/hermes/workspace/action?installationId=missing',true)).status,404)
     assert.equal(commands.length,0)
+    assert.equal((await request(endpoint,true)).status,403,'ungranted writes must remain forbidden')
+    const permission='/api/v1/agents/hermes/workspace/write-access?installationId=known'
+    assert.equal((await fetch(base+permission)).status,200)
+    assert.equal((await fetch(base+permission,{method:'PUT',headers:{'content-type':'application/json'},body:JSON.stringify({confirmed:true,enabled:true})})).status,403)
+    assert.equal((await fetch(base+permission,{method:'PUT',headers:{'content-type':'application/json','x-agent-lens-workspace-action':'confirmed'},body:JSON.stringify({confirmed:true,enabled:true})})).status,200)
+    assert.equal(grant,true)
     const allowed=await request(endpoint,true)
     assert.equal(allowed.status,200)
     const response=await allowed.json() as {accepted:boolean;installationId:string}
     assert.equal(response.accepted,true)
     assert.equal(response.installationId,'known')
-    assert.deepEqual(commands,[{roots:['/scope/hermes'],executable:'/usr/bin/hermes',
+    assert.deepEqual(commands,[{sourceId:'hermes',installationId:'known',roots:['/scope/hermes'],executable:'/usr/bin/hermes',
       action:{kind:'cron.pause',profile:'default',jobId:'job-a'}}])
+    const deniedOrigin=await fetch(base+endpoint,{method:'POST',headers:{origin:'http://attacker.invalid','content-type':'application/json','x-agent-lens-workspace-action':'confirmed'},body:JSON.stringify({confirmed:true,action:{kind:'cron.pause',profile:'default',jobId:'job-a'}})})
+    assert.equal(deniedOrigin.status,403)
+    assert.equal((await fetch(base+permission,{method:'PUT',headers:{'content-type':'application/json','x-agent-lens-workspace-action':'confirmed'},body:JSON.stringify({confirmed:true,enabled:false})})).status,200)
+    assert.equal(grant,false)
+    assert.equal((await request(endpoint,true)).status,403,'revocation must apply immediately')
     enabled=false
     assert.equal((await request(endpoint,true)).status,403)
     assert.equal(commands.length,1)
