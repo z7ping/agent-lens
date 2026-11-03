@@ -114,6 +114,7 @@ export const chineseCoreMessages: LocaleMessagesDto = {
       nativeIndexDone: '原生会话索引',
       nativeIndexProgress: '已检查 {{scopes}} 个来源范围 · 索引 {{sessions}} 条会话',
       nativeIndexIssues: '索引失败 {{failed}} 处 · 延后 {{deferred}} 处',
+      durationSeconds: '耗时 {{count}} 秒',
       openDiagnostics: '查看智能体采集诊断',
       idleState: '空闲',
       sourceRuntimeActive: '正在启动 {{source}} 实时采集',
