@@ -5,6 +5,7 @@ import {
   type AgentWorkOutputResponseDto,
   type AgentWorkMutationDto,
   type AgentWorkMutationResultDto,
+  type AgentWorkMutationReceiptDto,
   type AgentWorkWriteAccessDto,
   type AgentDetailResponseDto,
   type AgentEnrichmentResponseDto,
@@ -211,6 +212,11 @@ export class AgentLensApi {
       'agent-coverage',
       () => requestJson('/api/v1/agents/coverage'),
     )
+  }
+  agentWorkReceipt(sourceId:string,installationId:string,receiptId:string):Promise<AgentWorkMutationReceiptDto>{
+    return requestJson<AgentWorkMutationReceiptDto>(
+      '/api/v1/agents/'+encodeURIComponent(sourceId)+'/workspace/receipt?'+
+      new URLSearchParams({installationId,receiptId}).toString())
   }
   agentWorkWriteAccess(sourceId:string,installationId:string):Promise<AgentWorkWriteAccessDto>{
     return requestJson<AgentWorkWriteAccessDto>(
