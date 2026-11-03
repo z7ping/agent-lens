@@ -1,5 +1,5 @@
 import type { IncomingMessage, ServerResponse } from 'node:http'
-import { AGENT_LENS_PROTOCOL_VERSION, AGENT_WORK_MUTATION_KINDS, type AgentWorkspaceResponseDto, type AgentWorkOutputResponseDto, type AgentWorkMutationDto, type AgentWorkMutationResultDto } from '@agent-lens/protocol'
+import { AGENT_LENS_PROTOCOL_VERSION, AGENT_WORK_MUTATION_KINDS, type AgentWorkspaceResponseDto, type AgentWorkOutputResponseDto, type AgentWorkMutationDto, type AgentWorkMutationResultDto, type AgentWorkMutationReceiptDto } from '@agent-lens/protocol'
 import type { CapturePolicyService, SourceService } from '@agent-lens/core'
 import { badRequest, httpError, readJsonBody, writeJson } from './http-utils'
 import type { WorkspaceWriteAccess } from './agent-workspace-write-access'
@@ -22,10 +22,19 @@ export type AgentWorkspaceReader = (options?: {
 }) => Promise<AgentWorkspaceResponseDto>
 
 export type AgentWorkspaceMutationRunner = (options:{
+  sourceId:string
+  installationId:string
   roots:string[]
   action:AgentWorkMutationDto
   executable?:string
-}) => Promise<{accepted:boolean;message:string}>
+}) => Promise<{accepted:boolean;pending?:boolean;receiptId?:string;message:string}>
+
+export type AgentWorkspaceReceiptReader = (options:{
+  sourceId:string
+  installationId:string
+  roots:string[]
+  receiptId:string
+}) => AgentWorkMutationReceiptDto | null
 
 export type AgentWorkspaceOutputReader = (options: {
   roots?: string[]
@@ -50,8 +59,9 @@ export async function handleAgentWorkspaceRequest(
   outputReaders?: Readonly<Record<string, AgentWorkspaceOutputReader>>,
   mutationRunners?: Readonly<Record<string, AgentWorkspaceMutationRunner>>,
   writeAccess?: WorkspaceWriteAccess,
+  receiptReaders?: Readonly<Record<string, AgentWorkspaceReceiptReader>>,
 ): Promise<boolean> {
-  const match = /^\/api\/v1\/agents\/([^/]+)\/workspace(\/output|\/action|\/write-access)?$/.exec(url.pathname)
+  const match = /^\/api\/v1\/agents\/([^/]+)\/workspace(\/output|\/action|\/write-access|\/receipt)?$/.exec(url.pathname)
   if (!match) return false
   const expectedMethod = match[2] === '/action' ? 'POST'
     : match[2] === '/write-access' ? ['GET', 'PUT'] : ['GET']
@@ -79,6 +89,19 @@ export async function handleAgentWorkspaceRequest(
       || (request.headers['sec-fetch-site'] && !['same-origin', 'none'].includes(String(request.headers['sec-fetch-site'])))) {
       throw httpError(403, 'Cross-origin workspace writes are forbidden')
     }
+  }
+  if (match[2] === '/receipt') {
+    if (!installationId || [...url.searchParams.keys()].some(key=>!['installationId','receiptId'].includes(key))) throw badRequest('Invalid receipt scope')
+    const receiptId=url.searchParams.get('receiptId')
+    if (!receiptId || !/^[0-9a-f]{8}-[0-9a-f-]{27,36}$/i.test(receiptId)) throw badRequest('Invalid receipt identity')
+    const reader=receiptReaders?.[sourceId]
+    if (!reader) {writeJson(response,404,{error:'Run receipts not supported'});return true}
+    const installation=await resolveInstallationRoot(sourceId,installationId)
+    if (!installation) {writeJson(response,404,{error:'Unknown Agent installation'});return true}
+    const result=reader({sourceId,installationId,roots:[installation.root],receiptId})
+    if (!result) {writeJson(response,404,{error:'Unknown or expired run receipt'});return true}
+    writeJson(response,200,result)
+    return true
   }
   if (match[2] === '/write-access') {
     if (!mutationRunners?.[sourceId]) { writeJson(response, 404, {error:'Workspace writes not supported'}); return true }
@@ -125,11 +148,13 @@ export async function handleAgentWorkspaceRequest(
       throw httpError(403, 'Workspace write permission is disabled for this installation')
     }
     // CLI executable comes from the same registered installation when known.
-    const result=await runner({roots:[installation.root],action:payload.action as AgentWorkMutationDto,
+    const result=await runner({sourceId,installationId,roots:[installation.root],action:payload.action as AgentWorkMutationDto,
       ...(installation.executable ? {executable:installation.executable} : {})})
     const answer:AgentWorkMutationResultDto={
       sourceId,installationId,kind:(payload.action as AgentWorkMutationDto).kind,
       accepted:result.accepted,message:result.message,
+      ...(result.pending?{pending:true}:{}),
+      ...(result.receiptId?{receiptId:result.receiptId}:{}),
     }
     writeJson(response,200,answer)
     return true
