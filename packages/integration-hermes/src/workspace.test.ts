@@ -158,3 +158,36 @@ test('conflicting owner-admission receipts never produce a worker-session link',
     assert.equal(result.runs[0]?.workerSessionNativeId,undefined)
   }finally{await rm(root,{recursive:true,force:true})}
 })
+
+test('Projects paginate across profile stores without the previous 200-row cap',async()=>{
+  const root=await mkdtemp(join(tmpdir(),'agentlens-hermes-project-pages-'))
+  try{
+    const profile=join(root,'profiles','coder')
+    await mkdir(profile,{recursive:true})
+    for(const [path,offset,count] of [
+      [join(root,'projects.db'),0,130],
+      [join(profile,'projects.db'),130,120],
+    ] as const) {
+      const db=new DatabaseSync(path)
+      db.exec('CREATE TABLE projects(id TEXT PRIMARY KEY, slug TEXT NOT NULL,name TEXT NOT NULL,archived INTEGER)')
+      const insert=db.prepare('INSERT INTO projects VALUES (?,?,?,?)')
+      for(let i=offset;i<offset+count;i++){
+        const id=String(i).padStart(4,'0')
+        insert.run('p'+id,'repo'+id,'Project '+id,0)
+      }
+      db.close()
+    }
+    const first=await readHermesWorkspace({roots:[root]})
+    assert.equal(first.projects.length,100)
+    assert.equal(first.projectsTotal,250)
+    assert.equal(first.projectsHasMore,true)
+    assert.equal(first.projects[0]?.profile,'default')
+    const second=await readHermesWorkspace({roots:[root],projectOffset:100})
+    assert.equal(second.projects.length,100)
+    assert.equal(second.projects[30]?.profile,'coder')
+    const third=await readHermesWorkspace({roots:[root],projectOffset:200})
+    assert.equal(third.projects.length,50)
+    assert.equal(third.projectsHasMore,false)
+    assert.equal(third.projectsTotal,250)
+  }finally{await rm(root,{recursive:true,force:true})}
+})
