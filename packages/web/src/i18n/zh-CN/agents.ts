@@ -3,6 +3,7 @@ import type { LocaleMessagesDto } from '@agent-lens/protocol'
 export const chineseAgentsMessages: LocaleMessagesDto = {
   agents: {
     work: {
+      noSupportedActions: '当前安装实例未确认支持工作区写操作，请检查 Hermes CLI 版本和可执行文件。',
       writeConfirmed: '已从 Hermes 原生数据确认变更',
       writeUnconfirmed: 'Hermes 已接受命令，原生变更尚未确认；请刷新核对',
       receiptUnavailable: '运行回执暂不可用，请刷新原生执行记录确认结果。',
