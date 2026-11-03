@@ -5,6 +5,7 @@ import {
   type AgentWorkOutputResponseDto,
   type AgentWorkMutationDto,
   type AgentWorkMutationResultDto,
+  type AgentWorkWriteAccessDto,
   type AgentDetailResponseDto,
   type AgentEnrichmentResponseDto,
   type AgentOverviewResponseDto,
@@ -209,6 +210,17 @@ export class AgentLensApi {
       aggregateReadInFlight,
       'agent-coverage',
       () => requestJson('/api/v1/agents/coverage'),
+    )
+  }
+  agentWorkWriteAccess(sourceId:string,installationId:string):Promise<AgentWorkWriteAccessDto>{
+    return requestJson<AgentWorkWriteAccessDto>(
+      '/api/v1/agents/'+encodeURIComponent(sourceId)+'/workspace/write-access?installationId='+encodeURIComponent(installationId))
+  }
+  setAgentWorkWriteAccess(sourceId:string,installationId:string,enabled:boolean):Promise<AgentWorkWriteAccessDto>{
+    return requestJson<AgentWorkWriteAccessDto>(
+      '/api/v1/agents/'+encodeURIComponent(sourceId)+'/workspace/write-access?installationId='+encodeURIComponent(installationId),
+      {method:'PUT',headers:{'content-type':'application/json','x-agent-lens-workspace-action':'confirmed'},
+       body:JSON.stringify({confirmed:true,enabled})},
     )
   }
   agentWorkMutate(sourceId:string,installationId:string,action:AgentWorkMutationDto):Promise<AgentWorkMutationResultDto>{
