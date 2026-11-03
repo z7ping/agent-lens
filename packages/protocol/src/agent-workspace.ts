@@ -158,7 +158,7 @@ export type AgentWorkMutationDto =
   | {kind:'task.block'|'task.unblock'|'task.complete'|'task.promote';boardId:string;taskId:string;reason?:string}
   | {kind:'cron.create';profile:string;schedule:string;prompt:string;name?:string}
   | {kind:'cron.edit';profile:string;jobId:string;schedule?:string;prompt?:string;name?:string}
-  | {kind:'cron.pause'|'cron.resume'|'cron.remove'|'cron.cancel';profile:string;jobId:string}
+  | {kind:'cron.pause'|'cron.resume'|'cron.remove'|'cron.cancel'|'cron.run';profile:string;jobId:string}
 
 export interface AgentWorkWriteAccessDto {
   sourceId: string
@@ -172,6 +172,15 @@ export interface AgentWorkMutationResultDto {
   kind:AgentWorkMutationDto['kind']
   /** The native CLI exited successfully. Read-back is required for persisted state. */
   accepted:boolean
+  /** A background Hermes CLI is still running. This is not a successful native execution. */
+  pending?:boolean
+  receiptId?:string
+  message:string
+}
+
+export interface AgentWorkMutationReceiptDto {
+  receiptId:string
+  status:'running'|'accepted'|'failed'|'unknown'
   message:string
 }
 
@@ -180,5 +189,5 @@ export const AGENT_WORK_MUTATION_KINDS:readonly AgentWorkMutationDto['kind'][]=[
   'board.create','board.rename','board.archive',
   'task.create','task.edit','task.assign','task.link','task.unlink','task.archive',
   'task.block','task.unblock','task.complete','task.promote',
-  'cron.create','cron.edit','cron.pause','cron.resume','cron.remove','cron.cancel',
+  'cron.create','cron.edit','cron.pause','cron.resume','cron.remove','cron.cancel','cron.run',
 ]
