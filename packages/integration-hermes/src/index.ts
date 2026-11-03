@@ -5,7 +5,7 @@ import { integrationManifest } from './manifest'
 
 export { integrationManifest as hermesIntegrationManifest } from './manifest'
 export { readHermesWorkspace } from './workspace.js'
-export { mutateHermesWorkspace, hermesWorkMutationArgv } from './workspace-actions.js'
+export { mutateHermesWorkspace, hermesWorkMutationArgv, readHermesCronRunReceipt } from './workspace-actions.js'
 export { readHermesCronOutput } from './cron-output.js'
 
 export const hermesIntegration = defineAgentLensIntegration(
