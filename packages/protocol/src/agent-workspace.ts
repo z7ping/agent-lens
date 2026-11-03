@@ -99,6 +99,8 @@ export interface AgentWorkspaceResponseDto {
   features: AgentWorkFeatureDto[]
   /** Provider-issued allowed native actions, not inferred from Agent name. */
   availableActions?: AgentWorkMutationDto['kind'][]
+  /** True only when this Source exposes native actions and AgentLens can manage installation-level write access. */
+  writeControlAvailable?: boolean
   projects: AgentWorkProjectDto[]
   projectsHasMore: boolean
   projectsTotal: number
@@ -157,6 +159,12 @@ export type AgentWorkMutationDto =
   | {kind:'cron.create';profile:string;schedule:string;prompt:string;name?:string}
   | {kind:'cron.edit';profile:string;jobId:string;schedule?:string;prompt?:string;name?:string}
   | {kind:'cron.pause'|'cron.resume'|'cron.remove'|'cron.cancel';profile:string;jobId:string}
+
+export interface AgentWorkWriteAccessDto {
+  sourceId: string
+  installationId: string
+  enabled: boolean
+}
 
 export interface AgentWorkMutationResultDto {
   sourceId:string
