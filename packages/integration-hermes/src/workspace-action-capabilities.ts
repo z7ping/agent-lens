@@ -11,15 +11,28 @@ const MAX_PROBES = 32
 const cache = new Map<string, { expiresAt:number; promise:Promise<Kind[]> }>()
 
 /** Extract only argparse subcommand choice groups; prose is not evidence of support. */
-export function parseHermesHelpCommands(help: string): ReadonlySet<string> {
-  const text = help.replace(/\x1B\[[0-9;]*m/g,'')
+export function parseHermesHelpCommands(
+  help: string,
+  expectedPath: readonly string[] = [],
+): ReadonlySet<string> {
+  const text = help.replace(/\x1B\[[0-9;]*m/g, '')
+  // Only the argparse usage line is authoritative: other {a,b} groups may
+  // describe a flag's valid values, not executable subcommands.
+  const usage = text.match(/(?:^|\n)\s*usage:\s*(hermes(?:\.exe)?\b[^\n]*?(?:\n(?!\s*(?:options:|optional arguments:|positional arguments:|\w[^\n]*:))\s+[^\n]*){0,8})/i)?.[1]
+  if (!usage) return new Set()
+  const normalized = usage.replace(/\s+/g, ' ').trim()
+  if (expectedPath.length) {
+    const prefix = 'hermes ' + expectedPath.join(' ')
+    // Child-parser help should identify the command we are probing; do not
+    // interpret a different command's help as permission to run native writes.
+    if (!normalized.startsWith(prefix + ' ') && normalized !== prefix) return new Set()
+  }
+  const choice = normalized.match(/\{([a-z][a-z0-9_, -]{0,1600})\}/i)?.[1]
+  if (!choice) return new Set()
   const commands = new Set<string>()
-  // argparse prints known subcommands as {create,edit,...} in usage and options.
-  for (const found of text.matchAll(/\{([a-z][a-z0-9_,\s-]{0,1600})\}/gi)) {
-    for (const token of found[1]!.split(',')) {
-      const command = token.trim().toLowerCase()
-      if (/^[a-z][a-z0-9-]{0,40}$/.test(command))commands.add(command)
-    }
+  for (const token of choice.split(',')) {
+    const command = token.trim().toLowerCase()
+    if (/^[a-z][a-z0-9-]{0,40}$/.test(command)) commands.add(command)
   }
   return commands
 }
@@ -49,7 +62,7 @@ const probeArgs:readonly string[][] = [
   ['--profile','default','cron','--help'],
 ]
 
-async function probeCommands(executable:string,root:string,args:string[]):Promise<ReadonlySet<string>> {
+async function probeCommands(executable:string,root:string,args:string[],expectedPath:readonly string[]):Promise<ReadonlySet<string>> {
   try {
     const {stdout,stderr}=await execFileAsync(executable,args,{
       cwd:root,env:{...process.env,HERMES_HOME:root},encoding:'utf8',
@@ -57,7 +70,7 @@ async function probeCommands(executable:string,root:string,args:string[]):Promis
     })
     const output=stdout+'\n'+stderr
     if(!/(?:usage:|options:|optional arguments:)/i.test(output))return new Set()
-    return parseHermesHelpCommands(output)
+    return parseHermesHelpCommands(output, expectedPath)
   }catch {
     // Old, missing or incompatible Hermes CLI: fail closed, never guess.
     return new Set()
@@ -75,7 +88,8 @@ export async function probeHermesWorkspaceActions(options:Probe):Promise<Kind[]>
   const cached=cache.get(key)
   if(cached && cached.expiresAt>now)return cached.promise
   if(cache.size>=MAX_PROBES)cache.delete(cache.keys().next().value!)
-  const promise=Promise.all(probeArgs.map(args=>probeCommands(executable,root,args)))
+  const promise=Promise.all(probeArgs.map((args,index)=>probeCommands(executable,root,args,
+    index===0?['kanban','boards']:index===1?['kanban']:['cron'])))
     .then(commands=>commandsToWorkspaceActions(commands))
   cache.set(key,{expiresAt:now+TTL_MS,promise})
   return promise
