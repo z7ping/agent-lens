@@ -3,6 +3,8 @@ import type { LocaleMessagesDto } from '@agent-lens/protocol'
 export const englishAgentsMessages: LocaleMessagesDto = {
   agents: {
     work: {
+      open: 'View work',
+      unavailable: 'Work data unavailable',
       noSelectedBoard: 'Choose a board to view its tasks',
       featurePartial: '{{name}} is partially available:',
       workerSession: 'Worker session',

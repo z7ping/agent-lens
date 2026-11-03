@@ -6,6 +6,7 @@ import type {
   AgentAssetBindingDto,
   AgentAssetInventoryDto,
   AgentOverviewDto,
+  AgentWorkspaceResponseDto,
   IntegrationManagementItemDto,
   IntegrationToolDiscoveryItemDto,
   ManagedAssetRoot,
@@ -215,6 +216,7 @@ function AssetCard({
   onPathError,
 }: {
   agent: AgentOverviewDto
+  work?: AgentWorkspaceResponseDto
   asset: AgentAssetInventoryDto
   onPreview?(asset: AgentAssetInventoryDto, binding: AgentAssetBindingDto): void
   onOpenPath(path: string): Promise<unknown>
@@ -404,7 +406,7 @@ function PiConfigurationSummary({ agent, rules }: { agent: AgentOverviewDto; rul
   </section>
 }
 
-function AgentCard({ model, agent, management, discovery, discoveryScanning, discoveryError, piView, onManageIntegration }: {
+function AgentCard({ model, agent, work, management, discovery, discoveryScanning, discoveryError, piView, onManageIntegration, onOpenWork }: {
   model: AgentLensClientModel
   agent: AgentOverviewDto
   management: IntegrationManagementItemDto | undefined
@@ -413,6 +415,7 @@ function AgentCard({ model, agent, management, discovery, discoveryScanning, dis
   discoveryError: string
   piView: PiAgentView
   onManageIntegration(integrationId: string): void
+  onOpenWork(): void
 }) {
   const { t } = useTranslation('agents')
   const { t: tPi } = useTranslation('piEcosystem')
@@ -473,6 +476,8 @@ function AgentCard({ model, agent, management, discovery, discoveryScanning, dis
   const status = agentObservationState(agent, discovery, discoveryScanning, t, discoveryError)
   const presencePath = integrationToolPresencePath(discovery)
   const configPath = installation?.configRoot ?? discovery?.configRoot ?? discovery?.dataRoot
+  const visibleWork = work?.features.filter(feature => feature.availability === 'available' || feature.availability === 'partial') ?? []
+  const hasWork = Boolean(work?.features.some(feature => feature.availability !== 'unknown'))
   const assetsAvailable = agent.integration?.capabilities.some(capability =>
     capability.capability === 'assets' && capability.availability === 'available'
   ) ?? false
@@ -551,6 +556,20 @@ function AgentCard({ model, agent, management, discovery, discoveryScanning, dis
       onManage={onManageIntegration}
     />}
 
+    {hasWork && piView !== 'ecosystem' && <section className="agent-primary-section">
+      <div className="section-heading-row">
+        <h3>{t('work.title')}</h3>
+        <Button size="small" variant="quiet" onClick={onOpenWork}>{t('work.open')}</Button>
+      </div>
+      {visibleWork.length > 0 ? <div className="asset-kpis">
+        {visibleWork.some(f=>f.id==='boards') && <div className="asset-kpi">
+          <strong>{work?.boardsTotal ?? '—'}</strong><span>{t('work.boards')}</span></div>}
+        {visibleWork.some(f=>f.id==='schedules') && <div className="asset-kpi">
+          <strong>{work?.schedulesTotal ?? '—'}</strong><span>{t('work.schedules')}</span></div>}
+        {visibleWork.some(f=>f.id==='projects') && <div className="asset-kpi">
+          <strong>{work?.projectsTotal ?? '—'}</strong><span>{t('work.projects')}</span></div>}
+      </div> : <div className="muted-empty compact">{t('work.unavailable')}</div>}
+    </section>}
     {isPi && piView === 'ecosystem' ? <PiEcosystemPanel agent={agent}/> : <>
     {isPi ? <>
       <PiConfigurationSummary agent={agent} rules={piProjectRuleAssets}/>
@@ -758,6 +777,9 @@ export function AgentsPage({
             key={selectedAgent.sourceId}
             model={model}
             agent={selectedAgent}
+            {...(snapshot.agentWorkspace.sourceId === selectedAgent.sourceId && snapshot.agentWorkspace.response
+              ? {work:snapshot.agentWorkspace.response}: {})}
+            onOpenWork={() => navigate(`/agents?view=work&agent=${encodeURIComponent(selectedAgent.sourceId)}`)}
             management={selectedManagement}
             discovery={selectedDiscovery}
             discoveryScanning={discoveryScanning}
