@@ -192,29 +192,39 @@ async function readBoards(root: string, requestedBoard: string | undefined, offs
   return { boards, selectedBoard, tasks, runs, tasksHasMore,
     ...(detailTaskId?{detailTaskId}:{}),taskLinks,taskComments,taskEvents,taskEventsHasMore,runsHasMore,taskCommentsHasMore }
 }
-async function readProjects(root: string): Promise<{discovered:boolean; projects:AgentWorkProjectDto[]}> {
-  const profiles = [{name:'default',home:root}, ...(await dirs(join(root,'profiles'))).map(name => ({name,home:join(root,'profiles',name)}))]
+async function readProjects(root:string,offset=0):Promise<{
+  discovered:boolean; projects:AgentWorkProjectDto[];projectsTotal:number;projectsHasMore:boolean
+}> {
+  const profiles=[{name:'default',home:root},
+    ...(await dirs(join(root,'profiles'))).map(name=>({name,home:join(root,'profiles',name)}))]
   const projects:AgentWorkProjectDto[]=[]
-  let discovered = false
-  for (const profile of profiles) {
-    const path = join(profile.home,'projects.db')
-    if (!await fileExists(path)) continue
-    discovered = true
-    const db = openReadOnly(path)
+  let discovered=false
+  let projectsTotal=0
+  for(const profile of profiles) {
+    const path=join(profile.home,'projects.db')
+    if(!await fileExists(path)) continue
+    discovered=true
+    const db=openReadOnly(path)
     try {
       const pc=columns(db,'projects')
-      if (!pc.has('id') || !pc.has('slug') || !pc.has('name')) throw new Error('Unsupported Hermes projects schema')
-      const rows=db.prepare('SELECT '+select(pc,['id','slug','name','archived','board_slug','primary_path'])+
-        ' FROM projects ORDER BY name ASC LIMIT 200').all() as Record<string,unknown>[]
-      for (const row of rows) projects.push({
-        id:String(row.id),profile:profile.name,slug:String(row.slug),name:String(row.name),
-        archived:Number(row.archived??0)!==0,
-        ...(text(row.board_slug)?{boardId:text(row.board_slug)}:{}),
-        ...(text(row.primary_path)?{primaryPath:text(row.primary_path)}:{}),
-      })
-    }finally{db.close()}
+      if(!pc.has('id')||!pc.has('slug')||!pc.has('name')) throw new Error('Unsupported Hermes projects schema')
+      const count=Number((db.prepare('SELECT COUNT(*) AS total FROM projects').get() as {total:number}).total)
+      const localOffset=Math.max(0,offset-projectsTotal)
+      if(projects.length<50 && localOffset<count) {
+        const rows=db.prepare('SELECT '+select(pc,['id','slug','name','archived','board_slug','primary_path'])+
+          ' FROM projects ORDER BY name ASC,id ASC LIMIT ? OFFSET ?')
+          .all(50-projects.length,localOffset) as Record<string,unknown>[]
+        for(const row of rows) projects.push({
+          id:String(row.id),profile:profile.name,slug:String(row.slug),name:String(row.name),
+          archived:Number(row.archived??0)!==0,
+          ...(text(row.board_slug)?{boardId:text(row.board_slug)}:{}),
+          ...(text(row.primary_path)?{primaryPath:text(row.primary_path)}:{}),
+        })
+      }
+      projectsTotal+=count
+    } finally {db.close()}
   }
-  return {discovered,projects}
+  return {discovered,projects,projectsTotal,projectsHasMore:offset+projects.length<projectsTotal}
 }
 async function readSchedules(root: string, jobId?:string, profileName?:string, executionOffset=0, scheduleOffset=0) {
   const profiles = [{name:'default',home:root}, ...(await dirs(join(root,'profiles'))).map(name => ({name, home:join(root,'profiles',name)}))]
@@ -292,6 +302,7 @@ export async function readHermesWorkspace(options: {
   taskEventOffset?: number
   runOffset?: number
   commentOffset?: number
+  projectOffset?: number
 } = {}): Promise<AgentWorkspaceResponseDto> {
   const roots = options.roots ?? resolveHermesConfigRoots()
   const features: AgentWorkFeatureDto[] = [
@@ -299,7 +310,7 @@ export async function readHermesWorkspace(options: {
     {id:'schedules',availability:'unknown'},
     {id:'projects',availability:'unknown'},
   ]
-  const result: Workspace = {features,projects:[],boards:[],tasks:[],runs:[],runsHasMore:false,taskCommentsHasMore:false,taskLinks:[],taskComments:[],taskEvents:[],taskEventsHasMore:false,tasksHasMore:false,schedules:[],schedulesHasMore:false,schedulesTotal:0,executions:[],executionsHasMore:false}
+  const result: Workspace = {features,projects:[],projectsTotal:0,projectsHasMore:false,boards:[],tasks:[],runs:[],runsHasMore:false,taskCommentsHasMore:false,taskLinks:[],taskComments:[],taskEvents:[],taskEventsHasMore:false,tasksHasMore:false,schedules:[],schedulesHasMore:false,schedulesTotal:0,executions:[],executionsHasMore:false}
   const limit = Math.min(100,Math.max(1,Math.floor(options.limit ?? 40)))
   const offset = Math.max(0,Math.min(100000,Math.floor(options.offset ?? 0)))
   const candidates = [...new Set(roots.map(root => basename(dirname(root)) === 'profiles' ? dirname(dirname(root)) : root))]
@@ -338,9 +349,11 @@ export async function readHermesWorkspace(options: {
   }
   for (const root of candidates) {
     try {
-      const info = await readProjects(root)
+      const info = await readProjects(root,Math.min(100000,Math.max(0,options.projectOffset??0)))
       if (info.discovered) {
         result.projects = info.projects
+        result.projectsTotal=info.projectsTotal
+        result.projectsHasMore=info.projectsHasMore
         features[2] = {id:'projects',availability:'available'}
         break
       }
