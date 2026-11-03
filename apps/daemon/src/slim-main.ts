@@ -16,7 +16,7 @@ import { claudeSourceDefinition } from '@agent-lens/source-claude'
 import { hermesSourceDefinition } from '@agent-lens/source-hermes'
 import { readHermesWorkspace, readHermesCronOutput, mutateHermesWorkspace } from '@agent-lens/integration-hermes'
 import { openCodeSourceDefinition } from '@agent-lens/source-opencode'
-import { startNativeOnlyHttpSurface, previewLocalHostTextFile, type IntegrationPackageController } from '@agent-lens/surface-http'
+import { startNativeOnlyHttpSurface, previewLocalHostTextFile, createWorkspaceWriteAccess, type IntegrationPackageController } from '@agent-lens/surface-http'
 import type { PiEcosystemQueryService } from '@agent-lens/protocol'
 import { openLocalPath } from './local-path-opener.js'
 import { createProjectDirectoryPicker } from './project-directory-picker.js'
@@ -46,6 +46,8 @@ export interface SlimDaemonOptions {
   capturePolicy?:CapturePolicyService
   /** Tests can inject the official package lifecycle, no second implementation. */
   integrationPackages?:IntegrationPackageController
+  /** Test-only override of the local AgentLens write-permission preference path. */
+  workspaceWriteAccessPath?:string
 }
 
 export function resolveSlimWebRoot(configured?:string):string{
@@ -166,6 +168,8 @@ export async function startSlimNativeDaemon(options:SlimDaemonOptions){
     let notifyActivity=()=>{}
     const coordinator=new SlimSourceCoordinator(runtime,sources,policy,policy,
       ()=>notifyActivity())
+    const workspaceWriteAccess=await createWorkspaceWriteAccess(
+      options.workspaceWriteAccessPath??join(homedir(),'.agent-lens','1.0','workspace-write-access.json'))
     const http=await startNativeOnlyHttpSurface(httpPort,{
       backgroundProgress:()=>coordinator.snapshot(),
       rescanAgents:id=>coordinator.rescan(id),
@@ -174,6 +178,7 @@ export async function startSlimNativeDaemon(options:SlimDaemonOptions){
       workspaceReaders: {hermes: readHermesWorkspace},
       workspaceOutputReaders: {hermes: readHermesCronOutput},
       workspaceMutationRunners: {hermes: mutateHermesWorkspace},
+      workspaceWriteAccess,
       ...(policy.isSourceEnabled('pi')?{
         piEcosystem:options.piEcosystem??new NpmPiEcosystemProvider(),
       }:{}),
