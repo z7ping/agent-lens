@@ -1,0 +1,30 @@
+/* One shared tooltip surface for native-title migration, icons, and truncated text. */
+.ui-tooltip {
+  z-index: 120;
+  box-sizing: border-box;
+  width: max-content;
+  max-width: min(360px, calc(100vw - 24px));
+  max-height: min(45vh, 320px);
+  overflow: auto;
+  padding: 6px 9px;
+  border: 1px solid var(--al-line);
+  border-radius: var(--radius-sm);
+  background: var(--al-surface-raised);
+  box-shadow: var(--al-shadow);
+  color: var(--al-ink-2);
+  font-family: var(--font-ui);
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  pointer-events: auto;
+  user-select: text;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .ui-tooltip { animation: ui-tooltip-appear 120ms ease-out; }
+  @keyframes ui-tooltip-appear {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+}

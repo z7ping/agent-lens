@@ -28,6 +28,7 @@ export function Button({
   size = 'default',
   loading = false,
   disabled,
+  title,
   className,
   children,
   type = 'button',
@@ -36,6 +37,7 @@ export function Button({
   return <button
     type={type}
     className={classes('btn', variant !== 'default' && variant, size === 'small' && 'small', loading && 'is-loading', className)}
+    data-ui-tooltip={title || undefined}
     disabled={disabled || loading}
     aria-busy={loading || undefined}
     {...props}
@@ -54,6 +56,7 @@ export interface IconButtonProps extends ButtonHTMLAttributes<HTMLButtonElement>
 export const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>(function IconButton({
   size = 'default',
   variant = 'default',
+  title,
   className,
   children,
   type = 'button',
@@ -63,6 +66,7 @@ export const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>(functio
     ref={ref}
     type={type}
     className={classes('ui-icon-button', `is-${size}`, `is-${variant}`, className)}
+    data-ui-tooltip={title || undefined}
     {...props}
   >{children}</button>
 })
@@ -86,10 +90,11 @@ export function StatusBadge({
   tone = 'neutral',
   dot = false,
   children,
+  title,
   className,
   ...props
 }: StatusBadgeProps) {
-  return <span className={classes('ui-status-badge', `is-${tone}`, className)} {...props}>
+  return <span className={classes('ui-status-badge', `is-${tone}`, className)} data-ui-tooltip={title || undefined} {...props}>
     {dot && <span className="ui-status-dot" aria-hidden="true"/>}
     {children}
   </span>
