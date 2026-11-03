@@ -401,7 +401,7 @@ function Shell({ model }: { model: AgentLensClientModel }) {
   const workspaceState = snapshot.agentWorkspace
   const workPending = currentView === 'work' && Boolean(resolvedAgentOverviewSourceId)
     && (workspaceState.sourceId !== resolvedAgentOverviewSourceId
-      || (workspaceState.loading && !workspaceState.response))
+      || (!workspaceState.response && (workspaceState.loading || Boolean(workspaceState.error))))
   const hasAgentWork = workPending || (workspaceState.sourceId === resolvedAgentOverviewSourceId &&
     Boolean(workspaceState.response?.features.some(feature =>
       feature.availability === 'available' || feature.availability === 'partial' || feature.availability === 'error')))

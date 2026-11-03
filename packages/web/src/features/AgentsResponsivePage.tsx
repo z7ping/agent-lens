@@ -41,7 +41,8 @@ export function AgentsResponsivePage({
     Boolean(workspaceState.response?.features.some(feature => feature.availability === 'available' || feature.availability === 'partial' || feature.availability === 'error'))
   const requestedView = searchParams.get('view')
   const pendingWorkLink = requestedView === 'work' && Boolean(sourceId) && hasSelectedSummary
-    && (workspaceState.sourceId !== sourceId || (workspaceState.loading && !workspaceState.response))
+    && (workspaceState.sourceId !== sourceId
+      || (!workspaceState.response && (workspaceState.loading || Boolean(workspaceState.error))))
   const activeView: AgentWorkspaceView = requestedView === 'management'
     ? 'management'
     : (hasWork || pendingWorkLink) && requestedView === 'work' ? 'work'
