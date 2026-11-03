@@ -3,6 +3,11 @@ import type { LocaleMessagesDto } from '@agent-lens/protocol'
 export const chineseAgentsMessages: LocaleMessagesDto = {
   agents: {
     work: {
+      writeEnable: '启用写操作',
+      writeDisable: '关闭写操作',
+      writeLoading: '正在检查写权限…',
+      writeAccessError: '工作区写权限不可用',
+      writeAccessDescription: '此操作仅影响当前 Hermes 安装实例。启用后可在确认对话框内修改原生看板、任务和定时任务。',
       confirmDescription: '操作将修改 Hermes 原生数据，请确认目标与影响范围。',
       confirmAction: '确认执行',
       cancelAction: '取消',
