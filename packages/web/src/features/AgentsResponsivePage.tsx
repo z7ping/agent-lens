@@ -38,7 +38,7 @@ export function AgentsResponsivePage({
   const isPi = sourceId === 'pi'
   const workspaceState = snapshot.agentWorkspace
   const hasWork = workspaceState.sourceId === sourceId &&
-    Boolean(workspaceState.response?.features.some(feature => feature.availability === 'available' || feature.availability === 'error'))
+    Boolean(workspaceState.response?.features.some(feature => feature.availability === 'available' || feature.availability === 'partial' || feature.availability === 'error'))
   const requestedView = searchParams.get('view')
   const activeView: AgentWorkspaceView = requestedView === 'management'
     ? 'management'

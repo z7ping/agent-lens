@@ -80,6 +80,7 @@ async function readBoards(root: string, requestedBoard: string | undefined, offs
   let taskComments: AgentWorkCommentDto[] = []
   let taskEvents: AgentWorkEventDto[] = []
   let taskEventsHasMore = false
+  let failedBoards = 0
   const discoveredBoards = await boardList(root)
   const availableBoards = []
   for (const board of discoveredBoards) if (await fileExists(board.path)) availableBoards.push(board)
@@ -193,10 +194,13 @@ async function readBoards(root: string, requestedBoard: string | undefined, offs
             ...(epoch(item.created_at)?{createdAt:epoch(item.created_at)}:{})}))
         }
       }
+    } catch {
+      // An unreadable or incompatible Board must not suppress another valid Board.
+      failedBoards += 1
     } finally { db.close() }
   }
   return { boards, boardsTotal, boardsHasMore, selectedBoard, tasks, runs, tasksHasMore,
-    ...(detailTaskId?{detailTaskId}:{}),taskLinks,taskComments,taskEvents,taskEventsHasMore,runsHasMore,taskCommentsHasMore }
+    ...(detailTaskId?{detailTaskId}:{}),taskLinks,taskComments,taskEvents,taskEventsHasMore,runsHasMore,taskCommentsHasMore,failedBoards }
 }
 async function readProjects(root: string, offset=0): Promise<{
   discovered:boolean
@@ -329,9 +333,12 @@ export async function readHermesWorkspace(options: {
         Math.min(100000,Math.max(0,options.runOffset??0)),
         Math.min(100000,Math.max(0,options.commentOffset??0)),
         Math.min(100000,Math.max(0,options.boardOffset??0)))
-      if (info.boards.length) {
+      if (info.boardsTotal) {
         Object.assign(result,info)
-        features[0] = {id:'boards',availability:'available'}
+        features[0] = info.failedBoards
+          ? {id:'boards',availability:info.boards.length?'partial':'error',
+            reason:info.failedBoards+' Hermes board(s) could not be read'}
+          : {id:'boards',availability:'available'}
         break
       }
     } catch (error) {

@@ -128,11 +128,13 @@ export function AgentWorkPage({model,sourceId}: {model:AgentLensClientModel;sour
       ...(selectedSchedule?{jobId:selectedSchedule.id,profile:selectedSchedule.profile,executionOffset}:{}),
     })
   }
-  const boardAvailable = response?.features.some(f => f.id === 'boards' && f.availability === 'available') ?? false
-  const schedulesAvailable = response?.features.some(f => f.id === 'schedules' && f.availability === 'available') ?? false
-  const projectsAvailable = response?.features.some(f => f.id === 'projects' && f.availability === 'available') ?? false
+  const boardAvailable = response?.features.some(f => f.id === 'boards' && (f.availability === 'available' || f.availability === 'partial')) ?? false
+  const schedulesAvailable = response?.features.some(f => f.id === 'schedules' && (f.availability === 'available' || f.availability === 'partial')) ?? false
+  const projectsAvailable = response?.features.some(f => f.id === 'projects' && (f.availability === 'available' || f.availability === 'partial')) ?? false
   const board = response?.boards.find(item => item.id === response.selectedBoard)
-  const activePanel = panel === 'boards' && !boardAvailable && schedulesAvailable ? 'schedules' : panel
+  const activePanel = panel === 'boards' && !boardAvailable && schedulesAvailable ? 'schedules'
+    : panel === 'schedules' && !schedulesAvailable && boardAvailable ? 'boards'
+    : panel
   const openJob = (job:AgentWorkScheduleDto) => {
     const identity=job.profile+':'+job.id
     const next=selectedJob===identity?null:identity
@@ -173,7 +175,7 @@ export function AgentWorkPage({model,sourceId}: {model:AgentLensClientModel;sour
       {(!response && snapshot.loading) && <div className="muted-empty compact" role="status">{t('work.loading')}</div>}
       {sessionMessage && <div className="agent-path-error" role="status">{sessionMessage}</div>}
       {response && <div className="agent-detail-pane">
-        {response.features.filter(f=>f.availability==='error').map(feature=><div key={feature.id} role="alert" className="agent-path-error">
+        {response.features.filter(f=>f.availability==='error' || f.availability==='partial').map(feature=><div key={feature.id} role="alert" className="agent-path-error">
           {t('work.featureError',{name:feature.id})} {feature.reason}
         </div>)}
         <div className="agent-primary-section">
