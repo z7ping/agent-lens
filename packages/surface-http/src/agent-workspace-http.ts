@@ -266,7 +266,7 @@ export async function handleAgentWorkspaceRequest(
   const actions = canWrite ? await capabilityReaders?.[sourceId]?.({roots:[root.root],
     ...(root.executable?{executable:root.executable}:{})}) ?? [] : []
   writeJson(response,200,{...result,installationId,
-    writeControlAvailable:Boolean(mutationRunners?.[sourceId] && writeAccess),
+    writeControlAvailable:Boolean(mutationRunners?.[sourceId] && writeAccess && capabilityReaders?.[sourceId]),
     availableActions:actions.filter(kind=>AGENT_WORK_MUTATION_KINDS.includes(kind))})
   return true
 }
