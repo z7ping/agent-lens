@@ -3,6 +3,25 @@ import type { LocaleMessagesDto } from '@agent-lens/protocol'
 export const englishAgentsMessages: LocaleMessagesDto = {
   agents: {
     work: {
+      confirmDescription: 'This changes native Hermes data. Confirm the target and scope.',
+      confirmAction: 'Confirm',
+      cancelAction: 'Cancel',
+      actionRejected: 'Hermes did not confirm the action',
+      fieldTitle: 'Title',
+      fieldBody: 'Body',
+      fieldPriority: 'Priority',
+      fieldProfile: 'Profile',
+      fieldParent: 'Parent task ID',
+      fieldChild: 'Child task ID',
+      fieldName: 'Name',
+      fieldSchedule: 'Schedule expression',
+      fieldPrompt: 'Prompt',
+      actions: {
+        task_create: 'Create task',task_edit:'Edit task',task_assign:'Assign task',
+        task_link:'Add dependency',task_unlink:'Remove dependency',task_archive:'Archive task',
+        cron_create:'Create schedule',cron_edit:'Edit schedule',cron_pause:'Pause',
+        cron_resume:'Resume',cron_remove:'Delete schedule',cron_cancel:'Cancel running job',
+      },
       installation: 'Installation',
       noInstallation: 'No readable installation is available',
       open: 'View work',

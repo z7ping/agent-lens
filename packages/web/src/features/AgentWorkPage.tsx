@@ -1,14 +1,15 @@
 import { useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useNavigate, useSearchParams } from 'react-router-dom'
-import type { AgentWorkTaskDto, AgentWorkScheduleDto, AgentWorkOutputResponseDto, AgentInstallationOverviewDto } from '@agent-lens/protocol'
+import type { AgentWorkTaskDto, AgentWorkScheduleDto, AgentWorkOutputResponseDto, AgentInstallationOverviewDto, AgentWorkMutationDto } from '@agent-lens/protocol'
 import type { AgentLensClientModel } from '../client/model'
 import { useClientSnapshot } from '../client/use-client-snapshot'
-import { Button, SelectMenu, StatusBadge } from '../components/ui'
+import { Button, Dialog, Input, Textarea, SelectMenu, StatusBadge } from '../components/ui'
 import { MarkdownContent } from '../components/MarkdownContent'
 
 const PAGE_SIZE = 40
 const MAX_EXECUTION_PAGE = 200
+const actionLabelKey=(kind:AgentWorkMutationDto['kind'])=>'work.actions.'+kind.replace('.','_')
 const formatDate = (value: string | undefined): string => {
   if (!value) return '—'
   const date = new Date(value)
@@ -21,6 +22,10 @@ export function AgentWorkPage({model,sourceId,installationId,installations}: {
   const {t} = useTranslation('agents')
   const navigate = useNavigate()
   const [workSearchParams,setWorkSearchParams] = useSearchParams()
+  const [pendingAction,setPendingAction] = useState<AgentWorkMutationDto|null>(null)
+  const [actionBusy,setActionBusy] = useState(false)
+  const [actionFeedback,setActionFeedback] = useState('')
+  const [actionError,setActionError] = useState('')
   const [sessionPending,setSessionPending] = useState(false)
   const [sessionMessage,setSessionMessage] = useState('')
   const openNativeSession = async (sessionId:string) => {
@@ -190,6 +195,42 @@ export function AgentWorkPage({model,sourceId,installationId,installations}: {
   }
   const selectedSchedule:AgentWorkScheduleDto|undefined = response?.schedules.find(item =>
     item.profile + ':' + item.id === selectedJob)
+  const permitted=(kind:AgentWorkMutationDto['kind'])=>response?.availableActions?.includes(kind) ?? false
+  const askAction=(action:AgentWorkMutationDto)=>{
+    setPendingAction(action)
+    setActionError('')
+    setActionFeedback('')
+  }
+  const applyAction=async()=>{
+    if(!pendingAction || actionBusy || !installationId || !permitted(pendingAction.kind))return
+    setActionBusy(true)
+    setActionError('')
+    try{
+      const result=await model.agentWorkMutate(sourceId,installationId,pendingAction)
+      if(!result.accepted)throw new Error(t('work.actionRejected'))
+      setActionFeedback(result.message)
+      setPendingAction(null)
+      if(pendingAction.kind==='task.create'||pendingAction.kind==='task.archive') {
+        setOffset(0)
+        setSelectedTask(null)
+      }
+      if(pendingAction.kind==='cron.create'||pendingAction.kind==='cron.remove') {
+        setScheduleOffset(0)
+        setSelectedJob(null)
+      }
+      // The CLI exit proves acceptance, not the resulting native state.
+      await refreshWorkspace({
+        board:response?.selectedBoard,
+        offset:pendingAction.kind==='task.create'||pendingAction.kind==='task.archive'?0:offset,
+        limit:PAGE_SIZE,
+        scheduleOffset:pendingAction.kind==='cron.create'||pendingAction.kind==='cron.remove'?0:scheduleOffset,
+        ...(selectedTask && !['task.create','task.archive'].includes(pendingAction.kind)
+          ? {taskId:selectedTask,taskEventOffset,runOffset,commentOffset}:{}),
+      })
+    }catch(error){
+      setActionError(error instanceof Error?error.message:t('work.actionRejected'))
+    }finally{setActionBusy(false)}
+  }
   return <main className="workspace-page">
     <div className="page-content agents-content">
       {snapshot.sourceId === sourceId && snapshot.installationId === installationId && snapshot.error && <div className="agent-path-error" role="alert">{snapshot.error} <Button size="small" onClick={() => void refreshWorkspace()}>{t('work.retry')}</Button></div>}
@@ -207,6 +248,7 @@ export function AgentWorkPage({model,sourceId,installationId,installations}: {
       {snapshot.sourceId === sourceId && snapshot.installationId === installationId && snapshot.loading && response &&
         <div className="muted-empty compact" role="status">{t('work.loading')}</div>}
       {sessionMessage && <div className="agent-path-error" role="status">{sessionMessage}</div>}
+      {actionFeedback && <div className="muted-empty compact" role="status">{actionFeedback}</div>}
       {response && <div className="agent-detail-pane" aria-busy={snapshot.loading}>
         {response.features.filter(f=>f.availability==='error' || f.availability==='partial').map(feature=><div key={feature.id} role="alert" className="agent-path-error">
           {t(feature.availability==='partial'?'work.featurePartial':'work.featureError',{name:feature.id})} {feature.reason}
@@ -223,7 +265,12 @@ export function AgentWorkPage({model,sourceId,installationId,installations}: {
         </div>
         {activePanel==='boards' && boardAvailable && <>
           <section className="agent-primary-section">
-            <div className="section-heading-row"><h3>{t('work.boardTasks')}</h3><span className="section-total">{board?.taskCount ?? '—'}</span></div>
+            <div className="section-heading-row"><h3>{t('work.boardTasks')}</h3>
+              <span className="section-total">{board?.taskCount ?? '—'}</span>
+              {permitted('task.create') && response.selectedBoard && <Button size="small" onClick={()=>askAction({
+                kind:'task.create',boardId:response.selectedBoard!,title:'',
+              })}>{t('work.actions.task_create')}</Button>}
+            </div>
             <SelectMenu ariaLabel={t('work.selectBoard')} value={response.selectedBoard ?? ''} searchable
               options={response.boards.map(item => ({value:item.id,label:item.name + (item.archived?t('work.archived'):'')}))}
               onChange={value=>loadBoard(value)}/>
@@ -250,7 +297,8 @@ export function AgentWorkPage({model,sourceId,installationId,installations}: {
                 events={response.detailTaskId===item.id?response.taskEvents:[]}
                 hasMore={response.taskEventsHasMore} eventOffset={taskEventOffset} onEventPage={nextTaskEvents} loading={snapshot.loading} onOpenSession={openNativeSession} sessionPending={sessionPending}
                 runOffset={runOffset} runsHasMore={response.runsHasMore} onRunPage={nextTaskRuns}
-                commentOffset={commentOffset} commentsHasMore={response.taskCommentsHasMore} onCommentPage={nextTaskComments}/>} 
+                commentOffset={commentOffset} commentsHasMore={response.taskCommentsHasMore} onCommentPage={nextTaskComments}
+                permitted={permitted} onAction={askAction}/>} 
             </div>)}
             <div className="runtime-config-row">
               <span>{t('work.loaded')} {offset+response.tasks.length} / {board?.taskCount ?? '—'}</span>
@@ -260,7 +308,12 @@ export function AgentWorkPage({model,sourceId,installationId,installations}: {
           </section>
         </>}
         {activePanel==='schedules' && schedulesAvailable && <section className="agent-primary-section">
-          <div className="section-heading-row"><h3>{t('work.schedules')}</h3><span className="section-total">{response.schedulesTotal}</span></div>
+          <div className="section-heading-row"><h3>{t('work.schedules')}</h3>
+            <span className="section-total">{response.schedulesTotal}</span>
+            {permitted('cron.create') && <Button size="small" onClick={()=>askAction({
+              kind:'cron.create',profile:'default',schedule:'',prompt:'',
+            })}>{t('work.actions.cron_create')}</Button>}
+          </div>
           {!response.schedules.length && <div className="muted-empty compact">{t('work.noSchedules')}</div>}
           {response.schedules.map(job=><div className="asset-item" key={job.profile+':'+job.id}>
             <div className="asset-item-head">
@@ -272,6 +325,20 @@ export function AgentWorkPage({model,sourceId,installationId,installations}: {
             <div className="runtime-config-row"><span>{job.schedule || '—'}</span><span>{t('work.nextRun')} {formatDate(job.nextRunAt)}</span></div>
             {job.lastError && <div className="agent-path-error">{job.lastError}</div>}
             {selectedSchedule && selectedSchedule.id===job.id && selectedSchedule.profile===job.profile && <>
+              <div className="runtime-config-row">
+                {permitted('cron.edit') && <Button size="small" onClick={()=>askAction({
+                  kind:'cron.edit',profile:job.profile,jobId:job.id,name:job.name,
+                })}>{t('work.actions.cron_edit')}</Button>}
+                {permitted(job.enabled?'cron.pause':'cron.resume') && <Button size="small" onClick={()=>askAction({
+                  kind:job.enabled?'cron.pause':'cron.resume',profile:job.profile,jobId:job.id,
+                })}>{t(job.enabled?'work.actions.cron_pause':'work.actions.cron_resume')}</Button>}
+                {permitted('cron.cancel') && <Button size="small" onClick={()=>askAction({
+                  kind:'cron.cancel',profile:job.profile,jobId:job.id,
+                })}>{t('work.actions.cron_cancel')}</Button>}
+                {permitted('cron.remove') && <Button size="small" variant="danger" onClick={()=>askAction({
+                  kind:'cron.remove',profile:job.profile,jobId:job.id,
+                })}>{t('work.actions.cron_remove')}</Button>}
+              </div>
               <div className="section-heading-row"><h3>{t('work.runs')}</h3></div>
               {response.executions.filter(run=>run.jobId===job.id && run.profile===job.profile).map(run=><div key={run.id} className="runtime-config-row">
                 <StatusBadge tone={run.status==='failed'?'danger':run.status==='completed'?'success':'neutral'}>{run.status}</StatusBadge>
@@ -323,10 +390,52 @@ export function AgentWorkPage({model,sourceId,installationId,installations}: {
           </div>
         </section>}
       </div>}
+      <Dialog open={Boolean(pendingAction)} title={pendingAction?t(actionLabelKey(pendingAction.kind)):t('work.title')}
+        description={t('work.confirmDescription')} onClose={()=>{if(!actionBusy)setPendingAction(null)}}
+        closeDisabled={actionBusy} footer={<div className="runtime-config-row">
+          <Button disabled={actionBusy} onClick={()=>setPendingAction(null)}>{t('work.cancelAction')}</Button>
+          <Button variant={pendingAction?.kind==='cron.remove'||pendingAction?.kind==='task.archive'?'danger':'primary'}
+            loading={actionBusy} onClick={()=>void applyAction()}>{t('work.confirmAction')}</Button>
+        </div>}>
+        {pendingAction && <>
+          <div className="runtime-config-row"><span>{t('work.installation')}</span><code>{installationId}</code></div>
+          {'boardId' in pendingAction && <div className="runtime-config-row"><span>{t('work.boards')}</span><code>{pendingAction.boardId}</code></div>}
+          {'jobId' in pendingAction && <div className="runtime-config-row"><span>{t('work.taskId')}</span><code>{pendingAction.jobId}</code></div>}
+          {'taskId' in pendingAction && <div className="runtime-config-row"><span>{t('work.taskId')}</span><code>{pendingAction.taskId}</code></div>}
+          {(pendingAction.kind==='task.create'||pendingAction.kind==='task.edit') && <>
+            <label>{t('work.fieldTitle')}<Input value={pendingAction.title??''} maxLength={180}
+              onChange={event=>setPendingAction({...pendingAction,title:event.target.value})}/></label>
+            <label>{t('work.fieldPriority')}<Input type="number" value={pendingAction.priority??0}
+              onChange={event=>setPendingAction({...pendingAction,priority:Number(event.target.value)})}/></label>
+            <label>{t('work.fieldBody')}<Textarea rows={3} maxLength={4000} value={pendingAction.body??''}
+              onChange={event=>setPendingAction({...pendingAction,body:event.target.value||undefined})}/></label>
+          </>}
+          {pendingAction.kind==='task.assign' && <label>{t('work.fieldProfile')}<Input
+            value={pendingAction.profile} maxLength={80} onChange={event=>setPendingAction({...pendingAction,profile:event.target.value})}/></label>}
+          {(pendingAction.kind==='task.link'||pendingAction.kind==='task.unlink') && <>
+            <label>{t('work.fieldParent')}<Input value={pendingAction.parentId} maxLength={128}
+              onChange={event=>setPendingAction({...pendingAction,parentId:event.target.value})}/></label>
+            <label>{t('work.fieldChild')}<Input value={pendingAction.childId} maxLength={128}
+              onChange={event=>setPendingAction({...pendingAction,childId:event.target.value})}/></label>
+          </>}
+          {(pendingAction.kind==='cron.create'||pendingAction.kind==='cron.edit') && <>
+            {pendingAction.kind==='cron.create' && <label>{t('work.fieldProfile')}<Input
+              value={pendingAction.profile} maxLength={80} onChange={event=>setPendingAction({...pendingAction,profile:event.target.value})}/></label>}
+            <label>{t('work.fieldName')}<Input value={pendingAction.name??''} maxLength={180}
+              onChange={event=>setPendingAction({...pendingAction,name:event.target.value||undefined})}/></label>
+            <label>{t('work.fieldSchedule')}<Input value={pendingAction.schedule??''} maxLength={180}
+              onChange={event=>setPendingAction({...pendingAction,schedule:event.target.value||undefined})}/></label>
+            <label>{t('work.fieldPrompt')}<Textarea rows={4} maxLength={4000}
+              value={pendingAction.prompt??''}
+              onChange={event=>setPendingAction({...pendingAction,prompt:event.target.value||undefined})}/></label>
+          </>}
+          {actionError && <div className="agent-path-error" role="alert">{actionError}</div>}
+        </>}
+      </Dialog>
     </div>
   </main>
 }
-function TaskRuns({task,runs,links,comments,events,hasMore,eventOffset,onEventPage,loading,onOpenSession,sessionPending,runOffset,runsHasMore,onRunPage,commentOffset,commentsHasMore,onCommentPage}: {
+function TaskRuns({task,runs,links,comments,events,hasMore,eventOffset,onEventPage,loading,onOpenSession,sessionPending,runOffset,runsHasMore,onRunPage,commentOffset,commentsHasMore,onCommentPage,permitted,onAction}: {
   task:AgentWorkTaskDto
   runs:import('@agent-lens/protocol').AgentWorkRunDto[]
   links:import('@agent-lens/protocol').AgentWorkLinkDto[]
@@ -336,11 +445,27 @@ function TaskRuns({task,runs,links,comments,events,hasMore,eventOffset,onEventPa
   onOpenSession(id:string):void;sessionPending:boolean
   runOffset:number;runsHasMore:boolean;onRunPage(offset:number):void
   commentOffset:number;commentsHasMore:boolean;onCommentPage(offset:number):void
+  permitted(kind:AgentWorkMutationDto['kind']):boolean
+  onAction(action:AgentWorkMutationDto):void
 }) {
   const {t} = useTranslation('agents')
   return <section className="agent-secondary">
     <div className="runtime-config-row"><span>{t('work.taskId')}</span><code>{task.id}</code></div>
     {task.sourceSessionNativeId && <div className="runtime-config-row"><span>{t('work.nativeSession')}</span><code>{task.sourceSessionNativeId}</code><Button size="small" loading={sessionPending} onClick={()=>onOpenSession(task.sourceSessionNativeId!)}>{t('work.openSession')}</Button></div>}
+    <div className="runtime-config-row">
+      {permitted('task.edit') && <Button size="small" onClick={()=>onAction({
+        kind:'task.edit',boardId:task.boardId,taskId:task.id,title:task.title,priority:task.priority,
+      })}>{t('work.actions.task_edit')}</Button>}
+      {permitted('task.assign') && <Button size="small" onClick={()=>onAction({
+        kind:'task.assign',boardId:task.boardId,taskId:task.id,profile:task.assignee??'default',
+      })}>{t('work.actions.task_assign')}</Button>}
+      {permitted('task.link') && <Button size="small" onClick={()=>onAction({
+        kind:'task.link',boardId:task.boardId,parentId:task.id,childId:'',
+      })}>{t('work.actions.task_link')}</Button>}
+      {permitted('task.archive') && <Button size="small" variant="danger" onClick={()=>onAction({
+        kind:'task.archive',boardId:task.boardId,taskId:task.id,
+      })}>{t('work.actions.task_archive')}</Button>}
+    </div>
     <div className="section-heading-row"><h3>{t('work.runs')}</h3><span className="section-total">{runs.length}</span></div>
     {!runs.length && <div className="muted-empty compact">{t('work.noRuns')}</div>}
     {links.length>0 && <div className="runtime-config-row"><span>{t('work.links')}</span>{links.map(link=><code key={link.parentId+':'+link.childId}>{link.parentId} → {link.childId}</code>)}</div>}

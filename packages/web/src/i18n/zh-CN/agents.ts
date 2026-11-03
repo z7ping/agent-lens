@@ -3,6 +3,25 @@ import type { LocaleMessagesDto } from '@agent-lens/protocol'
 export const chineseAgentsMessages: LocaleMessagesDto = {
   agents: {
     work: {
+      confirmDescription: '操作将修改 Hermes 原生数据，请确认目标与影响范围。',
+      confirmAction: '确认执行',
+      cancelAction: '取消',
+      actionRejected: 'Hermes 未确认操作成功',
+      fieldTitle: '标题',
+      fieldBody: '正文',
+      fieldPriority: '优先级',
+      fieldProfile: 'Profile',
+      fieldParent: '前置任务 ID',
+      fieldChild: '后置任务 ID',
+      fieldName: '名称',
+      fieldSchedule: '调度表达式',
+      fieldPrompt: '任务提示词',
+      actions: {
+        task_create: '新建任务',task_edit:'编辑任务',task_assign:'指派任务',
+        task_link:'添加依赖',task_unlink:'移除依赖',task_archive:'归档任务',
+        cron_create:'新建定时任务',cron_edit:'编辑定时任务',cron_pause:'暂停',
+        cron_resume:'恢复',cron_remove:'删除定时任务',cron_cancel:'取消正在执行的任务',
+      },
       installation: '安装实例',
       noInstallation: '当前智能体暂无可读取的安装实例',
       open: '查看工作',
