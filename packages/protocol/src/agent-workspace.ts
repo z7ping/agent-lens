@@ -114,3 +114,18 @@ export interface AgentWorkspaceResponseDto {
     generatedAt: string
   }
 }
+
+export interface AgentWorkOutputFileDto {
+  name: string
+  bytes: number
+  modifiedAt: string
+}
+export interface AgentWorkOutputResponseDto {
+  sourceId: string
+  profile: string
+  jobId: string
+  files: AgentWorkOutputFileDto[]
+  hasMore: boolean
+  state: 'available' | 'unavailable'
+  preview?: { name: string; text: string }
+}

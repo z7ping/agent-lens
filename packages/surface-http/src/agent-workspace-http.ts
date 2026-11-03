@@ -1,5 +1,5 @@
 import type { IncomingMessage, ServerResponse } from 'node:http'
-import { AGENT_LENS_PROTOCOL_VERSION, type AgentWorkspaceResponseDto } from '@agent-lens/protocol'
+import { AGENT_LENS_PROTOCOL_VERSION, type AgentWorkspaceResponseDto, type AgentWorkOutputResponseDto } from '@agent-lens/protocol'
 import type { CapturePolicyService, SourceService } from '@agent-lens/core'
 import { badRequest, writeJson } from './http-utils'
 
@@ -16,6 +16,15 @@ export type AgentWorkspaceReader = (options?: {
   taskEventOffset?: number
 }) => Promise<AgentWorkspaceResponseDto>
 
+export type AgentWorkspaceOutputReader = (options: {
+  roots?: string[]
+  jobId: string
+  profile: string
+  file?: string
+  offset?: number
+}) => Promise<AgentWorkOutputResponseDto>
+
+const FILE_NAME = /^\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2}\.md$/
 const SLUG = /^[a-zA-Z0-9][a-zA-Z0-9_-]{0,79}$/
 
 /** Provider-owned read-only workspace query. No hardcoded Agent UI or source data interpretation. */
@@ -27,8 +36,9 @@ export async function handleAgentWorkspaceRequest(
   sources: SourceService,
   policy: CapturePolicyService,
   resolveInstallationRoots?: (sourceId:string)=>Promise<string[]>,
+  outputReaders?: Readonly<Record<string, AgentWorkspaceOutputReader>>,
 ): Promise<boolean> {
-  const match = /^\/api\/v1\/agents\/([^/]+)\/workspace$/.exec(url.pathname)
+  const match = /^\/api\/v1\/agents\/([^/]+)\/workspace(\/output)?$/.exec(url.pathname)
   if (!match) return false
   if (request.method !== 'GET') {
     writeJson(response,405,{error:'Method not allowed'})
@@ -42,6 +52,22 @@ export async function handleAgentWorkspaceRequest(
   }
   if (!policy.isSourceEnabled(sourceId)) {
     writeJson(response,403,{error:'Source disabled'})
+    return true
+  }
+  if (match[2] === '/output') {
+    const outputReader=outputReaders?.[sourceId]
+    if (!outputReader) {writeJson(response,404,{error:'Output not supported'});return true}
+    const jobId=url.searchParams.get('jobId')
+    const profile=url.searchParams.get('profile')
+    const file=url.searchParams.get('file')??undefined
+    const offsetText=url.searchParams.get('offset')
+    if (!jobId || !/^[a-zA-Z0-9_-]{1,128}$/.test(jobId) || !profile || !/^[a-zA-Z0-9_-]{1,80}$/.test(profile)
+      || (file && !FILE_NAME.test(file)) || (offsetText && !/^\d{1,6}$/.test(offsetText))
+      || [...url.searchParams.keys()].some(k=>!['jobId','profile','file','offset'].includes(k))) throw badRequest('Invalid Cron output identity')
+    const offset=offsetText?Number(offsetText):0
+    if (offset>100000) throw badRequest('Invalid Cron output offset')
+    const roots=resolveInstallationRoots?await resolveInstallationRoots(sourceId):undefined
+    writeJson(response,200,await outputReader({jobId,profile,...(file?{file}:{}),offset,...(roots?{roots}:{})}))
     return true
   }
   const provider = providers?.[sourceId]
