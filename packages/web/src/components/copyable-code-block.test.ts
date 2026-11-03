@@ -7,6 +7,7 @@ import { join } from 'node:path'
 const sourceRoot = fileURLToPath(new URL('../', import.meta.url))
 const componentSource = readFileSync(new URL('./CopyableCodeBlock.tsx', import.meta.url), 'utf8')
 const markdownSource = readFileSync(new URL('./MarkdownContent.tsx', import.meta.url), 'utf8')
+const codeBlockStyles = readFileSync(new URL('./copyable-code-block.css', import.meta.url), 'utf8')
 
 function sourceFiles(directory: string): string[] {
   return readdirSync(directory, { withFileTypes: true }).flatMap(entry => {
@@ -29,4 +30,16 @@ test('复制按钮包含成功、失败反馈和可访问名称', () => {
   assert.match(componentSource, /state === 'copied' \? t\('codeBlock\.copied'\) : state === 'error' \? t\('codeBlock\.failed'\) : t\('codeBlock\.copy'\)/)
   assert.match(componentSource, /aria-label=\{t\('codeBlock\.aria', \{ label \}\)\}/)
   assert.match(componentSource, /window\.setTimeout\(\(\) => setState\('idle'\), 1800\)/)
+})
+
+test('复制按钮使用独立工具栏，不覆盖首行、长行或滚动正文', () => {
+  const toolbar = componentSource.indexOf('className="code-block-copy-toolbar"')
+  const copyButton = componentSource.indexOf('className="code-block-copy"')
+  const pre = componentSource.indexOf('<pre {...preProps}>')
+  assert.ok(toolbar >= 0 && copyButton > toolbar && pre > copyButton)
+  assert.match(codeBlockStyles, /\.copyable-code-block \{[^}]*display: flex;[^}]*flex-direction: column;/)
+  assert.match(codeBlockStyles, /\.code-block-copy-toolbar \{[^}]*display: flex;[^}]*justify-content: flex-end;/)
+  assert.match(codeBlockStyles, /\.code-block-copy \{\s*position: static;/)
+  assert.doesNotMatch(codeBlockStyles, /\.code-block-copy \{\s*position: absolute;/)
+  assert.doesNotMatch(codeBlockStyles, /padding-right: (?:70|62)px/)
 })
