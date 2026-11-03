@@ -14,7 +14,7 @@ export interface WorkspaceWriteAccess {
   set(scope: WorkspaceWriteScope, enabled: boolean): Promise<boolean>
 }
 
-interface Grant extends WorkspaceWriteScope {}
+type Grant = WorkspaceWriteScope
 
 function validScope(scope: WorkspaceWriteScope): boolean {
   return Boolean(
