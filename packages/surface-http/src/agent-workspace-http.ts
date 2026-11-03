@@ -2,6 +2,7 @@ import type { IncomingMessage, ServerResponse } from 'node:http'
 import { AGENT_LENS_PROTOCOL_VERSION, AGENT_WORK_MUTATION_KINDS, type AgentWorkspaceResponseDto, type AgentWorkOutputResponseDto, type AgentWorkMutationDto, type AgentWorkMutationResultDto } from '@agent-lens/protocol'
 import type { CapturePolicyService, SourceService } from '@agent-lens/core'
 import { badRequest, httpError, readJsonBody, writeJson } from './http-utils'
+import type { WorkspaceWriteAccess } from './agent-workspace-write-access'
 
 export type AgentWorkspaceReader = (options?: {
   board?: string
@@ -48,10 +49,13 @@ export async function handleAgentWorkspaceRequest(
   resolveInstallationRoot: (sourceId:string,installationId:string)=>Promise<{root:string;executable?:string}|null>,
   outputReaders?: Readonly<Record<string, AgentWorkspaceOutputReader>>,
   mutationRunners?: Readonly<Record<string, AgentWorkspaceMutationRunner>>,
+  writeAccess?: WorkspaceWriteAccess,
 ): Promise<boolean> {
-  const match = /^\/api\/v1\/agents\/([^/]+)\/workspace(\/output|\/action)?$/.exec(url.pathname)
+  const match = /^\/api\/v1\/agents\/([^/]+)\/workspace(\/output|\/action|\/write-access)?$/.exec(url.pathname)
   if (!match) return false
-  if (request.method !== (match[2] === '/action' ? 'POST' : 'GET')) {
+  const expectedMethod = match[2] === '/action' ? 'POST'
+    : match[2] === '/write-access' ? ['GET', 'PUT'] : ['GET']
+  if (!(Array.isArray(expectedMethod) ? expectedMethod : [expectedMethod]).includes(request.method ?? '')) {
     writeJson(response,405,{error:'Method not allowed'})
     return true
   }
@@ -68,6 +72,34 @@ export async function handleAgentWorkspaceRequest(
   const installationId = url.searchParams.get('installationId')
   if (installationId && (installationId.length > 256 || /[\\x00-\\x1f]/.test(installationId))) {
     throw badRequest('Invalid installation identity')
+  }
+  if (match[2] === '/action' || (match[2] === '/write-access' && request.method === 'PUT')) {
+    const origin = request.headers.origin
+    if ((origin && (!request.headers.host || origin !== 'http://' + request.headers.host))
+      || (request.headers['sec-fetch-site'] && !['same-origin', 'none'].includes(String(request.headers['sec-fetch-site'])))) {
+      throw httpError(403, 'Cross-origin workspace writes are forbidden')
+    }
+  }
+  if (match[2] === '/write-access') {
+    if (!installationId) throw badRequest('Installation is required')
+    if ([...url.searchParams.keys()].some(key => key !== 'installationId')) throw badRequest('Unexpected permission parameters')
+    const installation = await resolveInstallationRoot(sourceId, installationId)
+    if (!installation) { writeJson(response, 404, {error:'Unknown Agent installation'}); return true }
+    const scope = {sourceId, installationId, root: installation.root}
+    if (request.method === 'GET') {
+      writeJson(response, 200, {sourceId, installationId, enabled: writeAccess?.allowed(scope) ?? false})
+      return true
+    }
+    if (!writeAccess) throw httpError(403, 'Workspace writes are not configured')
+    if (request.headers['x-agent-lens-workspace-action'] !== 'confirmed') throw httpError(403, 'Explicit permission confirmation is required')
+    const body = await readJsonBody(request, {maxBytes: 1024})
+    if (!body || typeof body !== 'object' || Array.isArray(body)
+      || (body as Record<string,unknown>).confirmed !== true
+      || typeof (body as Record<string,unknown>).enabled !== 'boolean'
+      || Object.keys(body).some(key => !['confirmed','enabled'].includes(key))) throw badRequest('Invalid workspace permission request')
+    const enabled = await writeAccess.set(scope, (body as {enabled:boolean}).enabled)
+    writeJson(response, 200, {sourceId, installationId, enabled})
+    return true
   }
   if (match[2] === '/action') {
     // Deliberate user confirmation + non-simple request header: local websites
@@ -88,6 +120,9 @@ export async function handleAgentWorkspaceRequest(
       Array.isArray(payload.action)) throw badRequest('Explicit confirmation and action are required')
     const installation=await resolveInstallationRoot(sourceId,installationId)
     if (!installation) {writeJson(response,404,{error:'Unknown Agent installation'});return true}
+    if (!writeAccess?.allowed({sourceId,installationId,root:installation.root})) {
+      throw httpError(403, 'Workspace write permission is disabled for this installation')
+    }
     // CLI executable comes from the same registered installation when known.
     const result=await runner({roots:[installation.root],action:payload.action as AgentWorkMutationDto,
       ...(installation.executable ? {executable:installation.executable} : {})})
@@ -180,6 +215,7 @@ export async function handleAgentWorkspaceRequest(
     return true
   }
   writeJson(response,200,{...result,installationId,
-    availableActions:mutationRunners?.[sourceId] ? AGENT_WORK_MUTATION_KINDS : []})
+    availableActions:mutationRunners?.[sourceId] && writeAccess?.allowed({sourceId,installationId,root:root.root})
+      ? AGENT_WORK_MUTATION_KINDS : []})
   return true
 }
