@@ -67,13 +67,25 @@ export function AgentWorkPage({model,sourceId}: {model:AgentLensClientModel;sour
   const [runOffset,setRunOffset] = useState(0)
   const [commentOffset,setCommentOffset] = useState(0)
   const [projectOffset,setProjectOffset] = useState(0)
+  const [boardOffset,setBoardOffset] = useState(0)
+  const refreshWorkspace = (options: Parameters<AgentLensClientModel['refreshAgentWorkspace']>[1] = {}) =>
+    model.refreshAgentWorkspace(sourceId,{boardOffset,projectOffset,...options})
+  const nextBoards=(nextOffset:number)=>{
+    setBoardOffset(nextOffset)
+    setOffset(0)
+    setSelectedTask(null)
+    setTaskEventOffset(0)
+    setRunOffset(0)
+    setCommentOffset(0)
+    void refreshWorkspace({boardOffset:nextOffset,offset:0,limit:PAGE_SIZE,scheduleOffset,projectOffset})
+  }
   const loadBoard = (board: string, nextOffset = 0) => {
     setSelectedTask(null)
     setTaskEventOffset(0)
     setRunOffset(0)
     setCommentOffset(0)
     setOffset(nextOffset)
-    void model.refreshAgentWorkspace(sourceId,{board,offset:nextOffset,limit:PAGE_SIZE})
+    void refreshWorkspace({board,offset:nextOffset,limit:PAGE_SIZE})
   }
   const openTask = (task:AgentWorkTaskDto) => {
     const next=selectedTask===task.id?null:task.id
@@ -81,21 +93,21 @@ export function AgentWorkPage({model,sourceId}: {model:AgentLensClientModel;sour
     setTaskEventOffset(0)
     setRunOffset(0)
     setCommentOffset(0)
-    if (next) void model.refreshAgentWorkspace(sourceId,{
+    if (next) void refreshWorkspace({
       board:task.boardId,offset,limit:PAGE_SIZE,scheduleOffset,taskId:next,taskEventOffset:0,runOffset:0,commentOffset:0,
     })
   }
   const nextTaskEvents=(nextOffset:number)=>{
     if (!selectedTask||!response?.selectedBoard) return
     setTaskEventOffset(nextOffset)
-    void model.refreshAgentWorkspace(sourceId,{
+    void refreshWorkspace({
       board:response.selectedBoard,offset,limit:PAGE_SIZE,scheduleOffset,taskId:selectedTask,taskEventOffset:nextOffset,runOffset,commentOffset,
     })
   }
   const nextTaskRuns=(nextOffset:number)=>{
     if (!selectedTask||!response?.selectedBoard) return
     setRunOffset(nextOffset)
-    void model.refreshAgentWorkspace(sourceId,{
+    void refreshWorkspace({
       board:response.selectedBoard,offset,limit:PAGE_SIZE,scheduleOffset,taskId:selectedTask,
       taskEventOffset,runOffset:nextOffset,commentOffset,
     })
@@ -103,14 +115,14 @@ export function AgentWorkPage({model,sourceId}: {model:AgentLensClientModel;sour
   const nextTaskComments=(nextOffset:number)=>{
     if (!selectedTask||!response?.selectedBoard) return
     setCommentOffset(nextOffset)
-    void model.refreshAgentWorkspace(sourceId,{
+    void refreshWorkspace({
       board:response.selectedBoard,offset,limit:PAGE_SIZE,scheduleOffset,taskId:selectedTask,
       taskEventOffset,runOffset,commentOffset:nextOffset,
     })
   }
   const nextProjects=(nextOffset:number)=>{
     setProjectOffset(nextOffset)
-    void model.refreshAgentWorkspace(sourceId,{
+    void refreshWorkspace({
       board:response?.selectedBoard,offset,limit:PAGE_SIZE,scheduleOffset,projectOffset:nextOffset,
       ...(selectedTask?{taskId:selectedTask,taskEventOffset,runOffset,commentOffset}:{}),
       ...(selectedSchedule?{jobId:selectedSchedule.id,profile:selectedSchedule.profile,executionOffset}:{}),
@@ -132,13 +144,13 @@ export function AgentWorkPage({model,sourceId}: {model:AgentLensClientModel;sour
     setCronOutputLoading(false)
     if (next) void loadOutput(job)
     setExecutionOffset(0)
-    if (next) void model.refreshAgentWorkspace(sourceId,{
+    if (next) void refreshWorkspace({
       board:response?.selectedBoard,jobId:job.id,profile:job.profile,executionOffset:0,scheduleOffset,
     })
   }
   const goExecutionPage = (job:AgentWorkScheduleDto,offset:number) => {
     setExecutionOffset(offset)
-    void model.refreshAgentWorkspace(sourceId,{
+    void refreshWorkspace({
       board:response?.selectedBoard,jobId:job.id,profile:job.profile,executionOffset:offset,scheduleOffset,
     })
   }
@@ -149,7 +161,7 @@ export function AgentWorkPage({model,sourceId}: {model:AgentLensClientModel;sour
     setCronOutputError('')
     outputRequest.current++
     setExecutionOffset(0)
-    void model.refreshAgentWorkspace(sourceId,{
+    void refreshWorkspace({
       board:response?.selectedBoard,scheduleOffset:nextOffset,limit:PAGE_SIZE,
     })
   }
@@ -167,7 +179,7 @@ export function AgentWorkPage({model,sourceId}: {model:AgentLensClientModel;sour
         <div className="agent-primary-section">
           <div className="section-heading-row">
             <h2>{t('work.title')}</h2>
-            <Button size="small" loading={snapshot.loading} onClick={() => void model.refreshAgentWorkspace(sourceId,{board:response.selectedBoard,offset,limit:PAGE_SIZE,scheduleOffset,projectOffset,...(selectedTask?{taskId:selectedTask,taskEventOffset,runOffset,commentOffset}:{}),...(selectedSchedule?{jobId:selectedSchedule.id,profile:selectedSchedule.profile,executionOffset}:{})})}>{t('work.refresh')}</Button>
+            <Button size="small" loading={snapshot.loading} onClick={() => void refreshWorkspace({board:response.selectedBoard,offset,limit:PAGE_SIZE,scheduleOffset,projectOffset,...(selectedTask?{taskId:selectedTask,taskEventOffset,runOffset,commentOffset}:{}),...(selectedSchedule?{jobId:selectedSchedule.id,profile:selectedSchedule.profile,executionOffset}:{})})}>{t('work.refresh')}</Button>
           </div>
           <div className="runtime-config-row">
             {boardAvailable && <Button size="small" variant={activePanel==='boards'?'primary':'default'} onClick={() => setPanel('boards')}>{t('work.boards')}</Button>}
@@ -180,6 +192,13 @@ export function AgentWorkPage({model,sourceId}: {model:AgentLensClientModel;sour
             <SelectMenu ariaLabel={t('work.selectBoard')} value={response.selectedBoard ?? ''} searchable
               options={response.boards.map(item => ({value:item.id,label:item.name + (item.archived?t('work.archived'):'')}))}
               onChange={value=>loadBoard(value)}/>
+            <div className="runtime-config-row">
+              <span>{response.boardsTotal}</span>
+              {boardOffset>0 && <Button size="small" disabled={snapshot.loading}
+                onClick={()=>nextBoards(Math.max(0,boardOffset-24))}>{t('work.previous')}</Button>}
+              {response.boardsHasMore && <Button size="small" disabled={snapshot.loading}
+                onClick={()=>nextBoards(boardOffset+24)}>{t('work.next')}</Button>}
+            </div>
             {response.tasks.length===0 && <div className="muted-empty compact">{t('work.noTasks')}</div>}
             {response.tasks.map(item => <div className="asset-item" key={item.id}>
               <div className="asset-item-head">
