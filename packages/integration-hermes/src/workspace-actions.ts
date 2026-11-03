@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto'
 import { promisify } from 'node:util'
 import { isAbsolute, resolve } from 'node:path'
 import type { AgentWorkMutationDto } from '@agent-lens/protocol'
+import { verifyHermesWorkMutation, type NativeMutationVerification } from './workspace-action-verification.js'
 
 const execFileAsync = promisify(execFile)
 const ID=/^[a-zA-Z0-9][a-zA-Z0-9_-]{0,79}$/
@@ -223,7 +224,7 @@ export async function mutateHermesWorkspace(options:{
   roots:string[]
   action:AgentWorkMutationDto
   executable?:string
-}):Promise<{accepted:boolean;pending?:boolean;receiptId?:string;message:string}>{
+}):Promise<{accepted:boolean;pending?:boolean;receiptId?:string;message:string}&Partial<NativeMutationVerification>>{
   if(options.sourceId!=='hermes'||!options.installationId)throw new Error('Verified Hermes scope is required')
   if(options.roots.length!==1||!isAbsolute(options.roots[0]??''))throw new Error('Verified Hermes installation root is required')
   const root=resolve(options.roots[0]!)
@@ -251,7 +252,8 @@ export async function mutateHermesWorkspace(options:{
       shell:false,
     })
     const message=(stdout||stderr||'Hermes accepted the operation').trim().slice(0,2000)
-    return {accepted:true,message}
+    const verification=await verifyHermesWorkMutation(root,options.action)
+    return {accepted:true,message,...verification}
   }catch(e){
     const error=e as Error&{stderr?:string;stdout?:string;code?:string|number;killed?:boolean}
     // Only CLI exit zero is accepted. Never report a timeout/partial run as success.
