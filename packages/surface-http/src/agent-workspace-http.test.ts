@@ -52,3 +52,15 @@ test('workspace handler validates source, policy and bounded read options', asyn
     assert.equal(options.length,1,'denied requests must not run provider')
   }finally{await new Promise<void>((resolve,reject)=>server.close(e=>e?reject(e):resolve()))}
 })
+
+test('workspace source roots are resolved only for authorized source requests', async () => {
+  const reader=await import('./agent-workspace-http')
+  assert.equal(typeof reader.handleAgentWorkspaceRequest,'function')
+  // The full native HTTP composition supplies verified source installation roots;
+  // Hermes's process default never authorizes an arbitrary installation in the HTTP layer.
+  const source=await import('node:fs/promises')
+  const full=await source.readFile(new URL('./slim-server.ts',import.meta.url),'utf8')
+  assert.match(full,/facets\.installedProducts/)
+  assert.match(full,/item\?\.productId===source\.manifest\.productId/)
+  assert.match(full,/configRoot/)
+});

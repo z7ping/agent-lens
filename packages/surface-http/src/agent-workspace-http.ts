@@ -11,6 +11,7 @@ export type AgentWorkspaceReader = (options?: {
   profile?: string
   executionOffset?: number
   scheduleOffset?: number
+  roots?: string[]
 }) => Promise<AgentWorkspaceResponseDto>
 
 const SLUG = /^[a-zA-Z0-9][a-zA-Z0-9_-]{0,79}$/
@@ -23,6 +24,7 @@ export async function handleAgentWorkspaceRequest(
   providers: Readonly<Record<string, AgentWorkspaceReader>> | undefined,
   sources: SourceService,
   policy: CapturePolicyService,
+  resolveInstallationRoots?: (sourceId:string)=>Promise<string[]>,
 ): Promise<boolean> {
   const match = /^\/api\/v1\/agents\/([^/]+)\/workspace$/.exec(url.pathname)
   if (!match) return false
@@ -68,7 +70,9 @@ export async function handleAgentWorkspaceRequest(
   const executionOffset = execOffsetText ? Number(execOffsetText) : 0
   const scheduleOffset = scheduleOffsetText ? Number(scheduleOffsetText) : 0
   if (offset > 100000 || executionOffset > 100000 || scheduleOffset > 100000 || limit < 1 || limit > 100) throw badRequest('Workspace page outside budget')
+  const roots = resolveInstallationRoots ? await resolveInstallationRoots(sourceId) : undefined
   const result = await provider({
+    ...(roots ? {roots} : {}),
     ...(board ? {board} : {}),
     offset,
     limit,
