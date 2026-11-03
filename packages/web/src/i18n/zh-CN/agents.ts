@@ -8,6 +8,7 @@ export const chineseAgentsMessages: LocaleMessagesDto = {
       cancelAction: '取消',
       actionRejected: 'Hermes 未确认操作成功',
       fieldTitle: '标题',
+      fieldSlug: '看板标识（创建后不可修改）',
       fieldBody: '正文',
       fieldPriority: '优先级',
       fieldProfile: 'Profile',
@@ -18,6 +19,7 @@ export const chineseAgentsMessages: LocaleMessagesDto = {
       fieldPrompt: '任务提示词',
       fieldReason: '操作说明（选填）',
       actions: {
+        board_create: '新建看板',board_rename:'重命名看板',board_archive:'归档看板',
         task_create: '新建任务',task_edit:'编辑任务',task_assign:'指派任务',
         task_link:'添加依赖',task_unlink:'移除依赖',task_archive:'归档任务',
         task_block:'阻塞任务',task_unblock:'解除阻塞',task_complete:'完成任务',task_promote:'提升为就绪',

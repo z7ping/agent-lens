@@ -8,6 +8,7 @@ export const englishAgentsMessages: LocaleMessagesDto = {
       cancelAction: 'Cancel',
       actionRejected: 'Hermes did not confirm the action',
       fieldTitle: 'Title',
+      fieldSlug: 'Board slug (immutable)',
       fieldBody: 'Body',
       fieldPriority: 'Priority',
       fieldProfile: 'Profile',
@@ -18,6 +19,7 @@ export const englishAgentsMessages: LocaleMessagesDto = {
       fieldPrompt: 'Prompt',
       fieldReason: 'Reason (optional)',
       actions: {
+        board_create: 'Create board',board_rename:'Rename board',board_archive:'Archive board',
         task_create: 'Create task',task_edit:'Edit task',task_assign:'Assign task',
         task_link:'Add dependency',task_unlink:'Remove dependency',task_archive:'Archive task',
         task_block:'Block task',task_unblock:'Unblock task',task_complete:'Complete task',task_promote:'Promote to ready',

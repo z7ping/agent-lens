@@ -210,6 +210,11 @@ export function AgentWorkPage({model,sourceId,installationId,installations}: {
       if(!result.accepted)throw new Error(result.message||t('work.actionRejected'))
       setActionFeedback(result.message)
       setPendingAction(null)
+      if(pendingAction.kind==='board.create'||pendingAction.kind==='board.archive') {
+        setBoardOffset(0)
+        setOffset(0)
+        setSelectedTask(null)
+      }
       if(pendingAction.kind==='task.create'||pendingAction.kind==='task.archive') {
         setOffset(0)
         setSelectedTask(null)
@@ -220,8 +225,10 @@ export function AgentWorkPage({model,sourceId,installationId,installations}: {
       }
       // The CLI exit proves acceptance, not the resulting native state.
       await refreshWorkspace({
-        board:response?.selectedBoard,
-        offset:pendingAction.kind==='task.create'||pendingAction.kind==='task.archive'?0:offset,
+        board:pendingAction.kind==='board.archive'?undefined:response?.selectedBoard,
+        boardOffset:pendingAction.kind==='board.create'||pendingAction.kind==='board.archive'?0:boardOffset,
+        offset:pendingAction.kind==='task.create'||pendingAction.kind==='task.archive'
+          ||pendingAction.kind==='board.archive'?0:offset,
         limit:PAGE_SIZE,
         scheduleOffset:pendingAction.kind==='cron.create'||pendingAction.kind==='cron.remove'?0:scheduleOffset,
         ...(selectedTask && !['task.create','task.archive'].includes(pendingAction.kind)
@@ -267,6 +274,16 @@ export function AgentWorkPage({model,sourceId,installationId,installations}: {
           <section className="agent-primary-section">
             <div className="section-heading-row"><h3>{t('work.boardTasks')}</h3>
               <span className="section-total">{board?.taskCount ?? '—'}</span>
+              {permitted('board.create') && <Button size="small" onClick={()=>askAction({
+                kind:'board.create',slug:'',
+              })}>{t('work.actions.board_create')}</Button>}
+              {permitted('board.rename') && response.selectedBoard && <Button size="small" onClick={()=>askAction({
+                kind:'board.rename',slug:response.selectedBoard!,name:board?.name??response.selectedBoard!,
+              })}>{t('work.actions.board_rename')}</Button>}
+              {permitted('board.archive') && response.selectedBoard && response.selectedBoard!=='default'
+                && <Button size="small" variant="danger" onClick={()=>askAction({
+                  kind:'board.archive',slug:response.selectedBoard!,
+                })}>{t('work.actions.board_archive')}</Button>}
               {permitted('task.create') && response.selectedBoard && <Button size="small" onClick={()=>askAction({
                 kind:'task.create',boardId:response.selectedBoard!,title:'',
               })}>{t('work.actions.task_create')}</Button>}
@@ -401,6 +418,13 @@ export function AgentWorkPage({model,sourceId,installationId,installations}: {
             loading={actionBusy} onClick={()=>void applyAction()}>{t('work.confirmAction')}</Button>
         </div>}>
         {pendingAction && <>
+          {'slug' in pendingAction && <label>{t('work.fieldSlug')}<Input maxLength={80}
+            disabled={pendingAction.kind!=='board.create'}
+            value={pendingAction.slug} onChange={event=>pendingAction.kind==='board.create'
+              && setPendingAction({...pendingAction,slug:event.target.value})}/></label>}
+          {(pendingAction.kind==='board.create'||pendingAction.kind==='board.rename') && <label>
+            {t('work.fieldName')}<Input maxLength={180} value={pendingAction.name??''}
+              onChange={event=>setPendingAction({...pendingAction,name:event.target.value})}/></label>}
           <div className="runtime-config-row"><span>{t('work.installation')}</span><code>{installationId}</code></div>
           {'boardId' in pendingAction && <div className="runtime-config-row"><span>{t('work.boards')}</span><code>{pendingAction.boardId}</code></div>}
           {'jobId' in pendingAction && <div className="runtime-config-row"><span>{t('work.taskId')}</span><code>{pendingAction.jobId}</code></div>}

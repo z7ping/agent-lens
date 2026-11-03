@@ -32,6 +32,16 @@ export function hermesWorkMutationArgv(action:AgentWorkMutationDto):string[] {
   if(!action || typeof action!=='object')throw new Error('Invalid mutation')
   const a=action
   if(typeof a.kind!=='string')throw new Error('Mutation kind is required')
+  if(a.kind.startsWith('board.')){
+    if(!('slug' in a))throw new Error('Board slug is required')
+    const slug=identity(a.slug,'board')
+    switch(a.kind){
+      case 'board.create':return ['kanban','boards','create',slug,
+        ...(a.name?['--name',required(a.name,180,'board name')]:[])]
+      case 'board.rename':return ['kanban','boards','rename',slug,required(a.name,180,'board name')]
+      case 'board.archive':return ['kanban','boards','rm',slug]
+    }
+  }
   if(a.kind.startsWith('task.')){
     if(!('boardId' in a))throw new Error('Board identity is required')
     const argv=['kanban','--board',identity(a.boardId,'board')]

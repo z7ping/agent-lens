@@ -145,6 +145,9 @@ export interface AgentWorkOutputResponseDto {
 
 /** Explicit, bounded native mutations. Never transport arbitrary CLI arguments. */
 export type AgentWorkMutationDto =
+  | {kind:'board.create';slug:string;name?:string}
+  | {kind:'board.rename';slug:string;name:string}
+  | {kind:'board.archive';slug:string}
   | {kind:'task.create';boardId:string;title:string;body?:string;assignee?:string;priority?:number}
   | {kind:'task.edit';boardId:string;taskId:string;title?:string;body?:string;priority?:number}
   | {kind:'task.assign';boardId:string;taskId:string;profile:string}
@@ -166,6 +169,7 @@ export interface AgentWorkMutationResultDto {
 
 /** Explicitly supported safe native verbs; providers must not accept arbitrary CLI. */
 export const AGENT_WORK_MUTATION_KINDS:readonly AgentWorkMutationDto['kind'][]=[
+  'board.create','board.rename','board.archive',
   'task.create','task.edit','task.assign','task.link','task.unlink','task.archive',
   'task.block','task.unblock','task.complete','task.promote',
   'cron.create','cron.edit','cron.pause','cron.resume','cron.remove','cron.cancel',
