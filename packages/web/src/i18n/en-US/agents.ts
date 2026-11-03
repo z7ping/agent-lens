@@ -3,6 +3,8 @@ import type { LocaleMessagesDto } from '@agent-lens/protocol'
 export const englishAgentsMessages: LocaleMessagesDto = {
   agents: {
     work: {
+      writeConfirmed: 'Change confirmed from Hermes native data',
+      writeUnconfirmed: 'Hermes accepted the command, but the native change is not verified; refresh to confirm',
       receiptUnavailable: 'The dispatch receipt is unavailable. Refresh native execution history to verify the outcome.',
       runCaution: 'This starts a native Hermes run immediately, even for paused jobs. Confirm the profile and job ID. Native history is the final authority.',
       writeEnable: 'Enable writes',
@@ -26,6 +28,7 @@ export const englishAgentsMessages: LocaleMessagesDto = {
       fieldPrompt: 'Prompt',
       fieldReason: 'Reason (optional)',
       actions: {
+        cron_retry: 'Run again', task_requeue: 'Requeue task',
         board_create: 'Create board',board_rename:'Rename board',board_archive:'Archive board',
         task_create: 'Create task',task_edit:'Edit task',task_assign:'Assign task',
         task_link:'Add dependency',task_unlink:'Remove dependency',task_archive:'Archive task',
