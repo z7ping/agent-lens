@@ -116,15 +116,18 @@ export function BackgroundActivityStatus() {
     }
   }, [open])
 
+  const loading = activity === null && !loadError
   const summary = useMemo(() => loadError
     ? { tone: 'warning' as const, label: t('backgroundActivity.statusUnavailable') }
-    : summarizeBackgroundActivity(activity), [activity, loadError, t])
+    : activity === null
+      ? { tone: 'active' as const, label: t('backgroundActivity.loading') }
+      : summarizeBackgroundActivity(activity), [activity, loadError, t])
   const connected = activity !== null && !loadError
   const active = connected ? activity.active : []
   const recent = connected ? recentActivities(activity.recent, Date.now()) : []
   const visible = [...active, ...recent]
   const issues = visible.some(hasProblem)
-  const running = active.some(item => item.state === 'running')
+  const running = loading || active.some(item => item.state === 'running')
 
   return <div className="workspace-background-activity">
     <button
@@ -145,13 +148,14 @@ export function BackgroundActivityStatus() {
         <header className="background-activity-popover-head">
           <b>{t('backgroundActivity.title')}</b>
           <span className={`background-activity-state is-${summary.tone}`}>
-            {loadError ? t('backgroundActivity.stateDegraded') : active.length ? t('backgroundActivity.processingCount', { count: active.length }) : issues ? t('backgroundActivity.stateDegraded') : t('backgroundActivity.idleState')}
+            {loading ? t('backgroundActivity.loading') : loadError ? t('backgroundActivity.stateDegraded') : active.length ? t('backgroundActivity.processingCount', { count: active.length }) : issues ? t('backgroundActivity.stateDegraded') : t('backgroundActivity.idleState')}
           </span>
         </header>
 
         <div className="background-activity-list">
           {visible.map(item => {
             const problem = hasProblem(item)
+            const duration = elapsedSeconds(item)
             const label = backgroundActivityLabel(item, item.sourceId ? agentLabel(item.sourceId) : undefined,
               item.state === 'running' || item.state === 'pending')
             return <div key={item.id + ':' + (item.startedAt ?? item.updatedAt)} className={`background-activity-item is-${item.state}${item.state === 'running' ? ' is-executing' : ''}`}>
@@ -169,15 +173,15 @@ export function BackgroundActivityStatus() {
                   {t('backgroundActivity.lastProgress', {
                     time: formatTime(item.completedAt ?? item.updatedAt, locale),
                   })}
-                  {elapsedSeconds(item) !== null && ' · ' + t('backgroundActivity.durationSeconds', {
-                    count: elapsedSeconds(item),
+                  {duration !== null && ' · ' + t('backgroundActivity.durationSeconds', {
+                    count: duration,
                   })}
                 </small>
               </div>
               <StatusBadge tone={stateTone(item.state)}>{t(stateKey(item.state))}</StatusBadge>
             </div>
           })}
-          {!visible.length && <div className="background-activity-empty">{t('backgroundActivity.noActive')}</div>}
+          {!visible.length && !loadError && <div className="background-activity-empty">{loading ? t('backgroundActivity.loading') : t('backgroundActivity.noActive')}</div>}
         </div>
         {issues && <Link to="/agents" className="background-activity-diagnostics" onClick={() => setOpen(false)}>
           {t('backgroundActivity.openDiagnostics')}
