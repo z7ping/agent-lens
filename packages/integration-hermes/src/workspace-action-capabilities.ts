@@ -15,7 +15,7 @@ export function parseHermesHelpCommands(help: string): ReadonlySet<string> {
   const text = help.replace(/\x1B\[[0-9;]*m/g,'')
   const commands = new Set<string>()
   // argparse prints known subcommands as {create,edit,...} in usage and options.
-  for (const found of text.matchAll(/\{([a-z][a-z0-9_,\\s-]{0,1600})\}/gi)) {
+  for (const found of text.matchAll(/\{([a-z][a-z0-9_,\s-]{0,1600})\}/gi)) {
     for (const token of found[1]!.split(',')) {
       const command = token.trim().toLowerCase()
       if (/^[a-z][a-z0-9-]{0,40}$/.test(command))commands.add(command)
