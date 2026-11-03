@@ -1,4 +1,4 @@
-import type { AgentCoverageResponseDto, AgentDetailResponseDto, AgentEnrichmentResponseDto, AgentOverviewResponseDto, AgentWorkspaceResponseDto, AgentWorkOutputResponseDto, AgentWorkMutationDto, AgentWorkMutationResultDto, AgentWorkWriteAccessDto, AgentRescanResponseDto, AgentSummaryResponseDto, CapturePolicyResponseDto, FacetResponseDto, HealthResponseDto, HostFilePreviewResponseDto, IntegrationManagementResponseDto, IntegrationPreferencesResponseDto, IntegrationToolDiscoveryResponseDto, ManagedAssetDirectoryResponseDto, ManagedAssetFilePreviewResponseDto, ManagedAssetRoot, LiveUpdateEventDto, ReviewInteractionDto, ReviewMessageAttachmentDto, ReviewResponseDto, ReviewSessionDetailDto, NativeSessionCatalogResponseDto, SessionRelationshipResponseDto, SourceRecordResponseDto, TaskFileChangesResponseDto, ToolAssetUsageResponseDto } from '@agent-lens/protocol'
+import type { AgentCoverageResponseDto, AgentDetailResponseDto, AgentEnrichmentResponseDto, AgentOverviewResponseDto, AgentWorkspaceResponseDto, AgentWorkOutputResponseDto, AgentWorkMutationDto, AgentWorkMutationResultDto, AgentWorkMutationReceiptDto, AgentWorkWriteAccessDto, AgentRescanResponseDto, AgentSummaryResponseDto, CapturePolicyResponseDto, FacetResponseDto, HealthResponseDto, HostFilePreviewResponseDto, IntegrationManagementResponseDto, IntegrationPreferencesResponseDto, IntegrationToolDiscoveryResponseDto, ManagedAssetDirectoryResponseDto, ManagedAssetFilePreviewResponseDto, ManagedAssetRoot, LiveUpdateEventDto, ReviewInteractionDto, ReviewMessageAttachmentDto, ReviewResponseDto, ReviewSessionDetailDto, NativeSessionCatalogResponseDto, SessionRelationshipResponseDto, SourceRecordResponseDto, TaskFileChangesResponseDto, ToolAssetUsageResponseDto } from '@agent-lens/protocol'
 import { AgentLensApi, type QueryFilters, type ReviewFilters } from './api'
 import { loadNativeImagePreview } from './native-media-preview'
 import { translateProduct } from '../i18n/runtime'
@@ -524,6 +524,9 @@ export abstract class AgentLensModelBase {
   }
 
   /** Confirmed native mutations remain source-owned; re-read after CLI acceptance. */
+  agentWorkReceipt(sourceId:string,installationId:string,receiptId:string):Promise<AgentWorkMutationReceiptDto>{
+    return this.api.agentWorkReceipt(sourceId,installationId,receiptId)
+  }
   agentWorkWriteAccess(sourceId:string,installationId:string):Promise<AgentWorkWriteAccessDto>{
     return this.api.agentWorkWriteAccess(sourceId,installationId)
   }
