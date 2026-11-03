@@ -61,6 +61,7 @@ export const chineseCoreMessages: LocaleMessagesDto = {
       stateInterrupted: '已中断',
       notExecuted: '未执行',
       statusUnavailable: '后台状态暂不可用',
+      loading: '正在读取后台状态…',
       agentSync: '智能体历史同步',
       syncSteps: '同步步骤时间线',
       syncTarget: '同步任务 {{index}}',
