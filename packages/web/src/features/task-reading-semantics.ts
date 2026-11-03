@@ -61,6 +61,7 @@ export function projectTaskReading<T>(facts: readonly TaskReadingFact<T>[]): Tas
         break
       case 'process-block':
         process.push(fact)
+        if (fact.error) errors += 1
         break
       case 'tool':
         process.push(fact)
