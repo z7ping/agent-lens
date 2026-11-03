@@ -3,6 +3,8 @@ import {
   type AgentCoverageResponseDto,
   type AgentWorkspaceResponseDto,
   type AgentWorkOutputResponseDto,
+  type AgentWorkMutationDto,
+  type AgentWorkMutationResultDto,
   type AgentDetailResponseDto,
   type AgentEnrichmentResponseDto,
   type AgentOverviewResponseDto,
@@ -209,6 +211,14 @@ export class AgentLensApi {
       () => requestJson('/api/v1/agents/coverage'),
     )
   }
+  agentWorkMutate(sourceId:string,installationId:string,action:AgentWorkMutationDto):Promise<AgentWorkMutationResultDto>{
+    return requestJson<AgentWorkMutationResultDto>(
+      '/api/v1/agents/'+encodeURIComponent(sourceId)+'/workspace/action?installationId='+encodeURIComponent(installationId),
+      {method:'POST',headers:{'content-type':'application/json','x-agent-lens-workspace-action':'confirmed'},
+       body:JSON.stringify({confirmed:true,action})},
+    )
+  }
+
   agentWorkOutput(sourceId: string, input: {
     installationId: string
     jobId: string

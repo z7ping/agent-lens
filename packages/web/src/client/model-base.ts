@@ -1,4 +1,4 @@
-import type { AgentCoverageResponseDto, AgentDetailResponseDto, AgentEnrichmentResponseDto, AgentOverviewResponseDto, AgentWorkspaceResponseDto, AgentWorkOutputResponseDto, AgentRescanResponseDto, AgentSummaryResponseDto, CapturePolicyResponseDto, FacetResponseDto, HealthResponseDto, HostFilePreviewResponseDto, IntegrationManagementResponseDto, IntegrationPreferencesResponseDto, IntegrationToolDiscoveryResponseDto, ManagedAssetDirectoryResponseDto, ManagedAssetFilePreviewResponseDto, ManagedAssetRoot, LiveUpdateEventDto, ReviewInteractionDto, ReviewMessageAttachmentDto, ReviewResponseDto, ReviewSessionDetailDto, NativeSessionCatalogResponseDto, SessionRelationshipResponseDto, SourceRecordResponseDto, TaskFileChangesResponseDto, ToolAssetUsageResponseDto } from '@agent-lens/protocol'
+import type { AgentCoverageResponseDto, AgentDetailResponseDto, AgentEnrichmentResponseDto, AgentOverviewResponseDto, AgentWorkspaceResponseDto, AgentWorkOutputResponseDto, AgentWorkMutationDto, AgentWorkMutationResultDto, AgentRescanResponseDto, AgentSummaryResponseDto, CapturePolicyResponseDto, FacetResponseDto, HealthResponseDto, HostFilePreviewResponseDto, IntegrationManagementResponseDto, IntegrationPreferencesResponseDto, IntegrationToolDiscoveryResponseDto, ManagedAssetDirectoryResponseDto, ManagedAssetFilePreviewResponseDto, ManagedAssetRoot, LiveUpdateEventDto, ReviewInteractionDto, ReviewMessageAttachmentDto, ReviewResponseDto, ReviewSessionDetailDto, NativeSessionCatalogResponseDto, SessionRelationshipResponseDto, SourceRecordResponseDto, TaskFileChangesResponseDto, ToolAssetUsageResponseDto } from '@agent-lens/protocol'
 import { AgentLensApi, type QueryFilters, type ReviewFilters } from './api'
 import { loadNativeImagePreview } from './native-media-preview'
 import { translateProduct } from '../i18n/runtime'
@@ -521,6 +521,11 @@ export abstract class AgentLensModelBase {
       && this.snapshot.agentWorkspace.installationId === installationId
       && (this.snapshot.agentWorkspace.response !== null || this.snapshot.agentWorkspace.loading)) return Promise.resolve()
     return this.refreshAgentWorkspace(sourceId,{installationId})
+  }
+
+  /** Confirmed native mutations remain source-owned; re-read after CLI acceptance. */
+  agentWorkMutate(sourceId:string,installationId:string,action:AgentWorkMutationDto):Promise<AgentWorkMutationResultDto>{
+    return this.api.agentWorkMutate(sourceId,installationId,action)
   }
 
   agentWorkOutput(sourceId: string, input:{
