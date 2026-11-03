@@ -15,6 +15,13 @@ test('background activity uses concrete user-facing actions', () => {
   }, 'Pi'), '正在同步 Pi 历史会话')
 
   assert.equal(backgroundActivityLabel({
+    id: 'native:startup-index',
+    kind: 'native-index',
+    state: 'running',
+    updatedAt: generatedAt,
+  }), '正在建立原生会话索引')
+
+  assert.equal(backgroundActivityLabel({
     id: 'tool-facts',
     kind: 'projection-rebuild',
     state: 'running',
@@ -23,7 +30,7 @@ test('background activity uses concrete user-facing actions', () => {
   }), '正在整理工具使用数据')
 })
 
-test('background activity summary prefers active work and only surfaces fresh completion or failure', () => {
+test('background activity summary retains failures but never replays completed work', () => {
   const active: BackgroundActivityResponseDto = {
     generatedAt,
     active: [{
@@ -39,7 +46,7 @@ test('background activity summary prefers active work and only surfaces fresh co
     }],
     recent: [],
   }
-  assert.deepEqual(summarizeBackgroundActivity(active, Date.parse(generatedAt)), {
+  assert.deepEqual(summarizeBackgroundActivity(active), {
     tone: 'active',
     label: '正在重新解析历史会话 · 另有 1 项',
   })
@@ -55,9 +62,25 @@ test('background activity summary prefers active work and only surfaces fresh co
       completedAt: generatedAt,
     }],
   }
-  assert.equal(summarizeBackgroundActivity(recent, Date.parse(generatedAt) + 10_000).label, '后台处理完成')
-  assert.deepEqual(summarizeBackgroundActivity(recent, Date.parse(generatedAt) + 60_000), {
+  assert.equal(summarizeBackgroundActivity(recent).label, '后台活动')
+  assert.deepEqual(summarizeBackgroundActivity(recent), {
     tone: 'idle',
     label: '后台活动',
   })
+  const degraded: BackgroundActivityResponseDto = {
+    generatedAt,
+    active: [],
+    recent: [{
+      id: 'native:startup-index',
+      kind: 'native-index',
+      state: 'degraded',
+      updatedAt: generatedAt,
+      completedAt: generatedAt,
+    }],
+  }
+  assert.deepEqual(summarizeBackgroundActivity(degraded), {
+    tone: 'warning',
+    label: '后台任务异常',
+  })
+
 })

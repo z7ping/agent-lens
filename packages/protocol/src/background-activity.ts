@@ -1,6 +1,7 @@
 export type BackgroundActivityKindDto =
   | 'source-detect'
   | 'source-history'
+  | 'native-index'
   | 'source-runtime'
   | 'runtime-startup-audit'
   | 'source-assets'
@@ -41,6 +42,13 @@ export interface SourceSyncProgressDto {
   currentUnit?: string
 }
 
+export interface NativeIndexActivityProgressDto {
+  examinedScopes: number
+  indexedSessions: number
+  failedScopes: number
+  deferredScopes: number
+}
+
 export interface BackgroundActivityItemDto {
   id: string
   kind: BackgroundActivityKindDto
@@ -52,6 +60,7 @@ export interface BackgroundActivityItemDto {
   updatedAt: string
   completedAt?: string
   sync?: SourceSyncProgressDto
+  nativeIndex?: NativeIndexActivityProgressDto
 }
 
 export interface BackgroundActivityResponseDto {

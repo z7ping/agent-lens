@@ -82,7 +82,8 @@ export interface NativeOnlyHttpOptions {
   reader:NativeSessionWindowReader
   backgroundProgress?:()=>{
     examinedScopes:number;indexedSessions:number;runningCaptures:number;
-    failedScopes:number;deferredScopes:number;finished:boolean
+    failedScopes:number;deferredScopes:number;finished:boolean;
+    startedAt?:string;updatedAt?:string;completedAt?:string
   }
   backup?: BackupService
   piEcosystem?:PiEcosystemQueryService
@@ -253,12 +254,18 @@ export async function startNativeOnlyHttpSurface(
         const state=progress.finished
           ?(progress.failedScopes||progress.deferredScopes?'degraded':'completed')
           :'running'
+        const updatedAt=progress.updatedAt??at
         const item={
-          id:'native:startup-index',kind:'source-history' as const,state,
-          scope:'local-native',updatedAt:at,
-          ...(progress.failedScopes||progress.deferredScopes?{
-            errorSummary:`原生索引失败 ${progress.failedScopes}，延迟 ${progress.deferredScopes}`,
-          }:{}),
+          id:'native:startup-index',kind:'native-index' as const,state,
+          scope:'local-native',
+          startedAt:progress.startedAt??updatedAt,updatedAt,
+          ...(progress.finished?{completedAt:progress.completedAt??updatedAt}:{}),
+          nativeIndex:{
+            examinedScopes:progress.examinedScopes,
+            indexedSessions:progress.indexedSessions,
+            failedScopes:progress.failedScopes,
+            deferredScopes:progress.deferredScopes,
+          },
         }
         writeJson(response,200,{generatedAt:at,
           active:progress.finished?[]:[item],

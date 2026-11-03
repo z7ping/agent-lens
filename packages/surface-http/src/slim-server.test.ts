@@ -150,7 +150,10 @@ test('Slim-only HTTP reads native Catalog/facets and refuses all old Event APIs'
       sourcesDetected:sourceId==='pi'?1:1,assetSourcesScanned:1,
       assetsDiscovered:2,assetsRemoved:0,statesRecorded:1,statesCleared:0,failures:[]}),
     backgroundProgress:()=>({examinedScopes:2,indexedSessions:14,runningCaptures:1,
-      failedScopes:0,deferredScopes:1,finished:true}),
+      failedScopes:0,deferredScopes:1,finished:true,
+      startedAt:'2026-11-03T01:00:00.000Z',
+      updatedAt:'2026-11-03T01:00:03.000Z',
+      completedAt:'2026-11-03T01:00:03.000Z'}),
     integrationDiscovery:{
       snapshot:()=>({status:'idle',items:[],generatedAt:'2026-10-26T00:00:00Z'}),
       async rescan(){return {status:'complete' as const,items:[],generatedAt:'2026-10-26T00:00:00Z'}},
@@ -327,9 +330,23 @@ test('Slim-only HTTP reads native Catalog/facets and refuses all old Event APIs'
     assert.equal((await fetch(base+'/api/v1/events',{method:'POST'})).status,405)
     const progress=await fetch(base+'/api/v1/background-activity')
     assert.equal(progress.status,200)
-    const progressBody=await progress.json() as {active:unknown[];recent:Array<{state:string}>}
+    const progressBody=await progress.json() as {active:unknown[];recent:Array<{
+      state:string;kind:string;updatedAt:string;completedAt?:string;
+      nativeIndex?:{examinedScopes:number;indexedSessions:number;deferredScopes:number}
+      sync?:unknown
+    }>}
     assert.equal(progressBody.active.length,0)
     assert.equal(progressBody.recent[0]?.state,'degraded')
+    assert.equal(progressBody.recent[0]?.kind,'native-index')
+    assert.equal(progressBody.recent[0]?.updatedAt,'2026-11-03T01:00:03.000Z')
+    assert.equal(progressBody.recent[0]?.completedAt,'2026-11-03T01:00:03.000Z')
+    assert.deepEqual(progressBody.recent[0]?.nativeIndex,{
+      examinedScopes:2,indexedSessions:14,failedScopes:0,deferredScopes:1,
+    })
+    assert.equal(progressBody.recent[0]?.sync,undefined)
+    const nextProgress=await (await fetch(base+'/api/v1/background-activity')).json()
+      as typeof progressBody
+    assert.equal(nextProgress.recent[0]?.updatedAt,progressBody.recent[0]?.updatedAt)
     const streamController=new AbortController()
     const stream=await fetch(base+'/api/v1/events',{signal:streamController.signal})
     assert.equal(stream.status,200)
