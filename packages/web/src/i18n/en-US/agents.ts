@@ -3,6 +3,9 @@ import type { LocaleMessagesDto } from '@agent-lens/protocol'
 export const englishAgentsMessages: LocaleMessagesDto = {
   agents: {
     work: {
+      outputError: 'Could not read Cron output',
+      noOutput: 'No output files available',
+      output: 'Output files',
       openSession: 'Open session',
       session_missing: 'Native session is not indexed',
       session_ambiguous: 'Duplicate session identities prevent a safe link',

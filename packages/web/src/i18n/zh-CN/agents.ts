@@ -3,6 +3,9 @@ import type { LocaleMessagesDto } from '@agent-lens/protocol'
 export const chineseAgentsMessages: LocaleMessagesDto = {
   agents: {
     work: {
+      outputError: '读取输出失败',
+      noOutput: '暂无可预览的输出',
+      output: '输出文件',
       openSession: '打开会话',
       session_missing: '原生会话尚未被 AgentLens 索引',
       session_ambiguous: '发现重复会话身份，无法确定对应会话',

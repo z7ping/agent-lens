@@ -1,5 +1,5 @@
-import { readFile, readdir, realpath, stat } from 'node:fs/promises'
-import { basename, dirname, isAbsolute, join, sep } from 'node:path'
+import { lstat, readFile, readdir, realpath, stat } from 'node:fs/promises'
+import { basename, dirname, join, sep } from 'node:path'
 import { resolveHermesConfigRoots } from '@agent-lens/runtime-cordis'
 import type { AgentWorkOutputFileDto, AgentWorkOutputResponseDto } from '@agent-lens/protocol'
 
@@ -53,8 +53,9 @@ export async function readHermesCronOutput(options: {
       if (file) {
         if (!names.includes(file)) return unavailable
         const path=join(folder,file)
-        const info=await stat(path)
-        if (!info.isFile() || info.size > MAX_PREVIEW_BYTES) {
+        const info=await lstat(path)
+        const canonical=await realpath(path)
+        if (!inside(folderPath,canonical) || !info.isFile() || info.size > MAX_PREVIEW_BYTES) {
           throw new Error('Hermes Cron output preview exceeds file budget')
         }
         return {sourceId:'hermes',profile,jobId,files,hasMore:offset+PAGE<names.length,

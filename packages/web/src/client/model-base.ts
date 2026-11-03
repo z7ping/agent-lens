@@ -1,4 +1,4 @@
-import type { AgentCoverageResponseDto, AgentDetailResponseDto, AgentEnrichmentResponseDto, AgentOverviewResponseDto, AgentWorkspaceResponseDto, AgentRescanResponseDto, AgentSummaryResponseDto, CapturePolicyResponseDto, FacetResponseDto, HealthResponseDto, HostFilePreviewResponseDto, IntegrationManagementResponseDto, IntegrationPreferencesResponseDto, IntegrationToolDiscoveryResponseDto, ManagedAssetDirectoryResponseDto, ManagedAssetFilePreviewResponseDto, ManagedAssetRoot, LiveUpdateEventDto, ReviewInteractionDto, ReviewMessageAttachmentDto, ReviewResponseDto, ReviewSessionDetailDto, NativeSessionCatalogResponseDto, SessionRelationshipResponseDto, SourceRecordResponseDto, TaskFileChangesResponseDto, ToolAssetUsageResponseDto } from '@agent-lens/protocol'
+import type { AgentCoverageResponseDto, AgentDetailResponseDto, AgentEnrichmentResponseDto, AgentOverviewResponseDto, AgentWorkspaceResponseDto, AgentWorkOutputResponseDto, AgentRescanResponseDto, AgentSummaryResponseDto, CapturePolicyResponseDto, FacetResponseDto, HealthResponseDto, HostFilePreviewResponseDto, IntegrationManagementResponseDto, IntegrationPreferencesResponseDto, IntegrationToolDiscoveryResponseDto, ManagedAssetDirectoryResponseDto, ManagedAssetFilePreviewResponseDto, ManagedAssetRoot, LiveUpdateEventDto, ReviewInteractionDto, ReviewMessageAttachmentDto, ReviewResponseDto, ReviewSessionDetailDto, NativeSessionCatalogResponseDto, SessionRelationshipResponseDto, SourceRecordResponseDto, TaskFileChangesResponseDto, ToolAssetUsageResponseDto } from '@agent-lens/protocol'
 import { AgentLensApi, type QueryFilters, type ReviewFilters } from './api'
 import { loadNativeImagePreview } from './native-media-preview'
 import { translateProduct } from '../i18n/runtime'
@@ -514,6 +514,12 @@ export abstract class AgentLensModelBase {
     if (!sourceId || this.snapshot.agentWorkspace.sourceId === sourceId &&
       (this.snapshot.agentWorkspace.response !== null || this.snapshot.agentWorkspace.loading)) return Promise.resolve()
     return this.refreshAgentWorkspace(sourceId)
+  }
+
+  agentWorkOutput(sourceId: string, input:{
+    jobId:string;profile:string;file?:string;offset?:number
+  }):Promise<AgentWorkOutputResponseDto> {
+    return this.api.agentWorkOutput(sourceId,input)
   }
 
   /** Exact indexed native identity only: never match by title, time or project name. */

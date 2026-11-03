@@ -2,6 +2,7 @@ import {
   parseLiveUpdateEvent,
   type AgentCoverageResponseDto,
   type AgentWorkspaceResponseDto,
+  type AgentWorkOutputResponseDto,
   type AgentDetailResponseDto,
   type AgentEnrichmentResponseDto,
   type AgentOverviewResponseDto,
@@ -208,6 +209,18 @@ export class AgentLensApi {
       () => requestJson('/api/v1/agents/coverage'),
     )
   }
+  agentWorkOutput(sourceId: string, input: {
+    jobId: string
+    profile: string
+    file?: string
+    offset?: number
+  }): Promise<AgentWorkOutputResponseDto> {
+    const params = new URLSearchParams({jobId: input.jobId, profile: input.profile})
+    if (input.file) params.set('file',input.file)
+    if (input.offset) params.set('offset',String(input.offset))
+    return requestJson<AgentWorkOutputResponseDto>('/api/v1/agents/'+encodeURIComponent(sourceId)+'/workspace/output?'+params)
+  }
+
   agentWorkspace(sourceId: string, options: {board?:string;offset?:number;limit?:number;jobId?:string;profile?:string;executionOffset?:number;scheduleOffset?:number;taskId?:string;taskEventOffset?:number} = {}): Promise<AgentWorkspaceResponseDto> {
     const params = new URLSearchParams()
     if (options.board) params.set('board', options.board)

@@ -1,10 +1,11 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router-dom'
-import type { AgentWorkTaskDto, AgentWorkScheduleDto } from '@agent-lens/protocol'
+import type { AgentWorkTaskDto, AgentWorkScheduleDto, AgentWorkOutputResponseDto } from '@agent-lens/protocol'
 import type { AgentLensClientModel } from '../client/model'
 import { useClientSnapshot } from '../client/use-client-snapshot'
 import { Button, SelectMenu, StatusBadge } from '../components/ui'
+import { MarkdownContent } from '../components/MarkdownContent'
 
 const PAGE_SIZE = 40
 const MAX_EXECUTION_PAGE = 200
@@ -36,6 +37,29 @@ export function AgentWorkPage({model,sourceId}: {model:AgentLensClientModel;sour
   const [panel,setPanel] = useState<'boards'|'schedules'>('boards')
   const [selectedTask,setSelectedTask] = useState<string|null>(null)
   const [selectedJob,setSelectedJob] = useState<string|null>(null)
+  const outputRequest=useRef(0)
+  const [cronOutput,setCronOutput] = useState<AgentWorkOutputResponseDto|null>(null)
+  const [cronOutputError,setCronOutputError] = useState('')
+  const [cronOutputLoading,setCronOutputLoading] = useState(false)
+  const [outputOffset,setOutputOffset] = useState(0)
+  const loadOutput = async (job:AgentWorkScheduleDto, file?:string,offset=0) => {
+    const generation=++outputRequest.current
+    setCronOutputLoading(true)
+    setCronOutputError('')
+    try {
+      const result=await model.agentWorkOutput(sourceId,{
+        jobId:job.id,profile:job.profile,...(file?{file}:{}),offset,
+      })
+      if (generation !== outputRequest.current) return
+      setCronOutput(result)
+      setOutputOffset(offset)
+    } catch {
+      if (generation !== outputRequest.current) return
+      setCronOutputError(t('work.outputError'))
+    } finally {
+      if (generation===outputRequest.current) setCronOutputLoading(false)
+    }
+  }
   const [executionOffset,setExecutionOffset] = useState(0)
   const [scheduleOffset,setScheduleOffset] = useState(0)
   const [offset,setOffset] = useState(0)
@@ -70,6 +94,12 @@ export function AgentWorkPage({model,sourceId}: {model:AgentLensClientModel;sour
     const identity=job.profile+':'+job.id
     const next=selectedJob===identity?null:identity
     setSelectedJob(next)
+    setCronOutput(null)
+    setCronOutputError('')
+    setOutputOffset(0)
+    outputRequest.current++
+    setCronOutputLoading(false)
+    if (next) void loadOutput(job)
     setExecutionOffset(0)
     if (next) void model.refreshAgentWorkspace(sourceId,{
       board:response?.selectedBoard,jobId:job.id,profile:job.profile,executionOffset:0,scheduleOffset,
@@ -84,6 +114,9 @@ export function AgentWorkPage({model,sourceId}: {model:AgentLensClientModel;sour
   const goSchedulePage = (nextOffset:number) => {
     setScheduleOffset(nextOffset)
     setSelectedJob(null)
+    setCronOutput(null)
+    setCronOutputError('')
+    outputRequest.current++
     setExecutionOffset(0)
     void model.refreshAgentWorkspace(sourceId,{
       board:response?.selectedBoard,scheduleOffset:nextOffset,limit:PAGE_SIZE,
@@ -162,6 +195,27 @@ export function AgentWorkPage({model,sourceId}: {model:AgentLensClientModel;sour
                 {executionOffset>0 && <Button size="small" disabled={snapshot.loading} onClick={()=>goExecutionPage(job,Math.max(0,executionOffset-MAX_EXECUTION_PAGE))}>{t('work.previous')}</Button>}
                 {response.executionsHasMore && <Button size="small" disabled={snapshot.loading} onClick={()=>goExecutionPage(job,executionOffset+MAX_EXECUTION_PAGE)}>{t('work.next')}</Button>}
               </div>
+              <section className="agent-secondary">
+                <div className="section-heading-row"><h3>{t('work.output')}</h3></div>
+                {cronOutputLoading && <div className="muted-empty compact" role="status">{t('work.loading')}</div>}
+                {cronOutputError && <div className="agent-path-error" role="alert">{cronOutputError}</div>}
+                {cronOutput?.state === 'unavailable' && <div className="muted-empty compact">{t('work.noOutput')}</div>}
+                {cronOutput?.files.map(file=><div key={file.name} className="runtime-config-row">
+                  <Button size="small" variant="quiet" disabled={cronOutputLoading}
+                    onClick={()=>void loadOutput(job,file.name,outputOffset)}>{file.name}</Button>
+                  <span>{formatDate(file.modifiedAt)}</span>
+                </div>)}
+                {cronOutput?.state==='available' && <div className="runtime-config-row">
+                  {outputOffset>0 && <Button size="small" disabled={cronOutputLoading}
+                    onClick={()=>void loadOutput(job,undefined,Math.max(0,outputOffset-50))}>{t('work.previous')}</Button>}
+                  {cronOutput.hasMore && <Button size="small" disabled={cronOutputLoading}
+                    onClick={()=>void loadOutput(job,undefined,outputOffset+50)}>{t('work.next')}</Button>}
+                </div>}
+                {cronOutput?.preview && <div className="agent-secondary">
+                  <div className="section-heading-row"><h3>{cronOutput.preview.name}</h3></div>
+                  <MarkdownContent text={cronOutput.preview.text}/>
+                </div>}
+              </section>
             </>}
           </div>)}
         </section>}
