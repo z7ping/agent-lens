@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { useNavigate } from 'react-router-dom'
 import type { AgentWorkTaskDto, AgentWorkScheduleDto } from '@agent-lens/protocol'
 import type { AgentLensClientModel } from '../client/model'
 import { useClientSnapshot } from '../client/use-client-snapshot'
@@ -15,6 +16,21 @@ const formatDate = (value: string | undefined): string => {
 
 export function AgentWorkPage({model,sourceId}: {model:AgentLensClientModel;sourceId:string}) {
   const {t} = useTranslation('agents')
+  const navigate = useNavigate()
+  const [sessionPending,setSessionPending] = useState(false)
+  const [sessionMessage,setSessionMessage] = useState('')
+  const openNativeSession = async (sessionId:string) => {
+    if (sessionPending) return
+    setSessionPending(true)
+    setSessionMessage('')
+    try {
+      const result = await model.resolveAgentNativeSession(sourceId,sessionId)
+      if (result.state === 'linked') navigate('/review/'+encodeURIComponent(result.reviewSessionId))
+      else setSessionMessage(t('work.session_'+result.state))
+    } catch {
+      setSessionMessage(t('work.session_unavailable'))
+    } finally { setSessionPending(false) }
+  }
   const snapshot = useClientSnapshot(model).agentWorkspace
   const response = snapshot.sourceId === sourceId ? snapshot.response : null
   const [panel,setPanel] = useState<'boards'|'schedules'>('boards')
@@ -79,6 +95,7 @@ export function AgentWorkPage({model,sourceId}: {model:AgentLensClientModel;sour
     <div className="page-content agents-content">
       {snapshot.sourceId === sourceId && snapshot.error && <div className="agent-path-error" role="alert">{snapshot.error} <Button size="small" onClick={() => void model.refreshAgentWorkspace(sourceId)}>{t('work.retry')}</Button></div>}
       {(!response && snapshot.loading) && <div className="muted-empty compact" role="status">{t('work.loading')}</div>}
+      {sessionMessage && <div className="agent-path-error" role="status">{sessionMessage}</div>}
       {response && <div className="agent-detail-pane">
         {response.features.filter(f=>f.availability==='error').map(feature=><div key={feature.id} role="alert" className="agent-path-error">
           {t('work.featureError',{name:feature.id})} {feature.reason}
@@ -112,7 +129,7 @@ export function AgentWorkPage({model,sourceId}: {model:AgentLensClientModel;sour
                 links={response.detailTaskId===item.id?response.taskLinks:[]}
                 comments={response.detailTaskId===item.id?response.taskComments:[]}
                 events={response.detailTaskId===item.id?response.taskEvents:[]}
-                hasMore={response.taskEventsHasMore} eventOffset={taskEventOffset} onEventPage={nextTaskEvents} loading={snapshot.loading}/>} 
+                hasMore={response.taskEventsHasMore} eventOffset={taskEventOffset} onEventPage={nextTaskEvents} loading={snapshot.loading} onOpenSession={openNativeSession} sessionPending={sessionPending}/>} 
             </div>)}
             <div className="runtime-config-row">
               <span>{t('work.loaded')} {offset+response.tasks.length} / {board?.taskCount ?? 0}</span>
@@ -160,18 +177,19 @@ export function AgentWorkPage({model,sourceId}: {model:AgentLensClientModel;sour
     </div>
   </main>
 }
-function TaskRuns({task,runs,links,comments,events,hasMore,eventOffset,onEventPage,loading}: {
+function TaskRuns({task,runs,links,comments,events,hasMore,eventOffset,onEventPage,loading,onOpenSession,sessionPending}: {
   task:AgentWorkTaskDto
   runs:import('@agent-lens/protocol').AgentWorkRunDto[]
   links:import('@agent-lens/protocol').AgentWorkLinkDto[]
   comments:import('@agent-lens/protocol').AgentWorkCommentDto[]
   events:import('@agent-lens/protocol').AgentWorkEventDto[]
   hasMore:boolean;eventOffset:number;onEventPage(offset:number):void;loading:boolean
+  onOpenSession(id:string):void;sessionPending:boolean
 }) {
   const {t} = useTranslation('agents')
   return <section className="agent-secondary">
     <div className="runtime-config-row"><span>{t('work.taskId')}</span><code>{task.id}</code></div>
-    {task.sourceSessionNativeId && <div className="runtime-config-row"><span>{t('work.nativeSession')}</span><code>{task.sourceSessionNativeId}</code></div>}
+    {task.sourceSessionNativeId && <div className="runtime-config-row"><span>{t('work.nativeSession')}</span><code>{task.sourceSessionNativeId}</code><Button size="small" loading={sessionPending} onClick={()=>onOpenSession(task.sourceSessionNativeId!)}>{t('work.openSession')}</Button></div>}
     <div className="section-heading-row"><h3>{t('work.runs')}</h3><span className="section-total">{runs.length}</span></div>
     {!runs.length && <div className="muted-empty compact">{t('work.noRuns')}</div>}
     {links.length>0 && <div className="runtime-config-row"><span>{t('work.links')}</span>{links.map(link=><code key={link.parentId+':'+link.childId}>{link.parentId} → {link.childId}</code>)}</div>}

@@ -516,6 +516,32 @@ export abstract class AgentLensModelBase {
     return this.refreshAgentWorkspace(sourceId)
   }
 
+  /** Exact indexed native identity only: never match by title, time or project name. */
+  async resolveAgentNativeSession(sourceId: string, nativeSessionId: string): Promise<
+    { state: 'linked'; reviewSessionId: string } | { state: 'missing' | 'ambiguous' | 'incomplete' }
+  > {
+    if (!sourceId || !nativeSessionId || nativeSessionId.length > 256) return {state:'missing'}
+    const matches = new Set<string>()
+    let cursor: string | undefined
+    for (let page = 0; page < 10; page++) {
+      const response = await this.api.nativeSessions({
+        sourceId, search: nativeSessionId, limit: 100,
+        ...(cursor ? {cursor} : {}),
+      })
+      for (const item of response.items) {
+        if (item.sourceId === sourceId && item.nativeSessionId === nativeSessionId) matches.add(item.id)
+      }
+      if (matches.size > 1) return {state:'ambiguous'}
+      if (!response.hasMore) {
+        const id = [...matches][0]
+        return id ? {state:'linked',reviewSessionId:id} : {state:'missing'}
+      }
+      if (!response.nextCursor || response.nextCursor === cursor) return {state:'incomplete'}
+      cursor = response.nextCursor
+    }
+    return {state:'incomplete'}
+  }
+
   ensureAgentDetail(sourceId: string): Promise<void> {
     if (!sourceId) return Promise.resolve()
     if (this.snapshot.agents?.items.some(item => item.sourceId === sourceId)) return Promise.resolve()

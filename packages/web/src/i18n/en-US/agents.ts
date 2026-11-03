@@ -3,6 +3,11 @@ import type { LocaleMessagesDto } from '@agent-lens/protocol'
 export const englishAgentsMessages: LocaleMessagesDto = {
   agents: {
     work: {
+      openSession: 'Open session',
+      session_missing: 'Native session is not indexed',
+      session_ambiguous: 'Duplicate session identities prevent a safe link',
+      session_incomplete: 'Session index scan is incomplete',
+      session_unavailable: 'Session lookup failed',
       nativeSession: 'Native session ID',
       links: 'Dependencies',
       comments: 'Comments',
