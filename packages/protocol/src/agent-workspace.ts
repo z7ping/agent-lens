@@ -140,3 +140,23 @@ export interface AgentWorkOutputResponseDto {
   state: 'available' | 'unavailable'
   preview?: { name: string; text: string }
 }
+
+/** Explicit, bounded native mutations. Never transport arbitrary CLI arguments. */
+export type AgentWorkMutationDto =
+  | {kind:'task.create';boardId:string;title:string;body?:string;assignee?:string;priority?:number}
+  | {kind:'task.edit';boardId:string;taskId:string;title?:string;body?:string;priority?:number}
+  | {kind:'task.assign';boardId:string;taskId:string;profile:string}
+  | {kind:'task.link'|'task.unlink';boardId:string;parentId:string;childId:string}
+  | {kind:'task.archive';boardId:string;taskId:string}
+  | {kind:'cron.create';profile:string;schedule:string;prompt:string;name?:string}
+  | {kind:'cron.edit';profile:string;jobId:string;schedule?:string;prompt?:string;name?:string}
+  | {kind:'cron.pause'|'cron.resume'|'cron.remove'|'cron.cancel';profile:string;jobId:string}
+
+export interface AgentWorkMutationResultDto {
+  sourceId:string
+  installationId:string
+  kind:AgentWorkMutationDto['kind']
+  /** The native CLI exited successfully. Read-back is required for persisted state. */
+  accepted:boolean
+  message:string
+}
