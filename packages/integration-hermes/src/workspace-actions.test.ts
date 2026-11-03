@@ -16,6 +16,8 @@ test('Hermes task commands pin an explicit board without a shell',()=>{
 test('Hermes Cron commands pin the correct native profile',()=>{
   assert.deepEqual(hermesWorkMutationArgv({kind:'cron.pause',profile:'coder',jobId:'job-1'}),
     ['--profile','coder','cron','pause','job-1'])
+  assert.deepEqual(hermesWorkMutationArgv({kind:'cron.run',profile:'coder',jobId:'job-1'}),
+    ['--profile','coder','cron','run','job-1'])
   assert.deepEqual(hermesWorkMutationArgv({kind:'cron.create',profile:'default',schedule:'0 9 * * *',prompt:'Summarize',name:'Morning'}),
     ['--profile','default','cron','create','0 9 * * *','Summarize','--name','Morning'])
 })
@@ -26,4 +28,10 @@ test('Hermes mutations reject ambiguous identity, injection and no-op input',()=
   assert.throws(()=>hermesWorkMutationArgv({kind:'task.edit',boardId:'default',taskId:'t'}),/No task changes/)
   assert.throws(()=>hermesWorkMutationArgv({kind:'task.link',boardId:'default',parentId:'t',childId:'t'}),/depend on itself/)
   assert.throws(()=>hermesWorkMutationArgv({kind:'cron.create',profile:'default',schedule:'',prompt:'one'}),/Invalid schedule/)
+})
+
+
+test('manual Hermes Cron CLI runs require an exact native job and profile',()=>{
+  assert.throws(()=>hermesWorkMutationArgv({kind:'cron.run',profile:'../../escape',jobId:'job-1'}),/Invalid profile/)
+  assert.throws(()=>hermesWorkMutationArgv({kind:'cron.run',profile:'default',jobId:'--all'}),/Invalid job/)
 })
