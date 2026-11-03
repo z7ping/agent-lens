@@ -23,18 +23,21 @@ export function AgentWorkPage({model,sourceId,installationId,installations}: {
   const navigate = useNavigate()
   const [workSearchParams,setWorkSearchParams] = useSearchParams()
   const [pendingAction,setPendingAction] = useState<AgentWorkMutationDto|null>(null)
+  const scopeGeneration=useRef(0)
   const [accessChange,setAccessChange] = useState<boolean|null>(null)
   const [accessBusy,setAccessBusy] = useState(false)
   const [accessEnabled,setAccessEnabled] = useState(false)
   const [accessStatus,setAccessStatus] = useState<'loading'|'ready'|'error'>('loading')
   const [accessError,setAccessError] = useState('')
   useEffect(()=>{
+    scopeGeneration.current++
     let valid=true
     setAccessStatus('loading')
     setAccessEnabled(false)
     setAccessError('')
     setAccessChange(null)
     setPendingAction(null)
+    setReceiptId(null)
     if(installationId) {
       void model.agentWorkWriteAccess(sourceId,installationId).then(value=>{
         if(valid){setAccessEnabled(value.enabled);setAccessStatus('ready')}
@@ -246,14 +249,17 @@ export function AgentWorkPage({model,sourceId,installationId,installations}: {
     if(accessChange===null || accessBusy || !installationId)return
     setAccessBusy(true)
     setAccessError('')
+    const generation=scopeGeneration.current
     try {
       const result=await model.setAgentWorkWriteAccess(sourceId,installationId,accessChange)
+      if(generation!==scopeGeneration.current)return
       setAccessEnabled(result.enabled)
       setAccessStatus('ready')
       setAccessChange(null)
       await refreshWorkspace({board:response?.selectedBoard,offset,limit:PAGE_SIZE,scheduleOffset,projectOffset})
     } catch(error) {
-      setAccessError(error instanceof Error?error.message:t('work.writeAccessError'))
+      if(generation===scopeGeneration.current)
+        setAccessError(error instanceof Error?error.message:t('work.writeAccessError'))
     } finally {setAccessBusy(false)}
   }
   const askAction=(action:AgentWorkMutationDto)=>{
@@ -265,8 +271,10 @@ export function AgentWorkPage({model,sourceId,installationId,installations}: {
     if(!pendingAction || actionBusy || !installationId || !permitted(pendingAction.kind))return
     setActionBusy(true)
     setActionError('')
+    const generation=scopeGeneration.current
     try{
       const result=await model.agentWorkMutate(sourceId,installationId,pendingAction)
+      if(generation!==scopeGeneration.current)return
       if(result.pending && result.receiptId){
         setActionFeedback(result.message)
         setReceiptId(result.receiptId)
@@ -301,7 +309,8 @@ export function AgentWorkPage({model,sourceId,installationId,installations}: {
           ? {taskId:selectedTask,taskEventOffset,runOffset,commentOffset}:{}),
       })
     }catch(error){
-      setActionError(error instanceof Error?error.message:t('work.actionRejected'))
+      if(generation===scopeGeneration.current)
+        setActionError(error instanceof Error?error.message:t('work.actionRejected'))
     }finally{setActionBusy(false)}
   }
   return <main className="workspace-page">
