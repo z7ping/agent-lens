@@ -117,8 +117,41 @@ async function readBoards(root: string, requestedBoard: string | undefined, offs
             ' FROM task_runs WHERE task_id = ? ORDER BY started_at DESC, id DESC LIMIT 101 OFFSET ?')
             .all(taskId,runOffset) as Record<string,unknown>[]
           runsHasMore = records.length > 100
+          // Hermes' gateway persists the run->session binding in owner_admitted events.
+          // Unlike tasks.session_id (originating conversation), this ID identifies the
+          // actual worker session admitted for this specific execution attempt.
+          const admitted = new Map<number,string>()
+          const ambiguous = new Set<number>()
+          const eventColumns = columns(db,'task_events')
+          if (eventColumns.has('task_id') && eventColumns.has('run_id')
+              && eventColumns.has('kind') && eventColumns.has('payload')) {
+            const runIds = records.slice(0,100).map(row=>Number(row.id)).filter(Number.isSafeInteger)
+            if (runIds.length) {
+              const admissionRows = db.prepare(
+                'SELECT run_id,payload FROM task_events WHERE task_id = ? AND kind = ?'
+                + ' AND run_id IN (' + runIds.map(()=>'?').join(',') + ')'
+                + ' ORDER BY id DESC LIMIT 500',
+              ).all(taskId,'owner_admitted',...runIds) as Array<{run_id:unknown;payload:unknown}>
+              for (const event of admissionRows) {
+                const runId = Number(event.run_id)
+                if (!Number.isSafeInteger(runId) || typeof event.payload !== 'string'
+                  || event.payload.length > 8192 || ambiguous.has(runId)) continue
+                let payload: Record<string,unknown>
+                try { payload = obj(JSON.parse(event.payload) as unknown) }
+                catch { continue }
+                const id = text(payload.session_id)
+                if (!id || id.length > 256) continue
+                const previous = admitted.get(runId)
+                if (previous && previous !== id) {
+                  ambiguous.add(runId)
+                  admitted.delete(runId)
+                } else admitted.set(runId,id)
+              }
+            }
+          }
           runs = records.slice(0,100).map(row => ({
             id: Number(row.id), boardId: board.id, taskId: String(row.task_id), status: String(row.status ?? 'unknown'),
+            ...(admitted.has(Number(row.id)) ? {workerSessionNativeId:admitted.get(Number(row.id))} : {}),
             ...(text(row.profile) ? {profile:text(row.profile)} : {}),
             ...(text(row.outcome) ? {outcome:text(row.outcome)} : {}),
             ...(epoch(row.started_at) ? {startedAt:epoch(row.started_at)} : {}),

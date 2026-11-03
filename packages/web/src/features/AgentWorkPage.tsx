@@ -277,7 +277,12 @@ function TaskRuns({task,runs,links,comments,events,hasMore,eventOffset,onEventPa
       <div className="asset-item-head"><StatusBadge tone={run.status==='done'?'success':run.status==='failed'?'danger':'neutral'}>{run.status}</StatusBadge>
         {run.profile && <span className="asset-scope">{run.profile}</span>}</div>
       <div className="runtime-config-row"><span>{formatDate(run.startedAt)}</span><span>{run.outcome??'—'}</span></div>
-      {run.summary && <p>{run.summary}</p>}
+      {run.workerSessionNativeId && <div className="runtime-config-row">
+        <span>{t('work.workerSession')}</span><code>{run.workerSessionNativeId}</code>
+        <Button size="small" loading={sessionPending}
+          onClick={()=>onOpenSession(run.workerSessionNativeId!)}>{t('work.openSession')}</Button>
+      </div>}
+      {run.summary && <p>{run.summary}</p>
       {run.error && <div className="agent-path-error">{run.error}</div>}
     </div>)}
     <div className="runtime-config-row">{runOffset>0 && <Button size="small" disabled={loading} onClick={()=>onRunPage(Math.max(0,runOffset-100))}>{t('work.previous')}</Button>}

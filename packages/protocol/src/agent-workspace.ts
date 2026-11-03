@@ -35,6 +35,8 @@ export interface AgentWorkRunDto {
   profile?: string
   status: string
   outcome?: string
+  /** Hermes owner_admitted event; this is the executed worker session, not the originating task session. */
+  workerSessionNativeId?: string
   startedAt?: string
   endedAt?: string
   summary?: string
