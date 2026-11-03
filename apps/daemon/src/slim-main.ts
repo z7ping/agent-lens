@@ -14,7 +14,7 @@ import { piSourceDefinition } from '@agent-lens/source-pi'
 import { codexSourceDefinition } from '@agent-lens/source-codex'
 import { claudeSourceDefinition } from '@agent-lens/source-claude'
 import { hermesSourceDefinition } from '@agent-lens/source-hermes'
-import { readHermesWorkspace, readHermesCronOutput, mutateHermesWorkspace, readHermesCronRunReceipt } from '@agent-lens/integration-hermes'
+import { readHermesWorkspace, readHermesCronOutput, mutateHermesWorkspace, readHermesCronRunReceipt, probeHermesWorkspaceActions } from '@agent-lens/integration-hermes'
 import { openCodeSourceDefinition } from '@agent-lens/source-opencode'
 import { startNativeOnlyHttpSurface, previewLocalHostTextFile, createWorkspaceWriteAccess, type IntegrationPackageController } from '@agent-lens/surface-http'
 import type { PiEcosystemQueryService } from '@agent-lens/protocol'
@@ -185,6 +185,7 @@ export async function startSlimNativeDaemon(options:SlimDaemonOptions){
       workspaceOutputReaders: {hermes: readHermesCronOutput},
       workspaceMutationRunners: {hermes: mutateHermesWorkspace},
       workspaceReceiptReaders: {hermes: readHermesCronRunReceipt},
+      workspaceCapabilityReaders: {hermes: probeHermesWorkspaceActions},
       workspaceWriteAccess,
       ...(policy.isSourceEnabled('pi')?{
         piEcosystem:options.piEcosystem??new NpmPiEcosystemProvider(),
