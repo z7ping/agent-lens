@@ -38,6 +38,14 @@ function stateKey(state: BackgroundActivityItemDto['state']): string {
   return 'backgroundActivity.stateCompleted'
 }
 
+function elapsedSeconds(item: BackgroundActivityItemDto): number | null {
+  if (!item.startedAt) return null
+  const startedAt = Date.parse(item.startedAt)
+  const finishedAt = item.state === 'running' ? Date.now() : Date.parse(item.completedAt ?? item.updatedAt)
+  if (!Number.isFinite(startedAt) || !Number.isFinite(finishedAt) || finishedAt < startedAt) return null
+  return Math.floor((finishedAt - startedAt) / 1000)
+}
+
 function recentActivities(items: BackgroundActivityItemDto[], now: number): BackgroundActivityItemDto[] {
   return items.filter(item => {
     if (hasProblem(item)) return true
@@ -137,7 +145,7 @@ export function BackgroundActivityStatus() {
         <header className="background-activity-popover-head">
           <b>{t('backgroundActivity.title')}</b>
           <span className={`background-activity-state is-${summary.tone}`}>
-            {active.length ? t('backgroundActivity.processingCount', { count: active.length }) : t('backgroundActivity.idleState')}
+            {loadError ? t('backgroundActivity.stateDegraded') : active.length ? t('backgroundActivity.processingCount', { count: active.length }) : issues ? t('backgroundActivity.stateDegraded') : t('backgroundActivity.idleState')}
           </span>
         </header>
 
@@ -157,11 +165,16 @@ export function BackgroundActivityStatus() {
                   failed: item.nativeIndex.failedScopes, deferred: item.nativeIndex.deferredScopes,
                 })}</small>}
                 {problem && !item.nativeIndex && item.errorSummary && <small className="background-activity-error">{item.errorSummary}</small>}
-                <small>{t('backgroundActivity.lastProgress', {
-                  time: formatTime(item.completedAt ?? item.updatedAt, locale),
-                })}</small>
+                <small>
+                  {t('backgroundActivity.lastProgress', {
+                    time: formatTime(item.completedAt ?? item.updatedAt, locale),
+                  })}
+                  {elapsedSeconds(item) !== null && ' · ' + t('backgroundActivity.durationSeconds', {
+                    count: elapsedSeconds(item),
+                  })}
+                </small>
               </div>
-              <StatusBadge dot tone={stateTone(item.state)}>{t(stateKey(item.state))}</StatusBadge>
+              <StatusBadge tone={stateTone(item.state)}>{t(stateKey(item.state))}</StatusBadge>
             </div>
           })}
           {!visible.length && <div className="background-activity-empty">{t('backgroundActivity.noActive')}</div>}
