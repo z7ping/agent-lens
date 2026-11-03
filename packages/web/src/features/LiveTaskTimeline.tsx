@@ -167,6 +167,7 @@ export const GenericLiveRound = memo(function GenericLiveRound({
       const kind: TaskReadingFact<LiveTaskProjectionItem>['kind'] = item.kind === 'thinking'
         ? 'reasoning'
         : item.kind === 'tool' ? 'tool'
+          : item.error ? 'process-block'
           : item.role === 'user' ? 'prompt'
             : item.phase === 'commentary' ? 'commentary'
               : item.phase === 'final' ? 'answer' : 'unclassified-answer'
@@ -185,7 +186,7 @@ export const GenericLiveRound = memo(function GenericLiveRound({
     onMessageAction={onMessageAction}
   />
   const renderProcessItem = (item: LiveTaskProjectionItem) =>
-    item.kind === 'message'
+    item.kind === 'message' && !item.error
       ? <TaskSessionProcessText key={item.id} text={item.text} streaming={item.streaming}/>
       : renderItem(item)
   // Build from the ORIGINAL native order: answers/prompts may be rendered in
