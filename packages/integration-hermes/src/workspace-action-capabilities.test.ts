@@ -11,7 +11,7 @@ test('native argparse choices, not help prose, authorize individual Hermes comma
   assert.ok(actions.includes('task.unblock'))
   assert.ok(actions.includes('cron.run'))
   assert.ok(actions.includes('cron.cancel'))
-  assert.equal(actions.length,21)
+  assert.equal(actions.length,20)
 })
 
 test('unknown, partially supported and misleading help output fail closed',()=>{
