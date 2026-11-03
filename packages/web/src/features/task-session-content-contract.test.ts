@@ -151,6 +151,25 @@ test('相同的 Session 事实在两种模式中只有一份 DOM 结构', () => 
   assert.doesNotMatch(runningReview, /<details[^>]*open/)
 })
 
+test('单次模型调用失败不宣称整个请求终止，仍保留原始错误细节', () => {
+  const html = renderToStaticMarkup(createElement(TaskSessionMessage, {
+    role: 'assistant', text: 'Connection error.', error: true,
+    errorScope: 'attempt', presentation: { author: 'Pi Live' },
+  }))
+  assert.match(html, /task-message-attempt-error/)
+  assert.match(html, /role="status"/)
+  assert.match(html, /Connection error\./)
+  assert.match(html, /task-message-failure-details/)
+  assert.doesNotMatch(html, /role="alert"/)
+
+  const terminal = renderToStaticMarkup(createElement(TaskSessionMessage, {
+    role: 'assistant', text: 'Runtime exited', error: true,
+    presentation: { author: 'Pi Live' },
+  }))
+  assert.match(terminal, /role="alert"/)
+  assert.doesNotMatch(terminal, /task-message-attempt-error/)
+})
+
 test('失败模型请求复用共享 TaskMessage，以错误语义呈现，不冒充正常答复', () => {
   const rendered = renderToStaticMarkup(createElement(TaskSessionMessage, {
     role: 'assistant', text: 'HTTP 422: developer role is not supported', error: true,
