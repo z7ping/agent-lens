@@ -283,7 +283,8 @@ export function AgentWorkPage({model,sourceId,installationId,installations}: {
         return
       }
       if(!result.accepted)throw new Error(result.message||t('work.actionRejected'))
-      setActionFeedback(result.message)
+      setActionFeedback(result.message+' · '+(result.verification==='confirmed'
+        ?t('work.writeConfirmed'):t('work.writeUnconfirmed'))
       setPendingAction(null)
       if(pendingAction.kind==='board.create'||pendingAction.kind==='board.archive') {
         setBoardOffset(0)
@@ -433,7 +434,8 @@ export function AgentWorkPage({model,sourceId,installationId,installations}: {
                 })}>{t(job.enabled?'work.actions.cron_pause':'work.actions.cron_resume')}</Button>}
                 {permitted('cron.run') && <Button size="small" onClick={()=>askAction({
                   kind:'cron.run',profile:job.profile,jobId:job.id,
-                })}>{t('work.actions.cron_run')}</Button>}
+                })}>{t(['failed','error','timed_out','blocked_config'].includes(job.lastStatus??'')
+                  ?'work.actions.cron_retry':'work.actions.cron_run')}</Button>}
                 {permitted('cron.cancel') && response.executions.some(run=>
                   run.jobId===job.id && run.profile===job.profile &&
                   (run.status==='running'||run.status==='claimed'))
@@ -599,7 +601,7 @@ function TaskRuns({task,runs,links,comments,events,hasMore,eventOffset,onEventPa
       })}>{t('work.actions.task_block')}</Button>}
       {permitted('task.unblock') && ['blocked','scheduled'].includes(task.status) && <Button size="small" onClick={()=>onAction({
         kind:'task.unblock',boardId:task.boardId,taskId:task.id,
-      })}>{t('work.actions.task_unblock')}</Button>}
+      })}>{t(task.status==='blocked' && task.lastError?'work.actions.task_requeue':'work.actions.task_unblock')}</Button>}
       {permitted('task.promote') && ['todo','blocked','triage'].includes(task.status) && <Button size="small" onClick={()=>onAction({
         kind:'task.promote',boardId:task.boardId,taskId:task.id,
       })}>{t('work.actions.task_promote')}</Button>}
