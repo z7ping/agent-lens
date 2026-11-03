@@ -3,6 +3,9 @@ import { readdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import test from 'node:test'
+import { createElement } from 'react'
+import { renderToStaticMarkup } from 'react-dom/server'
+import { Button, IconButton, StatusBadge } from './Primitives'
 
 const source = readFileSync(new URL('./Primitives.tsx', import.meta.url), 'utf8')
 const css = readFileSync(new URL('./ui-primitives.css', import.meta.url), 'utf8')
@@ -301,4 +304,36 @@ test('repository rules keep shared UI and TaskSurface constraints explicit', () 
   assert.match(agentRules, /TaskSurface/)
   assert.match(agentRules, /正常可见文字不得低于 `12px`/)
   assert.match(agentRules, /### 图标规范/)
+})
+
+test('shared Tooltip owns floating hints and converts native title without duplicate browser prompts', () => {
+  const tooltip = readFileSync(new URL('./TooltipProvider.tsx', import.meta.url), 'utf8')
+  const tooltipCss = readFileSync(new URL('./tooltip.css', import.meta.url), 'utf8')
+  const main = readFileSync(new URL('../../main.tsx', import.meta.url), 'utf8')
+  const lock = JSON.parse(readFileSync(new URL('../../../../../package-lock.json', import.meta.url), 'utf8'))
+  assert.match(source, /data-ui-tooltip=\{title \|\| undefined\}/)
+  assert.match(index, /export \{ TooltipProvider \} from '\.\/TooltipProvider'/)
+  assert.match(main, /<TooltipProvider><App model=\{clientModel\}\/><\/TooltipProvider>/)
+  assert.match(main, /import '\.\/components\/ui\/tooltip\.css'/)
+  assert.match(tooltip, /anchor\.removeAttribute\('title'\)/)
+  assert.match(tooltip, /MutationObserver/)
+  assert.match(tooltip, /role="tooltip"/)
+  assert.match(tooltip, /flip\(\{ padding: 12 \}\)/)
+  assert.match(tooltip, /shift\(\{ padding: 12 \}\)/)
+  assert.match(tooltip, /event\.key !== 'Escape'/)
+  assert.match(tooltip, /document\.addEventListener\('focusin'/)
+  assert.match(tooltipCss, /var\(--al-surface-raised\)/)
+  assert.equal(lock.packages['packages/web'].dependencies['@floating-ui/react'], '0.27.20')
+})
+
+test('buttons and status badges render shared tooltips without a native title attribute', () => {
+  for (const element of [
+    createElement(Button, { title: '刷新' }, '刷新'),
+    createElement(IconButton, { title: '查看 Markdown 源码', 'aria-label': '查看 Markdown 源码' }, '↔'),
+    createElement(StatusBadge, { title: '部分数据' }, '部分'),
+  ]) {
+    const html = renderToStaticMarkup(element)
+    assert.match(html, /data-ui-tooltip="/)
+    assert.doesNotMatch(html, /(?:\s)title="/)
+  }
 })

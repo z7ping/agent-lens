@@ -1,6 +1,7 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { App } from './App'
+import { TooltipProvider } from './components/ui'
 import { installLiveRecovery } from './client/live-recovery'
 import { clientModel } from './client/model'
 import { installTaskNotificationMonitor } from './features/task-notifications'
@@ -15,6 +16,7 @@ import './semantic-colors.css'
 // Shared UI primitives must load before shell, domain and page styling.
 import './components/ui/ui-primitives.css'
 import './components/ui/overlay.css'
+import './components/ui/tooltip.css'
 import './components/agent-logo.css'
 import './components/select-menu.css'
 import './shell.css'
@@ -72,7 +74,7 @@ async function bootstrap() {
   await initializeI18n()
   const root = document.getElementById('root')
   if (!root) throw new Error('AgentLens Web root is missing')
-  createRoot(root).render(<StrictMode><App model={clientModel} /></StrictMode>)
+  createRoot(root).render(<StrictMode><TooltipProvider><App model={clientModel}/></TooltipProvider></StrictMode>)
 }
 
 void bootstrap()
