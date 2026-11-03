@@ -246,19 +246,26 @@ export async function mutateHermesWorkspace(options:{
       profile:identity(options.action.profile,'profile'),
       jobId:identity(options.action.jobId,'job',TASK_ID)})
   }
+  let message:string
   try{
     const {stdout,stderr}=await execFileAsync(executable,args,{
       cwd:root,env,encoding:'utf8',timeout:20_000,maxBuffer:MAX_OUTPUT,windowsHide:true,
       shell:false,
     })
-    const message=(stdout||stderr||'Hermes accepted the operation').trim().slice(0,2000)
-    const verification=await verifyHermesWorkMutation(root,options.action)
-    return {accepted:true,message,...verification}
+    message=(stdout||stderr||'Hermes accepted the operation').trim().slice(0,2000)
   }catch(e){
     const error=e as Error&{stderr?:string;stdout?:string;code?:string|number;killed?:boolean}
-    // Only CLI exit zero is accepted. Never report a timeout/partial run as success.
+    // A timeout may have changed native data. Never imply a definite failure.
     return {accepted:false,message:error.killed
       ? 'Hermes operation timed out; the outcome is unknown. Refresh before retrying.'
       : 'Hermes operation failed: '+(error.stderr||error.message||'unknown error').slice(0,1800)}
   }
+  // A read-back failure must not retroactively change a successful CLI exit into failure.
+  let verification:NativeMutationVerification
+  try{
+    verification=await verifyHermesWorkMutation(root,options.action)
+  }catch{
+    verification={verification:'unconfirmed',verificationMessage:'Native read-back failed. Refresh to confirm.'}
+  }
+  return {accepted:true,message,...verification}
 }
