@@ -83,6 +83,27 @@ test('用户气泡操作只在气泡下方通过悬浮图标展示，并保持�
   assert.doesNotMatch(live, /<Button\s+key=\{action\.actionId\}/)
 })
 
+test('用户气泡不重复显示“我”，时间与原有操作保留', () => {
+  const html = renderToStaticMarkup(createElement(TaskSessionMessage, {
+    role: 'user', text: '你好', presentation: { author: '我', time: '10:09:47' },
+    actions: createElement('button', { type: 'button', 'aria-label': '从这里编辑' }, '编辑'),
+  }))
+  assert.match(html, /task-message-bubble-user/)
+  assert.match(html, /<time>10:09:47<\/time>/)
+  assert.match(html, /task-message-user-hover-actions/)
+  assert.doesNotMatch(html, /<b>我<\/b>/)
+
+  const withoutTime = renderToStaticMarkup(createElement(TaskSessionMessage, {
+    role: 'user', text: '你好', presentation: { author: '我' },
+  }))
+  assert.doesNotMatch(withoutTime, /task-message-model-meta/)
+
+  const assistant = renderToStaticMarkup(createElement(TaskSessionMessage, {
+    role: 'assistant', text: '收到', presentation: { author: 'Pi', time: '10:09:48' },
+  }))
+  assert.match(assistant, /<b>Pi<\/b>/)
+})
+
 test('相同的 Session 事实在两种模式中只有一份 DOM 结构', () => {
   const message = renderToStaticMarkup(createElement(TaskSessionMessage, {
     role: 'assistant', text: '共同消息', collapsible: false,

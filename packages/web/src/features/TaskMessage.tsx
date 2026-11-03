@@ -61,7 +61,7 @@ export function TaskMessage({
 }: TaskMessageProps) {
   const { t } = useTranslation('task')
   const user = role === 'user'
-  const resolvedAuthor = author ?? (user ? t('message.you') : t('message.agent'))
+  const resolvedAuthor = author ?? t('message.agent')
   const failure = error ? presentTaskError(text, errorDiagnostic) : null
   const [view, setView] = useState<'rendered' | 'source'>('rendered')
   const [expanded, setExpanded] = useState(() => !user)
@@ -172,7 +172,7 @@ export function TaskMessage({
   >
     <div className={`task-message-bubble ${bubbleClass}`}>
       {(modelLabel || time || meta || error) && <div className="task-message-model-meta">
-        <b>{resolvedAuthor}</b>
+        {!user && <b>{resolvedAuthor}</b>}
         {error && <span className="task-message-error-status"><UiIcon name="alert" size={14}/>{t('message.requestFailed')}</span>}
         {modelLabel && <><span aria-hidden="true">·</span><span className="task-message-model-label">{modelLabel}</span></>}
         {meta && <span className="task-message-context-evidence">{meta}</span>}
