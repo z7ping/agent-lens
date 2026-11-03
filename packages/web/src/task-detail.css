@@ -524,6 +524,55 @@
 .task-surface .markdown-message-actions button:hover,
 .task-surface .task-message-actions button:hover { background: var(--al-soft-2); color: var(--al-ink-2); }
 .task-surface .task-message-user .markdown-message-actions { margin-top: 4px; }
+/* Live message actions belong below the user bubble, never inside its text. */
+.task-surface .task-message-user:is(:hover, :focus-within) { z-index: 6; }
+.task-surface .task-message-user-hover-actions {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding-top: 3px;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transform: translateY(-3px);
+  transition: opacity .14s ease, transform .14s ease, visibility .14s ease;
+}
+.task-surface .task-message-bubble-user:is(:hover, :focus-within) > .task-message-user-hover-actions {
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+  transform: translateY(0);
+}
+.task-surface .task-message-user-hover-actions .ui-icon-button {
+  width: 26px;
+  height: 26px;
+  min-height: 26px;
+  border-color: transparent;
+  background: transparent;
+  color: var(--al-muted);
+}
+.task-surface .task-message-user-hover-actions .ui-icon-button:is(:hover, :focus-visible) {
+  background: var(--al-soft-2);
+  color: var(--al-ink-2);
+}
+.task-surface .task-message-user-hover-actions .ui-icon-button:disabled {
+  opacity: .4;
+  cursor: not-allowed;
+}
+@media (hover: none) {
+  .task-surface .task-message-user:has(.task-message-user-hover-actions) { margin-bottom: 31px; }
+  .task-surface .task-message-user-hover-actions {
+    opacity: 1;
+    visibility: visible;
+    pointer-events: auto;
+    transform: none;
+  }
+}
+
 .task-surface .task-message-actions { display: inline-flex; flex: 0 0 auto; flex-wrap: nowrap; align-items: center; gap: 4px; margin: 0; white-space: nowrap; }
 .task-surface .task-message-actions:empty { display: none; }
 .task-surface .markdown-message-actions > .task-message-actions { padding-left: 3px; border-left: 1px solid var(--al-line); }
@@ -1030,6 +1079,7 @@
   .task-surface .task-tool-group-chevron,
   .task-surface .task-tool-row-chevron,
   .task-surface .task-message-assistant .markdown-message-actions { transition: none; }
+  .task-surface .task-message-user-hover-actions { transition: none; }
   .task-surface .task-message-response-dots > span { animation: none; opacity: .55; }
   .task-surface .task-message-response-activity svg { animation: none; }
   .task-surface .task-message-output-state[data-active='true'] svg { animation: none; }
