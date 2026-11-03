@@ -226,7 +226,7 @@ export function normalizePiLiveEvent(event: Readonly<Record<string, unknown>>): 
     if (type === 'message_end' && rawRole === 'assistant') {
       const nativeError = piEventErrorText(message.errorMessage, message.error, event.errorMessage, event.error)
       if (nativeError.trim() || message.stopReason === 'error') {
-        return { type: 'error', message: nativeError.trim() || 'Pi assistant request failed' }
+        return { type: 'error', scope: 'attempt', message: nativeError.trim() || 'Pi assistant request failed' }
       }
     }
     const role = rawRole === 'user' || rawRole === 'assistant' || rawRole === 'tool' || rawRole === 'system'
