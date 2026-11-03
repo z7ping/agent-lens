@@ -140,6 +140,27 @@ export function AgentWorkPage({model,sourceId,installationId,installations}: {
   const [commentOffset,setCommentOffset] = useState(0)
   const [projectOffset,setProjectOffset] = useState(0)
   const [boardOffset,setBoardOffset] = useState(0)
+  useEffect(()=>{
+    // Reusing a page for another installation must not show the previous
+    // installation's selected work, output preview, or pagination window.
+    outputRequest.current++
+    setCronOutput(null)
+    setCronOutputError('')
+    setCronOutputLoading(false)
+    setSelectedTask(null)
+    setSelectedJob(null)
+    setOutputOffset(0)
+    setExecutionOffset(0)
+    setScheduleOffset(0)
+    setOffset(0)
+    setTaskEventOffset(0)
+    setRunOffset(0)
+    setCommentOffset(0)
+    setProjectOffset(0)
+    setBoardOffset(0)
+    setActionFeedback('')
+    setActionError('')
+  },[sourceId,installationId])
   const refreshWorkspace = (
     options: Omit<Parameters<AgentLensClientModel['refreshAgentWorkspace']>[1], 'installationId'> = {},
   ) => installationId
