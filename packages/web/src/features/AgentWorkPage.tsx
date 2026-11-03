@@ -64,9 +64,13 @@ export function AgentWorkPage({model,sourceId}: {model:AgentLensClientModel;sour
   const [scheduleOffset,setScheduleOffset] = useState(0)
   const [offset,setOffset] = useState(0)
   const [taskEventOffset,setTaskEventOffset] = useState(0)
+  const [runOffset,setRunOffset] = useState(0)
+  const [commentOffset,setCommentOffset] = useState(0)
   const loadBoard = (board: string, nextOffset = 0) => {
     setSelectedTask(null)
     setTaskEventOffset(0)
+    setRunOffset(0)
+    setCommentOffset(0)
     setOffset(nextOffset)
     void model.refreshAgentWorkspace(sourceId,{board,offset:nextOffset,limit:PAGE_SIZE})
   }
@@ -74,15 +78,33 @@ export function AgentWorkPage({model,sourceId}: {model:AgentLensClientModel;sour
     const next=selectedTask===task.id?null:task.id
     setSelectedTask(next)
     setTaskEventOffset(0)
+    setRunOffset(0)
+    setCommentOffset(0)
     if (next) void model.refreshAgentWorkspace(sourceId,{
-      board:task.boardId,offset,limit:PAGE_SIZE,scheduleOffset,taskId:next,taskEventOffset:0,
+      board:task.boardId,offset,limit:PAGE_SIZE,scheduleOffset,taskId:next,taskEventOffset:0,runOffset:0,commentOffset:0,
     })
   }
   const nextTaskEvents=(nextOffset:number)=>{
     if (!selectedTask||!response?.selectedBoard) return
     setTaskEventOffset(nextOffset)
     void model.refreshAgentWorkspace(sourceId,{
-      board:response.selectedBoard,offset,limit:PAGE_SIZE,scheduleOffset,taskId:selectedTask,taskEventOffset:nextOffset,
+      board:response.selectedBoard,offset,limit:PAGE_SIZE,scheduleOffset,taskId:selectedTask,taskEventOffset:nextOffset,runOffset,commentOffset,
+    })
+  }
+  const nextTaskRuns=(nextOffset:number)=>{
+    if (!selectedTask||!response?.selectedBoard) return
+    setRunOffset(nextOffset)
+    void model.refreshAgentWorkspace(sourceId,{
+      board:response.selectedBoard,offset,limit:PAGE_SIZE,scheduleOffset,taskId:selectedTask,
+      taskEventOffset,runOffset:nextOffset,commentOffset,
+    })
+  }
+  const nextTaskComments=(nextOffset:number)=>{
+    if (!selectedTask||!response?.selectedBoard) return
+    setCommentOffset(nextOffset)
+    void model.refreshAgentWorkspace(sourceId,{
+      board:response.selectedBoard,offset,limit:PAGE_SIZE,scheduleOffset,taskId:selectedTask,
+      taskEventOffset,runOffset,commentOffset:nextOffset,
     })
   }
   const boardAvailable = response?.features.some(f => f.id === 'boards' && f.availability === 'available') ?? false
@@ -136,7 +158,7 @@ export function AgentWorkPage({model,sourceId}: {model:AgentLensClientModel;sour
         <div className="agent-primary-section">
           <div className="section-heading-row">
             <h2>{t('work.title')}</h2>
-            <Button size="small" loading={snapshot.loading} onClick={() => void model.refreshAgentWorkspace(sourceId,{board:response.selectedBoard,offset,limit:PAGE_SIZE,scheduleOffset,...(selectedTask?{taskId:selectedTask,taskEventOffset}:{}),...(selectedSchedule?{jobId:selectedSchedule.id,profile:selectedSchedule.profile,executionOffset}:{})})}>{t('work.refresh')}</Button>
+            <Button size="small" loading={snapshot.loading} onClick={() => void model.refreshAgentWorkspace(sourceId,{board:response.selectedBoard,offset,limit:PAGE_SIZE,scheduleOffset,...(selectedTask?{taskId:selectedTask,taskEventOffset,runOffset,commentOffset}:{}),...(selectedSchedule?{jobId:selectedSchedule.id,profile:selectedSchedule.profile,executionOffset}:{})})}>{t('work.refresh')}</Button>
           </div>
           <div className="runtime-config-row">
             {boardAvailable && <Button size="small" variant={activePanel==='boards'?'primary':'default'} onClick={() => setPanel('boards')}>{t('work.boards')}</Button>}
@@ -162,7 +184,9 @@ export function AgentWorkPage({model,sourceId}: {model:AgentLensClientModel;sour
                 links={response.detailTaskId===item.id?response.taskLinks:[]}
                 comments={response.detailTaskId===item.id?response.taskComments:[]}
                 events={response.detailTaskId===item.id?response.taskEvents:[]}
-                hasMore={response.taskEventsHasMore} eventOffset={taskEventOffset} onEventPage={nextTaskEvents} loading={snapshot.loading} onOpenSession={openNativeSession} sessionPending={sessionPending}/>} 
+                hasMore={response.taskEventsHasMore} eventOffset={taskEventOffset} onEventPage={nextTaskEvents} loading={snapshot.loading} onOpenSession={openNativeSession} sessionPending={sessionPending}
+                runOffset={runOffset} runsHasMore={response.runsHasMore} onRunPage={nextTaskRuns}
+                commentOffset={commentOffset} commentsHasMore={response.taskCommentsHasMore} onCommentPage={nextTaskComments}/>} 
             </div>)}
             <div className="runtime-config-row">
               <span>{t('work.loaded')} {offset+response.tasks.length} / {board?.taskCount ?? 0}</span>
@@ -231,7 +255,7 @@ export function AgentWorkPage({model,sourceId}: {model:AgentLensClientModel;sour
     </div>
   </main>
 }
-function TaskRuns({task,runs,links,comments,events,hasMore,eventOffset,onEventPage,loading,onOpenSession,sessionPending}: {
+function TaskRuns({task,runs,links,comments,events,hasMore,eventOffset,onEventPage,loading,onOpenSession,sessionPending,runOffset,runsHasMore,onRunPage,commentOffset,commentsHasMore,onCommentPage}: {
   task:AgentWorkTaskDto
   runs:import('@agent-lens/protocol').AgentWorkRunDto[]
   links:import('@agent-lens/protocol').AgentWorkLinkDto[]
@@ -239,6 +263,8 @@ function TaskRuns({task,runs,links,comments,events,hasMore,eventOffset,onEventPa
   events:import('@agent-lens/protocol').AgentWorkEventDto[]
   hasMore:boolean;eventOffset:number;onEventPage(offset:number):void;loading:boolean
   onOpenSession(id:string):void;sessionPending:boolean
+  runOffset:number;runsHasMore:boolean;onRunPage(offset:number):void
+  commentOffset:number;commentsHasMore:boolean;onCommentPage(offset:number):void
 }) {
   const {t} = useTranslation('agents')
   return <section className="agent-secondary">
@@ -254,7 +280,11 @@ function TaskRuns({task,runs,links,comments,events,hasMore,eventOffset,onEventPa
       {run.summary && <p>{run.summary}</p>}
       {run.error && <div className="agent-path-error">{run.error}</div>}
     </div>)}
-    {comments.length>0 && <section className="agent-secondary"><h3>{t('work.comments')}</h3>{comments.map(comment=><div className="asset-item" key={comment.id}><strong>{comment.author}</strong><p>{comment.body}</p></div>)}</section>}
+    <div className="runtime-config-row">{runOffset>0 && <Button size="small" disabled={loading} onClick={()=>onRunPage(Math.max(0,runOffset-100))}>{t('work.previous')}</Button>}
+      {runsHasMore && <Button size="small" disabled={loading} onClick={()=>onRunPage(runOffset+100)}>{t('work.next')}</Button>}</div>
+    {(comments.length>0||commentOffset>0) && <section className="agent-secondary"><h3>{t('work.comments')}</h3>{comments.map(comment=><div className="asset-item" key={comment.id}><strong>{comment.author}</strong><p>{comment.body}</p></div>)}
+      <div className="runtime-config-row">{commentOffset>0 && <Button size="small" disabled={loading} onClick={()=>onCommentPage(Math.max(0,commentOffset-50))}>{t('work.previous')}</Button>}
+      {commentsHasMore && <Button size="small" disabled={loading} onClick={()=>onCommentPage(commentOffset+50)}>{t('work.next')}</Button>}</div></section>}
     {events.length>0 && <section className="agent-secondary"><h3>{t('work.events')}</h3>{events.map(event=><div className="runtime-config-row" key={event.id}><span>{event.kind}</span><span>{formatDate(event.createdAt)}</span></div>)}
       <div className="runtime-config-row">{eventOffset>0 && <Button size="small" disabled={loading} onClick={()=>onEventPage(Math.max(0,eventOffset-100))}>{t('work.previous')}</Button>}
         {hasMore && <Button size="small" disabled={loading} onClick={()=>onEventPage(eventOffset+100)}>{t('work.next')}</Button>}</div></section>}

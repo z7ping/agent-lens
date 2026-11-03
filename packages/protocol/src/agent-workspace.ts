@@ -98,6 +98,8 @@ export interface AgentWorkspaceResponseDto {
   selectedBoard?: string
   tasks: AgentWorkTaskDto[]
   runs: AgentWorkRunDto[]
+  runsHasMore: boolean
+  taskCommentsHasMore: boolean
   detailTaskId?: string
   taskLinks: AgentWorkLinkDto[]
   taskComments: AgentWorkCommentDto[]

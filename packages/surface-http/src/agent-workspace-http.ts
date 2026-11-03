@@ -14,6 +14,8 @@ export type AgentWorkspaceReader = (options?: {
   roots?: string[]
   taskId?: string
   taskEventOffset?: number
+  runOffset?: number
+  commentOffset?: number
 }) => Promise<AgentWorkspaceResponseDto>
 
 export type AgentWorkspaceOutputReader = (options: {
@@ -73,11 +75,11 @@ export async function handleAgentWorkspaceRequest(
   const provider = providers?.[sourceId]
   if (!provider) {
     // No workspace provider does not mean the Agent's other functionality is broken.
-    writeJson(response,200,{sourceId,features:[],projects:[],boards:[],tasks:[],runs:[],taskLinks:[],taskComments:[],taskEvents:[],taskEventsHasMore:false,
+    writeJson(response,200,{sourceId,features:[],projects:[],boards:[],tasks:[],runs:[],runsHasMore:false,taskCommentsHasMore:false,taskLinks:[],taskComments:[],taskEvents:[],taskEventsHasMore:false,
       tasksHasMore:false,schedules:[],schedulesHasMore:false,schedulesTotal:0,executions:[],executionsHasMore:false,meta:{protocolVersion:AGENT_LENS_PROTOCOL_VERSION,generatedAt:new Date().toISOString()}})
     return true
   }
-  if ([...url.searchParams.keys()].some(key => !['board','offset','limit','jobId','profile','executionOffset','scheduleOffset','taskId','taskEventOffset'].includes(key))) {
+  if ([...url.searchParams.keys()].some(key => !['board','offset','limit','jobId','profile','executionOffset','scheduleOffset','taskId','taskEventOffset','runOffset','commentOffset'].includes(key))) {
     throw badRequest('Invalid workspace parameters')
   }
   const board = url.searchParams.get('board') ?? undefined
@@ -90,9 +92,13 @@ export async function handleAgentWorkspaceRequest(
   const scheduleOffsetText = url.searchParams.get('scheduleOffset')
   const taskId = url.searchParams.get('taskId') ?? undefined
   const taskEventOffsetText = url.searchParams.get('taskEventOffset')
+  const runOffsetText = url.searchParams.get('runOffset')
+  const commentOffsetText = url.searchParams.get('commentOffset')
   if (offsetText && !/^\d{1,6}$/.test(offsetText)) throw badRequest('Invalid offset')
   if (limitText && !/^\d{1,3}$/.test(limitText)) throw badRequest('Invalid limit')
   if (taskId && (!board || !/^[a-zA-Z0-9_-]{1,128}$/.test(taskId))) throw badRequest('Invalid task identity')
+  if (runOffsetText && !/^\d{1,6}$/.test(runOffsetText)) throw badRequest('Invalid run offset')
+  if (commentOffsetText && !/^\d{1,6}$/.test(commentOffsetText)) throw badRequest('Invalid comment offset')
   if (taskEventOffsetText && !/^\d{1,6}$/.test(taskEventOffsetText)) throw badRequest('Invalid task event offset')
   if (jobId && (!/^[a-zA-Z0-9_-]{1,128}$/.test(jobId) || !profile || !/^[a-zA-Z0-9_-]{1,80}$/.test(profile))) throw badRequest('Invalid job identity')
   if (scheduleOffsetText && !/^\d{1,6}$/.test(scheduleOffsetText)) throw badRequest('Invalid schedule offset')
@@ -102,7 +108,9 @@ export async function handleAgentWorkspaceRequest(
   const executionOffset = execOffsetText ? Number(execOffsetText) : 0
   const scheduleOffset = scheduleOffsetText ? Number(scheduleOffsetText) : 0
   const taskEventOffset = taskEventOffsetText ? Number(taskEventOffsetText) : 0
-  if (offset > 100000 || executionOffset > 100000 || scheduleOffset > 100000 || taskEventOffset > 100000 || limit < 1 || limit > 100) throw badRequest('Workspace page outside budget')
+  const runOffset = runOffsetText ? Number(runOffsetText) : 0
+  const commentOffset = commentOffsetText ? Number(commentOffsetText) : 0
+  if (offset > 100000 || executionOffset > 100000 || scheduleOffset > 100000 || taskEventOffset > 100000 || runOffset > 100000 || commentOffset > 100000 || limit < 1 || limit > 100) throw badRequest('Workspace page outside budget')
   const roots = resolveInstallationRoots ? await resolveInstallationRoots(sourceId) : undefined
   const result = await provider({
     ...(roots ? {roots} : {}),
@@ -111,7 +119,7 @@ export async function handleAgentWorkspaceRequest(
     limit,
     ...(jobId && profile?{jobId,profile,executionOffset}:{}),
     scheduleOffset,
-    ...(taskId?{taskId,taskEventOffset}:{}),
+    ...(taskId?{taskId,taskEventOffset,runOffset,commentOffset}:{}),
   })
   if (result.sourceId !== sourceId) {
     writeJson(response,502,{error:'Workspace provider source identity mismatch'})
