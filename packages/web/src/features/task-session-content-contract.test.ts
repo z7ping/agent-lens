@@ -170,6 +170,20 @@ test('单次模型调用失败不宣称整个请求终止，仍保留原始错�
   assert.doesNotMatch(terminal, /task-message-attempt-error/)
 })
 
+test('Live 非终止错误只提示过程异常，不影响 Review 原有错误语义', () => {
+  const incident = renderToStaticMarkup(createElement(TaskSessionMessage, {
+    role: 'assistant', text: 'Extension failed', error: true, terminalFailure: false,
+  }))
+  assert.match(incident, /task-message-attempt-error/)
+  assert.match(incident, /role="status"/)
+  assert.doesNotMatch(incident, /role="alert"/)
+  const terminal = renderToStaticMarkup(createElement(TaskSessionMessage, {
+    role: 'assistant', text: 'Runtime failed', error: true, terminalFailure: true,
+  }))
+  assert.match(terminal, /role="alert"/)
+  assert.doesNotMatch(terminal, /task-message-attempt-error/)
+})
+
 test('失败模型请求复用共享 TaskMessage，以错误语义呈现，不冒充正常答复', () => {
   const rendered = renderToStaticMarkup(createElement(TaskSessionMessage, {
     role: 'assistant', text: 'HTTP 422: developer role is not supported', error: true,
