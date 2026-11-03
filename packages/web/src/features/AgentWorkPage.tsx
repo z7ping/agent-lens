@@ -171,6 +171,7 @@ function TaskRuns({task,runs,links,comments,events,hasMore,eventOffset,onEventPa
   const {t} = useTranslation('agents')
   return <section className="agent-secondary">
     <div className="runtime-config-row"><span>{t('work.taskId')}</span><code>{task.id}</code></div>
+    {task.sourceSessionNativeId && <div className="runtime-config-row"><span>{t('work.nativeSession')}</span><code>{task.sourceSessionNativeId}</code></div>}
     <div className="section-heading-row"><h3>{t('work.runs')}</h3><span className="section-total">{runs.length}</span></div>
     {!runs.length && <div className="muted-empty compact">{t('work.noRuns')}</div>}
     {links.length>0 && <div className="runtime-config-row"><span>{t('work.links')}</span>{links.map(link=><code key={link.parentId+':'+link.childId}>{link.parentId} → {link.childId}</code>)}</div>}

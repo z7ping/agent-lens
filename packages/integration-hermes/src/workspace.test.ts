@@ -12,11 +12,12 @@ test('Hermes workspace reads multiple boards and profile-local scheduled work wi
     const boardRoot=join(root,'kanban','boards','team')
     const profileRoot=join(root,'profiles','coder')
     await Promise.all([mkdir(boardRoot,{recursive:true}),mkdir(join(root,'cron'),{recursive:true}),
-      mkdir(join(profileRoot,'cron'),{recursive:true})])
+      mkdir(join(profileRoot,'cron'),{recursive:true}),
+      mkdir(join(root,'kanban','boards','default'),{recursive:true})])
     const database = (path:string) => new DatabaseSync(path)
     const createBoard=(path:string,id:string,title:string)=>{
       const db=database(path)
-      db.exec('CREATE TABLE tasks (id TEXT PRIMARY KEY,title TEXT,status TEXT,assignee TEXT,project_id TEXT,priority INTEGER,created_at INTEGER,last_failure_error TEXT,current_run_id INTEGER)')
+      db.exec('CREATE TABLE tasks (id TEXT PRIMARY KEY,title TEXT,status TEXT,assignee TEXT,project_id TEXT,priority INTEGER,created_at INTEGER,last_failure_error TEXT,current_run_id INTEGER,session_id TEXT)')
       db.exec('CREATE TABLE task_runs (id INTEGER PRIMARY KEY,task_id TEXT,profile TEXT,status TEXT,outcome TEXT,started_at INTEGER,ended_at INTEGER,summary TEXT,error TEXT)')
       db.prepare('INSERT INTO tasks (id,title,status,priority,created_at) VALUES (?,?,?,?,?)')
         .run(id,title,'ready',1,1730000000)
@@ -26,6 +27,9 @@ test('Hermes workspace reads multiple boards and profile-local scheduled work wi
     }
     createBoard(join(root,'kanban.db'),'t1','Default task')
     createBoard(join(boardRoot,'kanban.db'),'t2','Team task')
+    const native=new DatabaseSync(join(boardRoot,'kanban.db'))
+    native.prepare('UPDATE tasks SET session_id = ? WHERE id = ?').run('native-session-123','t2')
+    native.close()
     const detailsDb=new DatabaseSync(join(boardRoot,'kanban.db'))
     detailsDb.exec('CREATE TABLE task_links (parent_id TEXT,child_id TEXT)')
     detailsDb.exec('CREATE TABLE task_comments (id INTEGER PRIMARY KEY,task_id TEXT,author TEXT,body TEXT,created_at INTEGER)')
@@ -35,6 +39,9 @@ test('Hermes workspace reads multiple boards and profile-local scheduled work wi
     detailsDb.prepare('INSERT INTO task_events VALUES (?,?,?,?,?)').run(1,'t2','claimed',1,1730000000)
     detailsDb.close()
     await writeFile(join(boardRoot,'board.json'),JSON.stringify({name:'Team board',project_id:'project-1'}))
+    await writeFile(join(root,'kanban','boards','default','board.json'),JSON.stringify({name:'Personal board'}))
+    await mkdir(join(root,'kanban','boards','orphan'),{recursive:true})
+    createBoard(join(root,'kanban','boards','orphan','kanban.db'),'ghost','Ghost task')
     await writeFile(join(root,'cron','jobs.json'),JSON.stringify({jobs:[{
       id:'job1',name:'daily',enabled:true,schedule_display:'0 8 * * *',no_agent:true,
       next_run_at:'2026-11-04T08:00:00+08:00'
@@ -55,8 +62,11 @@ test('Hermes workspace reads multiple boards and profile-local scheduled work wi
     const response=await readHermesWorkspace({roots:[root],board:'team',limit:1,jobId:'job2',profile:'coder',taskId:'t2'})
     assert.deepEqual(response.features.map(f=>f.availability),['available','available','available'])
     assert.equal(response.boards.length,2)
+    assert.equal(response.boards.find(b=>b.id==='default')?.name,'Personal board')
+    assert.equal(response.boards.some(b=>b.id==='orphan'),false)
     assert.equal(response.boards.find(b=>b.id==='team')?.name,'Team board')
     assert.equal(response.tasks[0]?.id,'t2')
+    assert.equal(response.tasks[0]?.sourceSessionNativeId,'native-session-123')
     assert.equal(response.runs[0]?.taskId,'t2')
     assert.equal(response.schedules.length,2)
     assert.equal(response.schedules.find(j=>j.profile==='default')?.noAgent,true)

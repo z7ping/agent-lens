@@ -3,6 +3,7 @@ import type { LocaleMessagesDto } from '@agent-lens/protocol'
 export const englishAgentsMessages: LocaleMessagesDto = {
   agents: {
     work: {
+      nativeSession: 'Native session ID',
       links: 'Dependencies',
       comments: 'Comments',
       events: 'Events',

@@ -26,6 +26,7 @@ export interface AgentWorkTaskDto {
   createdAt?: string
   lastError?: string
   currentRunId?: number
+  sourceSessionNativeId?: string
 }
 export interface AgentWorkRunDto {
   id: number

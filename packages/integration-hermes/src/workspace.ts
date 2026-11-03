@@ -56,9 +56,13 @@ function select(columns: Set<string>, names: readonly string[]): string {
   return names.map(name => columns.has(name) ? '"' + name + '"' : 'NULL AS "' + name + '"').join(', ')
 }
 async function boardList(root: string): Promise<Array<{id:string; path:string; metadata:string}>> {
-  const boards = [{ id: 'default', path: join(root, 'kanban.db'), metadata: join(root, 'kanban', 'board.json') }]
-  for (const slug of (await dirs(join(root, 'kanban', 'boards'))).slice(0, MAX_BOARDS - 1)) {
-    boards.push({ id: slug, path: join(root, 'kanban', 'boards', slug, 'kanban.db'), metadata: join(root, 'kanban', 'boards', slug, 'board.json') })
+  const boards = [{ id: 'default', path: join(root, 'kanban.db'), metadata: join(root, 'kanban', 'boards', 'default', 'board.json') }]
+  for (const slug of (await dirs(join(root, 'kanban', 'boards'))).filter(slug => slug !== 'default')) {
+    if (boards.length >= MAX_BOARDS) break
+    const metadata = join(root, 'kanban', 'boards', slug, 'board.json')
+    // Hermes treats board.json, not a leftover kanban.db, as the board identity marker.
+    if (!await fileExists(metadata)) continue
+    boards.push({ id: slug, path: join(root, 'kanban', 'boards', slug, 'kanban.db'), metadata })
   }
   return boards
 }
@@ -90,7 +94,7 @@ async function readBoards(root: string, requestedBoard: string | undefined, offs
       const active = requestedBoard ? board.id === requestedBoard : selectedBoard === undefined
       if (!active) continue
       selectedBoard = board.id
-      const records = db.prepare('SELECT ' + select(tc, ['id','title','status','assignee','project_id','priority','created_at','last_failure_error','current_run_id']) +
+      const records = db.prepare('SELECT ' + select(tc, ['id','title','status','assignee','project_id','priority','created_at','last_failure_error','current_run_id','session_id']) +
         ' FROM tasks ORDER BY created_at DESC, id DESC LIMIT ? OFFSET ?').all(limit + 1, offset) as Record<string,unknown>[]
       tasksHasMore = records.length > limit
       tasks = records.slice(0, limit).map(row => ({
@@ -101,6 +105,7 @@ async function readBoards(root: string, requestedBoard: string | undefined, offs
         ...(epoch(row.created_at) ? {createdAt: epoch(row.created_at)} : {}),
         ...(text(row.last_failure_error) ? {lastError: text(row.last_failure_error)} : {}),
         ...(number(row.current_run_id) ? {currentRunId: number(row.current_run_id)} : {}),
+        ...(text(row.session_id) ? {sourceSessionNativeId: text(row.session_id)} : {}),
       }))
       const rc = columns(db, 'task_runs')
       if (rc.has('task_id') && rc.has('id')) {
