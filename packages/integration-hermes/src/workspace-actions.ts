@@ -1,4 +1,5 @@
-import { execFile } from 'node:child_process'
+import { execFile, spawn } from 'node:child_process'
+import { randomUUID } from 'node:crypto'
 import { promisify } from 'node:util'
 import { isAbsolute, resolve } from 'node:path'
 import type { AgentWorkMutationDto } from '@agent-lens/protocol'
@@ -93,6 +94,7 @@ export function hermesWorkMutationArgv(action:AgentWorkMutationDto):string[] {
         append(argv,'--schedule',schedule);append(argv,'--prompt',prompt);append(argv,'--name',name)
         return argv
       }
+      case 'cron.run':
       case 'cron.pause':
       case 'cron.resume':
       case 'cron.remove':
@@ -103,11 +105,117 @@ export function hermesWorkMutationArgv(action:AgentWorkMutationDto):string[] {
   throw new Error('Unsupported Hermes work mutation')
 }
 
+type CronDispatchReceipt = {
+  id:string
+  root:string
+  profile:string
+  jobId:string
+  status:'running'|'accepted'|'failed'|'unknown'
+  message:string
+  updatedAt:number
+}
+const dispatchReceipts=new Map<string,CronDispatchReceipt>()
+const activeDispatches=new Map<string,string>()
+const MAX_ACTIVE_DISPATCHES=8
+const MAX_RECEIPTS=200
+const RECEIPT_TTL=30*60*1000
+
+function pruneDispatchReceipts():void {
+  const now=Date.now()
+  for(const [id,item] of dispatchReceipts) {
+    if(item.status!=='running' && now-item.updatedAt>RECEIPT_TTL)dispatchReceipts.delete(id)
+  }
+  if(dispatchReceipts.size<=MAX_RECEIPTS)return
+  for(const [id,item] of dispatchReceipts) {
+    if(dispatchReceipts.size<=MAX_RECEIPTS)break
+    if(item.status!=='running')dispatchReceipts.delete(id)
+  }
+}
+
+/** A receipt is a CLI handoff acknowledgement, NEVER the native job execution result. */
+export function readHermesCronRunReceipt(options:{roots:string[];receiptId:string}):{
+  receiptId:string
+  status:CronDispatchReceipt['status']
+  message:string
+}|null {
+  if(options.roots.length!==1 || !isAbsolute(options.roots[0]??''))return null
+  pruneDispatchReceipts()
+  const receipt=dispatchReceipts.get(options.receiptId)
+  if(!receipt || receipt.root!==resolve(options.roots[0]!))return null
+  return {receiptId:receipt.id,status:receipt.status,message:receipt.message}
+}
+
+async function dispatchHermesCronRun(options:{
+  root:string
+  executable:string
+  env:NodeJS.ProcessEnv
+  profile:string
+  jobId:string
+}):Promise<{accepted:boolean;pending?:boolean;receiptId?:string;message:string}> {
+  pruneDispatchReceipts()
+  const key=JSON.stringify([options.root,options.profile,options.jobId])
+  const duplicateId=activeDispatches.get(key)
+  if(duplicateId){
+    return {accepted:false,pending:true,receiptId:duplicateId,
+      message:'Hermes Cron run is already being dispatched; check its receipt before retrying.'}
+  }
+  if(activeDispatches.size>=MAX_ACTIVE_DISPATCHES){
+    return {accepted:false,message:'Too many Hermes Cron CLI runs are pending.'}
+  }
+  const receipt:CronDispatchReceipt={
+    id:randomUUID(),root:options.root,profile:options.profile,jobId:options.jobId,
+    status:'running',message:'Hermes Cron CLI is running; native execution is not yet confirmed.',
+    updatedAt:Date.now(),
+  }
+  dispatchReceipts.set(receipt.id,receipt)
+  activeDispatches.set(key,receipt.id)
+  let child
+  try {
+    // The upstream CLI may synchronously execute the entire Agent. Do not hold
+    // the HTTP request open or build a replacement Cron scheduler.
+    child=spawn(options.executable,['--profile',options.profile,'cron','run',options.jobId],{
+      cwd:options.root,env:options.env,windowsHide:true,detached:true,
+      shell:false,stdio:'ignore',
+    })
+  }catch(error){
+    activeDispatches.delete(key)
+    receipt.status='failed'
+    receipt.message='Could not start Hermes CLI: '+String(error).slice(0,500)
+    receipt.updatedAt=Date.now()
+    return {accepted:false,message:receipt.message}
+  }
+  child.once('close',(code,signal)=>{
+    activeDispatches.delete(key)
+    if(receipt.status==='failed')return
+    receipt.status=code===0?'accepted':code===null?'unknown':'failed'
+    receipt.message=code===0
+      ?'Hermes CLI exited successfully. Refresh native execution history to verify the outcome.'
+      :code===null
+        ?'Hermes CLI exited without a known result ('+(signal??'unknown')+'); check native history.'
+        :'Hermes Cron CLI exited with code '+code+'. Check native history before retrying.'
+    receipt.updatedAt=Date.now()
+  })
+  const started=await new Promise<boolean>(resolveStart=>{
+    child.once('spawn',()=>resolveStart(true))
+    child.once('error',error=>{
+      receipt.status='failed'
+      receipt.message='Hermes CLI failed to start: '+error.message.slice(0,500)
+      receipt.updatedAt=Date.now()
+      activeDispatches.delete(key)
+      resolveStart(false)
+    })
+  })
+  if(!started)return {accepted:false,message:receipt.message}
+  child.unref()
+  return {accepted:false,pending:true,receiptId:receipt.id,
+    message:'Hermes Cron CLI started. Follow the receipt and native execution history.'}
+}
+
 export async function mutateHermesWorkspace(options:{
   roots:string[]
   action:AgentWorkMutationDto
   executable?:string
-}):Promise<{accepted:boolean;message:string}>{
+}):Promise<{accepted:boolean;pending?:boolean;receiptId?:string;message:string}>{
   if(options.roots.length!==1||!isAbsolute(options.roots[0]??''))throw new Error('Verified Hermes installation root is required')
   const root=resolve(options.roots[0]!)
   let args:string[]
@@ -122,6 +230,11 @@ export async function mutateHermesWorkspace(options:{
   delete env.HERMES_SESSION_KEY
   const executable=options.executable??'hermes'
   if(executable.includes('\0'))throw new Error('Invalid Hermes executable')
+  if(options.action.kind==='cron.run') {
+    return dispatchHermesCronRun({root,executable,env,
+      profile:identity(options.action.profile,'profile'),
+      jobId:identity(options.action.jobId,'job',TASK_ID)})
+  }
   try{
     const {stdout,stderr}=await execFileAsync(executable,args,{
       cwd:root,env,encoding:'utf8',timeout:20_000,maxBuffer:MAX_OUTPUT,windowsHide:true,
