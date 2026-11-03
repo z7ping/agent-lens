@@ -17,16 +17,16 @@ test('Hermes work → Review only resolves exact native identity, never title or
       ],hasMore:false})
     }
   }
-  const result=await new AgentLensClientModel(new Api()).resolveAgentNativeSession('hermes','original-123')
+  const result=await new AgentLensClientModel(new Api()).resolveAgentNativeSession('hermes','original-123','first')
   assert.deepEqual(result,{state:'linked',reviewSessionId:'native:001122'})
 })
 test('duplicate native session identities must not produce arbitrary links',async()=>{
   class Api extends AgentLensApi {
     override nativeSessions():Promise<NativeSessionCatalogResponseDto> {
-      return Promise.resolve({items:[session('native:aa','first'),session('native:bb','second')],hasMore:false})
+      return Promise.resolve({items:[session('native:aa','first'),session('native:bb','first')],hasMore:false})
     }
   }
-  const result=await new AgentLensClientModel(new Api()).resolveAgentNativeSession('hermes','original-123')
+  const result=await new AgentLensClientModel(new Api()).resolveAgentNativeSession('hermes','original-123','first')
   assert.equal(result.state,'ambiguous')
 })
 test('incomplete catalog pagination must not be treated as a missing session',async()=>{
@@ -35,6 +35,18 @@ test('incomplete catalog pagination must not be treated as a missing session',as
       return Promise.resolve({items:[],hasMore:true})
     }
   }
-  const result=await new AgentLensClientModel(new Api()).resolveAgentNativeSession('hermes','original-123')
+  const result=await new AgentLensClientModel(new Api()).resolveAgentNativeSession('hermes','original-123','first')
   assert.equal(result.state,'incomplete')
+})
+
+test('same native session identity in another installation is not selected',async()=>{
+  class Api extends AgentLensApi {
+    override nativeSessions():Promise<NativeSessionCatalogResponseDto> {
+      return Promise.resolve({items:[session('native:a','first'),session('native:b','second')],hasMore:false})
+    }
+  }
+  assert.deepEqual(
+    await new AgentLensClientModel(new Api()).resolveAgentNativeSession('hermes','original-123','second'),
+    {state:'linked',reviewSessionId:'native:b'},
+  )
 })
