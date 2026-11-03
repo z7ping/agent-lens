@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import type { AgentWorkTaskDto, AgentWorkScheduleDto, AgentWorkOutputResponseDto } from '@agent-lens/protocol'
 import type { AgentLensClientModel } from '../client/model'
 import { useClientSnapshot } from '../client/use-client-snapshot'
@@ -18,6 +18,7 @@ const formatDate = (value: string | undefined): string => {
 export function AgentWorkPage({model,sourceId}: {model:AgentLensClientModel;sourceId:string}) {
   const {t} = useTranslation('agents')
   const navigate = useNavigate()
+  const [workSearchParams,setWorkSearchParams] = useSearchParams()
   const [sessionPending,setSessionPending] = useState(false)
   const [sessionMessage,setSessionMessage] = useState('')
   const openNativeSession = async (sessionId:string) => {
@@ -34,7 +35,14 @@ export function AgentWorkPage({model,sourceId}: {model:AgentLensClientModel;sour
   }
   const snapshot = useClientSnapshot(model).agentWorkspace
   const response = snapshot.sourceId === sourceId ? snapshot.response : null
-  const [panel,setPanel] = useState<'boards'|'schedules'>('boards')
+  const panel = workSearchParams.get('section') === 'schedules' ? 'schedules' : 'boards'
+  const selectPanel=(section:'boards'|'schedules')=>{
+    if (section===panel) return
+    const next=new URLSearchParams(workSearchParams)
+    if (section==='boards') next.delete('section')
+    else next.set('section',section)
+    setWorkSearchParams(next)
+  }
   const [selectedTask,setSelectedTask] = useState<string|null>(null)
   const [selectedJob,setSelectedJob] = useState<string|null>(null)
   const outputRequest=useRef(0)
@@ -187,8 +195,8 @@ export function AgentWorkPage({model,sourceId}: {model:AgentLensClientModel;sour
             <Button size="small" loading={snapshot.loading} onClick={() => void refreshWorkspace({board:response.selectedBoard,offset,limit:PAGE_SIZE,scheduleOffset,projectOffset,...(selectedTask?{taskId:selectedTask,taskEventOffset,runOffset,commentOffset}:{}),...(selectedSchedule?{jobId:selectedSchedule.id,profile:selectedSchedule.profile,executionOffset}:{})})}>{t('work.refresh')}</Button>
           </div>
           <div className="runtime-config-row">
-            {boardAvailable && <Button size="small" variant={activePanel==='boards'?'primary':'default'} onClick={() => setPanel('boards')}>{t('work.boards')}</Button>}
-            {schedulesAvailable && <Button size="small" variant={activePanel==='schedules'?'primary':'default'} onClick={() => setPanel('schedules')}>{t('work.schedules')}</Button>}
+            {boardAvailable && <Button size="small" variant={activePanel==='boards'?'primary':'default'} onClick={() => selectPanel('boards')}>{t('work.boards')}</Button>}
+            {schedulesAvailable && <Button size="small" variant={activePanel==='schedules'?'primary':'default'} onClick={() => selectPanel('schedules')}>{t('work.schedules')}</Button>}
           </div>
         </div>
         {activePanel==='boards' && boardAvailable && <>

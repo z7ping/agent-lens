@@ -87,7 +87,10 @@ export function AgentsResponsivePage({
     onSelectAgent(nextSourceId)
     const next = new URLSearchParams(searchParams)
     next.set('agent', nextSourceId)
-    if (nextSourceId !== sourceId) next.delete('view')
+    if (nextSourceId !== sourceId) {
+      next.delete('view')
+      next.delete('section')
+    }
     setSearchParams(next, { replace: true })
   }
 
