@@ -207,7 +207,7 @@ export function AgentWorkPage({model,sourceId,installationId,installations}: {
     setActionError('')
     try{
       const result=await model.agentWorkMutate(sourceId,installationId,pendingAction)
-      if(!result.accepted)throw new Error(t('work.actionRejected'))
+      if(!result.accepted)throw new Error(result.message||t('work.actionRejected'))
       setActionFeedback(result.message)
       setPendingAction(null)
       if(pendingAction.kind==='task.create'||pendingAction.kind==='task.archive') {
@@ -424,10 +424,14 @@ export function AgentWorkPage({model,sourceId,installationId,installations}: {
             <label>{t('work.fieldName')}<Input value={pendingAction.name??''} maxLength={180}
               onChange={event=>setPendingAction({...pendingAction,name:event.target.value||undefined})}/></label>
             <label>{t('work.fieldSchedule')}<Input value={pendingAction.schedule??''} maxLength={180}
-              onChange={event=>setPendingAction({...pendingAction,schedule:event.target.value||undefined})}/></label>
+              onChange={event=>setPendingAction(pendingAction.kind==='cron.create'
+                ? {...pendingAction,schedule:event.target.value}
+                : {...pendingAction,schedule:event.target.value||undefined})}/></label>
             <label>{t('work.fieldPrompt')}<Textarea rows={4} maxLength={4000}
               value={pendingAction.prompt??''}
-              onChange={event=>setPendingAction({...pendingAction,prompt:event.target.value||undefined})}/></label>
+              onChange={event=>setPendingAction(pendingAction.kind==='cron.create'
+                ? {...pendingAction,prompt:event.target.value}
+                : {...pendingAction,prompt:event.target.value||undefined})}/></label>
           </>}
           {actionError && <div className="agent-path-error" role="alert">{actionError}</div>}
         </>}
@@ -468,7 +472,12 @@ function TaskRuns({task,runs,links,comments,events,hasMore,eventOffset,onEventPa
     </div>
     <div className="section-heading-row"><h3>{t('work.runs')}</h3><span className="section-total">{runs.length}</span></div>
     {!runs.length && <div className="muted-empty compact">{t('work.noRuns')}</div>}
-    {links.length>0 && <div className="runtime-config-row"><span>{t('work.links')}</span>{links.map(link=><code key={link.parentId+':'+link.childId}>{link.parentId} → {link.childId}</code>)}</div>}
+    {links.length>0 && <div className="runtime-config-row"><span>{t('work.links')}</span>{links.map(link=>
+      <span key={link.parentId+':'+link.childId}><code>{link.parentId} → {link.childId}</code>
+        {permitted('task.unlink') && <Button size="small" onClick={()=>onAction({
+          kind:'task.unlink',boardId:task.boardId,parentId:link.parentId,childId:link.childId,
+        })}>{t('work.actions.task_unlink')}</Button>}
+      </span>)}</div>}
     {runs.map(run=><div className="asset-item" key={run.id}>
       <div className="asset-item-head"><StatusBadge tone={run.status==='done'?'success':run.status==='failed'?'danger':'neutral'}>{run.status}</StatusBadge>
         {run.profile && <span className="asset-scope">{run.profile}</span>}</div>

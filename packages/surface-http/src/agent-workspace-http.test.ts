@@ -24,7 +24,7 @@ test('workspace handler validates source, policy and bounded read options', asyn
         req,res,url,{hermes:async input=>{options.push(input);return workspace}},
         {list:()=>[{manifest:{sourceId:'hermes'}},{manifest:{sourceId:'pi'}}]} as never,
         {isSourceEnabled:()=>allowed} as never,
-        async (sourceId,installationId)=>sourceId==='hermes' && installationId==='install-a' ? '/verified/a' : null,
+        async (sourceId,installationId)=>sourceId==='hermes' && installationId==='install-a' ? {root:'/verified/a',executable:'/bin/hermes'} : null,
       )
       if (!handled) {res.statusCode=404;res.end()}
     } catch (error) {
@@ -42,6 +42,12 @@ test('workspace handler validates source, policy and bounded read options', asyn
     assert.deepEqual(options,[{roots:['/verified/a'],board:'team',offset:10,limit:20,scheduleOffset:0,projectOffset:0,boardOffset:0}])
     assert.equal((await fetch(base+'/api/v1/agents/hermes/workspace')).status,400)
     assert.equal((await fetch(base+'/api/v1/agents/hermes/workspace?installationId=unknown')).status,404)
+    const post=await fetch(base+'/api/v1/agents/hermes/workspace/action?installationId=install-a',{
+      method:'POST',headers:{'content-type':'application/json','x-agent-lens-workspace-action':'confirmed'},
+      body:JSON.stringify({confirmed:true,action:{kind:'cron.pause',profile:'default',jobId:'job1'}}),
+    })
+    assert.equal(post.status,404,'write actions are not enabled without a provider')
+
     assert.equal((await fetch(base+'/api/v1/agents/hermes/workspace?installationId=install-a&board=..')).status,400)
     assert.equal((await fetch(base+'/api/v1/agents/hermes/workspace?installationId=install-a&limit=101')).status,400)
     assert.equal((await fetch(base+'/api/v1/agents/hermes/workspace?installationId=install-a&runOffset=../../')).status,400)
@@ -80,7 +86,7 @@ test('Cron output uses the same source policy boundary as the workspace',async()
       await handleAgentWorkspaceRequest(req,res,new URL(req.url??'/','http://localhost'),
         undefined,{list:()=>[{manifest:{sourceId:'hermes'}}]} as never,
         {isSourceEnabled:()=>true} as never,
-        async (_sourceId,installationId)=>installationId==='install-a'?'/verified/root':null,
+        async (_sourceId,installationId)=>installationId==='install-a'?{root:'/verified/root'}:null,
         {hermes:async options=>{
           calls++
           assert.deepEqual(options,{jobId:'j1',profile:'default',offset:0,roots:['/verified/root']})

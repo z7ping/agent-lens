@@ -116,7 +116,7 @@ export async function mutateHermesWorkspace(options:{
     const message=(stdout||stderr||'Hermes accepted the operation').trim().slice(0,2000)
     return {accepted:true,message}
   }catch(e){
-    const error=e as Error&{stderr?:string;stdout?:string;code?:string|number}
+    const error=e as Error&{stderr?:string;stdout?:string;code?:string|number;killed?:boolean}
     // Only CLI exit zero is accepted. Never report a timeout/partial run as success.
     return {accepted:false,message:error.killed
       ? 'Hermes operation timed out; the outcome is unknown. Refresh before retrying.'
