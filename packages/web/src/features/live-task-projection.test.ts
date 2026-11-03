@@ -549,7 +549,7 @@ test('Pi persisted assistant error without text survives snapshot, round project
   assert.deepEqual(items[1], {
     id: 'a-422:error', kind: 'message', role: 'assistant',
     text: 'HTTP 422: developer role is not supported',
-    error: true, streaming: false, at: '2026-10-20T10:00:00.000Z',
+    error: true, errorScope: 'attempt', streaming: false, at: '2026-10-20T10:00:00.000Z',
   })
   const rounds = projectLiveTaskRounds(items)
   assert.equal(rounds.length, 1)
