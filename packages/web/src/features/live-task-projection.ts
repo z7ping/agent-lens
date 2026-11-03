@@ -16,6 +16,8 @@ export type LiveTaskProjectionItem =
       text: string
       /** Native assistant failure, not a successful generated reply. */
       error?: true | undefined
+      /** A native assistant attempt failed; the enclosing agent run may still continue. */
+      errorScope?: 'attempt' | undefined
       /** Native adapter diagnostic facts; never inferred from HTTP codes or prose. */
       errorDiagnostic?: { code?: string; category?: string; retryable?: boolean } | undefined
       /** Stable native session entry id; present only for snapshot-backed messages. */
@@ -197,7 +199,7 @@ export function projectLiveSnapshotEntries(entries: readonly unknown[]): LiveTas
         ? item.content
         : undefined
 
-    const pushError = (message: string) => {
+    const pushError = (message: string, scope?: 'attempt') => {
       const diagnostic = nativeErrorDiagnostic(item, nested)
       projected.push({
         id: `${baseId}:error`,
@@ -205,6 +207,7 @@ export function projectLiveSnapshotEntries(entries: readonly unknown[]): LiveTas
         role: 'assistant',
         text: message,
         error: true,
+        ...(scope ? { errorScope: scope } : {}),
         ...(diagnostic ? { errorDiagnostic: diagnostic } : {}),
         streaming: false,
         ...(at ? { at } : {}),
@@ -280,7 +283,7 @@ export function projectLiveSnapshotEntries(entries: readonly unknown[]): LiveTas
       if (projected.some(candidate => candidate.kind === 'message'
         && candidate.role === 'assistant' && candidate.text === detail
         && (candidate.id === baseId || candidate.id.startsWith(`${baseId}:content:`)))) return
-      pushError(detail)
+      pushError(detail, 'attempt')
     }
 
     if (!content) {
@@ -504,8 +507,12 @@ export function mergeLiveActiveProjectionItems(
       if (transient >= 0) {
         const previous = merged[transient]
         indexes.delete(previous!.id)
-        merged[transient] = previous?.kind === 'message' && previous.errorDiagnostic && !item.errorDiagnostic
-          ? { ...item, errorDiagnostic: previous.errorDiagnostic }
+        merged[transient] = previous?.kind === 'message'
+          ? {
+              ...item,
+              ...(previous.errorDiagnostic && !item.errorDiagnostic ? { errorDiagnostic: previous.errorDiagnostic } : {}),
+              ...(previous.errorScope && !item.errorScope ? { errorScope: previous.errorScope } : {}),
+            }
           : item
         indexes.set(item.id, transient)
         continue
@@ -724,6 +731,7 @@ export function reduceLiveTaskEvent(
       role: 'assistant' as const,
       text: detail || agentLensI18n.t('task:message.requestFailed'),
       error: true as const,
+      ...(event.type === 'error' && event.scope === 'attempt' ? { errorScope: 'attempt' as const } : {}),
       ...((event.type === 'error' || event.type === 'completed') && (event.code || event.category || event.retryable !== undefined)
         ? { errorDiagnostic: {
             ...(event.code ? { code: event.code } : {}),
