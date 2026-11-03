@@ -82,6 +82,10 @@ export interface TaskRoundModel {
   preview?: string | undefined
   toolCount: number
   errorCount: number
+  /** Nonterminal model/tool failures retained for diagnostics, not final outcome. */
+  warningCount?: number | undefined
+  /** Explicit final task failure; independent of the number of failed attempts. */
+  terminalFailure?: boolean | undefined
   durationMs: number
   highLatency: boolean
 }
