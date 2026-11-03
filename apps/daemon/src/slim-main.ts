@@ -168,8 +168,14 @@ export async function startSlimNativeDaemon(options:SlimDaemonOptions){
     let notifyActivity=()=>{}
     const coordinator=new SlimSourceCoordinator(runtime,sources,policy,policy,
       ()=>notifyActivity())
-    const workspaceWriteAccess=await createWorkspaceWriteAccess(
-      options.workspaceWriteAccessPath??join(homedir(),'.agent-lens','1.0','workspace-write-access.json'))
+    // Permission state failure must never prevent the read-only daemon from starting.
+    let workspaceWriteAccess:Awaited<ReturnType<typeof createWorkspaceWriteAccess>>|undefined
+    try {
+      workspaceWriteAccess=await createWorkspaceWriteAccess(
+        options.workspaceWriteAccessPath??join(homedir(),'.agent-lens','1.0','workspace-write-access.json'))
+    } catch (error) {
+      console.warn('[AgentLens] Workspace writes disabled: permission file unavailable or invalid',error)
+    }
     const http=await startNativeOnlyHttpSurface(httpPort,{
       backgroundProgress:()=>coordinator.snapshot(),
       rescanAgents:id=>coordinator.rescan(id),
