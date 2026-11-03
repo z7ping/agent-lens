@@ -31,6 +31,7 @@ const append=(args:string[],flag:string,value:string|number|undefined)=>{
 export function hermesWorkMutationArgv(action:AgentWorkMutationDto):string[] {
   if(!action || typeof action!=='object')throw new Error('Invalid mutation')
   const a=action
+  if(typeof a.kind!=='string')throw new Error('Mutation kind is required')
   if(a.kind.startsWith('task.')){
     if(!('boardId' in a))throw new Error('Board identity is required')
     const argv=['kanban','--board',identity(a.boardId,'board')]
@@ -92,10 +93,12 @@ export async function mutateHermesWorkspace(options:{
   roots:string[]
   action:AgentWorkMutationDto
   executable?:string
-}):Promise<{accepted:true;message:string}>{
+}):Promise<{accepted:boolean;message:string}>{
   if(options.roots.length!==1||!isAbsolute(options.roots[0]??''))throw new Error('Verified Hermes installation root is required')
   const root=resolve(options.roots[0]!)
-  const args=hermesWorkMutationArgv(options.action)
+  let args:string[]
+  try{args=hermesWorkMutationArgv(options.action)}
+  catch(error){return {accepted:false,message:error instanceof Error?error.message:'Invalid Hermes action'}}
   // Hermes itself owns locking, migrations and native persistence.
   // Keep the inherited environment except for HOME routing and nested worker context.
   const env={...process.env,HERMES_HOME:root}
@@ -115,6 +118,8 @@ export async function mutateHermesWorkspace(options:{
   }catch(e){
     const error=e as Error&{stderr?:string;stdout?:string;code?:string|number}
     // Only CLI exit zero is accepted. Never report a timeout/partial run as success.
-    throw new Error('Hermes rejected the operation: '+(error.stderr||error.message||'unknown error').slice(0,1800))
+    return {accepted:false,message:error.killed
+      ? 'Hermes operation timed out; the outcome is unknown. Refresh before retrying.'
+      : 'Hermes operation failed: '+(error.stderr||error.message||'unknown error').slice(0,1800)}
   }
 }

@@ -168,7 +168,8 @@ export async function startNativeOnlyHttpSurface(
           if (!installed) return null
           const record=await storage.installations.get(installationId)
           if (!record || record.productId!==source.manifest.productId) return null
-          return record.configRoot || record.dataRoot || null
+          const root=record.configRoot || record.dataRoot
+          return root ? {root,...(record.executable ? {executable:record.executable}:{})} : null
         },options.workspaceOutputReaders,options.workspaceMutationRunners))return
       if(await handleLiveAttachmentRequest(request,response,url,options.liveAttachments))return
       if(await handleLiveRequest(request,response,url,options.lives,

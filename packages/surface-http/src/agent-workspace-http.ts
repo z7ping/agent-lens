@@ -23,7 +23,8 @@ export type AgentWorkspaceReader = (options?: {
 export type AgentWorkspaceMutationRunner = (options:{
   roots:string[]
   action:AgentWorkMutationDto
-}) => Promise<{accepted:true;message:string}>
+  executable?:string
+}) => Promise<{accepted:boolean;message:string}>
 
 export type AgentWorkspaceOutputReader = (options: {
   roots?: string[]
@@ -44,7 +45,7 @@ export async function handleAgentWorkspaceRequest(
   providers: Readonly<Record<string, AgentWorkspaceReader>> | undefined,
   sources: SourceService,
   policy: CapturePolicyService,
-  resolveInstallationRoot: (sourceId:string,installationId:string)=>Promise<string|null>,
+  resolveInstallationRoot: (sourceId:string,installationId:string)=>Promise<{root:string;executable?:string}|null>,
   outputReaders?: Readonly<Record<string, AgentWorkspaceOutputReader>>,
   mutationRunners?: Readonly<Record<string, AgentWorkspaceMutationRunner>>,
 ): Promise<boolean> {
@@ -85,10 +86,11 @@ export async function handleAgentWorkspaceRequest(
     const payload=body as Record<string,unknown>
     if (payload.confirmed !== true || !payload.action || typeof payload.action !== 'object' ||
       Array.isArray(payload.action)) throw badRequest('Explicit confirmation and action are required')
-    const root=await resolveInstallationRoot(sourceId,installationId)
-    if (!root) {writeJson(response,404,{error:'Unknown Agent installation'});return true}
-    // A provider may decline a verb; only the native CLI's exit-zero is success.
-    const result=await runner({roots:[root],action:payload.action as AgentWorkMutationDto})
+    const installation=await resolveInstallationRoot(sourceId,installationId)
+    if (!installation) {writeJson(response,404,{error:'Unknown Agent installation'});return true}
+    // CLI executable comes from the same registered installation when known.
+    const result=await runner({roots:[installation.root],action:payload.action as AgentWorkMutationDto,
+      ...(installation.executable ? {executable:installation.executable} : {})})
     const answer:AgentWorkMutationResultDto={
       sourceId,installationId,kind:(payload.action as AgentWorkMutationDto).kind,
       accepted:result.accepted,message:result.message,
@@ -111,7 +113,7 @@ export async function handleAgentWorkspaceRequest(
     if (offset>100000) throw badRequest('Invalid Cron output offset')
     const root=await resolveInstallationRoot(sourceId,installationId)
     if (!root) {writeJson(response,404,{error:'Unknown Agent installation'});return true}
-    writeJson(response,200,{...await outputReader({jobId,profile,...(file?{file}:{}),offset,roots:[root]}),installationId})
+    writeJson(response,200,{...await outputReader({jobId,profile,...(file?{file}:{}),offset,roots:[root.root]}),installationId})
     return true
   }
   const provider = providers?.[sourceId]
@@ -163,7 +165,7 @@ export async function handleAgentWorkspaceRequest(
   const root = await resolveInstallationRoot(sourceId,installationId)
   if (!root) {writeJson(response,404,{error:'Unknown Agent installation'});return true}
   const result = await provider({
-    roots: [root],
+    roots: [root.root],
     ...(board ? {board} : {}),
     offset,
     limit,
