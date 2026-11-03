@@ -65,6 +65,11 @@
   background: var(--al-danger);
   box-shadow: 0 0 0 2px color-mix(in srgb, var(--al-danger) 28%, transparent);
 }
+.task-turn-rail .turn-tick.warn i { background: color-mix(in srgb, var(--al-warning) 70%, var(--al-line)); }
+.task-turn-rail .turn-tick.warn.active i {
+  background: var(--al-warning);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--al-warning) 26%, transparent);
+}
 .task-turn-rail .turn-tick::after {
   content: attr(data-tip);
   position: absolute;
