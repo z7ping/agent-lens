@@ -788,7 +788,7 @@ export function AgentsPage({
             {...(snapshot.agentWorkspace.sourceId === selectedAgent.sourceId
               && snapshot.agentWorkspace.installationId === selectedOverviewInstallationId && snapshot.agentWorkspace.response
               ? {work:snapshot.agentWorkspace.response}: {})}
-            onOpenWork={() => navigate(`/agents?view=work&agent=${encodeURIComponent(selectedAgent.sourceId)}`)}
+            onOpenWork={() => navigate(`/agents?view=work&agent=${encodeURIComponent(selectedAgent.sourceId)}${selectedOverviewInstallationId ? `&installation=${encodeURIComponent(selectedOverviewInstallationId)}` : ''}`)}
             management={selectedManagement}
             discovery={selectedDiscovery}
             discoveryScanning={discoveryScanning}

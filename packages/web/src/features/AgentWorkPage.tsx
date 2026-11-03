@@ -28,7 +28,7 @@ export function AgentWorkPage({model,sourceId,installationId,installations}: {
     setSessionPending(true)
     setSessionMessage('')
     try {
-      const result = await model.resolveAgentNativeSession(sourceId,sessionId)
+      const result = await model.resolveAgentNativeSession(sourceId,sessionId,installationId)
       if (result.state === 'linked') navigate('/review/'+encodeURIComponent(result.reviewSessionId))
       else setSessionMessage(t('work.session_'+result.state))
     } catch {

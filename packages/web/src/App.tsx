@@ -17,6 +17,7 @@ import { WorkspaceViewTabs } from './components/WorkspaceViewTabs'
 import { MarkdownThemeManager } from './components/MarkdownThemeManager'
 import { ErrorStateBanner, PageLoadingState } from './components/StateViews'
 import { useTaskNotifications } from './features/task-notifications'
+import { installationChoices } from './features/agent-installation-choices'
 import { IntegrationOnboarding } from './features/IntegrationOnboarding'
 import { Breadcrumb, Button, IconButton, StatusBadge, UiIcon } from './components/ui'
 
@@ -400,8 +401,9 @@ function Shell({ model }: { model: AgentLensClientModel }) {
   const currentView = new URLSearchParams(location.search).get('view')
   const workspaceState = snapshot.agentWorkspace
   const currentAgentInstallations = snapshot.agents?.items.find(item=>item.sourceId===resolvedAgentOverviewSourceId)?.installations ?? []
-  const currentInstallationId = currentAgentInstallations.find(item=>item.id===new URLSearchParams(location.search).get('installation'))?.id
-    ?? currentAgentInstallations[0]?.id ?? ''
+  const availableInstallations = installationChoices(currentAgentInstallations)
+  const currentInstallationId = availableInstallations.find(item=>item.id===new URLSearchParams(location.search).get('installation'))?.id
+    ?? availableInstallations[0]?.id ?? ''
   const workPending = currentView === 'work' && Boolean(resolvedAgentOverviewSourceId)
     && (workspaceState.sourceId !== resolvedAgentOverviewSourceId || workspaceState.installationId !== currentInstallationId
       || (!workspaceState.response && (workspaceState.loading || Boolean(workspaceState.error))))

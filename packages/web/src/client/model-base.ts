@@ -530,19 +530,20 @@ export abstract class AgentLensModelBase {
   }
 
   /** Exact indexed native identity only: never match by title, time or project name. */
-  async resolveAgentNativeSession(sourceId: string, nativeSessionId: string): Promise<
+  async resolveAgentNativeSession(sourceId: string, nativeSessionId: string, installationId: string): Promise<
     { state: 'linked'; reviewSessionId: string } | { state: 'missing' | 'ambiguous' | 'incomplete' }
   > {
-    if (!sourceId || !nativeSessionId || nativeSessionId.length > 256) return {state:'missing'}
+    if (!sourceId || !nativeSessionId || !installationId || nativeSessionId.length > 256) return {state:'missing'}
     const matches = new Set<string>()
     let cursor: string | undefined
     for (let page = 0; page < 10; page++) {
       const response = await this.api.nativeSessions({
-        sourceId, search: nativeSessionId, limit: 100,
+        sourceId,installationId,search: nativeSessionId, limit: 100,
         ...(cursor ? {cursor} : {}),
       })
       for (const item of response.items) {
-        if (item.sourceId === sourceId && item.nativeSessionId === nativeSessionId) matches.add(item.id)
+        if (item.sourceId === sourceId && item.installationId === installationId
+          && item.nativeSessionId === nativeSessionId) matches.add(item.id)
       }
       if (matches.size > 1) return {state:'ambiguous'}
       if (!response.hasMore) {
