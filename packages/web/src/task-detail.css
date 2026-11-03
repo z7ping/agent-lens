@@ -786,11 +786,6 @@
   border-radius: 0;
   box-shadow: none;
 }
-.task-surface .task-tool-section .code-block-copy {
-  border: 0;
-  background: transparent;
-  box-shadow: none;
-}
 @keyframes task-activity-spin { to { transform: rotate(360deg); } }
 .task-surface .task-tool-row-chevron { color: var(--al-muted-2); transition: transform .18s cubic-bezier(.2,.8,.2,1); }
 .task-surface .task-tool-call[open] > summary .task-tool-row-chevron { transform: rotate(90deg); }
