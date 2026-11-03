@@ -3,6 +3,8 @@ import type { LocaleMessagesDto } from '@agent-lens/protocol'
 export const englishAgentsMessages: LocaleMessagesDto = {
   agents: {
     work: {
+      installation: 'Installation',
+      noInstallation: 'No readable installation is available',
       open: 'View work',
       unavailable: 'Work data unavailable',
       noSelectedBoard: 'Choose a board to view its tasks',

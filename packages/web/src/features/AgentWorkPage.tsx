@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useNavigate, useSearchParams } from 'react-router-dom'
-import type { AgentWorkTaskDto, AgentWorkScheduleDto, AgentWorkOutputResponseDto } from '@agent-lens/protocol'
+import type { AgentWorkTaskDto, AgentWorkScheduleDto, AgentWorkOutputResponseDto, AgentInstallationOverviewDto } from '@agent-lens/protocol'
 import type { AgentLensClientModel } from '../client/model'
 import { useClientSnapshot } from '../client/use-client-snapshot'
 import { Button, SelectMenu, StatusBadge } from '../components/ui'
@@ -15,7 +15,9 @@ const formatDate = (value: string | undefined): string => {
   return Number.isNaN(date.getTime()) ? value : date.toLocaleString()
 }
 
-export function AgentWorkPage({model,sourceId}: {model:AgentLensClientModel;sourceId:string}) {
+export function AgentWorkPage({model,sourceId,installationId,installations}: {
+  model:AgentLensClientModel;sourceId:string;installationId:string;installations:AgentInstallationOverviewDto[]
+}) {
   const {t} = useTranslation('agents')
   const navigate = useNavigate()
   const [workSearchParams,setWorkSearchParams] = useSearchParams()
@@ -34,7 +36,14 @@ export function AgentWorkPage({model,sourceId}: {model:AgentLensClientModel;sour
     } finally { setSessionPending(false) }
   }
   const snapshot = useClientSnapshot(model).agentWorkspace
-  const response = snapshot.sourceId === sourceId ? snapshot.response : null
+  const response = snapshot.sourceId === sourceId && snapshot.installationId === installationId
+    ? snapshot.response : null
+  const chooseInstallation = (id:string) => {
+    const next = new URLSearchParams(workSearchParams)
+    next.set('installation',id)
+    next.delete('section')
+    setWorkSearchParams(next)
+  }
   const panel = workSearchParams.get('section') === 'schedules' ? 'schedules' : 'boards'
   const selectPanel=(section:'boards'|'schedules')=>{
     if (section===panel) return
@@ -52,11 +61,12 @@ export function AgentWorkPage({model,sourceId}: {model:AgentLensClientModel;sour
   const [outputOffset,setOutputOffset] = useState(0)
   const loadOutput = async (job:AgentWorkScheduleDto, file?:string,offset=0) => {
     const generation=++outputRequest.current
+    if (!installationId) return
     setCronOutputLoading(true)
     setCronOutputError('')
     try {
       const result=await model.agentWorkOutput(sourceId,{
-        jobId:job.id,profile:job.profile,...(file?{file}:{}),offset,
+        installationId,jobId:job.id,profile:job.profile,...(file?{file}:{}),offset,
       })
       if (generation !== outputRequest.current) return
       setCronOutput(result)
@@ -76,8 +86,11 @@ export function AgentWorkPage({model,sourceId}: {model:AgentLensClientModel;sour
   const [commentOffset,setCommentOffset] = useState(0)
   const [projectOffset,setProjectOffset] = useState(0)
   const [boardOffset,setBoardOffset] = useState(0)
-  const refreshWorkspace = (options: Parameters<AgentLensClientModel['refreshAgentWorkspace']>[1] = {}) =>
-    model.refreshAgentWorkspace(sourceId,{boardOffset,projectOffset,...options})
+  const refreshWorkspace = (
+    options: Omit<Parameters<AgentLensClientModel['refreshAgentWorkspace']>[1], 'installationId'> = {},
+  ) => installationId
+    ? model.refreshAgentWorkspace(sourceId,{installationId,boardOffset,projectOffset,...options})
+    : Promise.resolve()
   const nextBoards=(nextOffset:number)=>{
     setBoardOffset(nextOffset)
     setOffset(0)
@@ -179,10 +192,19 @@ export function AgentWorkPage({model,sourceId}: {model:AgentLensClientModel;sour
     item.profile + ':' + item.id === selectedJob)
   return <main className="workspace-page">
     <div className="page-content agents-content">
-      {snapshot.sourceId === sourceId && snapshot.error && <div className="agent-path-error" role="alert">{snapshot.error} <Button size="small" onClick={() => void model.refreshAgentWorkspace(sourceId)}>{t('work.retry')}</Button></div>}
-      {(!response && (snapshot.sourceId !== sourceId || snapshot.loading)) &&
+      {snapshot.sourceId === sourceId && snapshot.installationId === installationId && snapshot.error && <div className="agent-path-error" role="alert">{snapshot.error} <Button size="small" onClick={() => void refreshWorkspace()}>{t('work.retry')}</Button></div>}
+      {!installationId && <div className="muted-empty compact" role="status">{t('work.noInstallation')}</div>}
+      {installations.length > 1 && <div className="runtime-config-row">
+        <span>{t('work.installation')}</span>
+        <SelectMenu ariaLabel={t('work.installation')} value={installationId} searchable
+          options={installations.map(item=>({
+            value:item.id,label:item.configRoot ?? item.dataRoot ?? item.id,
+          }))}
+          onChange={chooseInstallation}/>
+      </div>}
+      {installationId && (!response && (snapshot.sourceId !== sourceId || snapshot.installationId !== installationId || snapshot.loading)) &&
         <div className="muted-empty compact" role="status">{t('work.loading')}</div>}
-      {snapshot.sourceId === sourceId && snapshot.loading && response &&
+      {snapshot.sourceId === sourceId && snapshot.installationId === installationId && snapshot.loading && response &&
         <div className="muted-empty compact" role="status">{t('work.loading')}</div>}
       {sessionMessage && <div className="agent-path-error" role="status">{sessionMessage}</div>}
       {response && <div className="agent-detail-pane" aria-busy={snapshot.loading}>

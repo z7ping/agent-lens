@@ -3,6 +3,8 @@ import type { LocaleMessagesDto } from '@agent-lens/protocol'
 export const chineseAgentsMessages: LocaleMessagesDto = {
   agents: {
     work: {
+      installation: '安装实例',
+      noInstallation: '当前智能体暂无可读取的安装实例',
       open: '查看工作',
       unavailable: '工作数据不可用',
       noSelectedBoard: '未能确定当前看板，请重新选择',
