@@ -122,7 +122,7 @@ test('mutations require local confirmation and a registered single installation'
         },{
           allowed:scope=>grant && scope.installationId==='known' && scope.root==='/scope/hermes',
           set:async (scope,value)=>{assert.equal(scope.root,'/scope/hermes');grant=value;return grant},
-        })
+        },undefined,{hermes:async()=>['cron.pause']})
     }catch(error){
       res.statusCode=error instanceof HttpError?error.statusCode:500
       res.setHeader('content-type','application/json')
@@ -147,6 +147,10 @@ test('mutations require local confirmation and a registered single installation'
     assert.equal((await fetch(base+permission,{method:'PUT',headers:{'content-type':'application/json'},body:JSON.stringify({confirmed:true,enabled:true})})).status,403)
     assert.equal((await fetch(base+permission,{method:'PUT',headers:{'content-type':'application/json','x-agent-lens-workspace-action':'confirmed'},body:JSON.stringify({confirmed:true,enabled:true})})).status,200)
     assert.equal(grant,true)
+    const unsupported=await fetch(base+endpoint,{method:'POST',headers:{'content-type':'application/json','x-agent-lens-workspace-action':'confirmed'},
+      body:JSON.stringify({confirmed:true,action:{kind:'cron.cancel',profile:'default',jobId:'job-a'}})})
+    assert.equal(unsupported.status,409,'CLI discovery must constrain writes at the HTTP boundary')
+    assert.equal(commands.length,0)
     const allowed=await request(endpoint,true)
     assert.equal(allowed.status,200)
     const response=await allowed.json() as {accepted:boolean;installationId:string}
