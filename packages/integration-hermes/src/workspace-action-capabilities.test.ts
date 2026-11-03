@@ -24,6 +24,21 @@ test('unknown, partially supported and misleading help output fail closed',()=>{
   const multiline=parseHermesHelpCommands('usage: hermes cron {list,create,edit,\n    pause,resume,run}')
   assert.ok(multiline.has('create'))
   assert.ok(multiline.has('run'))
+  const unrelatedOption = parseHermesHelpCommands(
+    'usage: hermes cron [-h] {list,edit,pause}\\noptions:\\n  --status {run,remove,cancel}',
+    ['cron'],
+  )
+  assert.deepEqual([...unrelatedOption], ['list','edit','pause'])
+  const wrongCommand = parseHermesHelpCommands(
+    'usage: hermes kanban [-h] {run,remove,cancel}', ['cron'],
+  )
+  assert.equal(wrongCommand.size,0)
+  const wrappedWithFlag = parseHermesHelpCommands(
+    'usage: hermes kanban boards [-h] [--color {red,blue}]\\n'
+    +'         {list,create,rename,rm}\\noptions:\\n  --color {red,blue}',
+    ['kanban','boards'],
+  )
+  assert.deepEqual([...wrappedWithFlag], ['list','create','rename','rm'])
 })
 
 test('CLI discovery rejects unverified roots without probing PATH',async()=>{
