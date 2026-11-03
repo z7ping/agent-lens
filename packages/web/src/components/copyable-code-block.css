@@ -83,8 +83,8 @@ html body .markdown .copyable-code-block > pre,
 .pi-live-markdown-preview .copyable-code-block { margin: 0 0 8px; }
 .task-surface .task-tool-live-output .copyable-code-block,
 .task-surface .task-tool-output-details .copyable-code-block { margin: 4px 0 0; }
-.task-message-bubble-user .code-block-copy.ui-icon-button { color: var(--al-user-bubble-muted); }
-.task-message-bubble-user .code-block-copy.ui-icon-button:is(:hover, :focus-visible) { color: var(--al-user-bubble-text); }
+.task-message-bubble-user .copyable-code-block[data-copy-state='idle'] .code-block-copy.ui-icon-button { color: var(--al-user-bubble-muted); }
+.task-message-bubble-user .copyable-code-block[data-copy-state='idle'] .code-block-copy.ui-icon-button:is(:hover, :focus-visible) { color: var(--al-user-bubble-text); }
 
 @media (hover: none), (pointer: coarse) {
   .copyable-code-block .code-block-copy { opacity: 1; pointer-events: auto; }
