@@ -60,6 +60,29 @@ test('Review 消息证据只呈现一个弱化入口，不重复来源徽章和�
   assert.match(review, /meta=\{<EvidenceBadges evidence=\{node\.evidence\} compact\/>\}/)
 })
 
+test('用户气泡操作只在气泡下方通过悬浮图标展示，并保持键盘和触屏可访问', () => {
+  const actions = createElement('button', { type: 'button', 'aria-label': '从这里编辑' }, '✎')
+  const html = renderToStaticMarkup(createElement(TaskSessionMessage, {
+    role: 'user', text: '测试消息', time: '10:09:47', actions,
+  }))
+  assert.match(html, /task-message-bubble-user/)
+  assert.match(html, /task-message-user-hover-actions/)
+  assert.match(html, /role="group"[^>]*aria-label=/)
+  assert.match(html, /从这里编辑/)
+  assert.equal((html.match(/从这里编辑/g) ?? []).length, 1)
+  assert.ok(html.indexOf('task-message-user-hover-actions') > html.indexOf('task-message-content'))
+  assert.doesNotMatch(html, /<span class="task-message-actions">/)
+  const css = read('../task-detail.css')
+  assert.match(css, /\.task-message-bubble-user:is\(:hover, :focus-within\) > \.task-message-user-hover-actions/)
+  assert.match(css, /@media \(hover: none\)/)
+
+  const live = read('./LiveTaskTimeline.tsx')
+  assert.match(live, /action\.actionId === 'pi\.edit-from-here' \? 'tool-edit'/)
+  assert.match(live, /action\.actionId === 'pi\.new-session-from-here' \? 'fork'/)
+  assert.match(live, /aria-label=\{pending \? t\('live\.messageActionPending'\) : label\}/)
+  assert.doesNotMatch(live, /<Button\s+key=\{action\.actionId\}/)
+})
+
 test('相同的 Session 事实在两种模式中只有一份 DOM 结构', () => {
   const message = renderToStaticMarkup(createElement(TaskSessionMessage, {
     role: 'assistant', text: '共同消息', collapsible: false,

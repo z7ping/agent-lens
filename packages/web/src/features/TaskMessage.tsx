@@ -249,7 +249,7 @@ export function TaskMessage({
             {view === 'rendered' ? <MarkdownContent text={text} streaming={streaming}/> : <CopyableCodeBlock className="markdown-source" copyValue={text}>{text}</CopyableCodeBlock>}
             {canCollapse && !expanded && <span className="markdown-fade" aria-hidden="true"/>}
           </div>
-          {(canCollapse || Boolean(actions) || (!user && (showContentActions || streaming))) && <div className="markdown-message-actions">
+          {(canCollapse || Boolean(!user && actions) || (!user && (showContentActions || streaming))) && <div className="markdown-message-actions">
             {!user && streaming && <span className="task-message-output-state" data-active="true" role="status" aria-label={t('message.generating')}>
               <UiIcon name="loading" size={14}/>
             </span>}
@@ -270,11 +270,14 @@ export function TaskMessage({
               aria-pressed={view === 'source'}
               onClick={() => setView(value => value === 'rendered' ? 'source' : 'rendered')}
             ><UiIcon name={view === 'rendered' ? 'file-code' : 'preview'} size={14}/></IconButton>}
-            {actions && <span className="task-message-actions">{actions}</span>}
+            {!user && actions && <span className="task-message-actions">{actions}</span>}
           </div>}
         </div>}
       </>}
-      {actions && (!text || awaitingFirstContent) && <div className="task-message-actions">{actions}</div>}
+      {!user && actions && (!text || awaitingFirstContent) && <div className="task-message-actions">{actions}</div>}
+      {user && actions && <div className="task-message-user-hover-actions" role="group" aria-label={t('message.messageActions')}>
+        {actions}
+      </div>}
     </div>
   </div>
 }

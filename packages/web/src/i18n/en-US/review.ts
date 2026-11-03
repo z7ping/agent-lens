@@ -194,7 +194,7 @@ export const englishReviewMessages: LocaleMessagesDto = {
         assistant: 'Agent',
         commentary: 'Execution process',
         thinking: 'Thinking',
-        you: 'You',
+        you: 'Me',
       },
       markdown: {
         collapseFiveLines: 'Collapse to 5 lines',

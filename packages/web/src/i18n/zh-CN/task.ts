@@ -42,8 +42,9 @@ export const chineseTaskMessages: LocaleMessagesDto = {
       workspace: '工作区',
     },
     message: {
-      you: '你',
+      you: '我',
       agent: '智能体',
+      messageActions: '会话操作',
       waitingResponse: '正在等待智能体响应',
       requestFailed: '请求失败',
       failure: {

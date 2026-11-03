@@ -194,7 +194,7 @@ export const chineseReviewMessages: LocaleMessagesDto = {
         assistant: '智能体',
         commentary: '执行过程',
         thinking: '思考',
-        you: '你',
+        you: '我',
       },
       markdown: {
         collapseFiveLines: '收起到 5 行',
