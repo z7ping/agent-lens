@@ -82,7 +82,7 @@ async function readBoards(root: string, requestedBoard: string | undefined, offs
       const count = Number((db.prepare('SELECT COUNT(*) AS n FROM tasks').get() as {n:number}).n)
       boards.push({ id: board.id, name: text(info.name) ?? board.id, archived: info.archived === true, taskCount: count,
         ...(text(info.project_id) ? {projectId: text(info.project_id)} : {}) })
-      const active = (requestedBoard ? board.id === requestedBoard : selectedBoard === undefined)
+      const active = requestedBoard ? board.id === requestedBoard : selectedBoard === undefined
       if (!active) continue
       selectedBoard = board.id
       const records = db.prepare('SELECT ' + select(tc, ['id','title','status','assignee','project_id','priority','created_at','last_failure_error','current_run_id']) +

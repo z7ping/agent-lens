@@ -505,7 +505,7 @@ export abstract class AgentLensModelBase {
       })
     } catch (error) {
       if (generation === this.workspaceGeneration) this.patch({
-        agentWorkspace:{sourceId,response:null,loading:false,error:error instanceof Error?error.message:String(error)},
+        agentWorkspace:{sourceId,response:this.snapshot.agentWorkspace.sourceId===sourceId ? this.snapshot.agentWorkspace.response : null,loading:false,error:error instanceof Error?error.message:String(error)},
       })
     }
   }

@@ -39,13 +39,13 @@ export function AgentWorkPage({model,sourceId}: {model:AgentLensClientModel;sour
     setSelectedJob(next)
     setExecutionOffset(0)
     if (next) void model.refreshAgentWorkspace(sourceId,{
-      board:response?.selectedBoard,jobId:job.id,profile:job.profile,executionOffset:0,
+      board:response?.selectedBoard,jobId:job.id,profile:job.profile,executionOffset:0,scheduleOffset,
     })
   }
   const goExecutionPage = (job:AgentWorkScheduleDto,offset:number) => {
     setExecutionOffset(offset)
     void model.refreshAgentWorkspace(sourceId,{
-      board:response?.selectedBoard,jobId:job.id,profile:job.profile,executionOffset:offset,
+      board:response?.selectedBoard,jobId:job.id,profile:job.profile,executionOffset:offset,scheduleOffset,
     })
   }
   const goSchedulePage = (nextOffset:number) => {
@@ -53,7 +53,7 @@ export function AgentWorkPage({model,sourceId}: {model:AgentLensClientModel;sour
     setSelectedJob(null)
     setExecutionOffset(0)
     void model.refreshAgentWorkspace(sourceId,{
-      board:response?.selectedBoard,scheduleOffset:nextOffset,
+      board:response?.selectedBoard,scheduleOffset:nextOffset,limit:PAGE_SIZE,
     })
   }
   const selectedSchedule:AgentWorkScheduleDto|undefined = response?.schedules.find(item =>
@@ -69,7 +69,7 @@ export function AgentWorkPage({model,sourceId}: {model:AgentLensClientModel;sour
         <div className="agent-primary-section">
           <div className="section-heading-row">
             <h2>{t('work.title')}</h2>
-            <Button size="small" loading={snapshot.loading} onClick={() => void model.refreshAgentWorkspace(sourceId,{board:response.selectedBoard,limit:PAGE_SIZE})}>{t('work.refresh')}</Button>
+            <Button size="small" loading={snapshot.loading} onClick={() => void model.refreshAgentWorkspace(sourceId,{board:response.selectedBoard,offset,limit:PAGE_SIZE,scheduleOffset,...(selectedSchedule?{jobId:selectedSchedule.id,profile:selectedSchedule.profile,executionOffset}:{})})}>{t('work.refresh')}</Button>
           </div>
           <div className="runtime-config-row">
             {boardAvailable && <Button size="small" variant={activePanel==='boards'?'primary':'default'} onClick={() => setPanel('boards')}>{t('work.boards')}</Button>}
