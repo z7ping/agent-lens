@@ -127,7 +127,6 @@ export async function handleAgentWorkspaceRequest(
     limit,
     ...(jobId && profile?{jobId,profile,executionOffset}:{}),
     scheduleOffset,
-    projectOffset,
     ...(taskId?{taskId,taskEventOffset,runOffset,commentOffset}:{}),
     projectOffset,
     boardOffset,
