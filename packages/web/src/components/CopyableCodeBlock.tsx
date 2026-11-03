@@ -83,19 +83,17 @@ export function CopyableCodeBlock({ children, copyValue, containerClassName = ''
 
   const label = state === 'copied' ? t('codeBlock.copied') : state === 'error' ? t('codeBlock.failed') : t('codeBlock.copy')
   return <div className={`copyable-code-block ${containerClassName}`.trim()} data-copy-state={state} data-code-language={highlighted ? resolvedLanguage : undefined}>
-    <pre {...preProps}>
-      <span className="code-block-copy-toolbar">
-        <IconButton
-          size="small"
-          className="code-block-copy"
-          onClick={() => void copy()}
-          aria-label={t('codeBlock.aria', { label })}
-          title={label}
-        >
-          <UiIcon name={state === 'copied' ? 'check' : state === 'error' ? 'alert' : 'copy'} size={14}/>
-        </IconButton>
-      </span>
-      {highlighted ? <code className={`language-${resolvedLanguage}`}>{highlighted}</code> : children}
-    </pre>
+    <span className="code-block-copy-toolbar">
+      <IconButton
+        size="small"
+        className="code-block-copy"
+        onClick={() => void copy()}
+        aria-label={t('codeBlock.aria', { label })}
+        title={label}
+      >
+        <UiIcon name={state === 'copied' ? 'check' : state === 'error' ? 'alert' : 'copy'} size={14}/>
+      </IconButton>
+    </span>
+    <pre {...preProps}>{highlighted ? <code className={`language-${resolvedLanguage}`}>{highlighted}</code> : children}</pre>
   </div>
 }

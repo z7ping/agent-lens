@@ -449,7 +449,7 @@
 .task-surface .markdown pre,
 .task-surface .markdown-source {
   max-width: 100%;
-  margin: 7px 0;
+  margin: 0;
   padding: 7px 9px;
   overflow: auto;
   border: 1px solid var(--al-line);
