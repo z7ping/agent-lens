@@ -208,7 +208,7 @@ export class AgentLensApi {
       () => requestJson('/api/v1/agents/coverage'),
     )
   }
-  agentWorkspace(sourceId: string, options: {board?:string;offset?:number;limit?:number;jobId?:string;profile?:string;executionOffset?:number;scheduleOffset?:number} = {}): Promise<AgentWorkspaceResponseDto> {
+  agentWorkspace(sourceId: string, options: {board?:string;offset?:number;limit?:number;jobId?:string;profile?:string;executionOffset?:number;scheduleOffset?:number;taskId?:string;taskEventOffset?:number} = {}): Promise<AgentWorkspaceResponseDto> {
     const params = new URLSearchParams()
     if (options.board) params.set('board', options.board)
     if (options.offset) params.set('offset', String(options.offset))
@@ -216,6 +216,8 @@ export class AgentLensApi {
     if (options.jobId && options.profile) { params.set('jobId', options.jobId); params.set('profile',options.profile) }
     if (options.executionOffset) params.set('executionOffset',String(options.executionOffset))
     if (options.scheduleOffset) params.set('scheduleOffset',String(options.scheduleOffset))
+    if (options.taskId) params.set('taskId',options.taskId)
+    if (options.taskEventOffset) params.set('taskEventOffset',String(options.taskEventOffset))
     const suffix = params.size ? '?' + params : ''
     return requestJson<AgentWorkspaceResponseDto>('/api/v1/agents/' + encodeURIComponent(sourceId) + '/workspace' + suffix)
   }

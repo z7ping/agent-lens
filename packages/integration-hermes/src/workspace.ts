@@ -2,7 +2,7 @@ import { readFile, readdir, stat } from 'node:fs/promises'
 import { basename, dirname, join } from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
 import { resolveHermesConfigRoots } from '@agent-lens/runtime-cordis'
-import { AGENT_LENS_PROTOCOL_VERSION, type AgentWorkspaceResponseDto, type AgentWorkBoardDto, type AgentWorkTaskDto, type AgentWorkRunDto, type AgentWorkScheduleDto, type AgentWorkExecutionDto, type AgentWorkFeatureDto, type AgentWorkProjectDto } from '@agent-lens/protocol'
+import { AGENT_LENS_PROTOCOL_VERSION, type AgentWorkspaceResponseDto, type AgentWorkBoardDto, type AgentWorkTaskDto, type AgentWorkRunDto, type AgentWorkScheduleDto, type AgentWorkExecutionDto, type AgentWorkFeatureDto, type AgentWorkProjectDto, type AgentWorkLinkDto, type AgentWorkCommentDto, type AgentWorkEventDto } from '@agent-lens/protocol'
 
 const MAX_BOARDS = 24
 const MAX_SCHEDULES = 200
@@ -62,12 +62,17 @@ async function boardList(root: string): Promise<Array<{id:string; path:string; m
   }
   return boards
 }
-async function readBoards(root: string, requestedBoard: string | undefined, offset: number, limit: number) {
+async function readBoards(root: string, requestedBoard: string | undefined, offset: number, limit: number, taskId?: string, taskEventOffset=0) {
   const boards: AgentWorkBoardDto[] = []
   let tasks: AgentWorkTaskDto[] = []
   let runs: AgentWorkRunDto[] = []
   let tasksHasMore = false
   let selectedBoard: string | undefined
+  let detailTaskId: string | undefined
+  let taskLinks: AgentWorkLinkDto[] = []
+  let taskComments: AgentWorkCommentDto[] = []
+  let taskEvents: AgentWorkEventDto[] = []
+  let taskEventsHasMore = false
   for (const board of await boardList(root)) {
     if (!await fileExists(board.path)) continue
     const db = openReadOnly(board.path)
@@ -116,9 +121,35 @@ async function readBoards(root: string, requestedBoard: string | undefined, offs
           }))
         }
       }
+      if (taskId && db.prepare('SELECT 1 FROM tasks WHERE id = ?').get(taskId)) {
+        detailTaskId = taskId
+        const lc = columns(db,'task_links')
+        if (lc.has('parent_id') && lc.has('child_id')) {
+          taskLinks = (db.prepare('SELECT parent_id,child_id FROM task_links WHERE parent_id = ? OR child_id = ? LIMIT 200').all(taskId,taskId) as {parent_id:string;child_id:string}[])
+            .map(item=>({parentId:item.parent_id,childId:item.child_id}))
+        }
+        const cc = columns(db,'task_comments')
+        if (cc.has('task_id') && cc.has('id')) {
+          taskComments = (db.prepare('SELECT '+select(cc,['id','author','body','created_at'])+
+            ' FROM task_comments WHERE task_id = ? ORDER BY id DESC LIMIT 100').all(taskId) as Record<string,unknown>[])
+            .map(item=>({id:Number(item.id),author:String(item.author??''),body:String(item.body??'').slice(0,1200),
+              ...(epoch(item.created_at)?{createdAt:epoch(item.created_at)}:{})}))
+        }
+        const ec=columns(db,'task_events')
+        if (ec.has('task_id') && ec.has('id')) {
+          const records=db.prepare('SELECT '+select(ec,['id','kind','run_id','created_at'])+
+            ' FROM task_events WHERE task_id = ? ORDER BY id DESC LIMIT 101 OFFSET ?')
+            .all(taskId,taskEventOffset) as Record<string,unknown>[]
+          taskEventsHasMore=records.length>100
+          taskEvents=records.slice(0,100).map(item=>({id:Number(item.id),kind:String(item.kind??'unknown'),
+            ...(number(item.run_id)?{runId:number(item.run_id)}:{}),
+            ...(epoch(item.created_at)?{createdAt:epoch(item.created_at)}:{})}))
+        }
+      }
     } finally { db.close() }
   }
-  return { boards, selectedBoard, tasks, runs, tasksHasMore }
+  return { boards, selectedBoard, tasks, runs, tasksHasMore,
+    ...(detailTaskId?{detailTaskId}:{}),taskLinks,taskComments,taskEvents,taskEventsHasMore }
 }
 async function readProjects(root: string): Promise<{discovered:boolean; projects:AgentWorkProjectDto[]}> {
   const profiles = [{name:'default',home:root}, ...(await dirs(join(root,'profiles'))).map(name => ({name,home:join(root,'profiles',name)}))]
@@ -216,6 +247,8 @@ export async function readHermesWorkspace(options: {
   profile?: string
   executionOffset?: number
   scheduleOffset?: number
+  taskId?: string
+  taskEventOffset?: number
 } = {}): Promise<AgentWorkspaceResponseDto> {
   const roots = options.roots ?? resolveHermesConfigRoots()
   const features: AgentWorkFeatureDto[] = [
@@ -223,13 +256,13 @@ export async function readHermesWorkspace(options: {
     {id:'schedules',availability:'unknown'},
     {id:'projects',availability:'unknown'},
   ]
-  const result: Workspace = {features,projects:[],boards:[],tasks:[],runs:[],tasksHasMore:false,schedules:[],schedulesHasMore:false,schedulesTotal:0,executions:[],executionsHasMore:false}
+  const result: Workspace = {features,projects:[],boards:[],tasks:[],runs:[],taskLinks:[],taskComments:[],taskEvents:[],taskEventsHasMore:false,tasksHasMore:false,schedules:[],schedulesHasMore:false,schedulesTotal:0,executions:[],executionsHasMore:false}
   const limit = Math.min(100,Math.max(1,Math.floor(options.limit ?? 40)))
   const offset = Math.max(0,Math.min(100000,Math.floor(options.offset ?? 0)))
   const candidates = [...new Set(roots.map(root => basename(dirname(root)) === 'profiles' ? dirname(dirname(root)) : root))]
   for (const root of candidates) {
     try {
-      const info = await readBoards(root,options.board,offset,limit)
+      const info = await readBoards(root,options.board,offset,limit,options.taskId,Math.min(100000,Math.max(0,options.taskEventOffset??0)))
       if (info.boards.length) {
         Object.assign(result,info)
         features[0] = {id:'boards',availability:'available'}

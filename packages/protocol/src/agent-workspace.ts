@@ -39,6 +39,22 @@ export interface AgentWorkRunDto {
   summary?: string
   error?: string
 }
+export interface AgentWorkLinkDto {
+  parentId: string
+  childId: string
+}
+export interface AgentWorkCommentDto {
+  id: number
+  author: string
+  body: string
+  createdAt?: string
+}
+export interface AgentWorkEventDto {
+  id: number
+  kind: string
+  runId?: number
+  createdAt?: string
+}
 export interface AgentWorkScheduleDto {
   id: string
   profile: string
@@ -81,6 +97,11 @@ export interface AgentWorkspaceResponseDto {
   selectedBoard?: string
   tasks: AgentWorkTaskDto[]
   runs: AgentWorkRunDto[]
+  detailTaskId?: string
+  taskLinks: AgentWorkLinkDto[]
+  taskComments: AgentWorkCommentDto[]
+  taskEvents: AgentWorkEventDto[]
+  taskEventsHasMore: boolean
   tasksHasMore: boolean
   schedules: AgentWorkScheduleDto[]
   schedulesHasMore: boolean

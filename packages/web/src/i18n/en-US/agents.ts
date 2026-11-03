@@ -3,6 +3,9 @@ import type { LocaleMessagesDto } from '@agent-lens/protocol'
 export const englishAgentsMessages: LocaleMessagesDto = {
   agents: {
     work: {
+      links: 'Dependencies',
+      comments: 'Comments',
+      events: 'Events',
       archived: ' (archived)',
       featureError: 'Failed to read {{name}}:',
       projects: 'Projects',

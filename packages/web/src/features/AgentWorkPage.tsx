@@ -23,10 +23,27 @@ export function AgentWorkPage({model,sourceId}: {model:AgentLensClientModel;sour
   const [executionOffset,setExecutionOffset] = useState(0)
   const [scheduleOffset,setScheduleOffset] = useState(0)
   const [offset,setOffset] = useState(0)
+  const [taskEventOffset,setTaskEventOffset] = useState(0)
   const loadBoard = (board: string, nextOffset = 0) => {
     setSelectedTask(null)
+    setTaskEventOffset(0)
     setOffset(nextOffset)
     void model.refreshAgentWorkspace(sourceId,{board,offset:nextOffset,limit:PAGE_SIZE})
+  }
+  const openTask = (task:AgentWorkTaskDto) => {
+    const next=selectedTask===task.id?null:task.id
+    setSelectedTask(next)
+    setTaskEventOffset(0)
+    if (next) void model.refreshAgentWorkspace(sourceId,{
+      board:task.boardId,offset,limit:PAGE_SIZE,scheduleOffset,taskId:next,taskEventOffset:0,
+    })
+  }
+  const nextTaskEvents=(nextOffset:number)=>{
+    if (!selectedTask||!response?.selectedBoard) return
+    setTaskEventOffset(nextOffset)
+    void model.refreshAgentWorkspace(sourceId,{
+      board:response.selectedBoard,offset,limit:PAGE_SIZE,scheduleOffset,taskId:selectedTask,taskEventOffset:nextOffset,
+    })
   }
   const boardAvailable = response?.features.some(f => f.id === 'boards' && f.availability === 'available') ?? false
   const schedulesAvailable = response?.features.some(f => f.id === 'schedules' && f.availability === 'available') ?? false
@@ -69,7 +86,7 @@ export function AgentWorkPage({model,sourceId}: {model:AgentLensClientModel;sour
         <div className="agent-primary-section">
           <div className="section-heading-row">
             <h2>{t('work.title')}</h2>
-            <Button size="small" loading={snapshot.loading} onClick={() => void model.refreshAgentWorkspace(sourceId,{board:response.selectedBoard,offset,limit:PAGE_SIZE,scheduleOffset,...(selectedSchedule?{jobId:selectedSchedule.id,profile:selectedSchedule.profile,executionOffset}:{})})}>{t('work.refresh')}</Button>
+            <Button size="small" loading={snapshot.loading} onClick={() => void model.refreshAgentWorkspace(sourceId,{board:response.selectedBoard,offset,limit:PAGE_SIZE,scheduleOffset,...(selectedTask?{taskId:selectedTask,taskEventOffset}:{}),...(selectedSchedule?{jobId:selectedSchedule.id,profile:selectedSchedule.profile,executionOffset}:{})})}>{t('work.refresh')}</Button>
           </div>
           <div className="runtime-config-row">
             {boardAvailable && <Button size="small" variant={activePanel==='boards'?'primary':'default'} onClick={() => setPanel('boards')}>{t('work.boards')}</Button>}
@@ -89,9 +106,13 @@ export function AgentWorkPage({model,sourceId}: {model:AgentLensClientModel;sour
                 {item.assignee && <span className="asset-scope">{item.assignee}</span>}
                 {item.projectId && <span className="asset-scope">{item.projectId}</span>}
               </div>
-              <Button size="small" variant="quiet" onClick={()=>setSelectedTask(old=>old===item.id?null:item.id)} aria-expanded={selectedTask===item.id}>{item.title}</Button>
+              <Button size="small" variant="quiet" onClick={()=>openTask(item) aria-expanded={selectedTask===item.id}>{item.title}</Button>
               {item.lastError && <div className="agent-path-error">{item.lastError}</div>}
-              {selectedTask===item.id && <TaskRuns task={item} runs={response.runs.filter(run=>run.taskId===item.id)} />}
+              {selectedTask===item.id && <TaskRuns task={item} runs={response.runs.filter(run=>run.taskId===item.id)}
+                links={response.detailTaskId===item.id?response.taskLinks:[]}
+                comments={response.detailTaskId===item.id?response.taskComments:[]}
+                events={response.detailTaskId===item.id?response.taskEvents:[]}
+                hasMore={response.taskEventsHasMore} eventOffset={taskEventOffset} onEventPage={nextTaskEvents} loading={snapshot.loading}/>} 
             </div>)}
             <div className="runtime-config-row">
               <span>{t('work.loaded')} {offset+response.tasks.length} / {board?.taskCount ?? 0}</span>
@@ -139,12 +160,20 @@ export function AgentWorkPage({model,sourceId}: {model:AgentLensClientModel;sour
     </div>
   </main>
 }
-function TaskRuns({task,runs}: {task:AgentWorkTaskDto;runs:import('@agent-lens/protocol').AgentWorkRunDto[]}) {
+function TaskRuns({task,runs,links,comments,events,hasMore,eventOffset,onEventPage,loading}: {
+  task:AgentWorkTaskDto
+  runs:import('@agent-lens/protocol').AgentWorkRunDto[]
+  links:import('@agent-lens/protocol').AgentWorkLinkDto[]
+  comments:import('@agent-lens/protocol').AgentWorkCommentDto[]
+  events:import('@agent-lens/protocol').AgentWorkEventDto[]
+  hasMore:boolean;eventOffset:number;onEventPage(offset:number):void;loading:boolean
+}) {
   const {t} = useTranslation('agents')
   return <section className="agent-secondary">
     <div className="runtime-config-row"><span>{t('work.taskId')}</span><code>{task.id}</code></div>
     <div className="section-heading-row"><h3>{t('work.runs')}</h3><span className="section-total">{runs.length}</span></div>
     {!runs.length && <div className="muted-empty compact">{t('work.noRuns')}</div>}
+    {links.length>0 && <div className="runtime-config-row"><span>{t('work.links')}</span>{links.map(link=><code key={link.parentId+':'+link.childId}>{link.parentId} → {link.childId}</code>)}</div>}
     {runs.map(run=><div className="asset-item" key={run.id}>
       <div className="asset-item-head"><StatusBadge tone={run.status==='done'?'success':run.status==='failed'?'danger':'neutral'}>{run.status}</StatusBadge>
         {run.profile && <span className="asset-scope">{run.profile}</span>}</div>
@@ -152,5 +181,9 @@ function TaskRuns({task,runs}: {task:AgentWorkTaskDto;runs:import('@agent-lens/p
       {run.summary && <p>{run.summary}</p>}
       {run.error && <div className="agent-path-error">{run.error}</div>}
     </div>)}
+    {comments.length>0 && <section className="agent-secondary"><h3>{t('work.comments')}</h3>{comments.map(comment=><div className="asset-item" key={comment.id}><strong>{comment.author}</strong><p>{comment.body}</p></div>)}</section>}
+    {events.length>0 && <section className="agent-secondary"><h3>{t('work.events')}</h3>{events.map(event=><div className="runtime-config-row" key={event.id}><span>{event.kind}</span><span>{formatDate(event.createdAt)}</span></div>)}
+      <div className="runtime-config-row">{eventOffset>0 && <Button size="small" disabled={loading} onClick={()=>onEventPage(Math.max(0,eventOffset-100))}>{t('work.previous')}</Button>}
+        {hasMore && <Button size="small" disabled={loading} onClick={()=>onEventPage(eventOffset+100)}>{t('work.next')}</Button>}</div></section>}
   </section>
 }

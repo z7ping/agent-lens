@@ -26,6 +26,14 @@ test('Hermes workspace reads multiple boards and profile-local scheduled work wi
     }
     createBoard(join(root,'kanban.db'),'t1','Default task')
     createBoard(join(boardRoot,'kanban.db'),'t2','Team task')
+    const detailsDb=new DatabaseSync(join(boardRoot,'kanban.db'))
+    detailsDb.exec('CREATE TABLE task_links (parent_id TEXT,child_id TEXT)')
+    detailsDb.exec('CREATE TABLE task_comments (id INTEGER PRIMARY KEY,task_id TEXT,author TEXT,body TEXT,created_at INTEGER)')
+    detailsDb.exec('CREATE TABLE task_events (id INTEGER PRIMARY KEY,task_id TEXT,kind TEXT,run_id INTEGER,created_at INTEGER)')
+    detailsDb.prepare('INSERT INTO task_links VALUES (?,?)').run('t1','t2')
+    detailsDb.prepare('INSERT INTO task_comments VALUES (?,?,?,?,?)').run(1,'t2','coder','reviewed',1730000000)
+    detailsDb.prepare('INSERT INTO task_events VALUES (?,?,?,?,?)').run(1,'t2','claimed',1,1730000000)
+    detailsDb.close()
     await writeFile(join(boardRoot,'board.json'),JSON.stringify({name:'Team board',project_id:'project-1'}))
     await writeFile(join(root,'cron','jobs.json'),JSON.stringify({jobs:[{
       id:'job1',name:'daily',enabled:true,schedule_display:'0 8 * * *',no_agent:true,
@@ -44,7 +52,7 @@ test('Hermes workspace reads multiple boards and profile-local scheduled work wi
     projects.prepare('INSERT INTO projects VALUES (?,?,?,?,?,?)').run('project-1','repo','Repo',0,'team','/repo')
     projects.close()
     const before=await readFile(join(root,'cron','jobs.json'))
-    const response=await readHermesWorkspace({roots:[root],board:'team',limit:1,jobId:'job2',profile:'coder'})
+    const response=await readHermesWorkspace({roots:[root],board:'team',limit:1,jobId:'job2',profile:'coder',taskId:'t2'})
     assert.deepEqual(response.features.map(f=>f.availability),['available','available','available'])
     assert.equal(response.boards.length,2)
     assert.equal(response.boards.find(b=>b.id==='team')?.name,'Team board')
@@ -54,6 +62,9 @@ test('Hermes workspace reads multiple boards and profile-local scheduled work wi
     assert.equal(response.schedules.find(j=>j.profile==='default')?.noAgent,true)
     assert.equal(response.executions[0]?.profile,'coder')
     assert.equal(response.projects[0]?.profile,'coder')
+    assert.equal(response.taskLinks[0]?.parentId,'t1')
+    assert.equal(response.taskComments[0]?.author,'coder')
+    assert.equal(response.taskEvents[0]?.kind,'claimed')
     assert.deepEqual(await readFile(join(root,'cron','jobs.json')),before)
   } finally {await rm(root,{recursive:true,force:true})}
 })
