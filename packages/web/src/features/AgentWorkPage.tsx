@@ -201,7 +201,7 @@ export function AgentWorkPage({model,sourceId}: {model:AgentLensClientModel;sour
         </div>
         {activePanel==='boards' && boardAvailable && <>
           <section className="agent-primary-section">
-            <div className="section-heading-row"><h3>{t('work.boardTasks')}</h3><span className="section-total">{board?.taskCount ?? 0}</span></div>
+            <div className="section-heading-row"><h3>{t('work.boardTasks')}</h3><span className="section-total">{board?.taskCount ?? '—'}</span></div>
             <SelectMenu ariaLabel={t('work.selectBoard')} value={response.selectedBoard ?? ''} searchable
               options={response.boards.map(item => ({value:item.id,label:item.name + (item.archived?t('work.archived'):'')}))}
               onChange={value=>loadBoard(value)}/>
@@ -212,7 +212,8 @@ export function AgentWorkPage({model,sourceId}: {model:AgentLensClientModel;sour
               {response.boardsHasMore && <Button size="small" disabled={snapshot.loading}
                 onClick={()=>nextBoards(boardOffset+24)}>{t('work.next')}</Button>}
             </div>
-            {response.tasks.length===0 && <div className="muted-empty compact">{t('work.noTasks')}</div>}
+            {!response.selectedBoard && <div className="muted-empty compact">{t('work.noSelectedBoard')}</div>}
+            {response.selectedBoard && response.tasks.length===0 && <div className="muted-empty compact">{t('work.noTasks')}</div>}
             {response.tasks.map(item => <div className="asset-item" key={item.id}>
               <div className="asset-item-head">
                 <StatusBadge tone={item.status==='done'?'success':item.status==='blocked'?'warning':item.status==='running'?'accent':'neutral'}>{item.status}</StatusBadge>
@@ -230,7 +231,7 @@ export function AgentWorkPage({model,sourceId}: {model:AgentLensClientModel;sour
                 commentOffset={commentOffset} commentsHasMore={response.taskCommentsHasMore} onCommentPage={nextTaskComments}/>} 
             </div>)}
             <div className="runtime-config-row">
-              <span>{t('work.loaded')} {offset+response.tasks.length} / {board?.taskCount ?? 0}</span>
+              <span>{t('work.loaded')} {offset+response.tasks.length} / {board?.taskCount ?? '—'}</span>
               {offset>0 && <Button size="small" disabled={snapshot.loading} onClick={()=>loadBoard(response.selectedBoard??'default',Math.max(0,offset-PAGE_SIZE))}>{t('work.previous')}</Button>}
               {response.tasksHasMore && <Button size="small" disabled={snapshot.loading} onClick={()=>loadBoard(response.selectedBoard??'default',offset+PAGE_SIZE)}>{t('work.next')}</Button>}
             </div>
@@ -264,7 +265,8 @@ export function AgentWorkPage({model,sourceId}: {model:AgentLensClientModel;sour
                 <div className="section-heading-row"><h3>{t('work.output')}</h3></div>
                 {cronOutputLoading && <div className="muted-empty compact" role="status">{t('work.loading')}</div>}
                 {cronOutputError && <div className="agent-path-error" role="alert">{cronOutputError}</div>}
-                {cronOutput?.state === 'unavailable' && <div className="muted-empty compact">{t('work.noOutput')}</div>}
+                {(cronOutput?.state === 'unavailable' || (cronOutput?.state === 'available' && !cronOutput.files.length)) &&
+                  <div className="muted-empty compact">{t('work.noOutput')}</div>}
                 {cronOutput?.files.map(file=><div key={file.name} className="runtime-config-row">
                   <Button size="small" variant="quiet" disabled={cronOutputLoading}
                     onClick={()=>void loadOutput(job,file.name,outputOffset)}>{file.name}</Button>

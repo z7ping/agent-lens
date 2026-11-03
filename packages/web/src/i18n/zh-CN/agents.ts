@@ -3,6 +3,7 @@ import type { LocaleMessagesDto } from '@agent-lens/protocol'
 export const chineseAgentsMessages: LocaleMessagesDto = {
   agents: {
     work: {
+      noSelectedBoard: '未能确定当前看板，请重新选择',
       featurePartial: '{{name}} 部分数据不可用：',
       workerSession: '本次执行会话',
       outputError: '读取输出失败',
