@@ -48,6 +48,7 @@ export const chineseTaskMessages: LocaleMessagesDto = {
       waitingResponse: '正在等待智能体响应',
       requestFailed: '请求失败',
       attemptFailureTitle: '单次模型调用失败',
+      executionFailureTitle: '执行过程异常',
       failure: {
         quota: '模型服务配额不足',
         quotaHint: '当前请求未完成，请检查模型服务账户额度。',
