@@ -29,6 +29,11 @@ export type AgentWorkspaceMutationRunner = (options:{
   executable?:string
 }) => Promise<{accepted:boolean;pending?:boolean;receiptId?:string;message:string}>
 
+export type AgentWorkspaceCapabilityReader = (options:{
+  roots:string[]
+  executable?:string
+}) => Promise<AgentWorkMutationDto['kind'][]>
+
 export type AgentWorkspaceReceiptReader = (options:{
   sourceId:string
   installationId:string
@@ -61,6 +66,7 @@ export async function handleAgentWorkspaceRequest(
   mutationRunners?: Readonly<Record<string, AgentWorkspaceMutationRunner>>,
   writeAccess?: WorkspaceWriteAccess,
   receiptReaders?: Readonly<Record<string, AgentWorkspaceReceiptReader>>,
+  capabilityReaders?: Readonly<Record<string, AgentWorkspaceCapabilityReader>>,
 ): Promise<boolean> {
   const match = /^\/api\/v1\/agents\/([^/]+)\/workspace(\/output|\/action|\/write-access|\/receipt)?$/.exec(url.pathname)
   if (!match) return false
@@ -149,6 +155,11 @@ export async function handleAgentWorkspaceRequest(
     if (!installation) {writeJson(response,404,{error:'Unknown Agent installation'});return true}
     if (!writeAccess?.allowed({sourceId,installationId,root:installation.root})) {
       throw httpError(403, 'Workspace write permission is disabled for this installation')
+    }
+    const commands = await capabilityReaders?.[sourceId]?.({roots:[installation.root],
+      ...(installation.executable?{executable:installation.executable}:{})}) ?? []
+    if (!commands.includes(kind as AgentWorkMutationDto['kind'])) {
+      throw httpError(409, 'Installed Hermes CLI does not expose this operation')
     }
     // CLI executable comes from the same registered installation when known.
     const lockKey=JSON.stringify([sourceId,installationId,installation.root])
@@ -249,9 +260,11 @@ export async function handleAgentWorkspaceRequest(
     writeJson(response,502,{error:'Workspace provider source identity mismatch'})
     return true
   }
+  const canWrite = Boolean(mutationRunners?.[sourceId] && writeAccess?.allowed({sourceId,installationId,root:root.root}))
+  const actions = canWrite ? await capabilityReaders?.[sourceId]?.({roots:[root.root],
+    ...(root.executable?{executable:root.executable}:{})}) ?? [] : []
   writeJson(response,200,{...result,installationId,
     writeControlAvailable:Boolean(mutationRunners?.[sourceId] && writeAccess),
-    availableActions:mutationRunners?.[sourceId] && writeAccess?.allowed({sourceId,installationId,root:root.root})
-      ? AGENT_WORK_MUTATION_KINDS : []})
+    availableActions:actions.filter(kind=>AGENT_WORK_MUTATION_KINDS.includes(kind))})
   return true
 }
