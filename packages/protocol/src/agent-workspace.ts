@@ -150,6 +150,7 @@ export type AgentWorkMutationDto =
   | {kind:'task.assign';boardId:string;taskId:string;profile:string}
   | {kind:'task.link'|'task.unlink';boardId:string;parentId:string;childId:string}
   | {kind:'task.archive';boardId:string;taskId:string}
+  | {kind:'task.block'|'task.unblock'|'task.complete'|'task.promote';boardId:string;taskId:string;reason?:string}
   | {kind:'cron.create';profile:string;schedule:string;prompt:string;name?:string}
   | {kind:'cron.edit';profile:string;jobId:string;schedule?:string;prompt?:string;name?:string}
   | {kind:'cron.pause'|'cron.resume'|'cron.remove'|'cron.cancel';profile:string;jobId:string}
@@ -166,5 +167,6 @@ export interface AgentWorkMutationResultDto {
 /** Explicitly supported safe native verbs; providers must not accept arbitrary CLI. */
 export const AGENT_WORK_MUTATION_KINDS:readonly AgentWorkMutationDto['kind'][]=[
   'task.create','task.edit','task.assign','task.link','task.unlink','task.archive',
+  'task.block','task.unblock','task.complete','task.promote',
   'cron.create','cron.edit','cron.pause','cron.resume','cron.remove','cron.cancel',
 ]

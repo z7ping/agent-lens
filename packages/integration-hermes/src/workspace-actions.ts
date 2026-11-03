@@ -60,6 +60,10 @@ export function hermesWorkMutationArgv(action:AgentWorkMutationDto):string[] {
         return [...argv,a.kind==='task.link'?'link':'unlink',parent,child]
       }
       case 'task.archive':return [...argv,'archive',identity(a.taskId,'task',TASK_ID)]
+      case 'task.block':return [...argv,'block',identity(a.taskId,'task',TASK_ID),...(a.reason?[required(a.reason,400,'reason')]:[])]
+      case 'task.unblock':return [...argv,'unblock',identity(a.taskId,'task',TASK_ID),...(a.reason?['--reason',required(a.reason,400,'reason')]:[])]
+      case 'task.complete':return [...argv,'complete',identity(a.taskId,'task',TASK_ID),...(a.reason?['--result',required(a.reason,400,'result')]:[])]
+      case 'task.promote':return [...argv,'promote',identity(a.taskId,'task',TASK_ID),...(a.reason?[required(a.reason,400,'reason')]:[])]
     }
   }
   if(a.kind.startsWith('cron.')){

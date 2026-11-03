@@ -16,9 +16,11 @@ export const englishAgentsMessages: LocaleMessagesDto = {
       fieldName: 'Name',
       fieldSchedule: 'Schedule expression',
       fieldPrompt: 'Prompt',
+      fieldReason: 'Reason (optional)',
       actions: {
         task_create: 'Create task',task_edit:'Edit task',task_assign:'Assign task',
         task_link:'Add dependency',task_unlink:'Remove dependency',task_archive:'Archive task',
+        task_block:'Block task',task_unblock:'Unblock task',task_complete:'Complete task',task_promote:'Promote to ready',
         cron_create:'Create schedule',cron_edit:'Edit schedule',cron_pause:'Pause',
         cron_resume:'Resume',cron_remove:'Delete schedule',cron_cancel:'Cancel running job',
       },

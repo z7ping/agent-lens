@@ -410,6 +410,10 @@ export function AgentWorkPage({model,sourceId,installationId,installations}: {
             <label>{t('work.fieldBody')}<Textarea rows={3} maxLength={4000} value={pendingAction.body??''}
               onChange={event=>setPendingAction({...pendingAction,body:event.target.value||undefined})}/></label>
           </>}
+          {['task.block','task.unblock','task.complete','task.promote'].includes(pendingAction.kind)
+            && 'reason' in pendingAction && <label>{t('work.fieldReason')}<Textarea rows={2}
+            value={pendingAction.reason??''} maxLength={400}
+            onChange={event=>setPendingAction({...pendingAction,reason:event.target.value||undefined})}/></label>}
           {pendingAction.kind==='task.assign' && <label>{t('work.fieldProfile')}<Input
             value={pendingAction.profile} maxLength={80} onChange={event=>setPendingAction({...pendingAction,profile:event.target.value})}/></label>}
           {(pendingAction.kind==='task.link'||pendingAction.kind==='task.unlink') && <>
@@ -466,6 +470,18 @@ function TaskRuns({task,runs,links,comments,events,hasMore,eventOffset,onEventPa
       {permitted('task.link') && <Button size="small" onClick={()=>onAction({
         kind:'task.link',boardId:task.boardId,parentId:task.id,childId:'',
       })}>{t('work.actions.task_link')}</Button>}
+      {permitted('task.block') && !['blocked','done','archived'].includes(task.status) && <Button size="small" onClick={()=>onAction({
+        kind:'task.block',boardId:task.boardId,taskId:task.id,
+      })}>{t('work.actions.task_block')}</Button>}
+      {permitted('task.unblock') && ['blocked','scheduled'].includes(task.status) && <Button size="small" onClick={()=>onAction({
+        kind:'task.unblock',boardId:task.boardId,taskId:task.id,
+      })}>{t('work.actions.task_unblock')}</Button>}
+      {permitted('task.promote') && ['todo','blocked','triage'].includes(task.status) && <Button size="small" onClick={()=>onAction({
+        kind:'task.promote',boardId:task.boardId,taskId:task.id,
+      })}>{t('work.actions.task_promote')}</Button>}
+      {permitted('task.complete') && !['done','archived','running'].includes(task.status) && <Button size="small" onClick={()=>onAction({
+        kind:'task.complete',boardId:task.boardId,taskId:task.id,
+      })}>{t('work.actions.task_complete')}</Button>}
       {permitted('task.archive') && <Button size="small" variant="danger" onClick={()=>onAction({
         kind:'task.archive',boardId:task.boardId,taskId:task.id,
       })}>{t('work.actions.task_archive')}</Button>}

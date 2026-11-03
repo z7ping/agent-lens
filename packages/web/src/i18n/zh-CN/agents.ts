@@ -16,9 +16,11 @@ export const chineseAgentsMessages: LocaleMessagesDto = {
       fieldName: '名称',
       fieldSchedule: '调度表达式',
       fieldPrompt: '任务提示词',
+      fieldReason: '操作说明（选填）',
       actions: {
         task_create: '新建任务',task_edit:'编辑任务',task_assign:'指派任务',
         task_link:'添加依赖',task_unlink:'移除依赖',task_archive:'归档任务',
+        task_block:'阻塞任务',task_unblock:'解除阻塞',task_complete:'完成任务',task_promote:'提升为就绪',
         cron_create:'新建定时任务',cron_edit:'编辑定时任务',cron_pause:'暂停',
         cron_resume:'恢复',cron_remove:'删除定时任务',cron_cancel:'取消正在执行的任务',
       },
