@@ -913,6 +913,10 @@ function buildRoundModel(
   const toolCount = items.filter(item => item.kind === 'tool').length
   const errorCount = items.filter(item => (item.kind === 'tool' && item.status === 'error')
     || (item.kind === 'message' && item.error === true)).length
+  const warningCount = items.filter(item => (item.kind === 'tool' && item.status === 'error')
+    || (item.kind === 'message' && item.errorScope === 'attempt')).length
+  const terminalFailure = items.some(item =>
+    item.kind === 'message' && item.error === true && item.errorScope !== 'attempt')
   const running = items.some(item =>
     (item.kind === 'message' || item.kind === 'thinking') ? item.streaming : item.status === 'running',
   )
@@ -927,6 +931,8 @@ function buildRoundModel(
     ...(previewSource ? { preview: compactRoundPreview(previewSource.text) } : {}),
     toolCount,
     errorCount,
+    warningCount,
+    terminalFailure,
     durationMs: timing.durationMs,
     highLatency: false,
   }
