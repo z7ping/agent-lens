@@ -3,6 +3,8 @@ import type { LocaleMessagesDto } from '@agent-lens/protocol'
 export const chineseAgentsMessages: LocaleMessagesDto = {
   agents: {
     work: {
+      writeConfirmed: '已从 Hermes 原生数据确认变更',
+      writeUnconfirmed: 'Hermes 已接受命令，原生变更尚未确认；请刷新核对',
       receiptUnavailable: '运行回执暂不可用，请刷新原生执行记录确认结果。',
       runCaution: '将立即触发一次 Hermes 原生任务，可能在暂停状态下仍执行；请确认 Profile 与任务 ID。运行结果以原生执行记录为准。',
       writeEnable: '启用写操作',
@@ -26,6 +28,7 @@ export const chineseAgentsMessages: LocaleMessagesDto = {
       fieldPrompt: '任务提示词',
       fieldReason: '操作说明（选填）',
       actions: {
+        cron_retry: '重新运行', task_requeue: '重新排队',
         board_create: '新建看板',board_rename:'重命名看板',board_archive:'归档看板',
         task_create: '新建任务',task_edit:'编辑任务',task_assign:'指派任务',
         task_link:'添加依赖',task_unlink:'移除依赖',task_archive:'归档任务',
