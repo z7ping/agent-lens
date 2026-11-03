@@ -97,6 +97,8 @@ export interface AgentWorkspaceResponseDto {
   /** Server-selected registered Agent installation; native files are scoped to this identity. */
   installationId?: string
   features: AgentWorkFeatureDto[]
+  /** Provider-issued allowed native actions, not inferred from Agent name. */
+  availableActions?: AgentWorkMutationDto['kind'][]
   projects: AgentWorkProjectDto[]
   projectsHasMore: boolean
   projectsTotal: number
@@ -160,3 +162,9 @@ export interface AgentWorkMutationResultDto {
   accepted:boolean
   message:string
 }
+
+/** Explicitly supported safe native verbs; providers must not accept arbitrary CLI. */
+export const AGENT_WORK_MUTATION_KINDS:readonly AgentWorkMutationDto['kind'][]=[
+  'task.create','task.edit','task.assign','task.link','task.unlink','task.archive',
+  'cron.create','cron.edit','cron.pause','cron.resume','cron.remove','cron.cancel',
+]

@@ -1,5 +1,5 @@
 import type { IncomingMessage, ServerResponse } from 'node:http'
-import { AGENT_LENS_PROTOCOL_VERSION, type AgentWorkspaceResponseDto, type AgentWorkOutputResponseDto, type AgentWorkMutationDto, type AgentWorkMutationResultDto } from '@agent-lens/protocol'
+import { AGENT_LENS_PROTOCOL_VERSION, AGENT_WORK_MUTATION_KINDS, type AgentWorkspaceResponseDto, type AgentWorkOutputResponseDto, type AgentWorkMutationDto, type AgentWorkMutationResultDto } from '@agent-lens/protocol'
 import type { CapturePolicyService, SourceService } from '@agent-lens/core'
 import { badRequest, httpError, readJsonBody, writeJson } from './http-utils'
 
@@ -177,6 +177,7 @@ export async function handleAgentWorkspaceRequest(
     writeJson(response,502,{error:'Workspace provider source identity mismatch'})
     return true
   }
-  writeJson(response,200,{...result,installationId})
+  writeJson(response,200,{...result,installationId,
+    availableActions:mutationRunners?.[sourceId] ? AGENT_WORK_MUTATION_KINDS : []})
   return true
 }
