@@ -681,6 +681,78 @@ test('failed Pi model attempt remains visible while its logical run continues st
     && item.role === 'assistant' && item.text === 'Found the configuration'))
 })
 
+test('Pi retry success records a warning, never a failed final round', () => {
+  const user = { id: 'u', kind: 'message' as const, role: 'user' as const, text: 'task', streaming: false }
+  const failedAttempt = reduceLiveTaskEvent([user], event(1, {
+    type: 'error', scope: 'attempt', message: 'Connection error.',
+  }))
+  const output = reduceLiveTaskEvent(failedAttempt, event(2, {
+    type: 'text.end', messageId: 'retry', text: 'done',
+  }))
+  const settled = reduceLiveTaskEvent(output, event(3, {
+    type: 'completed', status: 'completed',
+  }))
+  const round = projectLiveTaskRounds(settled)[0]
+  assert.equal(round?.model.errorCount, 1)
+  assert.equal(round?.model.warningCount, 1)
+  assert.equal(round?.model.terminalFailure, false)
+  assert.equal(settled.filter(item => item.kind === 'message' && item.error).length, 1)
+  assert.ok(settled.some(item => item.kind === 'message' && item.text === 'done'))
+})
+
+test('Pi final failure upgrades the last failed attempt without duplicating it', () => {
+  const initial = [{ id: 'u', kind: 'message' as const, role: 'user' as const, text: 'task', streaming: false }]
+  const attempt = reduceLiveTaskEvent(initial, event(1, {
+    type: 'error', scope: 'attempt', message: 'Connection error.',
+  }))
+  for (const completed of [
+    { type: 'completed', status: 'failed' } as const,
+    { type: 'completed', status: 'failed', message: 'Connection error.' } as const,
+  ]) {
+    const settled = reduceLiveTaskEvent(attempt, event(2, completed))
+    const failures = settled.filter(item => item.kind === 'message' && item.error)
+    assert.equal(failures.length, 1)
+    assert.equal(failures[0]?.kind === 'message' ? failures[0].errorScope : null, undefined)
+    assert.equal(failures[0]?.kind === 'message' ? failures[0].terminalFailure : null, true)
+    const round = projectLiveTaskRounds(settled)[0]
+    assert.equal(round?.model.terminalFailure, true)
+    assert.equal(round?.model.warningCount, 0)
+  }
+})
+
+test('generic Live errors are visible warnings until a terminal failure is explicit', () => {
+  const user = { id: 'u', kind: 'message' as const, role: 'user' as const, text: 'task', streaming: false }
+  const transient = reduceLiveTaskEvent([user], event(1, {
+    type: 'error', message: 'Extension failed',
+  }))
+  const round = projectLiveTaskRounds(transient)[0]
+  assert.equal(round?.model.warningCount, 1)
+  assert.equal(round?.model.terminalFailure, false)
+
+  const ended = reduceLiveTaskEvent(transient, event(2, {
+    type: 'status', status: 'failed', message: 'Runtime exited',
+  }))
+  const failed = projectLiveTaskRounds(ended)[0]
+  assert.equal(failed?.model.terminalFailure, true)
+  assert.ok(ended.some(item => item.kind === 'message' && item.terminalFailure))
+})
+
+test('native snapshot last successful assistant supersedes an earlier failed attempt', () => {
+  const projected = projectLiveSnapshotEntries([
+    { type: 'message', id: 'u1', message: { role: 'user', content: [{ type: 'text', text: 'task' }] } },
+    { type: 'message', id: 'failed', message: {
+      role: 'assistant', stopReason: 'error', content: [], errorMessage: 'Connection error.',
+    } },
+    { type: 'message', id: 'success', message: {
+      role: 'assistant', stopReason: 'stop', content: [{ type: 'text', text: 'done' }],
+    } },
+  ])
+  const round = projectLiveTaskRounds(projected)[0]
+  assert.equal(round?.model.warningCount, 1)
+  assert.equal(round?.model.terminalFailure, false)
+  assert.ok(round?.items.some(item => item.kind === 'message' && item.phase === 'final'))
+})
+
 test('SSE failure reconciles with persisted error instead of duplicating the same failure', () => {
   const user = { id: 'user:1', kind: 'message' as const, role: 'user' as const, text: 'hello', streaming: false }
   const live = reduceLiveTaskEvent([user], event(1, { type: 'error', message: 'Network timeout' }))

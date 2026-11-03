@@ -48,6 +48,7 @@ export const englishTaskMessages: LocaleMessagesDto = {
       waitingResponse: 'Waiting for the agent to respond',
       requestFailed: 'Request failed',
       attemptFailureTitle: 'Model attempt failed',
+      executionFailureTitle: 'Execution issue',
       failure: {
         quota: 'Model service quota exhausted',
         quotaHint: 'The request did not complete. Check your model service account quota.',
@@ -82,6 +83,7 @@ export const englishTaskMessages: LocaleMessagesDto = {
       roundContinuation: '{{label}} (cont.)',
       running: 'Running',
       hasError: 'Has errors',
+      hasWarning: 'Execution had warnings',
       jumpTo: 'Jump to {{tip}}',
       boundaryNavigation: 'Session boundary navigation',
       jumpStart: 'Jump to start',

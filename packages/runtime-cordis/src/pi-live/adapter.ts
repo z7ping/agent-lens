@@ -23,6 +23,7 @@ import {
   requireLiveMessageSupport,
 } from '@agent-lens/live-support'
 import { parsePiCacheOptimizerStatus } from './cache-status'
+import { piAssistantAttemptFailed, piEventErrorText } from './assistant-attempt-outcome'
 import type {
   PiLiveImageInput,
   PiLiveRuntimeState,
@@ -116,21 +117,6 @@ function liveText(value: unknown): string {
   return typeof value === 'string' ? value : ''
 }
 
-function piErrorText(value: unknown): string {
-  if (typeof value === 'string') return value.trim()
-  const nested = liveRecord(value)
-  return liveText(nested.message).trim() || liveText(nested.errorMessage).trim()
-    || liveText(nested.detail).trim() || liveText(nested.description).trim()
-}
-
-function piEventErrorText(...values: unknown[]): string {
-  for (const value of values) {
-    const message = piErrorText(value)
-    if (message) return message
-  }
-  return ''
-}
-
 function livePreview(value: unknown, max = 4_000): string {
   if (value === undefined || value === null) return ''
   const text = typeof value === 'string'
@@ -216,7 +202,8 @@ export function normalizePiLiveEvent(event: Readonly<Record<string, unknown>>): 
   // as the final completion/cancellation boundary.
   if (type === 'agent_settled') {
     // Pi 1.2 reports cancellation on the final settlement event, not agent_end.
-    return { type: 'completed', status: event.aborted === true ? 'cancelled' : 'completed' }
+    return { type: 'completed', status: event.aborted === true ? 'cancelled'
+      : event.lastAssistantAttemptFailed === true ? 'failed' : 'completed' }
   }
   if (type === 'message_start' || type === 'message_end') {
     const message = liveRecord(event.message)
@@ -225,7 +212,7 @@ export function normalizePiLiveEvent(event: Readonly<Record<string, unknown>>): 
     // model provider or transport. Keep adapter generic; no status-code hints.
     if (type === 'message_end' && rawRole === 'assistant') {
       const nativeError = piEventErrorText(message.errorMessage, message.error, event.errorMessage, event.error)
-      if (nativeError.trim() || message.stopReason === 'error') {
+      if (piAssistantAttemptFailed(message, event as Record<string, unknown>)) {
         return { type: 'error', scope: 'attempt', message: nativeError.trim() || 'Pi assistant request failed' }
       }
     }

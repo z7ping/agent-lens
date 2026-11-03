@@ -21,6 +21,7 @@ import type { PiLiveStartupAuditSink } from './startup-audit'
 import { WorkerPiRuntimeHost, type PiRuntimeHandle, type PiRuntimeHost } from './worker-host'
 import { PiWorkspaceFileReferenceIndex } from './workspace-files'
 import { parsePiCacheOptimizerStatus, type PiLiveCacheMetrics } from './cache-status'
+import { piAssistantAttemptFailed } from './assistant-attempt-outcome'
 import type { LiveQueueMutation } from '@agent-lens/core'
 import type { PiLiveAvailability, PiLiveCommand, PiLiveControls, PiLiveExtensionBindingStatus, PiLiveInitializationStage, PiLiveImageInput, PiLiveInitializationTiming, PiLivePackageUpdate, PiLivePackageUpdateCheckStatus, PiLiveQueueState, PiLiveRuntimeCapabilities, PiLiveRuntimeListener, PiLiveRuntimeState, PiLiveService, PiLiveSnapshot, PiLiveStartInput, PiLiveStartupMetric, PiLiveStartupIssue, PiLiveStartupResources, PiLiveStreamingBehavior, PiLiveVersionCheckStatus, PiLiveWarmWorkerStatus } from './types'
 
@@ -64,6 +65,7 @@ interface OwnedRuntime {
   /** Native Pi name events outrank any cached fallback, including explicit name removal. */
   observedSessionName?: string | null | undefined
   activeAssistantMessageId?: string | undefined
+  lastAssistantAttemptFailed?: boolean | undefined
   isStreaming: boolean
   isCompacting: boolean
   manualCompactionPending?: boolean | undefined
@@ -2263,7 +2265,14 @@ export class DefaultPiLiveService implements PiLiveService {
       runtime.cacheMetrics = undefined
       if (runtime.cachedState) runtime.cachedState = { ...runtime.cachedState, cacheMetrics: undefined }
     }
-    if (type === 'agent_start') runtime.isStreaming = true
+    if (type === 'agent_start') {
+      // Retry/queued runs may follow agent_end without settling the logical turn.
+      if (!runtime.isStreaming) runtime.lastAssistantAttemptFailed = undefined
+      runtime.isStreaming = true
+    }
+    if (type === 'message_end' && messageRole === 'assistant' && message) {
+      runtime.lastAssistantAttemptFailed = piAssistantAttemptFailed(message, event)
+    }
     if (type === 'compaction_start') runtime.isCompacting = true
     if (type === 'compaction_end') runtime.isCompacting = false
     if (type === 'message_start' && messageRole === 'assistant') {
@@ -2291,7 +2300,9 @@ export class DefaultPiLiveService implements PiLiveService {
       }
     }
 
-    const publishedEvent = (type === 'message_start' || type === 'message_end')
+    const publishedEvent = type === 'agent_settled' && runtime.lastAssistantAttemptFailed === true
+      ? { ...event, lastAssistantAttemptFailed: true }
+      : (type === 'message_start' || type === 'message_end')
       && messageRole === 'assistant' && runtime.activeAssistantMessageId
       ? { ...event, message: { ...message, id: messageId || runtime.activeAssistantMessageId } }
       : type === 'message_update' && runtime.activeAssistantMessageId
@@ -2322,6 +2333,7 @@ export class DefaultPiLiveService implements PiLiveService {
     const logicalSettled = type === 'agent_settled' || type === 'runtime_exit'
     if (logicalSettled) {
       runtime.activeAssistantMessageId = undefined
+      runtime.lastAssistantAttemptFailed = undefined
       runtime.isStreaming = false
       runtime.isCompacting = false
       runtime.pendingExtensionRequestIds.clear()

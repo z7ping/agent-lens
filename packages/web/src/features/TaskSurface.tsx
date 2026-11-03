@@ -41,6 +41,8 @@ export interface TaskTurnRailData {
   label: string
   preview?: string | undefined
   error?: boolean | undefined
+  /** A native call/tool failed but the logical turn is not known to have failed. */
+  warning?: boolean | undefined
   state?: string | undefined
 }
 
@@ -71,6 +73,7 @@ interface TaskTurnRailItem {
   label: string
   preview: string
   error: boolean
+  warning: boolean
   state: string
   element?: HTMLElement | undefined
 }
@@ -267,17 +270,19 @@ function collectTurnRailItems(root: HTMLElement): TaskTurnRailItem[] {
       || undefined,
     )
     const error = element.dataset.roundError === 'true' || round?.classList.contains('task-round-has-error') === true
+    const warning = element.dataset.roundWarning === 'true'
     const state = element.dataset.roundState?.trim() || round?.dataset.taskRoundState?.trim() || 'settled'
 
     const existing = bySemanticId.get(semanticId)
     if (existing) {
       existing.error = existing.error || error
+      existing.warning = existing.warning || warning
       existing.state = mergeRoundState(existing.state, state)
       if (!existing.preview && preview) existing.preview = preview
       continue
     }
 
-    const item = { id: semanticId, semanticId, label, preview, error, state, element, loaded: true }
+    const item = { id: semanticId, semanticId, label, preview, error, warning, state, element, loaded: true }
     bySemanticId.set(semanticId, item)
     result.push(item)
   }
@@ -326,6 +331,7 @@ function sameTurnRailItems(left: TaskTurnRailItem[], right: TaskTurnRailItem[]):
       && item.label === next.label
       && item.preview === next.preview
       && item.error === next.error
+      && item.warning === next.warning
       && item.state === next.state
       && item.element === next.element
   })
@@ -392,6 +398,7 @@ function virtualTurnRailItem(ordinal: number): TaskTurnRailItem {
     label: agentLensI18n.t('task:surface.roundOrdinal', { count: ordinal }),
     preview: '',
     error: false,
+    warning: false,
     state: 'settled',
   }
 }
@@ -580,6 +587,7 @@ export const TaskSurface = forwardRef<HTMLElement, TaskSurfaceProps>(function Ta
         label: item.label,
         preview: compactRailPreview(item.preview),
         error: item.error === true,
+        warning: item.warning === true,
         state: item.state || 'settled',
         element: railElementBySemanticIdRef.current.get(semanticId),
       }
@@ -735,6 +743,7 @@ export const TaskSurface = forwardRef<HTMLElement, TaskSurfaceProps>(function Ta
       label: item.label,
       preview: item.preview,
       error: item.error,
+      warning: item.warning,
       state: item.state,
     })
   }
@@ -793,11 +802,11 @@ export const TaskSurface = forwardRef<HTMLElement, TaskSurfaceProps>(function Ta
           {renderedRailItems.map(item => {
             const active = item.id === activeRoundId
             const running = item.state === 'running'
-            const tip = [item.label, item.preview, running ? t('surface.running') : '', item.error ? t('surface.hasError') : ''].filter(Boolean).join(' · ')
+            const tip = [item.label, item.preview, running ? t('surface.running') : '', item.error ? t('surface.hasError') : item.warning ? t('surface.hasWarning') : ''].filter(Boolean).join(' · ')
             return <button
               key={item.id}
               type="button"
-              className={`turn-tick ${active ? 'active' : ''} ${item.error ? 'err' : ''} ${running ? 'running' : ''}`.trim()}
+              className={`turn-tick ${active ? 'active' : ''} ${item.error ? 'err' : item.warning ? 'warn' : ''} ${running ? 'running' : ''}`.trim()}
               data-tip={tip}
               aria-label={t('surface.jumpTo', { tip })}
               aria-current={active ? 'step' : undefined}

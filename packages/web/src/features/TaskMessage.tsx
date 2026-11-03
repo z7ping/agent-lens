@@ -34,6 +34,8 @@ export interface TaskMessageProps {
   showContentActions?: boolean | undefined
   pending?: boolean | undefined
   error?: boolean | undefined
+  /** Explicit Live turn/Runtime failure; undefined preserves Review's existing presentation. */
+  terminalFailure?: boolean | undefined
   errorScope?: 'attempt' | undefined
   errorDiagnostic?: TaskErrorDiagnostic | undefined
   pendingLabel?: string | undefined
@@ -56,6 +58,7 @@ export function TaskMessage({
   showContentActions = true,
   pending = false,
   error = false,
+  terminalFailure,
   errorScope,
   errorDiagnostic,
   pendingLabel,
@@ -65,6 +68,7 @@ export function TaskMessage({
   const user = role === 'user'
   const resolvedAuthor = author ?? t('message.agent')
   const failure = error ? presentTaskError(text, errorDiagnostic) : null
+  const nonterminalFailure = error && (errorScope === 'attempt' || terminalFailure === false)
   const [view, setView] = useState<'rendered' | 'source'>('rendered')
   const [expanded, setExpanded] = useState(() => !user)
   const [canCollapse, setCanCollapse] = useState(false)
@@ -163,27 +167,28 @@ export function TaskMessage({
   const sourceActionLabel = view === 'rendered' ? t('message.viewMarkdownSource') : t('message.returnRendered')
 
   return <div
-    className={`task-message-row ${roleClass} ${error && errorScope === 'attempt' ? 'task-message-attempt-error' : ''} ${className}`.trim()}
+    className={`task-message-row ${roleClass} ${nonterminalFailure ? 'task-message-attempt-error' : ''} ${className}`.trim()}
     data-task-message-role={role}
     data-streaming={streaming ? 'true' : undefined}
     data-pending={awaitingFirstContent ? 'true' : undefined}
     data-error={error ? 'true' : undefined}
-    role={error ? errorScope === 'attempt' ? 'status' : 'alert' : undefined}
+    role={error ? nonterminalFailure ? 'status' : 'alert' : undefined}
     data-model-label={modelLabel || undefined}
     aria-busy={streaming || awaitingFirstContent || undefined}
   >
     <div className={`task-message-bubble ${bubbleClass}`}>
       {(modelLabel || time || meta || error) && <div className="task-message-model-meta">
         {!user && <b>{resolvedAuthor}</b>}
-        {error && errorScope !== 'attempt' && <span className="task-message-error-status"><UiIcon name="alert" size={14}/>{t('message.requestFailed')}</span>}
+        {error && !nonterminalFailure && <span className="task-message-error-status"><UiIcon name="alert" size={14}/>{t('message.requestFailed')}</span>}
         {modelLabel && <><span aria-hidden="true">·</span><span className="task-message-model-label">{modelLabel}</span></>}
         {meta && <span className="task-message-context-evidence">{meta}</span>}
         {time && <time>{time}</time>}
       </div>}
       {failure ? <div className="task-message-failure">
-        <strong className="task-message-failure-title">{t(errorScope === 'attempt' ? 'message.attemptFailureTitle' : `message.failure.${failure.kind}`)}</strong>
-        {((failure.kind === 'quota' && errorScope !== 'attempt') || failure.preview) && <p className="task-message-failure-preview">{
-          failure.kind === 'quota' && errorScope !== 'attempt'
+        <strong className="task-message-failure-title">{t(errorScope === 'attempt' ? 'message.attemptFailureTitle'
+          : nonterminalFailure ? 'message.executionFailureTitle' : `message.failure.${failure.kind}`)}</strong>
+        {((failure.kind === 'quota' && !nonterminalFailure) || failure.preview) && <p className="task-message-failure-preview">{
+          failure.kind === 'quota' && !nonterminalFailure
             ? t('message.failure.quotaHint') : failure.preview
         }</p>}
         <Disclosure

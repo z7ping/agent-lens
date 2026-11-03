@@ -407,6 +407,12 @@ test('Pi 1.2 Live maps settled aborts without treating intermediate agent_end as
     type: 'completed',
     status: 'completed',
   })
+  assert.deepEqual(normalizePiLiveEvent({
+    type: 'agent_settled', lastAssistantAttemptFailed: true,
+  }), { type: 'completed', status: 'failed' })
+  assert.deepEqual(normalizePiLiveEvent({
+    type: 'agent_settled', lastAssistantAttemptFailed: true, aborted: true,
+  }), { type: 'completed', status: 'cancelled' })
 })
 
 test('Pi 1.2 Live carries native monotonic tool duration when present', () => {

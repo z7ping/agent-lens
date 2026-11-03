@@ -44,3 +44,14 @@ test('轮次导轨保留 hover 原始摘要与键盘焦点，未改变命中区'
   assert.match(source, /\[item\.label, item\.preview,/)
   assert.match(source, /aria-current=\{active \? 'step' : undefined\}/)
 })
+
+test('轮次导轨区分过程异常与最终失败，不改变共享刻度尺寸', () => {
+  const warn = rule(/\.task-turn-rail \.turn-tick\.warn i\s*\{([^}]*)\}/)
+  const warnActive = rule(/\.task-turn-rail \.turn-tick\.warn\.active i\s*\{([^}]*)\}/)
+  assert.match(warn, /var\(--al-warning\)/)
+  assert.match(warnActive, /background:\s*var\(--al-warning\)/)
+  assert.doesNotMatch(warnActive, /\b(?:width|height)\s*:/)
+  const source = readFileSync(new URL('./features/TaskSurface.tsx', import.meta.url), 'utf8')
+  assert.match(source, /item\.warning \? 'warn' : ''/)
+  assert.match(source, /item\.error \? t\('surface\.hasError'\) : item\.warning \? t\('surface\.hasWarning'\)/)
+})

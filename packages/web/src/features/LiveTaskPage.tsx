@@ -354,6 +354,11 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
       const cursor = semanticId.startsWith('live-round:')
         ? semanticId.slice('live-round:'.length)
         : undefined
+      const indexed = cursor
+        ? historyIndex?.items.find(item => item.cursor === cursor)
+        : historyIndex?.items.find(item => ordinal !== undefined && item.ordinal === ordinal)
+      const failed = round.model.terminalFailure === true
+        || (round.model.state !== 'running' && indexed?.summary?.terminal?.status === 'error')
       return {
         id: round.model.id,
         semanticId,
@@ -361,7 +366,9 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
         ...(ordinal ? { ordinal } : {}),
         label: ordinal ? t('surface.roundOrdinal', { count: ordinal }) : round.model.label,
         preview: round.model.preview,
-        error: round.model.errorCount > 0,
+        error: failed,
+        warning: !failed && ((round.model.warningCount ?? 0) > 0
+          || (indexed?.summary?.process.errorCount ?? 0) > 0),
         state: round.model.state,
         loaded: true,
       } satisfies TaskTurnRailData
@@ -373,13 +380,15 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
       .map(item => [item.ordinal!, item] as const))
     for (const indexed of historyIndex?.items ?? []) {
       if (byOrdinal.has(indexed.ordinal)) continue
+      const failed = indexed.summary?.terminal?.status === 'error'
       byOrdinal.set(indexed.ordinal, {
         id: `indexed-round:${indexed.ordinal}`,
         cursor: indexed.cursor,
         ordinal: indexed.ordinal,
         label: t('surface.roundOrdinal', { count: indexed.ordinal }),
         preview: indexed.preview ?? '',
-        error: (indexed.summary?.process.errorCount ?? 0) > 0,
+        error: failed,
+        warning: !failed && (indexed.summary?.process.errorCount ?? 0) > 0,
         state: 'settled',
         loaded: false,
       })
