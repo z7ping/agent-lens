@@ -120,10 +120,16 @@ export function TooltipProvider({ children }: { children: ReactNode }) {
       }
       const anchor = findAnchor(event.target)
       if (!anchor || anchor !== hoverRef.current) return
-      if (next && (anchor.contains(next) || panel?.contains(next))) return
+      if (next && anchor.contains(next)) return
       hoverRef.current = null
       if (dismissedRef.current === anchor) dismissedRef.current = null
       clearShow()
+      // The pointer may enter the floating tooltip directly from its trigger.
+      // Clear hover ownership in either case, so leaving the tooltip can dismiss it.
+      if (next && panel?.contains(next)) {
+        clearHide()
+        return
+      }
       if (!focusRef.current) closeSoon()
     }
     const focusIn = (event: FocusEvent) => {
