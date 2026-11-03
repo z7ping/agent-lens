@@ -15,19 +15,26 @@ export function parseHermesHelpCommands(
   help: string,
   expectedPath: readonly string[] = [],
 ): ReadonlySet<string> {
-  const text = help.replace(/\x1B\[[0-9;]*m/g, '')
-  // Only the argparse usage line is authoritative: other {a,b} groups may
-  // describe a flag's valid values, not executable subcommands.
-  const usage = text.match(/(?:^|\n)\s*usage:\s*(hermes(?:\.exe)?\b[^\n]*?(?:\n(?!\s*(?:options:|optional arguments:|positional arguments:|\w[^\n]*:))\s+[^\n]*){0,8})/i)?.[1]
-  if (!usage) return new Set()
-  const normalized = usage.replace(/\s+/g, ' ').trim()
+  const lines = help.replace(/\x1B\[[0-9;]*m/g, '').split(/\r?\n/)
+  const start = lines.findIndex(line => /^\s*usage:\s*hermes(?:\.exe)?\b/i.test(line))
+  if (start < 0) return new Set()
+  const parts = [lines[start]!.replace(/^\s*usage:\s*/i, '').trim()]
+  // argparse may wrap the same usage over multiple indented lines.
+  for (let i = start + 1; i < Math.min(start + 9, lines.length); i++) {
+    const line = lines[i]!
+    if (!line.trim() || !/^\s{2,}\S/.test(line)
+      || /^\s*(?:options:|positional arguments:|optional arguments:)/i.test(line)) break
+    parts.push(line.trim())
+  }
+  const usage = parts.join(' ')
   if (expectedPath.length) {
     const prefix = 'hermes ' + expectedPath.join(' ')
-    // Child-parser help should identify the command we are probing; do not
-    // interpret a different command's help as permission to run native writes.
-    if (!normalized.startsWith(prefix + ' ') && normalized !== prefix) return new Set()
+    if (usage !== prefix && !usage.startsWith(prefix + ' ')) return new Set()
   }
-  const choice = normalized.match(/\{([a-z][a-z0-9_, -]{0,1600})\}/i)?.[1]
+  // Argparse's subcommand choices are the final {...} in the usage, not
+  // enum values for flags listed in the options below.
+  const groups = [...usage.matchAll(/\{([a-z][a-z0-9_, -]{0,1600})\}/gi)]
+  const choice = groups.at(-1)?.[1]
   if (!choice) return new Set()
   const commands = new Set<string>()
   for (const token of choice.split(',')) {
