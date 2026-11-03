@@ -1,7 +1,7 @@
 import type { BackgroundActivityItemDto, BackgroundActivityResponseDto } from '@agent-lens/protocol'
 import { translateProduct } from '../i18n/runtime'
 
-export type BackgroundActivityTone = 'active' | 'success' | 'warning' | 'idle'
+export type BackgroundActivityTone = 'active' | 'warning' | 'idle'
 
 function projectionLabel(scope: string | undefined, active: boolean): string {
   if (scope?.includes('tool-usage')) return translateProduct(active ? 'common:backgroundActivity.projectionToolActive' : 'common:backgroundActivity.projectionToolDone')
@@ -17,6 +17,7 @@ export function backgroundActivityLabel(
 ): string {
   if (item.kind === 'source-detect') return translateProduct(active ? 'common:backgroundActivity.sourceDetectActive' : 'common:backgroundActivity.sourceDetectDone', { source: sourceName })
   if (item.kind === 'source-history') return translateProduct(active ? 'common:backgroundActivity.sourceHistoryActive' : 'common:backgroundActivity.sourceHistoryDone', { source: sourceName })
+  if (item.kind === 'native-index') return translateProduct(active ? 'common:backgroundActivity.nativeIndexActive' : 'common:backgroundActivity.nativeIndexDone')
   if (item.kind === 'source-runtime') return translateProduct(active ? 'common:backgroundActivity.sourceRuntimeActive' : 'common:backgroundActivity.sourceRuntimeDone', { source: sourceName })
   if (item.kind === 'runtime-startup-audit') return translateProduct('common:backgroundActivity.runtimeStartupAudit', { source: sourceName })
   if (item.kind === 'source-assets') return translateProduct(active ? 'common:backgroundActivity.sourceAssetsActive' : 'common:backgroundActivity.sourceAssetsDone', { source: sourceName })
@@ -28,30 +29,21 @@ export function backgroundActivityLabel(
   return translateProduct(active ? 'common:backgroundActivity.databaseActive' : 'common:backgroundActivity.databaseDone')
 }
 
-function recentAgeMs(item: BackgroundActivityItemDto, now: number): number {
-  const time = Date.parse(item.completedAt ?? item.updatedAt)
-  return Number.isFinite(time) ? Math.max(0, now - time) : Number.POSITIVE_INFINITY
-}
-
 export function summarizeBackgroundActivity(
   response: BackgroundActivityResponseDto | null,
-  now = Date.now(),
 ): { tone: BackgroundActivityTone; label: string } {
   const primary = response?.active[0]
   if (primary) {
-    const suffix = response!.active.length > 1 ? translateProduct('common:backgroundActivity.moreActive', { count: response!.active.length - 1 }) : ''
-    return { tone: 'active', label: `${backgroundActivityLabel(primary)}${suffix}` }
+    const suffix = response!.active.length > 1
+      ? translateProduct('common:backgroundActivity.moreActive', { count: response!.active.length - 1 }) : ''
+    return { tone: 'active', label: backgroundActivityLabel(primary) + suffix }
   }
 
-  const recentProblem = response?.recent.find(item =>
-    (item.state === 'failed' || item.state === 'degraded') && recentAgeMs(item, now) <= 10 * 60_000,
-  )
-  if (recentProblem) return { tone: 'warning', label: translateProduct('common:backgroundActivity.taskWarning') }
-
-  const recentSuccess = response?.recent.find(item =>
-    item.state === 'completed' && recentAgeMs(item, now) <= 20_000,
-  )
-  if (recentSuccess) return { tone: 'success', label: translateProduct('common:backgroundActivity.taskSuccess') }
+  // The latest run remains visibly degraded until a newer successful run replaces it.
+  const latest = response?.recent[0]
+  if (latest && (latest.state === 'failed' || latest.state === 'degraded')) {
+    return { tone: 'warning', label: translateProduct('common:backgroundActivity.taskWarning') }
+  }
 
   return { tone: 'idle', label: translateProduct('common:backgroundActivity.idle') }
 }
