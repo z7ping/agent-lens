@@ -332,7 +332,10 @@ export function AgentWorkPage({model,sourceId,installationId,installations}: {
                 {permitted(job.enabled?'cron.pause':'cron.resume') && <Button size="small" onClick={()=>askAction({
                   kind:job.enabled?'cron.pause':'cron.resume',profile:job.profile,jobId:job.id,
                 })}>{t(job.enabled?'work.actions.cron_pause':'work.actions.cron_resume')}</Button>}
-                {permitted('cron.cancel') && <Button size="small" onClick={()=>askAction({
+                {permitted('cron.cancel') && response.executions.some(run=>
+                  run.jobId===job.id && run.profile===job.profile &&
+                  (run.status==='running'||run.status==='claimed'))
+                && <Button size="small" onClick={()=>askAction({
                   kind:'cron.cancel',profile:job.profile,jobId:job.id,
                 })}>{t('work.actions.cron_cancel')}</Button>}
                 {permitted('cron.remove') && <Button size="small" variant="danger" onClick={()=>askAction({

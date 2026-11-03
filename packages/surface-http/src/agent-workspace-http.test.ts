@@ -103,3 +103,49 @@ test('Cron output uses the same source policy boundary as the workspace',async()
     assert.equal(calls,1)
   }finally{await new Promise<void>(resolve=>server.close(()=>resolve()))}
 })
+
+test('mutations require local confirmation and a registered single installation',async()=>{
+  const commands:Array<unknown>=[]
+  let enabled=true
+  const server=createServer(async(req,res)=>{
+    try{
+      await handleAgentWorkspaceRequest(req,res,new URL(req.url??'/','http://localhost'),
+        undefined,{list:()=>[{manifest:{sourceId:'hermes'}}]} as never,
+        {isSourceEnabled:()=>enabled} as never,
+        async (_sourceId,id)=>id==='known'?{root:'/scope/hermes',executable:'/usr/bin/hermes'}:null,
+        undefined,{
+          hermes:async options=>{
+            commands.push(options)
+            return {accepted:true,message:'Native CLI accepted'}
+          },
+        })
+    }catch(error){
+      res.statusCode=error instanceof HttpError?error.statusCode:500
+      res.setHeader('content-type','application/json')
+      res.end(JSON.stringify({message:String(error)}))
+    }
+  })
+  await new Promise<void>(resolve=>server.listen(0,'127.0.0.1',resolve))
+  const base='http://127.0.0.1:'+(server.address() as AddressInfo).port
+  const request=(url:string,confirm:boolean)=>fetch(base+url,{
+    method:'POST',headers:{'content-type':'application/json',
+      ...(confirm?{'x-agent-lens-workspace-action':'confirmed'}:{})},
+    body:JSON.stringify({confirmed:true,action:{kind:'cron.pause',profile:'default',jobId:'job-a'}}),
+  })
+  try{
+    const endpoint='/api/v1/agents/hermes/workspace/action?installationId=known'
+    assert.equal((await request(endpoint,false)).status,403)
+    assert.equal((await request('/api/v1/agents/hermes/workspace/action?installationId=missing',true)).status,404)
+    assert.equal(commands.length,0)
+    const allowed=await request(endpoint,true)
+    assert.equal(allowed.status,200)
+    const response=await allowed.json() as {accepted:boolean;installationId:string}
+    assert.equal(response.accepted,true)
+    assert.equal(response.installationId,'known')
+    assert.deepEqual(commands,[{roots:['/scope/hermes'],executable:'/usr/bin/hermes',
+      action:{kind:'cron.pause',profile:'default',jobId:'job-a'}}])
+    enabled=false
+    assert.equal((await request(endpoint,true)).status,403)
+    assert.equal(commands.length,1)
+  }finally{await new Promise<void>((resolve,reject)=>server.close(e=>e?reject(e):resolve()))}
+})
