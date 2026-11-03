@@ -24,7 +24,7 @@ export interface ClientSnapshot {
   agents: AgentOverviewResponseDto | null
   agentDetailLoadingSourceId: string
   agentDetailError: string
-  agentWorkspace: {sourceId:string;response:AgentWorkspaceResponseDto|null;loading:boolean;error:string}
+  agentWorkspace: {sourceId:string;installationId:string;response:AgentWorkspaceResponseDto|null;loading:boolean;error:string}
   capturePolicy: CapturePolicyResponseDto | null
   agentsLoading: boolean
   agentsError: string
@@ -140,7 +140,7 @@ export abstract class AgentLensModelBase {
     agents: null,
     agentDetailLoadingSourceId: '',
     agentDetailError: '',
-    agentWorkspace: {sourceId:'',response:null,loading:false,error:''},
+    agentWorkspace: {sourceId:'',installationId:'',response:null,loading:false,error:''},
     capturePolicy: null,
     agentsLoading: false,
     agentsError: '',
@@ -493,31 +493,38 @@ export abstract class AgentLensModelBase {
 
   async refreshAgentWorkspace(
     sourceId: string,
-    options: {board?:string;offset?:number;limit?:number;jobId?:string;profile?:string;executionOffset?:number;scheduleOffset?:number;taskId?:string;taskEventOffset?:number;runOffset?:number;commentOffset?:number;projectOffset?:number;boardOffset?:number} = {},
+    options: {installationId:string;board?:string;offset?:number;limit?:number;jobId?:string;profile?:string;executionOffset?:number;scheduleOffset?:number;taskId?:string;taskEventOffset?:number;runOffset?:number;commentOffset?:number;projectOffset?:number;boardOffset?:number} = {},
   ): Promise<void> {
     const generation = ++this.workspaceGeneration
-    this.patch({agentWorkspace:{sourceId,response:this.snapshot.agentWorkspace.sourceId===sourceId
+    const installationId = options.installationId
+    const matches = this.snapshot.agentWorkspace.sourceId === sourceId
+      && this.snapshot.agentWorkspace.installationId === installationId
+    this.patch({agentWorkspace:{sourceId,installationId,response:matches
       ? this.snapshot.agentWorkspace.response : null,loading:true,error:''}})
     try {
       const response = await this.api.agentWorkspace(sourceId,options)
       if (generation === this.workspaceGeneration) this.patch({
-        agentWorkspace:{sourceId,response,loading:false,error:''},
+        agentWorkspace:{sourceId,installationId,response,loading:false,error:''},
       })
     } catch (error) {
       if (generation === this.workspaceGeneration) this.patch({
-        agentWorkspace:{sourceId,response:this.snapshot.agentWorkspace.sourceId===sourceId ? this.snapshot.agentWorkspace.response : null,loading:false,error:error instanceof Error?error.message:String(error)},
+        agentWorkspace:{sourceId,installationId,response:this.snapshot.agentWorkspace.sourceId===sourceId
+          && this.snapshot.agentWorkspace.installationId===installationId
+          ? this.snapshot.agentWorkspace.response : null,loading:false,error:error instanceof Error?error.message:String(error)},
       })
     }
   }
 
-  ensureAgentWorkspace(sourceId: string): Promise<void> {
-    if (!sourceId || this.snapshot.agentWorkspace.sourceId === sourceId &&
-      (this.snapshot.agentWorkspace.response !== null || this.snapshot.agentWorkspace.loading)) return Promise.resolve()
-    return this.refreshAgentWorkspace(sourceId)
+  ensureAgentWorkspace(sourceId: string,installationId: string): Promise<void> {
+    if (!sourceId || !installationId) return Promise.resolve()
+    if (this.snapshot.agentWorkspace.sourceId === sourceId
+      && this.snapshot.agentWorkspace.installationId === installationId
+      && (this.snapshot.agentWorkspace.response !== null || this.snapshot.agentWorkspace.loading)) return Promise.resolve()
+    return this.refreshAgentWorkspace(sourceId,{installationId})
   }
 
   agentWorkOutput(sourceId: string, input:{
-    jobId:string;profile:string;file?:string;offset?:number
+    installationId:string;jobId:string;profile:string;file?:string;offset?:number
   }):Promise<AgentWorkOutputResponseDto> {
     return this.api.agentWorkOutput(sourceId,input)
   }
