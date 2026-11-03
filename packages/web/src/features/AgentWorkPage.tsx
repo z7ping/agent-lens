@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import type { AgentWorkTaskDto, AgentWorkScheduleDto, AgentWorkOutputResponseDto, AgentInstallationOverviewDto, AgentWorkMutationDto } from '@agent-lens/protocol'
@@ -23,6 +23,27 @@ export function AgentWorkPage({model,sourceId,installationId,installations}: {
   const navigate = useNavigate()
   const [workSearchParams,setWorkSearchParams] = useSearchParams()
   const [pendingAction,setPendingAction] = useState<AgentWorkMutationDto|null>(null)
+  const [accessChange,setAccessChange] = useState<boolean|null>(null)
+  const [accessBusy,setAccessBusy] = useState(false)
+  const [accessEnabled,setAccessEnabled] = useState(false)
+  const [accessStatus,setAccessStatus] = useState<'loading'|'ready'|'error'>('loading')
+  const [accessError,setAccessError] = useState('')
+  useEffect(()=>{
+    let valid=true
+    setAccessStatus('loading')
+    setAccessEnabled(false)
+    setAccessError('')
+    setAccessChange(null)
+    setPendingAction(null)
+    if(installationId) {
+      void model.agentWorkWriteAccess(sourceId,installationId).then(value=>{
+        if(valid){setAccessEnabled(value.enabled);setAccessStatus('ready')}
+      }).catch(()=>{
+        if(valid)setAccessStatus('error')
+      })
+    }
+    return ()=>{valid=false}
+  },[model,sourceId,installationId])
   const [actionBusy,setActionBusy] = useState(false)
   const [actionFeedback,setActionFeedback] = useState('')
   const [actionError,setActionError] = useState('')
@@ -195,7 +216,22 @@ export function AgentWorkPage({model,sourceId,installationId,installations}: {
   }
   const selectedSchedule:AgentWorkScheduleDto|undefined = response?.schedules.find(item =>
     item.profile + ':' + item.id === selectedJob)
-  const permitted=(kind:AgentWorkMutationDto['kind'])=>response?.availableActions?.includes(kind) ?? false
+  const permitted=(kind:AgentWorkMutationDto['kind'])=>
+    accessStatus==='ready' && accessEnabled && (response?.availableActions?.includes(kind) ?? false)
+  const changeWriteAccess=async()=>{
+    if(accessChange===null || accessBusy || !installationId)return
+    setAccessBusy(true)
+    setAccessError('')
+    try {
+      const result=await model.setAgentWorkWriteAccess(sourceId,installationId,accessChange)
+      setAccessEnabled(result.enabled)
+      setAccessStatus('ready')
+      setAccessChange(null)
+      await refreshWorkspace({board:response?.selectedBoard,offset,limit:PAGE_SIZE,scheduleOffset,projectOffset})
+    } catch(error) {
+      setAccessError(error instanceof Error?error.message:t('work.writeAccessError'))
+    } finally {setAccessBusy(false)}
+  }
   const askAction=(action:AgentWorkMutationDto)=>{
     setPendingAction(action)
     setActionError('')
@@ -256,6 +292,7 @@ export function AgentWorkPage({model,sourceId,installationId,installations}: {
         <div className="muted-empty compact" role="status">{t('work.loading')}</div>}
       {sessionMessage && <div className="agent-path-error" role="status">{sessionMessage}</div>}
       {actionFeedback && <div className="muted-empty compact" role="status">{actionFeedback}</div>}
+      {accessError && <div className="agent-path-error" role="alert">{accessError}</div>}
       {response && <div className="agent-detail-pane" aria-busy={snapshot.loading}>
         {response.features.filter(f=>f.availability==='error' || f.availability==='partial').map(feature=><div key={feature.id} role="alert" className="agent-path-error">
           {t(feature.availability==='partial'?'work.featurePartial':'work.featureError',{name:feature.id})} {feature.reason}
@@ -263,7 +300,12 @@ export function AgentWorkPage({model,sourceId,installationId,installations}: {
         <div className="agent-primary-section">
           <div className="section-heading-row">
             <h2>{t('work.title')}</h2>
-            <Button size="small" loading={snapshot.loading} onClick={() => void refreshWorkspace({board:response.selectedBoard,offset,limit:PAGE_SIZE,scheduleOffset,projectOffset,...(selectedTask?{taskId:selectedTask,taskEventOffset,runOffset,commentOffset}:{}),...(selectedSchedule?{jobId:selectedSchedule.id,profile:selectedSchedule.profile,executionOffset}:{})})}>{t('work.refresh')}</Button>
+            <div className="runtime-config-row">
+              {response.writeControlAvailable && <Button size="small" variant={accessEnabled?'danger':'default'}
+                disabled={accessStatus!=='ready' || accessBusy || actionBusy}
+                onClick={()=>setAccessChange(!accessEnabled)}>{t(accessStatus==='loading'?'work.writeLoading':accessStatus==='error'?'work.writeAccessError':accessEnabled?'work.writeDisable':'work.writeEnable')}</Button>}
+              <Button size="small" loading={snapshot.loading} onClick={() => void refreshWorkspace({board:response.selectedBoard,offset,limit:PAGE_SIZE,scheduleOffset,projectOffset,...(selectedTask?{taskId:selectedTask,taskEventOffset,runOffset,commentOffset}:{}),...(selectedSchedule?{jobId:selectedSchedule.id,profile:selectedSchedule.profile,executionOffset}:{})})}>{t('work.refresh')}</Button>
+            </div>
           </div>
           <div className="runtime-config-row">
             {boardAvailable && <Button size="small" variant={activePanel==='boards'?'primary':'default'} onClick={() => selectPanel('boards')}>{t('work.boards')}</Button>}
@@ -410,6 +452,17 @@ export function AgentWorkPage({model,sourceId,installationId,installations}: {
           </div>
         </section>}
       </div>}
+      <Dialog open={accessChange!==null} title={t(accessChange?'work.writeEnable':'work.writeDisable')}
+        description={t('work.writeAccessDescription')}
+        onClose={()=>{if(!accessBusy)setAccessChange(null)}} closeDisabled={accessBusy}
+        footer={<div className="runtime-config-row">
+          <Button disabled={accessBusy} onClick={()=>setAccessChange(null)}>{t('work.cancelAction')}</Button>
+          <Button variant={accessChange?'danger':'primary'} loading={accessBusy}
+            onClick={()=>void changeWriteAccess()}>{t('work.confirmAction')}</Button>
+        </div>}>
+        <div className="runtime-config-row"><span>{t('work.installation')}</span><code>{installationId}</code></div>
+        {accessError && <div className="agent-path-error" role="alert">{accessError}</div>}
+      </Dialog>
       <Dialog open={Boolean(pendingAction)} title={pendingAction?t(actionLabelKey(pendingAction.kind)):t('work.title')}
         description={t('work.confirmDescription')} onClose={()=>{if(!actionBusy)setPendingAction(null)}}
         closeDisabled={actionBusy} footer={<div className="runtime-config-row">
