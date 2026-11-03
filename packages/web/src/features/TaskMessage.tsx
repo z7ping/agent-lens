@@ -182,8 +182,9 @@ export function TaskMessage({
       </div>}
       {failure ? <div className="task-message-failure">
         <strong className="task-message-failure-title">{t(errorScope === 'attempt' ? 'message.attemptFailureTitle' : `message.failure.${failure.kind}`)}</strong>
-        {(failure.kind === 'quota' || failure.preview) && <p className="task-message-failure-preview">{
-          failure.kind === 'quota' ? t('message.failure.quotaHint') : failure.preview
+        {((failure.kind === 'quota' && errorScope !== 'attempt') || failure.preview) && <p className="task-message-failure-preview">{
+          failure.kind === 'quota' && errorScope !== 'attempt'
+            ? t('message.failure.quotaHint') : failure.preview
         }</p>}
         <Disclosure
           className="task-message-failure-details"
