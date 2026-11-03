@@ -28,6 +28,7 @@ export function AgentWorkPage({model,sourceId,installationId,installations}: {
   const [accessBusy,setAccessBusy] = useState(false)
   const [accessEnabled,setAccessEnabled] = useState(false)
   const [accessStatus,setAccessStatus] = useState<'loading'|'ready'|'error'>('loading')
+  const [accessRetry,setAccessRetry] = useState(0)
   const [accessError,setAccessError] = useState('')
   useEffect(()=>{
     scopeGeneration.current++
@@ -46,7 +47,7 @@ export function AgentWorkPage({model,sourceId,installationId,installations}: {
       })
     }
     return ()=>{valid=false}
-  },[model,sourceId,installationId])
+  },[model,sourceId,installationId,accessRetry])
   const [actionBusy,setActionBusy] = useState(false)
   const [actionFeedback,setActionFeedback] = useState('')
   const [receiptId,setReceiptId] = useState<string|null>(null)
@@ -341,8 +342,8 @@ export function AgentWorkPage({model,sourceId,installationId,installations}: {
             <h2>{t('work.title')}</h2>
             <div className="runtime-config-row">
               {response.writeControlAvailable && <Button size="small" variant={accessEnabled?'danger':'default'}
-                disabled={accessStatus!=='ready' || accessBusy || actionBusy}
-                onClick={()=>setAccessChange(!accessEnabled)}>{t(accessStatus==='loading'?'work.writeLoading':accessStatus==='error'?'work.writeAccessError':accessEnabled?'work.writeDisable':'work.writeEnable')}</Button>}
+                disabled={accessStatus==='loading' || accessBusy || actionBusy}
+                onClick={()=>accessStatus==='error'?setAccessRetry(value=>value+1):setAccessChange(!accessEnabled)}>{t(accessStatus==='loading'?'work.writeLoading':accessStatus==='error'?'work.retry':accessEnabled?'work.writeDisable':'work.writeEnable')}</Button>}
               <Button size="small" loading={snapshot.loading} onClick={() => void refreshWorkspace({board:response.selectedBoard,offset,limit:PAGE_SIZE,scheduleOffset,projectOffset,...(selectedTask?{taskId:selectedTask,taskEventOffset,runOffset,commentOffset}:{}),...(selectedSchedule?{jobId:selectedSchedule.id,profile:selectedSchedule.profile,executionOffset}:{})})}>{t('work.refresh')}</Button>
             </div>
           </div>
