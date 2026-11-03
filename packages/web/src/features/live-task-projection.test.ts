@@ -655,11 +655,13 @@ test('failed Pi model attempt remains visible while its logical run continues st
   const continuing = reduceLiveTaskEvent(attempt, event(2, {
     type: 'text.start', messageId: 'retry-response', text: 'Checking files',
   }))
-  assert.equal(continuing.at(-1)?.kind === 'message' ? continuing.at(-1)?.streaming : null, true)
+  const streamed = continuing.at(-1)
+  assert.equal(streamed?.kind === 'message' ? streamed.streaming : null, true)
   const final = reduceLiveTaskEvent(continuing, event(3, {
     type: 'text.end', messageId: 'retry-response', text: 'Found the configuration',
   }))
-  assert.equal(final.at(-1)?.kind === 'message' ? final.at(-1)?.text : null, 'Found the configuration')
+  const resumed = final.at(-1)
+  assert.equal(resumed?.kind === 'message' ? resumed.text : null, 'Found the configuration')
   assert.equal(final.filter(item => item.kind === 'message' && item.errorScope === 'attempt').length, 1)
   assert.equal(final.some(item => item.kind === 'message' && item.error && !item.errorScope), false)
 
@@ -673,9 +675,8 @@ test('failed Pi model attempt remains visible while its logical run continues st
   assert.equal(fromHistory?.kind === 'message' ? fromHistory.errorScope : null, 'attempt')
   const merged = mergeLiveActiveProjectionItems(attempt, native)
   assert.equal(merged.filter(item => item.kind === 'message' && item.error).length, 1)
-  assert.equal(merged.find(item => item.kind === 'message' && item.error)?.kind === 'message'
-    ? (merged.find(item => item.kind === 'message' && item.error) as Extract<typeof merged[number], { kind: 'message' }>).errorScope : null,
-  'attempt')
+  const reconciledFailure = merged.find(item => item.kind === 'message' && item.error)
+  assert.equal(reconciledFailure?.kind === 'message' ? reconciledFailure.errorScope : null, 'attempt')
   assert.ok(merged.some(item => item.kind === 'message' && !item.error
     && item.role === 'assistant' && item.text === 'Found the configuration'))
 })
