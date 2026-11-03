@@ -310,7 +310,7 @@ test('shared Tooltip owns floating hints and converts native title without dupli
   const tooltip = readFileSync(new URL('./TooltipProvider.tsx', import.meta.url), 'utf8')
   const tooltipCss = readFileSync(new URL('./tooltip.css', import.meta.url), 'utf8')
   const main = readFileSync(new URL('../../main.tsx', import.meta.url), 'utf8')
-  const lock = JSON.parse(readFileSync(new URL('../../../../package-lock.json', import.meta.url), 'utf8'))
+  const lock = JSON.parse(readFileSync(new URL('../../../../../package-lock.json', import.meta.url), 'utf8'))
   assert.match(source, /data-ui-tooltip=\{title \|\| undefined\}/)
   assert.match(index, /export \{ TooltipProvider \} from '\.\/TooltipProvider'/)
   assert.match(main, /<TooltipProvider><App model=\{clientModel\}\/><\/TooltipProvider>/)
