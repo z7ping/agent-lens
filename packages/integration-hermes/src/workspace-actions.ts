@@ -108,6 +108,8 @@ export function hermesWorkMutationArgv(action:AgentWorkMutationDto):string[] {
 type CronDispatchReceipt = {
   id:string
   root:string
+  sourceId:string
+  installationId:string
   profile:string
   jobId:string
   status:'running'|'accepted'|'failed'|'unknown'
@@ -133,7 +135,7 @@ function pruneDispatchReceipts():void {
 }
 
 /** A receipt is a CLI handoff acknowledgement, NEVER the native job execution result. */
-export function readHermesCronRunReceipt(options:{roots:string[];receiptId:string}):{
+export function readHermesCronRunReceipt(options:{roots:string[];sourceId:string;installationId:string;receiptId:string}):{
   receiptId:string
   status:CronDispatchReceipt['status']
   message:string
@@ -141,11 +143,14 @@ export function readHermesCronRunReceipt(options:{roots:string[];receiptId:strin
   if(options.roots.length!==1 || !isAbsolute(options.roots[0]??''))return null
   pruneDispatchReceipts()
   const receipt=dispatchReceipts.get(options.receiptId)
-  if(!receipt || receipt.root!==resolve(options.roots[0]!))return null
+  if(!receipt || receipt.root!==resolve(options.roots[0]!)
+    || receipt.sourceId!==options.sourceId || receipt.installationId!==options.installationId)return null
   return {receiptId:receipt.id,status:receipt.status,message:receipt.message}
 }
 
 async function dispatchHermesCronRun(options:{
+  sourceId:string
+  installationId:string
   root:string
   executable:string
   env:NodeJS.ProcessEnv
@@ -153,7 +158,7 @@ async function dispatchHermesCronRun(options:{
   jobId:string
 }):Promise<{accepted:boolean;pending?:boolean;receiptId?:string;message:string}> {
   pruneDispatchReceipts()
-  const key=JSON.stringify([options.root,options.profile,options.jobId])
+  const key=JSON.stringify([options.sourceId,options.installationId,options.root,options.profile,options.jobId])
   const duplicateId=activeDispatches.get(key)
   if(duplicateId){
     return {accepted:false,pending:true,receiptId:duplicateId,
@@ -163,7 +168,8 @@ async function dispatchHermesCronRun(options:{
     return {accepted:false,message:'Too many Hermes Cron CLI runs are pending.'}
   }
   const receipt:CronDispatchReceipt={
-    id:randomUUID(),root:options.root,profile:options.profile,jobId:options.jobId,
+    id:randomUUID(),root:options.root,sourceId:options.sourceId,
+    installationId:options.installationId,profile:options.profile,jobId:options.jobId,
     status:'running',message:'Hermes Cron CLI is running; native execution is not yet confirmed.',
     updatedAt:Date.now(),
   }
@@ -212,10 +218,13 @@ async function dispatchHermesCronRun(options:{
 }
 
 export async function mutateHermesWorkspace(options:{
+  sourceId:string
+  installationId:string
   roots:string[]
   action:AgentWorkMutationDto
   executable?:string
 }):Promise<{accepted:boolean;pending?:boolean;receiptId?:string;message:string}>{
+  if(options.sourceId!=='hermes'||!options.installationId)throw new Error('Verified Hermes scope is required')
   if(options.roots.length!==1||!isAbsolute(options.roots[0]??''))throw new Error('Verified Hermes installation root is required')
   const root=resolve(options.roots[0]!)
   let args:string[]
@@ -232,6 +241,7 @@ export async function mutateHermesWorkspace(options:{
   if(executable.includes('\0'))throw new Error('Invalid Hermes executable')
   if(options.action.kind==='cron.run') {
     return dispatchHermesCronRun({root,executable,env,
+      sourceId:options.sourceId,installationId:options.installationId,
       profile:identity(options.action.profile,'profile'),
       jobId:identity(options.action.jobId,'job',TASK_ID)})
   }
