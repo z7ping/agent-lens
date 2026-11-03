@@ -65,11 +65,13 @@ async function boardList(root: string): Promise<Array<{id:string; path:string; m
   }
   return boards
 }
-async function readBoards(root: string, requestedBoard: string | undefined, offset: number, limit: number, taskId?: string, taskEventOffset=0,runOffset=0,commentOffset=0) {
+async function readBoards(root: string, requestedBoard: string | undefined, offset: number, limit: number, taskId?: string, taskEventOffset=0,runOffset=0,commentOffset=0,boardOffset=0) {
   const boards: AgentWorkBoardDto[] = []
   let tasks: AgentWorkTaskDto[] = []
   let runs: AgentWorkRunDto[] = []
   let tasksHasMore = false
+  let boardsTotal = 0
+  let boardsHasMore = false
   let runsHasMore = false
   let taskCommentsHasMore = false
   let selectedBoard: string | undefined
@@ -78,8 +80,13 @@ async function readBoards(root: string, requestedBoard: string | undefined, offs
   let taskComments: AgentWorkCommentDto[] = []
   let taskEvents: AgentWorkEventDto[] = []
   let taskEventsHasMore = false
-  for (const board of await boardList(root)) {
-    if (!await fileExists(board.path)) continue
+  const discoveredBoards = await boardList(root)
+  const availableBoards = []
+  for (const board of discoveredBoards) if (await fileExists(board.path)) availableBoards.push(board)
+  boardsTotal = availableBoards.length
+  const boardPage = availableBoards.slice(boardOffset,boardOffset+24)
+  boardsHasMore = boardOffset+boardPage.length<boardsTotal
+  for (const board of boardPage) {
     const db = openReadOnly(board.path)
     try {
       const tc = columns(db, 'tasks')
@@ -188,7 +195,7 @@ async function readBoards(root: string, requestedBoard: string | undefined, offs
       }
     } finally { db.close() }
   }
-  return { boards, selectedBoard, tasks, runs, tasksHasMore,
+  return { boards, boardsTotal, boardsHasMore, selectedBoard, tasks, runs, tasksHasMore,
     ...(detailTaskId?{detailTaskId}:{}),taskLinks,taskComments,taskEvents,taskEventsHasMore,runsHasMore,taskCommentsHasMore }
 }
 async function readProjects(root: string, offset=0): Promise<{
@@ -303,6 +310,7 @@ export async function readHermesWorkspace(options: {
   runOffset?: number
   commentOffset?: number
   projectOffset?: number
+  boardOffset?: number
 } = {}): Promise<AgentWorkspaceResponseDto> {
   const roots = options.roots ?? resolveHermesConfigRoots()
   const features: AgentWorkFeatureDto[] = [
@@ -310,7 +318,7 @@ export async function readHermesWorkspace(options: {
     {id:'schedules',availability:'unknown'},
     {id:'projects',availability:'unknown'},
   ]
-  const result: Workspace = {features,projects:[],projectsTotal:0,projectsHasMore:false,boards:[],tasks:[],runs:[],runsHasMore:false,taskCommentsHasMore:false,taskLinks:[],taskComments:[],taskEvents:[],taskEventsHasMore:false,tasksHasMore:false,schedules:[],schedulesHasMore:false,schedulesTotal:0,executions:[],executionsHasMore:false}
+  const result: Workspace = {features,projects:[],projectsTotal:0,projectsHasMore:false,boards:[],boardsTotal:0,boardsHasMore:false,tasks:[],runs:[],runsHasMore:false,taskCommentsHasMore:false,taskLinks:[],taskComments:[],taskEvents:[],taskEventsHasMore:false,tasksHasMore:false,schedules:[],schedulesHasMore:false,schedulesTotal:0,executions:[],executionsHasMore:false}
   const limit = Math.min(100,Math.max(1,Math.floor(options.limit ?? 40)))
   const offset = Math.max(0,Math.min(100000,Math.floor(options.offset ?? 0)))
   const candidates = [...new Set(roots.map(root => basename(dirname(root)) === 'profiles' ? dirname(dirname(root)) : root))]
@@ -319,7 +327,8 @@ export async function readHermesWorkspace(options: {
       const info = await readBoards(root,options.board,offset,limit,options.taskId,
         Math.min(100000,Math.max(0,options.taskEventOffset??0)),
         Math.min(100000,Math.max(0,options.runOffset??0)),
-        Math.min(100000,Math.max(0,options.commentOffset??0)))
+        Math.min(100000,Math.max(0,options.commentOffset??0)),
+        Math.min(100000,Math.max(0,options.boardOffset??0)))
       if (info.boards.length) {
         Object.assign(result,info)
         features[0] = {id:'boards',availability:'available'}

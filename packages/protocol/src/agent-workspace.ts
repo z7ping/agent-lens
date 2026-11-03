@@ -99,6 +99,8 @@ export interface AgentWorkspaceResponseDto {
   projectsHasMore: boolean
   projectsTotal: number
   boards: AgentWorkBoardDto[]
+  boardsTotal:number
+  boardsHasMore:boolean
   selectedBoard?: string
   tasks: AgentWorkTaskDto[]
   runs: AgentWorkRunDto[]
