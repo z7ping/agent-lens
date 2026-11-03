@@ -368,7 +368,6 @@
 /* Failure facts remain separate from generated Markdown, with source evidence behind a shared disclosure. */
 .task-surface .task-message-error-status { display: inline-flex; align-items: center; gap: 5px; color: var(--al-danger); font-weight: 650; }
 /* A failed model attempt may be followed by a native retry; keep it distinct from terminal failure. */
-.task-surface .task-message-attempt-error .task-message-error-status,
 .task-surface .task-message-attempt-error .task-message-failure-title { color: var(--al-warning); }
 .task-surface .task-message-failure { display: flex; min-width: 0; flex-direction: column; align-items: stretch; gap: 4px; }
 .task-surface .task-message-failure-title { font-size: var(--text-task-body); line-height: 1.5; color: var(--al-ink); font-weight: 650; }
