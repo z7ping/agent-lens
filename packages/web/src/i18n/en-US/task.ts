@@ -42,8 +42,9 @@ export const englishTaskMessages: LocaleMessagesDto = {
       workspace: 'Workspace',
     },
     message: {
-      you: 'You',
+      you: 'Me',
       agent: 'Agent',
+      messageActions: 'Message actions',
       waitingResponse: 'Waiting for the agent to respond',
       requestFailed: 'Request failed',
       failure: {
