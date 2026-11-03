@@ -3,6 +3,11 @@ import type { LocaleMessagesDto } from '@agent-lens/protocol'
 export const englishAgentsMessages: LocaleMessagesDto = {
   agents: {
     work: {
+      writeEnable: 'Enable writes',
+      writeDisable: 'Disable writes',
+      writeLoading: 'Checking write access…',
+      writeAccessError: 'Workspace write access is unavailable',
+      writeAccessDescription: 'Only this installation is affected. When enabled, confirmed actions can modify native boards, tasks and scheduled jobs.',
       confirmDescription: 'This changes native Hermes data. Confirm the target and scope.',
       confirmAction: 'Confirm',
       cancelAction: 'Cancel',
