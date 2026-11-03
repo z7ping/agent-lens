@@ -3,6 +3,7 @@ import test from 'node:test'
 import type { PiLiveRecoveryRecord, PiLiveRecoveryStore } from './recovery-store'
 import type { PiLiveRuntimeState, PiLiveStartInput } from './types'
 import { DefaultPiLiveService } from './service'
+import { normalizePiLiveEvent } from './adapter'
 import type { PiLiveStartupAuditSnapshot } from './startup-audit'
 import type { PiRuntimeHandle, PiRuntimeHost } from './worker-host'
 
@@ -498,4 +499,59 @@ test('agent_end 不会提前结束 Logical Run，只有 agent_settled 才回到 
 
   unsubscribe()
   await service.terminate(started.runtimeSessionId)
+})
+
+test('Pi latest failed attempt determines terminal outcome, successful retry supersedes failure', async () => {
+  let emit: ((event: Record<string, unknown>) => void) | undefined
+  const service = new DefaultPiLiveService({
+    start: async (id, _input, _signal, onEvent) => {
+      emit = onEvent
+      return handle(id, '/sessions/model-retry.jsonl')
+    },
+  })
+  const started = await service.start({ cwd: '/workspace' })
+  const events: Array<Record<string, unknown>> = []
+  const unsubscribe = service.subscribe(started.runtimeSessionId, envelope => events.push(envelope.event))
+  try {
+    for (let index = 0; index < 30; index += 1) {
+      if ((await service.state(started.runtimeSessionId)).status === 'ready') break
+      await new Promise(resolve => setTimeout(resolve, 0))
+    }
+    assert.equal((await service.state(started.runtimeSessionId)).status, 'ready')
+
+    const attempt = (reason: 'error' | 'stop', id: string) => {
+      emit?.({ type: 'message_start', message: { id, role: 'assistant' } })
+      emit?.({ type: 'message_end', message: { id, role: 'assistant', stopReason: reason,
+        ...(reason === 'error' ? { errorMessage: 'Connection error.' } : {}) } })
+    }
+    const settle = (aborted = false) => {
+      emit?.({ type: 'agent_settled', ...(aborted ? { aborted: true } : {}) })
+      const value = events.filter(event => event.type === 'agent_settled').at(-1)
+      assert.ok(value)
+      return normalizePiLiveEvent(value)
+    }
+
+    emit?.({ type: 'agent_start' })
+    attempt('error', 'retry-1')
+    emit?.({ type: 'agent_end' })
+    emit?.({ type: 'agent_start' })
+    attempt('stop', 'retry-2')
+    assert.deepEqual(settle(), { type: 'completed', status: 'completed' })
+
+    emit?.({ type: 'agent_start' })
+    attempt('error', 'failed-final')
+    assert.deepEqual(settle(), { type: 'completed', status: 'failed' })
+
+    // No error state can leak into a later, successful user turn.
+    emit?.({ type: 'agent_start' })
+    attempt('stop', 'next-turn')
+    assert.deepEqual(settle(), { type: 'completed', status: 'completed' })
+
+    emit?.({ type: 'agent_start' })
+    attempt('error', 'aborted-final')
+    assert.deepEqual(settle(true), { type: 'completed', status: 'cancelled' })
+  } finally {
+    unsubscribe()
+    await service.terminate(started.runtimeSessionId)
+  }
 })
