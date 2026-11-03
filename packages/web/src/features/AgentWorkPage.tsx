@@ -106,7 +106,7 @@ export function AgentWorkPage({model,sourceId}: {model:AgentLensClientModel;sour
                 {item.assignee && <span className="asset-scope">{item.assignee}</span>}
                 {item.projectId && <span className="asset-scope">{item.projectId}</span>}
               </div>
-              <Button size="small" variant="quiet" onClick={()=>openTask(item) aria-expanded={selectedTask===item.id}>{item.title}</Button>
+              <Button size="small" variant="quiet" onClick={()=>openTask(item)} aria-expanded={selectedTask===item.id}>{item.title}</Button>
               {item.lastError && <div className="agent-path-error">{item.lastError}</div>}
               {selectedTask===item.id && <TaskRuns task={item} runs={response.runs.filter(run=>run.taskId===item.id)}
                 links={response.detailTaskId===item.id?response.taskLinks:[]}
