@@ -221,7 +221,7 @@ export class AgentLensApi {
     return requestJson<AgentWorkOutputResponseDto>('/api/v1/agents/'+encodeURIComponent(sourceId)+'/workspace/output?'+params.toString())
   }
 
-  agentWorkspace(sourceId: string, options: {board?:string;offset?:number;limit?:number;jobId?:string;profile?:string;executionOffset?:number;scheduleOffset?:number;taskId?:string;taskEventOffset?:number;runOffset?:number;commentOffset?:number} = {}): Promise<AgentWorkspaceResponseDto> {
+  agentWorkspace(sourceId: string, options: {board?:string;offset?:number;limit?:number;jobId?:string;profile?:string;executionOffset?:number;scheduleOffset?:number;taskId?:string;taskEventOffset?:number;runOffset?:number;commentOffset?:number;projectOffset?:number} = {}): Promise<AgentWorkspaceResponseDto> {
     const params = new URLSearchParams()
     if (options.board) params.set('board', options.board)
     if (options.offset) params.set('offset', String(options.offset))
@@ -233,6 +233,7 @@ export class AgentLensApi {
     if (options.taskEventOffset) params.set('taskEventOffset',String(options.taskEventOffset))
     if (options.runOffset) params.set('runOffset',String(options.runOffset))
     if (options.commentOffset) params.set('commentOffset',String(options.commentOffset))
+    if (options.projectOffset) params.set('projectOffset',String(options.projectOffset))
     const suffix = params.size ? '?' + params.toString() : ''
     return requestJson<AgentWorkspaceResponseDto>('/api/v1/agents/' + encodeURIComponent(sourceId) + '/workspace' + suffix)
   }

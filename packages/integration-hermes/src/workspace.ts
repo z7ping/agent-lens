@@ -4,7 +4,7 @@ import { DatabaseSync } from 'node:sqlite'
 import { resolveHermesConfigRoots } from '@agent-lens/runtime-cordis'
 import { AGENT_LENS_PROTOCOL_VERSION, type AgentWorkspaceResponseDto, type AgentWorkBoardDto, type AgentWorkTaskDto, type AgentWorkRunDto, type AgentWorkScheduleDto, type AgentWorkExecutionDto, type AgentWorkFeatureDto, type AgentWorkProjectDto, type AgentWorkLinkDto, type AgentWorkCommentDto, type AgentWorkEventDto } from '@agent-lens/protocol'
 
-const MAX_BOARDS = 24
+const PROJECT_PAGE_SIZE = 100
 const MAX_SCHEDULES = 200
 const MAX_EXECUTIONS = 200
 const MAX_JOB_BYTES = 2 * 1024 * 1024
@@ -58,7 +58,6 @@ function select(columns: Set<string>, names: readonly string[]): string {
 async function boardList(root: string): Promise<Array<{id:string; path:string; metadata:string}>> {
   const boards = [{ id: 'default', path: join(root, 'kanban.db'), metadata: join(root, 'kanban', 'boards', 'default', 'board.json') }]
   for (const slug of (await dirs(join(root, 'kanban', 'boards'))).filter(slug => slug !== 'default')) {
-    if (boards.length >= MAX_BOARDS) break
     const metadata = join(root, 'kanban', 'boards', slug, 'board.json')
     // Hermes treats board.json, not a leftover kanban.db, as the board identity marker.
     if (!await fileExists(metadata)) continue
@@ -192,39 +191,40 @@ async function readBoards(root: string, requestedBoard: string | undefined, offs
   return { boards, selectedBoard, tasks, runs, tasksHasMore,
     ...(detailTaskId?{detailTaskId}:{}),taskLinks,taskComments,taskEvents,taskEventsHasMore,runsHasMore,taskCommentsHasMore }
 }
-async function readProjects(root:string,offset=0):Promise<{
-  discovered:boolean; projects:AgentWorkProjectDto[];projectsTotal:number;projectsHasMore:boolean
+async function readProjects(root: string, offset=0): Promise<{
+  discovered:boolean
+  projects:AgentWorkProjectDto[]
+  projectsHasMore:boolean
+  projectsTotal:number
 }> {
-  const profiles=[{name:'default',home:root},
-    ...(await dirs(join(root,'profiles'))).map(name=>({name,home:join(root,'profiles',name)}))]
+  const profiles = [{name:'default',home:root}, ...(await dirs(join(root,'profiles'))).map(name=>({name,home:join(root,'profiles',name)}))]
   const projects:AgentWorkProjectDto[]=[]
   let discovered=false
   let projectsTotal=0
-  for(const profile of profiles) {
+  for (const profile of profiles) {
     const path=join(profile.home,'projects.db')
-    if(!await fileExists(path)) continue
+    if (!await fileExists(path)) continue
     discovered=true
     const db=openReadOnly(path)
     try {
       const pc=columns(db,'projects')
-      if(!pc.has('id')||!pc.has('slug')||!pc.has('name')) throw new Error('Unsupported Hermes projects schema')
-      const count=Number((db.prepare('SELECT COUNT(*) AS total FROM projects').get() as {total:number}).total)
+      if (!pc.has('id') || !pc.has('slug') || !pc.has('name')) throw new Error('Unsupported Hermes projects schema')
+      const count=Number((db.prepare('SELECT COUNT(*) AS n FROM projects').get() as {n:number}).n)
       const localOffset=Math.max(0,offset-projectsTotal)
-      if(projects.length<50 && localOffset<count) {
-        const rows=db.prepare('SELECT '+select(pc,['id','slug','name','archived','board_slug','primary_path'])+
-          ' FROM projects ORDER BY name ASC,id ASC LIMIT ? OFFSET ?')
-          .all(50-projects.length,localOffset) as Record<string,unknown>[]
-        for(const row of rows) projects.push({
-          id:String(row.id),profile:profile.name,slug:String(row.slug),name:String(row.name),
-          archived:Number(row.archived??0)!==0,
-          ...(text(row.board_slug)?{boardId:text(row.board_slug)}:{}),
-          ...(text(row.primary_path)?{primaryPath:text(row.primary_path)}:{}),
-        })
-      }
       projectsTotal+=count
+      const remaining=PROJECT_PAGE_SIZE-projects.length
+      if (remaining<=0 || localOffset>=count) continue
+      const rows=db.prepare('SELECT '+select(pc,['id','slug','name','archived','board_slug','primary_path'])+
+        ' FROM projects ORDER BY name ASC, id ASC LIMIT ? OFFSET ?').all(remaining,localOffset) as Record<string,unknown>[]
+      for (const row of rows) projects.push({
+        id:String(row.id),profile:profile.name,slug:String(row.slug),name:String(row.name),
+        archived:Number(row.archived??0)!==0,
+        ...(text(row.board_slug)?{boardId:text(row.board_slug)}:{}),
+        ...(text(row.primary_path)?{primaryPath:text(row.primary_path)}:{}),
+      })
     } finally {db.close()}
   }
-  return {discovered,projects,projectsTotal,projectsHasMore:offset+projects.length<projectsTotal}
+  return {discovered,projects,projectsTotal,projectsHasMore:projectsTotal>offset+projects.length}
 }
 async function readSchedules(root: string, jobId?:string, profileName?:string, executionOffset=0, scheduleOffset=0) {
   const profiles = [{name:'default',home:root}, ...(await dirs(join(root,'profiles'))).map(name => ({name, home:join(root,'profiles',name)}))]
@@ -352,6 +352,8 @@ export async function readHermesWorkspace(options: {
       const info = await readProjects(root,Math.min(100000,Math.max(0,options.projectOffset??0)))
       if (info.discovered) {
         result.projects = info.projects
+        result.projectsHasMore = info.projectsHasMore
+        result.projectsTotal = info.projectsTotal
         result.projectsTotal=info.projectsTotal
         result.projectsHasMore=info.projectsHasMore
         features[2] = {id:'projects',availability:'available'}

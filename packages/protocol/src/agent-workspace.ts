@@ -96,6 +96,8 @@ export interface AgentWorkspaceResponseDto {
   sourceId: string
   features: AgentWorkFeatureDto[]
   projects: AgentWorkProjectDto[]
+  projectsHasMore: boolean
+  projectsTotal: number
   projectsTotal:number
   projectsHasMore:boolean
   boards: AgentWorkBoardDto[]

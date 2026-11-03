@@ -12,7 +12,7 @@ test('workspace handler validates source, policy and bounded read options', asyn
   const workspace:AgentWorkspaceResponseDto={
     sourceId:'hermes',
     features:[{id:'boards',availability:'available'}],
-    projects:[],boards:[],tasks:[],runs:[],runsHasMore:false,taskCommentsHasMore:false,taskLinks:[],taskComments:[],taskEvents:[],taskEventsHasMore:false,tasksHasMore:false,
+    projects:[],projectsHasMore:false,projectsTotal:0,boards:[],tasks:[],runs:[],runsHasMore:false,taskCommentsHasMore:false,taskLinks:[],taskComments:[],taskEvents:[],taskEventsHasMore:false,tasksHasMore:false,
     schedules:[],schedulesHasMore:false,schedulesTotal:0,
     executions:[],executionsHasMore:false,
     meta:{protocolVersion:AGENT_LENS_PROTOCOL_VERSION,generatedAt:'2026-11-03T00:00:00Z'},
@@ -38,10 +38,11 @@ test('workspace handler validates source, policy and bounded read options', asyn
     const valid=await fetch(base+'/api/v1/agents/hermes/workspace?board=team&offset=10&limit=20')
     assert.equal(valid.status,200)
     assert.deepEqual((await valid.json() as AgentWorkspaceResponseDto).features,workspace.features)
-    assert.deepEqual(options,[{board:'team',offset:10,limit:20,scheduleOffset:0}])
+    assert.deepEqual(options,[{board:'team',offset:10,limit:20,scheduleOffset:0,projectOffset:0}])
     assert.equal((await fetch(base+'/api/v1/agents/hermes/workspace?board=..')).status,400)
     assert.equal((await fetch(base+'/api/v1/agents/hermes/workspace?limit=101')).status,400)
     assert.equal((await fetch(base+'/api/v1/agents/hermes/workspace?runOffset=../../')).status,400)
+    assert.equal((await fetch(base+'/api/v1/agents/hermes/workspace?projectOffset=-1')).status,400)
     assert.equal((await fetch(base+'/api/v1/agents/hermes/workspace?jobId=bad')).status,400)
     assert.equal((await fetch(base+'/api/v1/agents/hermes/workspace?taskId=../')).status,400)
     assert.equal((await fetch(base+'/api/v1/agents/hermes/workspace?profile=..&jobId=job')).status,400)

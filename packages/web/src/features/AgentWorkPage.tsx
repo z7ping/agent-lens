@@ -66,6 +66,7 @@ export function AgentWorkPage({model,sourceId}: {model:AgentLensClientModel;sour
   const [taskEventOffset,setTaskEventOffset] = useState(0)
   const [runOffset,setRunOffset] = useState(0)
   const [commentOffset,setCommentOffset] = useState(0)
+  const [projectOffset,setProjectOffset] = useState(0)
   const loadBoard = (board: string, nextOffset = 0) => {
     setSelectedTask(null)
     setTaskEventOffset(0)
@@ -105,6 +106,14 @@ export function AgentWorkPage({model,sourceId}: {model:AgentLensClientModel;sour
     void model.refreshAgentWorkspace(sourceId,{
       board:response.selectedBoard,offset,limit:PAGE_SIZE,scheduleOffset,taskId:selectedTask,
       taskEventOffset,runOffset,commentOffset:nextOffset,
+    })
+  }
+  const nextProjects=(nextOffset:number)=>{
+    setProjectOffset(nextOffset)
+    void model.refreshAgentWorkspace(sourceId,{
+      board:response?.selectedBoard,offset,limit:PAGE_SIZE,scheduleOffset,projectOffset:nextOffset,
+      ...(selectedTask?{taskId:selectedTask,taskEventOffset,runOffset,commentOffset}:{}),
+      ...(selectedSchedule?{jobId:selectedSchedule.id,profile:selectedSchedule.profile,executionOffset}:{}),
     })
   }
   const boardAvailable = response?.features.some(f => f.id === 'boards' && f.availability === 'available') ?? false
@@ -158,7 +167,7 @@ export function AgentWorkPage({model,sourceId}: {model:AgentLensClientModel;sour
         <div className="agent-primary-section">
           <div className="section-heading-row">
             <h2>{t('work.title')}</h2>
-            <Button size="small" loading={snapshot.loading} onClick={() => void model.refreshAgentWorkspace(sourceId,{board:response.selectedBoard,offset,limit:PAGE_SIZE,scheduleOffset,...(selectedTask?{taskId:selectedTask,taskEventOffset,runOffset,commentOffset}:{}),...(selectedSchedule?{jobId:selectedSchedule.id,profile:selectedSchedule.profile,executionOffset}:{})})}>{t('work.refresh')}</Button>
+            <Button size="small" loading={snapshot.loading} onClick={() => void model.refreshAgentWorkspace(sourceId,{board:response.selectedBoard,offset,limit:PAGE_SIZE,scheduleOffset,projectOffset,...(selectedTask?{taskId:selectedTask,taskEventOffset,runOffset,commentOffset}:{}),...(selectedSchedule?{jobId:selectedSchedule.id,profile:selectedSchedule.profile,executionOffset}:{})})}>{t('work.refresh')}</Button>
           </div>
           <div className="runtime-config-row">
             {boardAvailable && <Button size="small" variant={activePanel==='boards'?'primary':'default'} onClick={() => setPanel('boards')}>{t('work.boards')}</Button>}
@@ -244,12 +253,18 @@ export function AgentWorkPage({model,sourceId}: {model:AgentLensClientModel;sour
           </div>)}
         </section>}
         {projectsAvailable && <section className="agent-primary-section">
-          <div className="section-heading-row"><h3>{t('work.projects')}</h3><span className="section-total">{response.projects.length}</span></div>
+          <div className="section-heading-row"><h3>{t('work.projects')}</h3><span className="section-total">{response.projectsTotal}</span></div>
           {response.projects.map(project=><div className="runtime-config-row" key={project.profile+':'+project.id}>
             <span>{project.name}</span><span className="asset-scope">{project.profile}</span>
             {project.boardId && <span className="asset-scope">{project.boardId}</span>}
             {project.primaryPath && <code>{project.primaryPath}</code>}
           </div>)}
+          <div className="runtime-config-row">
+            {projectOffset>0 && <Button size="small" disabled={snapshot.loading}
+              onClick={()=>nextProjects(Math.max(0,projectOffset-100))}>{t('work.previous')}</Button>}
+            {response.projectsHasMore && <Button size="small" disabled={snapshot.loading}
+              onClick={()=>nextProjects(projectOffset+100)}>{t('work.next')}</Button>}
+          </div>
         </section>}
       </div>}
     </div>
