@@ -218,7 +218,7 @@ export class AgentLensApi {
     const params = new URLSearchParams({jobId: input.jobId, profile: input.profile})
     if (input.file) params.set('file',input.file)
     if (input.offset) params.set('offset',String(input.offset))
-    return requestJson<AgentWorkOutputResponseDto>('/api/v1/agents/'+encodeURIComponent(sourceId)+'/workspace/output?'+params)
+    return requestJson<AgentWorkOutputResponseDto>('/api/v1/agents/'+encodeURIComponent(sourceId)+'/workspace/output?'+params.toString())
   }
 
   agentWorkspace(sourceId: string, options: {board?:string;offset?:number;limit?:number;jobId?:string;profile?:string;executionOffset?:number;scheduleOffset?:number;taskId?:string;taskEventOffset?:number;runOffset?:number;commentOffset?:number} = {}): Promise<AgentWorkspaceResponseDto> {
@@ -233,7 +233,7 @@ export class AgentLensApi {
     if (options.taskEventOffset) params.set('taskEventOffset',String(options.taskEventOffset))
     if (options.runOffset) params.set('runOffset',String(options.runOffset))
     if (options.commentOffset) params.set('commentOffset',String(options.commentOffset))
-    const suffix = params.size ? '?' + params : ''
+    const suffix = params.size ? '?' + params.toString() : ''
     return requestJson<AgentWorkspaceResponseDto>('/api/v1/agents/' + encodeURIComponent(sourceId) + '/workspace' + suffix)
   }
   agentDetail(sourceId: string): Promise<AgentDetailResponseDto | null> {

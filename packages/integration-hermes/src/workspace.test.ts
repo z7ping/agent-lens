@@ -98,3 +98,43 @@ test('Hermes bad Cron data does not hide an otherwise healthy Board',async()=>{
     assert.equal(data.features[1]?.availability,'error')
   }finally{await rm(root,{recursive:true,force:true})}
 })
+
+test('Task runs, comments and events can be browsed past their first page without cross-task records',async()=>{
+  const root=await mkdtemp(join(tmpdir(),'agentlens-hermes-task-pages-'))
+  try{
+    const db=new DatabaseSync(join(root,'kanban.db'))
+    db.exec('CREATE TABLE tasks(id TEXT PRIMARY KEY,title TEXT,status TEXT,created_at INTEGER)')
+    db.exec('CREATE TABLE task_runs(id INTEGER PRIMARY KEY,task_id TEXT,status TEXT,started_at INTEGER)')
+    db.exec('CREATE TABLE task_comments(id INTEGER PRIMARY KEY,task_id TEXT,author TEXT,body TEXT,created_at INTEGER)')
+    db.exec('CREATE TABLE task_events(id INTEGER PRIMARY KEY,task_id TEXT,kind TEXT,created_at INTEGER)')
+    db.prepare('INSERT INTO tasks VALUES (?,?,?,?)').run('t1','Task','ready',1730000000)
+    db.prepare('INSERT INTO tasks VALUES (?,?,?,?)').run('t2','Other','done',1730000001)
+    for(let i=1;i<=205;i++){
+      db.prepare('INSERT INTO task_runs VALUES (?,?,?,?)').run(i,'t1','done',1730000000+i)
+      if(i<=101){
+        db.prepare('INSERT INTO task_comments VALUES (?,?,?,?,?)').run(i,'t1','worker','message',1730000000+i)
+      }
+      if(i<=202){
+        db.prepare('INSERT INTO task_events VALUES (?,?,?,?)').run(i,'t1','updated',1730000000+i)
+      }
+    }
+    db.prepare('INSERT INTO task_runs VALUES (?,?,?,?)').run(999,'t2','failed',1739999999)
+    db.close()
+    const first=await readHermesWorkspace({roots:[root],board:'default',taskId:'t1'})
+    assert.equal(first.runs.length,100)
+    assert.equal(first.runsHasMore,true)
+    assert.equal(first.taskComments.length,50)
+    assert.equal(first.taskCommentsHasMore,true)
+    assert.equal(first.taskEvents.length,100)
+    assert.equal(first.taskEventsHasMore,true)
+    assert.equal(first.runs.every(item=>item.taskId==='t1'),true)
+    const tail=await readHermesWorkspace({roots:[root],board:'default',taskId:'t1',
+      runOffset:200,commentOffset:100,taskEventOffset:200})
+    assert.equal(tail.runs.length,5)
+    assert.equal(tail.runsHasMore,false)
+    assert.equal(tail.taskComments.length,1)
+    assert.equal(tail.taskCommentsHasMore,false)
+    assert.equal(tail.taskEvents.length,2)
+    assert.equal(tail.taskEventsHasMore,false)
+  }finally{await rm(root,{recursive:true,force:true})}
+})

@@ -282,7 +282,7 @@ function TaskRuns({task,runs,links,comments,events,hasMore,eventOffset,onEventPa
     </div>)}
     <div className="runtime-config-row">{runOffset>0 && <Button size="small" disabled={loading} onClick={()=>onRunPage(Math.max(0,runOffset-100))}>{t('work.previous')}</Button>}
       {runsHasMore && <Button size="small" disabled={loading} onClick={()=>onRunPage(runOffset+100)}>{t('work.next')}</Button>}</div>
-    {(comments.length>0||commentOffset>0) && <section className="agent-secondary"><h3>{t('work.comments')}</h3>{comments.map(comment=><div className="asset-item" key={comment.id}><strong>{comment.author}</strong><p>{comment.body}</p></div>)}
+    {(comments.length>0||commentOffset>0||commentsHasMore) && <section className="agent-secondary"><h3>{t('work.comments')}</h3>{comments.map(comment=><div className="asset-item" key={comment.id}><strong>{comment.author}</strong><p>{comment.body}</p></div>)}
       <div className="runtime-config-row">{commentOffset>0 && <Button size="small" disabled={loading} onClick={()=>onCommentPage(Math.max(0,commentOffset-50))}>{t('work.previous')}</Button>}
       {commentsHasMore && <Button size="small" disabled={loading} onClick={()=>onCommentPage(commentOffset+50)}>{t('work.next')}</Button>}</div></section>}
     {events.length>0 && <section className="agent-secondary"><h3>{t('work.events')}</h3>{events.map(event=><div className="runtime-config-row" key={event.id}><span>{event.kind}</span><span>{formatDate(event.createdAt)}</span></div>)}
