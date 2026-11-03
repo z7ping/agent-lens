@@ -175,6 +175,9 @@ export interface AgentWorkMutationResultDto {
   /** A background Hermes CLI is still running. This is not a successful native execution. */
   pending?:boolean
   receiptId?:string
+  /** Only exact native read-back can mark an operation confirmed. */
+  verification?:'confirmed'|'unconfirmed'|'not-verifiable'
+  verificationMessage?:string
   message:string
 }
 
