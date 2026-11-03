@@ -51,6 +51,7 @@ import { discoverLocalePacks } from './locale-packs'
 import { handleLiveRequest } from './live-http'
 import { handleHermesLiveSetupRequest, type HermesLiveSetupController } from './hermes-live-setup-http'
 import { handleAgentWorkspaceRequest, type AgentWorkspaceReader, type AgentWorkspaceOutputReader, type AgentWorkspaceMutationRunner } from './agent-workspace-http'
+import type { WorkspaceWriteAccess } from './agent-workspace-write-access'
 import { handleLiveAttachmentRequest } from './live-attachments-http'
 import { nativeMetricContribution } from './native-metrics-contribution'
 import { nativeOnlyInsightsResponse, nativeOnlyToolUsageResponse } from './native-only-usage-insights'
@@ -96,6 +97,7 @@ export interface NativeOnlyHttpOptions {
   workspaceReaders?: Readonly<Record<string, AgentWorkspaceReader>>
   workspaceOutputReaders?: Readonly<Record<string, AgentWorkspaceOutputReader>>
   workspaceMutationRunners?: Readonly<Record<string, AgentWorkspaceMutationRunner>>
+  workspaceWriteAccess?: WorkspaceWriteAccess
   integrationDiscovery?:IntegrationDiscoveryController
   integrationManagement?:IntegrationManagementController
   integrationStatus?:(productId:string)=>Promise<AgentIntegrationRuntimeStatus|null>
@@ -170,7 +172,7 @@ export async function startNativeOnlyHttpSurface(
           if (!record || record.productId!==source.manifest.productId) return null
           const root=record.configRoot || record.dataRoot
           return root ? {root,...(record.executable ? {executable:record.executable}:{})} : null
-        },options.workspaceOutputReaders,options.workspaceMutationRunners))return
+        },options.workspaceOutputReaders,options.workspaceMutationRunners,options.workspaceWriteAccess))return
       if(await handleLiveAttachmentRequest(request,response,url,options.liveAttachments))return
       if(await handleLiveRequest(request,response,url,options.lives,
         options.selectProjectDirectory,{
