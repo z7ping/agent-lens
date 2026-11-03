@@ -82,6 +82,7 @@ export const chineseTaskMessages: LocaleMessagesDto = {
       roundContinuation: '{{label}}（续）',
       running: '进行中',
       hasError: '有错误',
+      hasWarning: '存在过程异常',
       jumpTo: '跳到{{tip}}',
       boundaryNavigation: '会话边界导航',
       jumpStart: '跳到开头',
