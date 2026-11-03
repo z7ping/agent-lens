@@ -158,16 +158,16 @@ export async function startNativeOnlyHttpSurface(
         request,response,url,options.integrationPackages))return
       if(await handleHermesLiveSetupRequest(request,response,url,options.hermesLiveSetup))return
       if(await handleAgentWorkspaceRequest(request,response,url,options.workspaceReaders,
-        options.sources,options.capturePolicy,async sourceId=>{
+        options.sources,options.capturePolicy,async (sourceId,installationId)=>{
           const source=options.sources.list().find(item=>item.manifest.sourceId===sourceId)
-          if (!source) return []
+          if (!source) return null
           const facets=await storage.nativeFacets.query()
-          const identities=facets.installedProducts
-            .filter(item=>item.productId===source.manifest.productId)
-            .flatMap(item=>item.installationIds)
-          const records=await Promise.all([...new Set(identities)].map(id=>storage.installations.get(id)))
-          return [...new Set(records.filter(item=>item?.productId===source.manifest.productId)
-            .flatMap(item=>item?.configRoot?[item.configRoot]:[]))]
+          const installed=facets.installedProducts.find(item=>
+            item.productId===source.manifest.productId && item.installationIds.includes(installationId))
+          if (!installed) return null
+          const record=await storage.installations.get(installationId)
+          if (!record || record.productId!==source.manifest.productId) return null
+          return record.configRoot || record.dataRoot || null
         },options.workspaceOutputReaders))return
       if(await handleLiveAttachmentRequest(request,response,url,options.liveAttachments))return
       if(await handleLiveRequest(request,response,url,options.lives,

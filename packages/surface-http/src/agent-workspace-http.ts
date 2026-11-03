@@ -39,7 +39,7 @@ export async function handleAgentWorkspaceRequest(
   providers: Readonly<Record<string, AgentWorkspaceReader>> | undefined,
   sources: SourceService,
   policy: CapturePolicyService,
-  resolveInstallationRoots?: (sourceId:string)=>Promise<string[]>,
+  resolveInstallationRoot: (sourceId:string,installationId:string)=>Promise<string|null>,
   outputReaders?: Readonly<Record<string, AgentWorkspaceOutputReader>>,
 ): Promise<boolean> {
   const match = /^\/api\/v1\/agents\/([^/]+)\/workspace(\/output)?$/.exec(url.pathname)
@@ -58,20 +58,26 @@ export async function handleAgentWorkspaceRequest(
     writeJson(response,403,{error:'Source disabled'})
     return true
   }
+  const installationId = url.searchParams.get('installationId')
+  if (installationId && (installationId.length > 256 || /[\\x00-\\x1f]/.test(installationId))) {
+    throw badRequest('Invalid installation identity')
+  }
   if (match[2] === '/output') {
     const outputReader=outputReaders?.[sourceId]
     if (!outputReader) {writeJson(response,404,{error:'Output not supported'});return true}
+    if (!installationId) throw badRequest('Installation is required')
     const jobId=url.searchParams.get('jobId')
     const profile=url.searchParams.get('profile')
     const file=url.searchParams.get('file')??undefined
     const offsetText=url.searchParams.get('offset')
     if (!jobId || !/^[a-zA-Z0-9_-]{1,128}$/.test(jobId) || !profile || !/^[a-zA-Z0-9_-]{1,80}$/.test(profile)
       || (file && !FILE_NAME.test(file)) || (offsetText && !/^\d{1,6}$/.test(offsetText))
-      || [...url.searchParams.keys()].some(k=>!['jobId','profile','file','offset'].includes(k))) throw badRequest('Invalid Cron output identity')
+      || [...url.searchParams.keys()].some(k=>!['jobId','profile','file','offset','installationId'].includes(k))) throw badRequest('Invalid Cron output identity')
     const offset=offsetText?Number(offsetText):0
     if (offset>100000) throw badRequest('Invalid Cron output offset')
-    const roots=resolveInstallationRoots?await resolveInstallationRoots(sourceId):undefined
-    writeJson(response,200,await outputReader({jobId,profile,...(file?{file}:{}),offset,...(roots?{roots}:{})}))
+    const root=await resolveInstallationRoot(sourceId,installationId)
+    if (!root) {writeJson(response,404,{error:'Unknown Agent installation'});return true}
+    writeJson(response,200,{...await outputReader({jobId,profile,...(file?{file}:{}),offset,roots:[root]}),installationId})
     return true
   }
   const provider = providers?.[sourceId]
@@ -81,7 +87,8 @@ export async function handleAgentWorkspaceRequest(
       tasksHasMore:false,schedules:[],schedulesHasMore:false,schedulesTotal:0,executions:[],executionsHasMore:false,meta:{protocolVersion:AGENT_LENS_PROTOCOL_VERSION,generatedAt:new Date().toISOString()}})
     return true
   }
-  if ([...url.searchParams.keys()].some(key => !['board','offset','limit','jobId','profile','executionOffset','scheduleOffset','taskId','taskEventOffset','runOffset','commentOffset','projectOffset','boardOffset'].includes(key))) {
+  if (!installationId) throw badRequest('Installation is required')
+  if ([...url.searchParams.keys()].some(key => !['installationId','board','offset','limit','jobId','profile','executionOffset','scheduleOffset','taskId','taskEventOffset','runOffset','commentOffset','projectOffset','boardOffset'].includes(key))) {
     throw badRequest('Invalid workspace parameters')
   }
   const board = url.searchParams.get('board') ?? undefined
@@ -119,9 +126,10 @@ export async function handleAgentWorkspaceRequest(
   const projectOffset = projectOffsetText ? Number(projectOffsetText) : 0
   const boardOffset = boardOffsetText ? Number(boardOffsetText) : 0
   if (offset > 100000 || executionOffset > 100000 || scheduleOffset > 100000 || taskEventOffset > 100000 || runOffset > 100000 || commentOffset > 100000 || projectOffset > 100000 || boardOffset > 100000 || limit < 1 || limit > 100) throw badRequest('Workspace page outside budget')
-  const roots = resolveInstallationRoots ? await resolveInstallationRoots(sourceId) : undefined
+  const root = await resolveInstallationRoot(sourceId,installationId)
+  if (!root) {writeJson(response,404,{error:'Unknown Agent installation'});return true}
   const result = await provider({
-    ...(roots ? {roots} : {}),
+    roots: [root],
     ...(board ? {board} : {}),
     offset,
     limit,
@@ -135,6 +143,6 @@ export async function handleAgentWorkspaceRequest(
     writeJson(response,502,{error:'Workspace provider source identity mismatch'})
     return true
   }
-  writeJson(response,200,result)
+  writeJson(response,200,{...result,installationId})
   return true
 }

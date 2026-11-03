@@ -94,6 +94,8 @@ export interface AgentWorkProjectDto {
 }
 export interface AgentWorkspaceResponseDto {
   sourceId: string
+  /** Server-selected registered Agent installation; native files are scoped to this identity. */
+  installationId?: string
   features: AgentWorkFeatureDto[]
   projects: AgentWorkProjectDto[]
   projectsHasMore: boolean
@@ -130,6 +132,7 @@ export interface AgentWorkOutputFileDto {
 }
 export interface AgentWorkOutputResponseDto {
   sourceId: string
+  installationId?: string
   profile: string
   jobId: string
   files: AgentWorkOutputFileDto[]
