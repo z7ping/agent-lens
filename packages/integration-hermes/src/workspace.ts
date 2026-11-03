@@ -354,8 +354,6 @@ export async function readHermesWorkspace(options: {
         result.projects = info.projects
         result.projectsHasMore = info.projectsHasMore
         result.projectsTotal = info.projectsTotal
-        result.projectsTotal=info.projectsTotal
-        result.projectsHasMore=info.projectsHasMore
         features[2] = {id:'projects',availability:'available'}
         break
       }
