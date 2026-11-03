@@ -1,7 +1,7 @@
 import type { IncomingMessage, ServerResponse } from 'node:http'
-import { AGENT_LENS_PROTOCOL_VERSION, type AgentWorkspaceResponseDto, type AgentWorkOutputResponseDto } from '@agent-lens/protocol'
+import { AGENT_LENS_PROTOCOL_VERSION, type AgentWorkspaceResponseDto, type AgentWorkOutputResponseDto, type AgentWorkMutationDto, type AgentWorkMutationResultDto } from '@agent-lens/protocol'
 import type { CapturePolicyService, SourceService } from '@agent-lens/core'
-import { badRequest, writeJson } from './http-utils'
+import { badRequest, httpError, readJsonBody, writeJson } from './http-utils'
 
 export type AgentWorkspaceReader = (options?: {
   board?: string
@@ -19,6 +19,11 @@ export type AgentWorkspaceReader = (options?: {
   projectOffset?: number
   boardOffset?: number
 }) => Promise<AgentWorkspaceResponseDto>
+
+export type AgentWorkspaceMutationRunner = (options:{
+  roots:string[]
+  action:AgentWorkMutationDto
+}) => Promise<{accepted:true;message:string}>
 
 export type AgentWorkspaceOutputReader = (options: {
   roots?: string[]
@@ -41,10 +46,11 @@ export async function handleAgentWorkspaceRequest(
   policy: CapturePolicyService,
   resolveInstallationRoot: (sourceId:string,installationId:string)=>Promise<string|null>,
   outputReaders?: Readonly<Record<string, AgentWorkspaceOutputReader>>,
+  mutationRunners?: Readonly<Record<string, AgentWorkspaceMutationRunner>>,
 ): Promise<boolean> {
-  const match = /^\/api\/v1\/agents\/([^/]+)\/workspace(\/output)?$/.exec(url.pathname)
+  const match = /^\/api\/v1\/agents\/([^/]+)\/workspace(\/output|\/action)?$/.exec(url.pathname)
   if (!match) return false
-  if (request.method !== 'GET') {
+  if (request.method !== (match[2] === '/action' ? 'POST' : 'GET')) {
     writeJson(response,405,{error:'Method not allowed'})
     return true
   }
@@ -61,6 +67,34 @@ export async function handleAgentWorkspaceRequest(
   const installationId = url.searchParams.get('installationId')
   if (installationId && (installationId.length > 256 || /[\\x00-\\x1f]/.test(installationId))) {
     throw badRequest('Invalid installation identity')
+  }
+  if (match[2] === '/action') {
+    // Deliberate user confirmation + non-simple request header: local websites
+    // cannot silently trigger native filesystem mutations via CSRF.
+    if (request.headers['x-agent-lens-workspace-action'] !== 'confirmed') {
+      throw httpError(403,'Explicit workspace action confirmation is required')
+    }
+    if (!installationId) throw badRequest('Installation is required')
+    if ([...url.searchParams.keys()].some(key=>key!=='installationId')) {
+      throw badRequest('Unexpected workspace action parameters')
+    }
+    const runner=mutationRunners?.[sourceId]
+    if (!runner) {writeJson(response,404,{error:'Workspace writes not supported'});return true}
+    const body=await readJsonBody(request,{maxBytes:8192})
+    if (!body || typeof body !== 'object' || Array.isArray(body)) throw badRequest('Invalid workspace mutation body')
+    const payload=body as Record<string,unknown>
+    if (payload.confirmed !== true || !payload.action || typeof payload.action !== 'object' ||
+      Array.isArray(payload.action)) throw badRequest('Explicit confirmation and action are required')
+    const root=await resolveInstallationRoot(sourceId,installationId)
+    if (!root) {writeJson(response,404,{error:'Unknown Agent installation'});return true}
+    // A provider may decline a verb; only the native CLI's exit-zero is success.
+    const result=await runner({roots:[root],action:payload.action as AgentWorkMutationDto})
+    const answer:AgentWorkMutationResultDto={
+      sourceId,installationId,kind:(payload.action as AgentWorkMutationDto).kind,
+      accepted:result.accepted,message:result.message,
+    }
+    writeJson(response,200,answer)
+    return true
   }
   if (match[2] === '/output') {
     const outputReader=outputReaders?.[sourceId]
