@@ -43,7 +43,7 @@ export async function verifyHermesWorkMutation(root:string,action:AgentWorkMutat
   if(feature?.availability!=='available') {
     return unknown('Native '+category+' data is not fully available for verification.')
   }
-  if(action.kind.startsWith('board.')) {
+  if('slug' in action) {
     const board=page.boards.find(item=>item.id===action.slug)
     if(action.kind==='board.create')return board ? confirmed : unknown('Created board is not visible in the bounded native read.')
     if(action.kind==='board.rename')return board?.name===action.name ? confirmed : unknown('Updated board name has not been observed.')
@@ -70,7 +70,7 @@ export async function verifyHermesWorkMutation(root:string,action:AgentWorkMutat
       case 'task.promote':return item.status==='ready' ? confirmed : unknown('Task is not yet ready in the native board.')
     }
   }
-  if(action.kind.startsWith('cron.')) {
+  if('profile' in action && action.kind.startsWith('cron.')) {
     const job=page.schedules.find(item=>item.profile===action.profile&&'jobId' in action&&item.id===action.jobId)
     if(action.kind==='cron.remove')return !job && !page.schedulesHasMore ? confirmed : unknown('Removed job cannot be conclusively verified.')
     if(!job)return unknown('Target Cron job is outside the bounded native read.')
