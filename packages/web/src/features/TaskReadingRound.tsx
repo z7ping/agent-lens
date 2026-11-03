@@ -24,7 +24,7 @@ export function TaskReadingRound({
     data-round-semantic-id={model.semanticId ?? model.id}
     data-round-label={model.label}
     data-round-preview={model.preview || undefined}
-    data-round-error={model.errorCount > 0 ? 'true' : undefined}
+    data-round-error={(model.terminalFailure ?? (model.errorCount > 0)) ? 'true' : undefined}
     data-round-state={model.state}
   >
     {prompt}
