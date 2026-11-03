@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
+import { readFileSync } from 'node:fs'
 import { projectTaskReading, type TaskReadingFact } from './task-reading-semantics'
 import { coalesceLiveSemanticRounds } from './live-semantic-rounds'
 import { projectLiveTaskRounds, type LiveTaskProjectionItem } from './live-task-projection'
@@ -54,4 +55,19 @@ test('不同用户轮次不能因为虚拟分块合并', () => {
   const rounds = coalesceLiveSemanticRounds(projectLiveTaskRounds(events))
   assert.equal(rounds.length, 2)
   assert.deepEqual(rounds.map(x => x.model.semanticId), ['live-round:user:a', 'live-round:user:b'])
+})
+
+test('Live model failures stay in the execution lane, preserving final answer visibility', () => {
+  const facts: TaskReadingFact<string>[] = [
+    { id: 'request', kind: 'prompt', value: 'task' },
+    { id: 'failed-model', kind: 'process-block', value: 'Connection error.', error: true },
+    { id: 'final', kind: 'answer', value: 'done' },
+  ]
+  const result = projectTaskReading(facts)
+  assert.deepEqual(result.process.map(item => item.id), ['failed-model'])
+  assert.deepEqual(result.answers.map(item => item.id), ['final'])
+  assert.equal(result.processCounts.errors, 1)
+  const source = readFileSync(new URL('./LiveTaskTimeline.tsx', import.meta.url), 'utf8')
+  assert.match(source, /item\.error \? 'process-block'/)
+  assert.match(source, /item\.kind === 'message' && !item\.error/)
 })
