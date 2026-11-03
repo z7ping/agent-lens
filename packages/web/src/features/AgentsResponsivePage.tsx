@@ -40,9 +40,11 @@ export function AgentsResponsivePage({
   const hasWork = workspaceState.sourceId === sourceId &&
     Boolean(workspaceState.response?.features.some(feature => feature.availability === 'available' || feature.availability === 'partial' || feature.availability === 'error'))
   const requestedView = searchParams.get('view')
+  const pendingWorkLink = requestedView === 'work' && Boolean(sourceId) && hasSelectedSummary
+    && (workspaceState.sourceId !== sourceId || (workspaceState.loading && !workspaceState.response))
   const activeView: AgentWorkspaceView = requestedView === 'management'
     ? 'management'
-    : hasWork && requestedView === 'work' ? 'work'
+    : (hasWork || pendingWorkLink) && requestedView === 'work' ? 'work'
     : isPi && requestedView === 'ecosystem'
       ? 'ecosystem'
       : 'overview'
@@ -57,6 +59,15 @@ export function AgentsResponsivePage({
     if (!sourceId || !hasSelectedSummary) return
     void model.ensureAgentWorkspace(sourceId)
   }, [model,sourceId,hasSelectedSummary])
+
+  useEffect(() => {
+    // A stale/unsupported deep link is never kept as a fake working tab.
+    if (requestedView !== 'work' || workspaceState.sourceId !== sourceId
+      || workspaceState.loading || workspaceState.error || !workspaceState.response || hasWork) return
+    const next = new URLSearchParams(searchParams)
+    next.delete('view')
+    setSearchParams(next, {replace:true})
+  }, [requestedView,sourceId,workspaceState,hasWork,searchParams,setSearchParams])
 
   useEffect(() => {
     if (!hasSelectedOverview || activeView !== 'overview') return

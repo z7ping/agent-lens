@@ -399,8 +399,12 @@ function Shell({ model }: { model: AgentLensClientModel }) {
 
   const currentView = new URLSearchParams(location.search).get('view')
   const workspaceState = snapshot.agentWorkspace
-  const hasAgentWork = workspaceState.sourceId === resolvedAgentOverviewSourceId &&
-    Boolean(workspaceState.response?.features.some(feature => feature.availability === 'available' || feature.availability === 'partial' || feature.availability === 'error'))
+  const workPending = currentView === 'work' && Boolean(resolvedAgentOverviewSourceId)
+    && (workspaceState.sourceId !== resolvedAgentOverviewSourceId
+      || (workspaceState.loading && !workspaceState.response))
+  const hasAgentWork = workPending || (workspaceState.sourceId === resolvedAgentOverviewSourceId &&
+    Boolean(workspaceState.response?.features.some(feature =>
+      feature.availability === 'available' || feature.availability === 'partial' || feature.availability === 'error')))
   const workspaceTabs = onTools || onInsights
     ? [
         { value: 'overview', label: t('navigation:usageOverview'), to: '/insights' },

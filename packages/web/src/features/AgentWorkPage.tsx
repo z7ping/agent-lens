@@ -172,9 +172,12 @@ export function AgentWorkPage({model,sourceId}: {model:AgentLensClientModel;sour
   return <main className="workspace-page">
     <div className="page-content agents-content">
       {snapshot.sourceId === sourceId && snapshot.error && <div className="agent-path-error" role="alert">{snapshot.error} <Button size="small" onClick={() => void model.refreshAgentWorkspace(sourceId)}>{t('work.retry')}</Button></div>}
-      {(!response && snapshot.loading) && <div className="muted-empty compact" role="status">{t('work.loading')}</div>}
+      {(!response && (snapshot.sourceId !== sourceId || snapshot.loading)) &&
+        <div className="muted-empty compact" role="status">{t('work.loading')}</div>}
+      {snapshot.sourceId === sourceId && snapshot.loading && response &&
+        <div className="muted-empty compact" role="status">{t('work.loading')}</div>}
       {sessionMessage && <div className="agent-path-error" role="status">{sessionMessage}</div>}
-      {response && <div className="agent-detail-pane">
+      {response && <div className="agent-detail-pane" aria-busy={snapshot.loading}>
         {response.features.filter(f=>f.availability==='error' || f.availability==='partial').map(feature=><div key={feature.id} role="alert" className="agent-path-error">
           {t(feature.availability==='partial'?'work.featurePartial':'work.featureError',{name:feature.id})} {feature.reason}
         </div>)}
