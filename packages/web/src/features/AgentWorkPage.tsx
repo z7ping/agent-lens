@@ -46,6 +46,30 @@ export function AgentWorkPage({model,sourceId,installationId,installations}: {
   },[model,sourceId,installationId])
   const [actionBusy,setActionBusy] = useState(false)
   const [actionFeedback,setActionFeedback] = useState('')
+  const [receiptId,setReceiptId] = useState<string|null>(null)
+  useEffect(()=>{
+    if(!receiptId || !installationId)return
+    let active=true
+    let timer:ReturnType<typeof setTimeout>|undefined
+    let attempts=0
+    const check=async()=>{
+      try {
+        const receipt=await model.agentWorkReceipt(sourceId,installationId,receiptId)
+        if(!active)return
+        setActionFeedback(receipt.message)
+        if(receipt.status==='running' && attempts++<120){
+          timer=setTimeout(()=>void check(),3000)
+        } else {
+          setReceiptId(null)
+          if(receipt.status==='accepted')void model.refreshAgentWorkspace(sourceId,{installationId})
+        }
+      } catch {
+        if(active){setReceiptId(null);setActionFeedback(t('work.receiptUnavailable'))}
+      }
+    }
+    timer=setTimeout(()=>void check(),1000)
+    return ()=>{active=false;if(timer)clearTimeout(timer)}
+  },[model,sourceId,installationId,receiptId,t])
   const [actionError,setActionError] = useState('')
   const [sessionPending,setSessionPending] = useState(false)
   const [sessionMessage,setSessionMessage] = useState('')
@@ -243,6 +267,12 @@ export function AgentWorkPage({model,sourceId,installationId,installations}: {
     setActionError('')
     try{
       const result=await model.agentWorkMutate(sourceId,installationId,pendingAction)
+      if(result.pending && result.receiptId){
+        setActionFeedback(result.message)
+        setReceiptId(result.receiptId)
+        setPendingAction(null)
+        return
+      }
       if(!result.accepted)throw new Error(result.message||t('work.actionRejected'))
       setActionFeedback(result.message)
       setPendingAction(null)
@@ -391,6 +421,9 @@ export function AgentWorkPage({model,sourceId,installationId,installations}: {
                 {permitted(job.enabled?'cron.pause':'cron.resume') && <Button size="small" onClick={()=>askAction({
                   kind:job.enabled?'cron.pause':'cron.resume',profile:job.profile,jobId:job.id,
                 })}>{t(job.enabled?'work.actions.cron_pause':'work.actions.cron_resume')}</Button>}
+                {permitted('cron.run') && <Button size="small" onClick={()=>askAction({
+                  kind:'cron.run',profile:job.profile,jobId:job.id,
+                })}>{t('work.actions.cron_run')}</Button>}
                 {permitted('cron.cancel') && response.executions.some(run=>
                   run.jobId===job.id && run.profile===job.profile &&
                   (run.status==='running'||run.status==='claimed'))
@@ -471,6 +504,7 @@ export function AgentWorkPage({model,sourceId,installationId,installations}: {
             loading={actionBusy} onClick={()=>void applyAction()}>{t('work.confirmAction')}</Button>
         </div>}>
         {pendingAction && <>
+          {pendingAction.kind==='cron.run' && <p>{t('work.runCaution')}</p>}
           {'slug' in pendingAction && <label>{t('work.fieldSlug')}<Input maxLength={80}
             disabled={pendingAction.kind!=='board.create'}
             value={pendingAction.slug} onChange={event=>pendingAction.kind==='board.create'
