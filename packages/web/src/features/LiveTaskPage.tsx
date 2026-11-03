@@ -354,8 +354,9 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
       const cursor = semanticId.startsWith('live-round:')
         ? semanticId.slice('live-round:'.length)
         : undefined
-      const indexed = historyIndex?.items.find(item => (cursor && item.cursor === cursor)
-        || (ordinal !== undefined && item.ordinal === ordinal))
+      const indexed = cursor
+        ? historyIndex?.items.find(item => item.cursor === cursor)
+        : historyIndex?.items.find(item => ordinal !== undefined && item.ordinal === ordinal)
       const failed = round.model.terminalFailure === true
         || (round.model.state !== 'running' && indexed?.summary?.terminal?.status === 'error')
       return {
