@@ -34,6 +34,15 @@ const actionCommand: Readonly<Record<Kind,readonly [number,string]>> = {
   'cron.resume':[2,'resume'],'cron.remove':[2,'remove'],
   'cron.cancel':[2,'cancel'],'cron.run':[2,'run'],
 }
+/** Pure command-set mapping; only commands seen in native --help are exposed. */
+export function commandsToWorkspaceActions(
+  groups:readonly ReadonlySet<string>[],
+):Kind[] {
+  return (Object.entries(actionCommand) as [Kind,readonly [number,string]][])
+    .filter(([, [index,verb]])=>Boolean(groups[index]?.has(verb)))
+    .map(([kind])=>kind)
+}
+
 const probeArgs:readonly string[][] = [
   ['kanban','boards','--help'],
   ['kanban','--help'],
@@ -67,9 +76,7 @@ export async function probeHermesWorkspaceActions(options:Probe):Promise<Kind[]>
   if(cached && cached.expiresAt>now)return cached.promise
   if(cache.size>=MAX_PROBES)cache.delete(cache.keys().next().value!)
   const promise=Promise.all(probeArgs.map(args=>probeCommands(executable,root,args)))
-    .then(commands=>(Object.entries(actionCommand) as [Kind,readonly [number,string]][])
-      .filter(([, [index,verb]])=>commands[index]!.has(verb))
-      .map(([kind])=>kind))
+    .then(commands=>commandsToWorkspaceActions(commands))
   cache.set(key,{expiresAt:now+TTL_MS,promise})
   return promise
 }
