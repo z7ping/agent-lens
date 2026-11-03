@@ -68,10 +68,9 @@
   color: color-mix(in srgb, var(--al-accent) 82%, var(--al-ink));
 }
 
-.markdown[data-markdown-theme='next-helvetica'] pre {
-  margin: .55em 0;
-  padding: 8px 10px;
-  border-radius: 7px;
+.markdown[data-markdown-theme='next-helvetica'] .copyable-code-block > pre {
+  margin: 0;
+  padding: 0 10px 10px;
   font-size: 12px;
   line-height: 1.5;
 }

@@ -1,25 +1,33 @@
 @reference "../styles.css";
 
-.copyable-code-block { position: relative; min-width: 0; }
-.copyable-code-block > pre { min-width: 0; margin: 0; }
-
-/* The code frame remains the existing <pre>; its first row is reserved for
- * the icon. The action sits OUTSIDE the scrollport so both horizontal and
- * vertical scrolling preserve its position without covering the code. */
-.copyable-code-block > pre::before {
-  display: block;
-  height: 30px;
-  content: '';
-}
-.code-block-copy-toolbar {
-  position: absolute;
-  top: 8px;
-  right: 8px;
-  z-index: 1;
+.copyable-code-block {
   display: flex;
+  min-width: 0;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid var(--al-line);
+  border-radius: var(--radius-sm);
+  background: var(--al-soft-2);
+}
+
+/* One framed code block: a fixed-height action row and a separate scrollport.
+ * Copying never overlaps readable code, even when the user scrolls within pre. */
+.code-block-copy-toolbar {
+  display: flex;
+  min-height: 34px;
+  flex: 0 0 auto;
   align-items: center;
   justify-content: flex-end;
-  pointer-events: none;
+  padding: 4px 7px;
+}
+.copyable-code-block > pre {
+  min-width: 0;
+  margin: 0;
+  padding: 0 10px 10px;
+  overflow: auto;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
 }
 
 /* Shared readable code baseline (Markdown fences, Tool I/O, source previews).

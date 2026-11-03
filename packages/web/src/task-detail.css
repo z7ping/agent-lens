@@ -450,11 +450,11 @@
 .task-surface .markdown-source {
   max-width: 100%;
   margin: 0;
-  padding: 7px 9px;
+  padding: 0 9px 9px;
   overflow: auto;
-  border: 1px solid var(--al-line);
-  border-radius: 8px;
-  background: var(--al-soft-2);
+  border: 0;
+  border-radius: 0;
+  background: transparent;
   color: var(--al-ink-2);
   font: var(--text-task-code)/1.5 var(--font-mono);
   white-space: pre-wrap;
@@ -467,9 +467,9 @@
 .task-surface .task-message-bubble-user .markdown strong,
 .task-surface .task-message-bubble-user .markdown em,
 .task-surface .task-message-bubble-user .markdown-source { color: var(--al-user-bubble-text); }
-.task-surface .task-message-bubble-user .markdown :not(pre) > code,
-.task-surface .task-message-bubble-user .markdown-source,
-.task-surface .task-message-bubble-user .markdown pre { background: var(--al-user-bubble-code); border-color: transparent; color: var(--al-user-bubble-text); }
+.task-surface .task-message-bubble-user .markdown :not(pre) > code { background: var(--al-user-bubble-code); border-color: transparent; color: var(--al-user-bubble-text); }
+.task-surface .task-message-bubble-user .copyable-code-block { background: var(--al-user-bubble-code); border-color: transparent; }
+.task-surface .task-message-bubble-user .copyable-code-block > pre { color: var(--al-user-bubble-text); }
 /* 用户消息仍按 Markdown 渲染，但标题不使用文档级字号，避免提示词撑大气泡。 */
 .task-surface .task-message-bubble-user .markdown :is(h1, h2, h3, h4, h5, h6) {
   margin: .5em 0 .2em;
@@ -799,10 +799,10 @@
   max-height: 320px;
   margin: 0;
   overflow: auto;
-  padding: 8px 10px;
-  border: 1px solid var(--al-line);
-  border-radius: 7px;
-  background: var(--al-soft-2);
+  padding: 0 10px 10px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
   color: var(--al-ink-2);
   font: var(--text-task-tool-code)/1.65 var(--font-mono);
   white-space: pre-wrap;
