@@ -2,7 +2,7 @@ import { memo } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { LiveMessageActionContributionDto } from '@agent-lens/protocol'
 import { VirtualRoundMount } from '../components/VirtualRoundMount'
-import { Button } from '../components/ui'
+import { IconButton, UiIcon } from '../components/ui'
 import { liveTaskRoundEstimate, type LiveTaskProjectionItem, type LiveTaskRoundProjection } from './live-task-projection'
 import { sameStableLiveTaskRoundProps } from './live-task-render-boundary'
 import { TaskReadingRound } from './TaskReadingRound'
@@ -61,16 +61,22 @@ function GenericLiveItem({
         ? actions.map(action => {
             const key = `${action.actionId}:${item.entryId}`
             const disabled = actionPending !== null || (action.requiresIdle === true && runtimeStreaming)
+            const label = contributionText(action.label, i18n.language)
             const description = action.description ? contributionText(action.description, i18n.language) : undefined
-            return <Button
+            const pending = actionPending === key
+            const icon = pending ? 'loading'
+              : action.actionId === 'pi.edit-from-here' ? 'tool-edit'
+                : action.actionId === 'pi.new-session-from-here' ? 'fork' : 'menu'
+            const tooltip = description ? `${label} · ${description}` : label
+            return <IconButton
               key={action.actionId}
               size="small"
+              className="task-message-live-action"
               disabled={disabled}
-              title={description}
+              aria-label={pending ? t('live.messageActionPending') : label}
+              title={tooltip}
               onClick={() => onMessageAction(action, item)}
-            >
-              {actionPending === key ? t('live.messageActionPending') : contributionText(action.label, i18n.language)}
-            </Button>
+            ><UiIcon name={icon} size={14}/></IconButton>
           })
         : undefined}
     />
