@@ -506,7 +506,6 @@
   flex: 0 0 20px;
   align-items: center;
   justify-content: center;
-  visibility: hidden;
   color: var(--al-accent);
 }
 .task-surface .task-message-output-state[data-active='true'] { visibility: visible; }
@@ -537,14 +536,12 @@
   gap: 3px;
   padding-top: 3px;
   opacity: 0;
-  visibility: hidden;
   pointer-events: none;
   transform: translateY(-3px);
   transition: opacity .14s ease, transform .14s ease, visibility .14s ease;
 }
 .task-surface .task-message-bubble-user:is(:hover, :focus-within) > .task-message-user-hover-actions {
   opacity: 1;
-  visibility: visible;
   pointer-events: auto;
   transform: translateY(0);
 }
@@ -568,8 +565,7 @@
   .task-surface .task-message-user:has(.task-message-user-hover-actions) { margin-bottom: 31px; }
   .task-surface .task-message-user-hover-actions {
     opacity: 1;
-    visibility: visible;
-    pointer-events: auto;
+      pointer-events: auto;
     transform: none;
   }
 }
