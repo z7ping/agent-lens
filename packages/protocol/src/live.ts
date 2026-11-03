@@ -388,6 +388,8 @@ export type LiveEventDto =
   | {
       type: 'error'
       message: string
+      /** One failed model attempt; this does not settle the enclosing logical run. */
+      scope?: 'attempt' | undefined
       code?: string | undefined
       category?: 'provider' | 'network' | 'runtime' | 'tool' | 'permission' | 'unknown' | undefined
       retryable?: boolean | undefined
@@ -808,6 +810,7 @@ export function parseLiveEventDto(value: unknown): LiveEventDto | null {
     return {
       type,
       message: message || code!,
+      ...(event.scope === 'attempt' ? { scope: 'attempt' as const } : {}),
       ...(code ? { code } : {}),
       ...(validCategory ? { category: category as NonNullable<Extract<LiveEventDto, { type: 'error' }>['category']> } : {}),
       ...(retryable !== undefined ? { retryable } : {}),

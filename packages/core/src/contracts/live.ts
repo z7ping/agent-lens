@@ -412,6 +412,8 @@ export interface LiveNotificationEvent {
 export interface LiveErrorEvent {
   type: 'error'
   message: string
+  /** A single failed model attempt is not necessarily a failed logical run. */
+  scope?: 'attempt' | undefined
   /** Optional native error code; never interpret HTTP/provider-specific values in Product UI. */
   code?: string | undefined
   /** Adapter-classified origin, not inferred from localized error text. */

@@ -549,7 +549,7 @@ test('Pi persisted assistant error without text survives snapshot, round project
   assert.deepEqual(items[1], {
     id: 'a-422:error', kind: 'message', role: 'assistant',
     text: 'HTTP 422: developer role is not supported',
-    error: true, streaming: false, at: '2026-10-20T10:00:00.000Z',
+    error: true, errorScope: 'attempt', streaming: false, at: '2026-10-20T10:00:00.000Z',
   })
   const rounds = projectLiveTaskRounds(items)
   assert.equal(rounds.length, 1)
@@ -640,6 +640,45 @@ test('persisted generic error wrappers, objects, tool failures and assistant sto
   const tool = items.find(item => item.kind === 'tool')
   assert.equal(tool?.kind === 'tool' ? tool.status : null, 'error')
   assert.ok(tool?.kind === 'tool' && tool.output)
+})
+
+test('failed Pi model attempt remains visible while its logical run continues streaming', () => {
+  const user = { id: 'user-1', kind: 'message' as const, role: 'user' as const,
+    text: 'read the log', streaming: false }
+  const attempt = reduceLiveTaskEvent([user], event(1, {
+    type: 'error', scope: 'attempt', message: 'Connection error.',
+  }))
+  const failure = attempt.at(-1)
+  assert.equal(failure?.kind === 'message' ? failure.errorScope : undefined, 'attempt')
+  assert.equal(failure?.kind === 'message' ? failure.error : undefined, true)
+
+  const continuing = reduceLiveTaskEvent(attempt, event(2, {
+    type: 'text.start', messageId: 'retry-response', text: 'Checking files',
+  }))
+  const streamed = continuing.at(-1)
+  assert.equal(streamed?.kind === 'message' ? streamed.streaming : null, true)
+  const final = reduceLiveTaskEvent(continuing, event(3, {
+    type: 'text.end', messageId: 'retry-response', text: 'Found the configuration',
+  }))
+  const resumed = final.at(-1)
+  assert.equal(resumed?.kind === 'message' ? resumed.text : null, 'Found the configuration')
+  assert.equal(final.filter(item => item.kind === 'message' && item.errorScope === 'attempt').length, 1)
+  assert.equal(final.some(item => item.kind === 'message' && item.error && !item.errorScope), false)
+
+  const native = projectLiveSnapshotEntries([
+    { type: 'message', id: 'native-error', message: { role: 'assistant',
+      stopReason: 'error', content: [], errorMessage: 'Connection error.' } },
+    { type: 'message', id: 'native-reply', message: { role: 'assistant',
+      stopReason: 'stop', content: [{ type: 'text', text: 'Found the configuration' }] } },
+  ])
+  const fromHistory = native.find(item => item.kind === 'message' && item.error)
+  assert.equal(fromHistory?.kind === 'message' ? fromHistory.errorScope : null, 'attempt')
+  const merged = mergeLiveActiveProjectionItems(attempt, native)
+  assert.equal(merged.filter(item => item.kind === 'message' && item.error).length, 1)
+  const reconciledFailure = merged.find(item => item.kind === 'message' && item.error)
+  assert.equal(reconciledFailure?.kind === 'message' ? reconciledFailure.errorScope : null, 'attempt')
+  assert.ok(merged.some(item => item.kind === 'message' && !item.error
+    && item.role === 'assistant' && item.text === 'Found the configuration'))
 })
 
 test('SSE failure reconciles with persisted error instead of duplicating the same failure', () => {

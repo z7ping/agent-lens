@@ -62,16 +62,17 @@ test('Pi Live propagates persisted assistant errors immediately without replacin
     },
   })
   assert.equal(failed?.type, 'error')
+  assert.equal(failed?.type === 'error' ? failed.scope : undefined, 'attempt')
   assert.match(failed?.type === 'error' ? failed.message : '', /HTTP 422: developer role is not supported/)
   assert.equal(failed?.type === 'error' ? failed.message : '', 'HTTP 422: developer role is not supported')
   assert.deepEqual(normalizePiLiveEvent({
     type: 'message_end',
     message: { role: 'assistant', stopReason: 'error', content: [], errorMessage: 'HTTP 500: generic provider failure' },
-  }), { type: 'error', message: 'HTTP 500: generic provider failure' })
+  }), { type: 'error', scope: 'attempt', message: 'HTTP 500: generic provider failure' })
   assert.deepEqual(normalizePiLiveEvent({
     type: 'message_end',
     message: { role: 'assistant', stopReason: 'error', errorMessage: 'HTTP 422: unsupported image format' },
-  }), { type: 'error', message: 'HTTP 422: unsupported image format' })
+  }), { type: 'error', scope: 'attempt', message: 'HTTP 422: unsupported image format' })
   for (const message of [
     'HTTP 400: malformed request',
     'HTTP 401: authentication failed',
@@ -83,11 +84,11 @@ test('Pi Live propagates persisted assistant errors immediately without replacin
     assert.deepEqual(normalizePiLiveEvent({
       type: 'message_end',
       message: { role: 'assistant', stopReason: 'error', errorMessage: message },
-    }), { type: 'error', message })
+    }), { type: 'error', scope: 'attempt', message })
   }
   assert.deepEqual(normalizePiLiveEvent({
     type: 'message_end', message: { role: 'assistant', stopReason: 'error', content: [] },
-  }), { type: 'error', message: 'Pi assistant request failed' })
+  }), { type: 'error', scope: 'attempt', message: 'Pi assistant request failed' })
   assert.deepEqual(normalizePiLiveEvent({
     type: 'runtime_status', status: 'failed',
     error: 'Model runtime crashed',
@@ -95,7 +96,7 @@ test('Pi Live propagates persisted assistant errors immediately without replacin
   assert.deepEqual(normalizePiLiveEvent({
     type: 'message_end', message: { role: 'assistant', stopReason: 'error',
       error: { message: 'Transport timeout' } },
-  }), { type: 'error', message: 'Transport timeout' })
+  }), { type: 'error', scope: 'attempt', message: 'Transport timeout' })
   assert.deepEqual(normalizePiLiveEvent({
     type: 'runtime_status', status: 'failed',
     error: { detail: 'Process terminated unexpectedly' },

@@ -252,6 +252,12 @@ test('Live protocol retains adapter-authored structured failures and safely drop
   }), { type: 'error', message: 'NATIVE_ERROR', code: 'NATIVE_ERROR' })
   assert.deepEqual(parseLiveEventDto({ type: 'error', message: 'legacy plain error' }),
     { type: 'error', message: 'legacy plain error' })
+  assert.deepEqual(parseLiveEventDto({
+    type: 'error', message: 'Connection error.', scope: 'attempt',
+  }), { type: 'error', message: 'Connection error.', scope: 'attempt' })
+  assert.deepEqual(parseLiveEventDto({
+    type: 'error', message: 'Connection error.', scope: 'untrusted',
+  }), { type: 'error', message: 'Connection error.' })
   assert.equal(parseLiveEventDto({ type: 'error', category: 'network' }), null)
 })
 
