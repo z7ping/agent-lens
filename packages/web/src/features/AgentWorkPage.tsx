@@ -282,7 +282,7 @@ function TaskRuns({task,runs,links,comments,events,hasMore,eventOffset,onEventPa
         <Button size="small" loading={sessionPending}
           onClick={()=>onOpenSession(run.workerSessionNativeId!)}>{t('work.openSession')}</Button>
       </div>}
-      {run.summary && <p>{run.summary}</p>
+      {run.summary && <p>{run.summary}</p>}
       {run.error && <div className="agent-path-error">{run.error}</div>}
     </div>)}
     <div className="runtime-config-row">{runOffset>0 && <Button size="small" disabled={loading} onClick={()=>onRunPage(Math.max(0,runOffset-100))}>{t('work.previous')}</Button>}
