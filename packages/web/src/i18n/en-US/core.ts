@@ -114,6 +114,7 @@ export const englishCoreMessages: LocaleMessagesDto = {
       nativeIndexDone: 'Native session index',
       nativeIndexProgress: '{{scopes}} source scopes checked · {{sessions}} sessions indexed',
       nativeIndexIssues: '{{failed}} indexing failures · {{deferred}} deferred',
+      durationSeconds: '{{count}}s elapsed',
       openDiagnostics: 'View agent capture diagnostics',
       idleState: 'Idle',
       sourceRuntimeActive: 'Starting {{source}} live capture',
