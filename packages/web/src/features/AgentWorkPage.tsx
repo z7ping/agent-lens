@@ -335,6 +335,8 @@ export function AgentWorkPage({model,sourceId,installationId,installations}: {
       {actionFeedback && <div className="muted-empty compact" role="status">{actionFeedback}</div>}
       {accessError && <div className="agent-path-error" role="alert">{accessError}</div>}
       {response && <div className="agent-detail-pane" aria-busy={snapshot.loading}>
+        {response.writeControlAvailable && accessEnabled && response.availableActions?.length===0 &&
+          <div className="muted-empty compact" role="status">{t('work.noSupportedActions')}</div>}
         {response.features.filter(f=>f.availability==='error' || f.availability==='partial').map(feature=><div key={feature.id} role="alert" className="agent-path-error">
           {t(feature.availability==='partial'?'work.featurePartial':'work.featureError',{name:feature.id})} {feature.reason}
         </div>)}
