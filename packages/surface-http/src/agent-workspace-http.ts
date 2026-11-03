@@ -27,7 +27,7 @@ export type AgentWorkspaceMutationRunner = (options:{
   roots:string[]
   action:AgentWorkMutationDto
   executable?:string
-}) => Promise<{accepted:boolean;pending?:boolean;receiptId?:string;message:string}>
+}) => Promise<{accepted:boolean;pending?:boolean;receiptId?:string;verification?:'confirmed'|'unconfirmed'|'not-verifiable';verificationMessage?:string;message:string}>
 
 export type AgentWorkspaceCapabilityReader = (options:{
   roots:string[]
@@ -175,6 +175,8 @@ export async function handleAgentWorkspaceRequest(
       accepted:result.accepted,message:result.message,
       ...(result.pending?{pending:true}:{}),
       ...(result.receiptId?{receiptId:result.receiptId}:{}),
+      ...(result.verification?{verification:result.verification}:{}),
+      ...(result.verificationMessage?{verificationMessage:result.verificationMessage}:{})
     }
     writeJson(response,200,answer)
     return true
