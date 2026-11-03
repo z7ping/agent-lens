@@ -50,7 +50,7 @@ import {
 import { discoverLocalePacks } from './locale-packs'
 import { handleLiveRequest } from './live-http'
 import { handleHermesLiveSetupRequest, type HermesLiveSetupController } from './hermes-live-setup-http'
-import { handleAgentWorkspaceRequest, type AgentWorkspaceReader, type AgentWorkspaceOutputReader, type AgentWorkspaceMutationRunner, type AgentWorkspaceReceiptReader } from './agent-workspace-http'
+import { handleAgentWorkspaceRequest, type AgentWorkspaceReader, type AgentWorkspaceOutputReader, type AgentWorkspaceMutationRunner, type AgentWorkspaceReceiptReader, type AgentWorkspaceCapabilityReader } from './agent-workspace-http'
 import type { WorkspaceWriteAccess } from './agent-workspace-write-access'
 import { handleLiveAttachmentRequest } from './live-attachments-http'
 import { nativeMetricContribution } from './native-metrics-contribution'
@@ -98,6 +98,7 @@ export interface NativeOnlyHttpOptions {
   workspaceOutputReaders?: Readonly<Record<string, AgentWorkspaceOutputReader>>
   workspaceMutationRunners?: Readonly<Record<string, AgentWorkspaceMutationRunner>>
   workspaceReceiptReaders?: Readonly<Record<string, AgentWorkspaceReceiptReader>>
+  workspaceCapabilityReaders?: Readonly<Record<string, AgentWorkspaceCapabilityReader>>
   workspaceWriteAccess?: WorkspaceWriteAccess
   integrationDiscovery?:IntegrationDiscoveryController
   integrationManagement?:IntegrationManagementController
@@ -174,7 +175,7 @@ export async function startNativeOnlyHttpSurface(
           const root=record.configRoot || record.dataRoot
           return root ? {root,...(record.executable ? {executable:record.executable}:{})} : null
         },options.workspaceOutputReaders,options.workspaceMutationRunners,options.workspaceWriteAccess,
-        options.workspaceReceiptReaders))return
+        options.workspaceReceiptReaders,options.workspaceCapabilityReaders))return
       if(await handleLiveAttachmentRequest(request,response,url,options.liveAttachments))return
       if(await handleLiveRequest(request,response,url,options.lives,
         options.selectProjectDirectory,{
