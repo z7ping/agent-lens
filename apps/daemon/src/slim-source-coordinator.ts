@@ -17,6 +17,9 @@ export interface SlimSourceProgress {
   failedScopes:number
   deferredScopes:number
   finished:boolean
+  startedAt:string
+  updatedAt:string
+  completedAt?:string
 }
 
 /** Native-only startup reconciliation. Existing Slim installations are read
@@ -31,6 +34,7 @@ export class SlimSourceCoordinator {
   private readonly captures:NativeCaptureHandle[]=[]
   private progress:Omit<SlimSourceProgress,'runningCaptures'>={
     examinedScopes:0,indexedSessions:0,failedScopes:0,deferredScopes:0,finished:false,
+    startedAt:new Date().toISOString(),updatedAt:new Date().toISOString(),
   }
 
   constructor(
@@ -48,17 +52,24 @@ export class SlimSourceCoordinator {
     return {...this.progress,runningCaptures:this.captures.length}
   }
 
+  private emitProgress(at=new Date().toISOString()):void{
+    this.progress.updatedAt=at
+    this.onProgress?.()
+  }
+
   start():void{
     if(this.task)return
-    this.onProgress?.()
+    this.emitProgress()
     this.task=Promise.resolve().then(()=>this.run()).catch(error=>{
       if(!this.abort.signal.aborted){
         this.progress.failedScopes++
         console.warn('[AgentLens] native-only source startup failed',error)
       }
     }).finally(()=>{
+      const completedAt=new Date().toISOString()
       this.progress.finished=true
-      this.onProgress?.()
+      this.progress.completedAt=completedAt
+      this.emitProgress(completedAt)
     })
   }
 
@@ -79,13 +90,19 @@ export class SlimSourceCoordinator {
     const work=this.rescanQueue.then(async()=>{
       await this.task?.catch(()=>undefined)
       if(this.abort.signal.aborted)throw new Error('Native Source coordinator is stopped')
-      this.progress.finished=false
-      this.onProgress?.()
+      const runAt=new Date().toISOString()
+      this.progress={
+        examinedScopes:0,indexedSessions:0,failedScopes:0,deferredScopes:0,
+        finished:false,startedAt:runAt,updatedAt:runAt,
+      }
+      this.emitProgress(runAt)
       try{
         await this.run(sourceId,report)
       }finally{
+        const completedAt=new Date().toISOString()
         this.progress.finished=true
-        this.onProgress?.()
+        this.progress.completedAt=completedAt
+        this.emitProgress(completedAt)
       }
       report.status=report.failures.length
         ?(report.sourcesDetected||report.assetSourcesScanned?'partial':'failed')
@@ -191,7 +208,7 @@ export class SlimSourceCoordinator {
               continue
             }
             this.progress.examinedScopes++
-            this.onProgress?.()
+            this.emitProgress()
             const scope={
               source,installationId,signal:this.abort.signal,
               ...(profile?{runtimeProfileId:profile.id}:{}),
@@ -201,7 +218,7 @@ export class SlimSourceCoordinator {
                 ...scope,maxSessions:MAX_STARTUP_SESSIONS_PER_SCOPE,
               })
               this.progress.indexedSessions+=indexReport.indexed
-              this.onProgress?.()
+              this.emitProgress()
               if(source.discoverAssets && this.assetPolicy && !this.abort.signal.aborted){
                 try{
                   const scan=await this.runtime.scanInstallationAssets({
