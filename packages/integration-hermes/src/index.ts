@@ -4,6 +4,7 @@ import { hermesSourcePlugin } from '@agent-lens/source-hermes'
 import { integrationManifest } from './manifest'
 
 export { integrationManifest as hermesIntegrationManifest } from './manifest'
+export { readHermesWorkspace } from './workspace.js'
 
 export const hermesIntegration = defineAgentLensIntegration(
   integrationManifest,
