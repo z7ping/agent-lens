@@ -3,6 +3,7 @@ import type { LocaleMessagesDto } from '@agent-lens/protocol'
 export const englishAgentsMessages: LocaleMessagesDto = {
   agents: {
     work: {
+      refreshFailed: 'Automatic refresh failed; refresh native data manually',
       noSupportedActions: 'No workspace write operation was confirmed for this installation. Check the Hermes CLI version and executable.',
       writeConfirmed: 'Change confirmed from Hermes native data',
       writeUnconfirmed: 'Hermes accepted the command, but the native change is not verified; refresh to confirm',
