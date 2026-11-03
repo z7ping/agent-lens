@@ -149,7 +149,7 @@ export function WorkspaceSidebar({
           </section>
         </Popover>
       </div>
-      <BackgroundActivityStatus health={snapshot.health}/>
+      <BackgroundActivityStatus/>
     </div>
   </aside>
 }
