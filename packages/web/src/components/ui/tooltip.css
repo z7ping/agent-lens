@@ -1,6 +1,7 @@
 /* One shared tooltip surface for native-title migration, icons, and truncated text. */
 .ui-tooltip {
-  z-index: 120;
+  /* Above shared Dialog (1400) and Popover (1450). */
+  z-index: 1500;
   box-sizing: border-box;
   width: max-content;
   max-width: min(360px, calc(100vw - 24px));

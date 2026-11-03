@@ -3,6 +3,9 @@ import { readdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import test from 'node:test'
+import { createElement } from 'react'
+import { renderToStaticMarkup } from 'react-dom/server'
+import { Button, IconButton, StatusBadge } from './Primitives'
 
 const source = readFileSync(new URL('./Primitives.tsx', import.meta.url), 'utf8')
 const css = readFileSync(new URL('./ui-primitives.css', import.meta.url), 'utf8')
@@ -321,4 +324,16 @@ test('shared Tooltip owns floating hints and converts native title without dupli
   assert.match(tooltip, /document\.addEventListener\('focusin'/)
   assert.match(tooltipCss, /var\(--al-surface-raised\)/)
   assert.equal(lock.packages['packages/web'].dependencies['@floating-ui/react'], '0.27.20')
+})
+
+test('buttons and status badges render shared tooltips without a native title attribute', () => {
+  for (const element of [
+    createElement(Button, { title: '刷新' }, '刷新'),
+    createElement(IconButton, { title: '查看 Markdown 源码', 'aria-label': '查看 Markdown 源码' }, '↔'),
+    createElement(StatusBadge, { title: '部分数据' }, '部分'),
+  ]) {
+    const html = renderToStaticMarkup(element)
+    assert.match(html, /data-ui-tooltip="/)
+    assert.doesNotMatch(html, /(?:\s)title="/)
+  }
 })
