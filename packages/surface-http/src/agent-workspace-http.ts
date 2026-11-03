@@ -46,6 +46,7 @@ export type AgentWorkspaceOutputReader = (options: {
 
 const FILE_NAME = /^\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2}\.md$/
 const SLUG = /^[a-zA-Z0-9][a-zA-Z0-9_-]{0,79}$/
+const workspaceWritesInFlight = new Set<string>()
 
 /** Provider-owned read-only workspace query. No hardcoded Agent UI or source data interpretation. */
 export async function handleAgentWorkspaceRequest(
@@ -142,14 +143,22 @@ export async function handleAgentWorkspaceRequest(
     const payload=body as Record<string,unknown>
     if (payload.confirmed !== true || !payload.action || typeof payload.action !== 'object' ||
       Array.isArray(payload.action)) throw badRequest('Explicit confirmation and action are required')
+    const kind=(payload.action as Record<string,unknown>).kind
+    if (typeof kind!=='string' || !AGENT_WORK_MUTATION_KINDS.some(item=>item===kind)) throw badRequest('Unsupported workspace mutation kind')
     const installation=await resolveInstallationRoot(sourceId,installationId)
     if (!installation) {writeJson(response,404,{error:'Unknown Agent installation'});return true}
     if (!writeAccess?.allowed({sourceId,installationId,root:installation.root})) {
       throw httpError(403, 'Workspace write permission is disabled for this installation')
     }
     // CLI executable comes from the same registered installation when known.
-    const result=await runner({sourceId,installationId,roots:[installation.root],action:payload.action as AgentWorkMutationDto,
-      ...(installation.executable ? {executable:installation.executable} : {})})
+    const lockKey=JSON.stringify([sourceId,installationId,installation.root])
+    if (workspaceWritesInFlight.has(lockKey)) throw httpError(409,'Another native workspace operation is in progress')
+    workspaceWritesInFlight.add(lockKey)
+    let result:Awaited<ReturnType<AgentWorkspaceMutationRunner>>
+    try {
+      result=await runner({sourceId,installationId,roots:[installation.root],action:payload.action as AgentWorkMutationDto,
+        ...(installation.executable ? {executable:installation.executable} : {})})
+    } finally {workspaceWritesInFlight.delete(lockKey)}
     const answer:AgentWorkMutationResultDto={
       sourceId,installationId,kind:(payload.action as AgentWorkMutationDto).kind,
       accepted:result.accepted,message:result.message,
