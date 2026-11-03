@@ -34,6 +34,7 @@ export interface TaskMessageProps {
   showContentActions?: boolean | undefined
   pending?: boolean | undefined
   error?: boolean | undefined
+  errorScope?: 'attempt' | undefined
   errorDiagnostic?: TaskErrorDiagnostic | undefined
   pendingLabel?: string | undefined
   className?: string | undefined
@@ -55,6 +56,7 @@ export function TaskMessage({
   showContentActions = true,
   pending = false,
   error = false,
+  errorScope,
   errorDiagnostic,
   pendingLabel,
   className = '',
@@ -161,25 +163,25 @@ export function TaskMessage({
   const sourceActionLabel = view === 'rendered' ? t('message.viewMarkdownSource') : t('message.returnRendered')
 
   return <div
-    className={`task-message-row ${roleClass} ${className}`.trim()}
+    className={`task-message-row ${roleClass} ${error && errorScope === 'attempt' ? 'task-message-attempt-error' : ''} ${className}`.trim()}
     data-task-message-role={role}
     data-streaming={streaming ? 'true' : undefined}
     data-pending={awaitingFirstContent ? 'true' : undefined}
     data-error={error ? 'true' : undefined}
-    role={error ? 'alert' : undefined}
+    role={error ? errorScope === 'attempt' ? 'status' : 'alert' : undefined}
     data-model-label={modelLabel || undefined}
     aria-busy={streaming || awaitingFirstContent || undefined}
   >
     <div className={`task-message-bubble ${bubbleClass}`}>
       {(modelLabel || time || meta || error) && <div className="task-message-model-meta">
         {!user && <b>{resolvedAuthor}</b>}
-        {error && <span className="task-message-error-status"><UiIcon name="alert" size={14}/>{t('message.requestFailed')}</span>}
+        {error && <span className="task-message-error-status"><UiIcon name="alert" size={14}/>{t(errorScope === 'attempt' ? 'message.attemptFailed' : 'message.requestFailed')}</span>}
         {modelLabel && <><span aria-hidden="true">·</span><span className="task-message-model-label">{modelLabel}</span></>}
         {meta && <span className="task-message-context-evidence">{meta}</span>}
         {time && <time>{time}</time>}
       </div>}
       {failure ? <div className="task-message-failure">
-        <strong className="task-message-failure-title">{t(`message.failure.${failure.kind}`)}</strong>
+        <strong className="task-message-failure-title">{t(errorScope === 'attempt' ? 'message.attemptFailureTitle' : `message.failure.${failure.kind}`)}</strong>
         {(failure.kind === 'quota' || failure.preview) && <p className="task-message-failure-preview">{
           failure.kind === 'quota' ? t('message.failure.quotaHint') : failure.preview
         }</p>}
