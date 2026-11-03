@@ -41,9 +41,9 @@ export function TaskThinking({
     : ''
   const label = measuredThinkingLabel || model.label
   const running = model.state === 'running'
-  // Thinking always keeps a two-line text excerpt next to the icon, including
-  // while expanded; only its full Markdown body is controlled by disclosure.
-  const preview = kind === 'thinking' || !expanded
+  // Collapsed thinking shows a concise preview; expanded thinking owns one full body.
+  // Do not repeat the same reasoning text in both the header and Markdown content.
+  const preview = !expanded
     ? (model.preview?.trim() || model.text.replace(/\s+/g, ' ').trim().slice(0, 220))
     : ''
 
