@@ -164,3 +164,39 @@ test('mutations require local confirmation and a registered single installation'
     assert.equal(commands.length,1)
   }finally{await new Promise<void>((resolve,reject)=>server.close(e=>e?reject(e):resolve()))}
 })
+
+test('Cron run receipt is read-only and cannot cross an Agent installation',async()=>{
+  const receiptId='00000000-1111-4222-8333-444444444444'
+  let verifiedCalls=0
+  const server=createServer(async(req,res)=>{
+    try{
+      await handleAgentWorkspaceRequest(req,res,new URL(req.url??'/','http://localhost'),
+        undefined,
+        {list:()=>[{manifest:{sourceId:'hermes'}}]} as never,
+        {isSourceEnabled:()=>true} as never,
+        async (_source,id)=>id==='install-a'?{root:'/native/a'}:id==='install-b'?{root:'/native/b'}:null,
+        undefined,undefined,undefined,{
+          hermes:scope=>{
+            verifiedCalls++
+            if(scope.installationId!=='install-a'||scope.roots[0]!=='/native/a'||scope.receiptId!==receiptId)return null
+            return {receiptId,status:'running',message:'Native CLI has not exited'}
+          },
+        })
+    }catch(error){
+      res.statusCode=error instanceof HttpError?error.statusCode:500
+      res.end()
+    }
+  })
+  await new Promise<void>(resolve=>server.listen(0,'127.0.0.1',resolve))
+  const base='http://127.0.0.1:'+(server.address() as AddressInfo).port
+  try{
+    const route='/api/v1/agents/hermes/workspace/receipt?receiptId='+receiptId
+    const a=await fetch(base+route+'&installationId=install-a')
+    assert.equal(a.status,200)
+    assert.equal((await a.json() as {status:string}).status,'running')
+    assert.equal((await fetch(base+route+'&installationId=install-b')).status,404)
+    assert.equal((await fetch(base+route+'&installationId=unknown')).status,404)
+    assert.equal((await fetch(base+'/api/v1/agents/hermes/workspace/receipt?installationId=install-a&receiptId=../')).status,400)
+    assert.equal(verifiedCalls,2)
+  }finally{await new Promise<void>(resolve=>server.close(()=>resolve()))}
+})
