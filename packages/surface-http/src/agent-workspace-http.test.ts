@@ -45,6 +45,7 @@ test('workspace handler validates source, policy and bounded read options', asyn
     assert.equal((await fetch(base+'/api/v1/agents/hermes/workspace?taskId=../')).status,400)
     assert.equal((await fetch(base+'/api/v1/agents/hermes/workspace?profile=..&jobId=job')).status,400)
     assert.equal((await fetch(base+'/api/v1/agents/hermes/workspace',{method:'POST'})).status,405)
+    assert.equal((await fetch(base+'/api/v1/agents/hermes/workspace/output?jobId=job1&profile=default')).status,404)
     const none=await fetch(base+'/api/v1/agents/pi/workspace')
     assert.equal(none.status,200)
     assert.deepEqual((await none.json() as AgentWorkspaceResponseDto).features,[])
@@ -65,3 +66,28 @@ test('workspace source roots are resolved only for authorized source requests', 
   assert.match(full,/item\?\.productId===source\.manifest\.productId/)
   assert.match(full,/configRoot/)
 });
+
+test('Cron output uses the same source policy boundary as the workspace',async()=>{
+  const {createServer}=await import('node:http')
+  let calls=0
+  const server=createServer(async(req,res)=>{
+    try{
+      await handleAgentWorkspaceRequest(req,res,new URL(req.url??'/','http://localhost'),
+        undefined,{list:()=>[{manifest:{sourceId:'hermes'}}]} as never,
+        {isSourceEnabled:()=>true} as never,async()=>['/verified/root'],
+        {hermes:async options=>{
+          calls++
+          assert.deepEqual(options,{jobId:'j1',profile:'default',offset:0,roots:['/verified/root']})
+          return {sourceId:'hermes',jobId:'j1',profile:'default',files:[],hasMore:false,state:'unavailable'}
+        }})
+    }catch(error){res.statusCode=error instanceof HttpError?error.statusCode:500;res.end()}
+  })
+  await new Promise<void>(resolve=>server.listen(0,'127.0.0.1',resolve))
+  const base='http://127.0.0.1:'+(server.address() as AddressInfo).port
+  try{
+    assert.equal((await fetch(base+'/api/v1/agents/hermes/workspace/output?jobId=j1&profile=default')).status,200)
+    assert.equal((await fetch(base+'/api/v1/agents/hermes/workspace/output?jobId=j1&profile=../')).status,400)
+    assert.equal((await fetch(base+'/api/v1/agents/hermes/workspace/output?jobId=j1&profile=default&file=../../secret')).status,400)
+    assert.equal(calls,1)
+  }finally{await new Promise<void>(resolve=>server.close(()=>resolve()))}
+})
