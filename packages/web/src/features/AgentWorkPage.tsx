@@ -299,8 +299,9 @@ export function AgentWorkPage({model,sourceId,installationId,installations}: {
         setScheduleOffset(0)
         setSelectedJob(null)
       }
-      // The CLI exit proves acceptance, not the resulting native state.
-      await refreshWorkspace({
+      // A refresh error is not proof that the native CLI action failed.
+      try {
+        await refreshWorkspace({
         board:pendingAction.kind==='board.archive'?undefined:response?.selectedBoard,
         boardOffset:pendingAction.kind==='board.create'||pendingAction.kind==='board.archive'?0:boardOffset,
         offset:pendingAction.kind==='task.create'||pendingAction.kind==='task.archive'
@@ -309,7 +310,10 @@ export function AgentWorkPage({model,sourceId,installationId,installations}: {
         scheduleOffset:pendingAction.kind==='cron.create'||pendingAction.kind==='cron.remove'?0:scheduleOffset,
         ...(selectedTask && !['task.create','task.archive'].includes(pendingAction.kind)
           ? {taskId:selectedTask,taskEventOffset,runOffset,commentOffset}:{}),
-      })
+        })
+      } catch {
+        setActionFeedback(previous=>previous+' · '+t('work.refreshFailed'))
+      }
     }catch(error){
       if(generation===scopeGeneration.current)
         setActionError(error instanceof Error?error.message:t('work.actionRejected'))
