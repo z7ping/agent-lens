@@ -3,6 +3,9 @@ import { readFileSync, readdirSync } from 'node:fs'
 import test from 'node:test'
 import { fileURLToPath } from 'node:url'
 import { join } from 'node:path'
+import { createElement } from 'react'
+import { renderToStaticMarkup } from 'react-dom/server'
+import { CopyableCodeBlock } from './CopyableCodeBlock'
 
 const sourceRoot = fileURLToPath(new URL('../', import.meta.url))
 const componentSource = readFileSync(new URL('./CopyableCodeBlock.tsx', import.meta.url), 'utf8')
@@ -32,14 +35,35 @@ test('复制按钮包含成功、失败反馈和可访问名称', () => {
   assert.match(componentSource, /window\.setTimeout\(\(\) => setState\('idle'\), 1800\)/)
 })
 
-test('复制按钮使用独立工具栏，不覆盖首行、长行或滚动正文', () => {
+test('复制图标在代码块内部保留独立行，不覆盖首行与滚动内容', () => {
   const toolbar = componentSource.indexOf('className="code-block-copy-toolbar"')
-  const copyButton = componentSource.indexOf('className="code-block-copy"')
+  const button = componentSource.indexOf('<IconButton')
   const pre = componentSource.indexOf('<pre {...preProps}>')
-  assert.ok(toolbar >= 0 && copyButton > toolbar && pre > copyButton)
+  const code = componentSource.indexOf('highlighted ? <code')
+  assert.ok(toolbar >= 0 && button > toolbar && pre > button && code > pre)
+  assert.match(componentSource, /import \{ IconButton, UiIcon \} from '\.\/ui'/)
+  assert.match(componentSource, /size="small"/)
+  assert.match(componentSource, /title=\{label\}/)
   assert.match(codeBlockStyles, /\.copyable-code-block \{[^}]*display: flex;[^}]*flex-direction: column;/)
-  assert.match(codeBlockStyles, /\.code-block-copy-toolbar \{[^}]*display: flex;[^}]*justify-content: flex-end;/)
-  assert.match(codeBlockStyles, /\.code-block-copy \{\s*position: static;/)
-  assert.doesNotMatch(codeBlockStyles, /\.code-block-copy \{\s*position: absolute;/)
+  assert.match(codeBlockStyles, /\.code-block-copy-toolbar \{[^}]*display: flex;[^}]*min-height: 34px;/)
+  assert.match(codeBlockStyles, /\.copyable-code-block > pre \{[^}]*overflow: auto;[^}]*border: 0;/)
+  assert.match(codeBlockStyles, /\.code-block-copy\.ui-icon-button \{[^}]*opacity: 0;/)
+  assert.match(codeBlockStyles, /:focus-within/)
+  assert.match(codeBlockStyles, /@media \(hover: none\), \(pointer: coarse\)/)
+  assert.doesNotMatch(codeBlockStyles, /position: (?:sticky|absolute);/)
+  assert.doesNotMatch(codeBlockStyles, /pre::before/)
   assert.doesNotMatch(codeBlockStyles, /padding-right: (?:70|62)px/)
+})
+
+test('代码块只渲染一个 pre，复制图标使用共享 Tooltip，不改动原始复制内容', () => {
+  const html = renderToStaticMarkup(createElement(CopyableCodeBlock, {
+    copyValue: 'POST /rpc/v2/busApp/userInfo',
+    children: createElement('code', null, 'POST /rpc/v2/busApp/userInfo'),
+  }))
+  assert.equal((html.match(/<pre\b/g) ?? []).length, 1)
+  assert.match(html, /<span class="code-block-copy-toolbar"><button[^>]*class="ui-icon-button is-small is-default code-block-copy"/)
+  assert.match(html, /data-ui-tooltip="/)
+  assert.doesNotMatch(html, /\stitle="/)
+  assert.match(html, /<pre[^>]*><code>POST \/rpc\/v2\/busApp\/userInfo<\/code><\/pre>/)
+  assert.equal((html.match(/POST \/rpc\/v2\/busApp\/userInfo/g) ?? []).length, 1)
 })

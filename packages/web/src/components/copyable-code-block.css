@@ -1,14 +1,33 @@
 @reference "../styles.css";
 
-.copyable-code-block { display: flex; min-width: 0; flex-direction: column; }
-.copyable-code-block.copyable-code-block > pre { min-width: 0; margin: 0; }
+.copyable-code-block {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid var(--al-line);
+  border-radius: var(--radius-sm);
+  background: var(--al-soft-2);
+}
 
-/* Keep the shared copy action in normal flow, above scrollable/wrapping code. */
+/* One framed code block: a fixed-height action row and a separate scrollport.
+ * Copying never overlaps readable code, even when the user scrolls within pre. */
 .code-block-copy-toolbar {
   display: flex;
+  min-height: 34px;
   flex: 0 0 auto;
+  align-items: center;
   justify-content: flex-end;
-  padding: 0 7px 4px;
+  padding: 4px 7px;
+}
+.copyable-code-block > pre {
+  min-width: 0;
+  margin: 0;
+  padding: 0 10px 10px;
+  overflow: auto;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
 }
 
 /* Shared readable code baseline (Markdown fences, Tool I/O, source previews).
@@ -42,29 +61,20 @@ html body .markdown .copyable-code-block > pre,
 .copyable-code-block .token-deleted { color: var(--al-danger); }
 
 
-.code-block-copy {
-  position: static;
-  display: inline-flex;
-  min-width: 54px;
-  height: 26px;
-  align-items: center;
-  justify-content: center;
-  gap: 4px;
-  padding: 0 7px;
-  border: 1px solid color-mix(in srgb, var(--al-line-strong) 78%, transparent);
-  border-radius: 6px;
-  background: color-mix(in srgb, var(--al-surface) 92%, transparent);
-  box-shadow: 0 1px 3px rgb(16 24 40 / .08);
+/* Control dimensions, focus and hover colors are owned by the shared IconButton.
+ * Invisible actions remain keyboard focusable; :focus-within reveals them. */
+.code-block-copy.ui-icon-button {
+  opacity: 0;
+  pointer-events: none;
   color: var(--al-muted);
-  font: 600 12px/1 var(--font-ui);
-  cursor: pointer;
-  opacity: .82;
-  transition: color .15s ease, background-color .15s ease, border-color .15s ease, opacity .15s ease;
+  transition: opacity .15s ease, background-color .15s ease, color .15s ease;
 }
-.code-block-copy:hover,
-.code-block-copy:focus-visible { border-color: var(--al-line-strong); background: var(--al-surface); color: var(--al-ink-2); opacity: 1; }
-.code-block-copy:focus-visible { outline: 2px solid color-mix(in srgb, var(--al-accent) 46%, transparent); outline-offset: 2px; }
-.code-block-copy svg { width: 13px; height: 13px; fill: none; stroke: currentColor; stroke-width: 1.45; stroke-linecap: round; stroke-linejoin: round; }
+.copyable-code-block:is(:hover, :focus-within) .code-block-copy,
+.copyable-code-block[data-copy-state='copied'] .code-block-copy,
+.copyable-code-block[data-copy-state='error'] .code-block-copy {
+  opacity: 1;
+  pointer-events: auto;
+}
 .copyable-code-block[data-copy-state='copied'] .code-block-copy { color: var(--al-success); }
 .copyable-code-block[data-copy-state='error'] .code-block-copy { color: var(--al-danger); }
 
@@ -73,12 +83,10 @@ html body .markdown .copyable-code-block > pre,
 .pi-live-markdown-preview .copyable-code-block { margin: 0 0 8px; }
 .task-surface .task-tool-live-output .copyable-code-block,
 .task-surface .task-tool-output-details .copyable-code-block { margin: 4px 0 0; }
-.task-message-bubble-user .code-block-copy { border-color: color-mix(in srgb, var(--al-user-bubble-text) 25%, transparent); background: color-mix(in srgb, var(--al-user-bubble-code) 86%, transparent); color: var(--al-user-bubble-muted); box-shadow: none; }
-.task-message-bubble-user .code-block-copy:hover,
-.task-message-bubble-user .code-block-copy:focus-visible { color: var(--al-user-bubble-text); }
+.task-message-bubble-user .copyable-code-block[data-copy-state='idle'] .code-block-copy.ui-icon-button { color: var(--al-user-bubble-muted); }
+.task-message-bubble-user .copyable-code-block[data-copy-state='idle'] .code-block-copy.ui-icon-button:is(:hover, :focus-visible) { color: var(--al-user-bubble-text); }
 
-@media (max-width: 767.98px) {
-  .code-block-copy-toolbar { padding-right: 6px; }
-  .code-block-copy { min-width: 48px; height: 24px; padding-inline: 6px; }
+@media (hover: none), (pointer: coarse) {
+  .copyable-code-block .code-block-copy { opacity: 1; pointer-events: auto; }
 }
-@media (prefers-reduced-motion: reduce) { .code-block-copy { transition: none; } }
+@media (prefers-reduced-motion: reduce) { .code-block-copy.ui-icon-button { transition: none; } }

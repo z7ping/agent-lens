@@ -163,14 +163,14 @@ export function TooltipProvider({ children }: { children: ReactNode }) {
       for (const record of records) {
         if (!(record.target instanceof HTMLElement || record.target instanceof SVGElement)) continue
         const anchor = record.target
-        if (anchor.getAttribute('title') === null) continue
+        if (record.attributeName === 'title' && anchor.getAttribute('title') === null) continue
         const text = tooltipText(anchor)
-        if (activeRef.current?.anchor === anchor) {
+        if (activeRef.current?.anchor === anchor && activeRef.current.text !== text) {
           setActive(previous => previous?.anchor === anchor ? { anchor, text } : previous)
         }
       }
     })
-    observer.observe(document.body, { subtree: true, attributes: true, attributeFilter: ['title'] })
+    observer.observe(document.body, { subtree: true, attributes: true, attributeFilter: ['title', 'data-ui-tooltip'] })
     document.addEventListener('pointerover', pointerOver, true)
     document.addEventListener('pointerout', pointerOut, true)
     document.addEventListener('focusin', focusIn, true)
