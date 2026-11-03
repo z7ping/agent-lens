@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import type { TFunction } from 'i18next'
 import { useTranslation } from 'react-i18next'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import type {
   AgentAssetBindingDto,
   AgentAssetInventoryDto,
@@ -427,7 +427,8 @@ function AgentCard({ model, agent, work, management, discovery, discoveryScannin
     binding: AgentAssetBindingDto
   } | null>(null)
   const choices = useMemo(() => installationChoices(agent.installations), [agent.installations])
-  const [selectedInstallationId, setSelectedInstallationId] = useState(choices[0]?.id ?? '')
+  const [searchParams,setSearchParams] = useSearchParams()
+  const selectedInstallationId = searchParams.get('installation') ?? ''
   const installation = choices.find(item => item.id === selectedInstallationId) ?? choices[0]
   const grouped = useMemo(() => {
     const map = new Map<string, AgentAssetInventoryDto[]>()
@@ -536,7 +537,9 @@ function AgentCard({ model, agent, work, management, discovery, discoveryScannin
               }
             })}
             onChange={value => {
-              setSelectedInstallationId(value)
+              const next = new URLSearchParams(searchParams)
+              next.set('installation',value)
+              setSearchParams(next)
               setManagedRoot(null)
               setPreviewAsset(null)
               setShowAllBindings(false)
@@ -762,6 +765,11 @@ export function AgentsPage({
     : fallbackRow?.sourceId ?? ''
   const selectedRow = rows.find(row => row.sourceId === selectedSourceId || row.id === selectedSourceId)
   const selectedAgent = selectedRow?.agent
+  const [overviewSearchParams] = useSearchParams()
+  const selectedOverviewInstallationId = (() => {
+    const choices = installationChoices(selectedAgent?.installations ?? [])
+    return choices.find(item=>item.id===overviewSearchParams.get('installation'))?.id ?? choices[0]?.id ?? ''
+  })()
   const selectedManagement = selectedRow?.management
   const selectedDiscovery = selectedRow?.discovery
   const detailPending = Boolean(
@@ -777,7 +785,8 @@ export function AgentsPage({
             key={selectedAgent.sourceId}
             model={model}
             agent={selectedAgent}
-            {...(snapshot.agentWorkspace.sourceId === selectedAgent.sourceId && snapshot.agentWorkspace.response
+            {...(snapshot.agentWorkspace.sourceId === selectedAgent.sourceId
+              && snapshot.agentWorkspace.installationId === selectedOverviewInstallationId && snapshot.agentWorkspace.response
               ? {work:snapshot.agentWorkspace.response}: {})}
             onOpenWork={() => navigate(`/agents?view=work&agent=${encodeURIComponent(selectedAgent.sourceId)}`)}
             management={selectedManagement}

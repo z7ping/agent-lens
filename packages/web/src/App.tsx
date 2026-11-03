@@ -399,12 +399,17 @@ function Shell({ model }: { model: AgentLensClientModel }) {
 
   const currentView = new URLSearchParams(location.search).get('view')
   const workspaceState = snapshot.agentWorkspace
+  const currentAgentInstallations = snapshot.agents?.items.find(item=>item.sourceId===resolvedAgentOverviewSourceId)?.installations ?? []
+  const currentInstallationId = currentAgentInstallations.find(item=>item.id===new URLSearchParams(location.search).get('installation'))?.id
+    ?? currentAgentInstallations[0]?.id ?? ''
   const workPending = currentView === 'work' && Boolean(resolvedAgentOverviewSourceId)
-    && (workspaceState.sourceId !== resolvedAgentOverviewSourceId
+    && (workspaceState.sourceId !== resolvedAgentOverviewSourceId || workspaceState.installationId !== currentInstallationId
       || (!workspaceState.response && (workspaceState.loading || Boolean(workspaceState.error))))
-  const hasAgentWork = workPending || (workspaceState.sourceId === resolvedAgentOverviewSourceId &&
+  const hasAgentWork = workPending || (workspaceState.sourceId === resolvedAgentOverviewSourceId
+    && workspaceState.installationId === currentInstallationId &&
     Boolean(workspaceState.response?.features.some(feature =>
       feature.availability === 'available' || feature.availability === 'partial' || feature.availability === 'error')))
+  const agentInstallationQuery = currentInstallationId ? `&installation=${encodeURIComponent(currentInstallationId)}` : ''
   const workspaceTabs = onTools || onInsights
     ? [
         { value: 'overview', label: t('navigation:usageOverview'), to: '/insights' },
@@ -412,9 +417,9 @@ function Shell({ model }: { model: AgentLensClientModel }) {
       ]
     : onAgents
       ? [
-          { value: 'overview', label: t('navigation:overview'), to: `/agents${resolvedAgentOverviewSourceId ? `?agent=${encodeURIComponent(resolvedAgentOverviewSourceId)}` : ''}` },
-          ...(hasAgentWork ? [{value:'work',label:t('navigation:agentWork'),to:`/agents?view=work&agent=${encodeURIComponent(resolvedAgentOverviewSourceId)}`}] : []),
-          { value: 'management', label: t('navigation:integrationManagement'), to: `/agents?view=management${resolvedAgentOverviewSourceId ? `&agent=${encodeURIComponent(resolvedAgentOverviewSourceId)}` : ''}` },
+          { value: 'overview', label: t('navigation:overview'), to: `/agents${resolvedAgentOverviewSourceId ? `?agent=${encodeURIComponent(resolvedAgentOverviewSourceId)}${agentInstallationQuery}` : ''}` },
+          ...(hasAgentWork ? [{value:'work',label:t('navigation:agentWork'),to:`/agents?view=work&agent=${encodeURIComponent(resolvedAgentOverviewSourceId)}${agentInstallationQuery}`}] : []),
+          { value: 'management', label: t('navigation:integrationManagement'), to: `/agents?view=management${resolvedAgentOverviewSourceId ? `&agent=${encodeURIComponent(resolvedAgentOverviewSourceId)}${agentInstallationQuery}` : ''}` },
         ]
       : [
           { value: 'assets', label: t('backup:assetView.currentTab'), to: '/backup' },

@@ -12,6 +12,7 @@ import { SelectMenu } from '../components/ui'
 import { AgentsPage } from './AgentsPage'
 import { IntegrationManagementPage } from './IntegrationManagementPage'
 import { AgentWorkPage } from './AgentWorkPage'
+import { installationChoices } from './agent-installation-choices'
 
 type AgentWorkspaceView = 'overview' | 'ecosystem' | 'management' | 'work'
 
@@ -36,12 +37,18 @@ export function AgentsResponsivePage({
   const hasSelectedOverview = Boolean(snapshot.agents?.items.some(item => item.sourceId === sourceId))
   const hasSelectedSummary = Boolean(snapshot.agentSummaries?.items.some(item => item.sourceId === sourceId))
   const isPi = sourceId === 'pi'
+  const selectedAgent = snapshot.agents?.items.find(item=>item.sourceId===sourceId)
+  const installations = installationChoices(selectedAgent?.installations ?? [])
+  const requestedInstallationId = searchParams.get('installation')
+  const selectedInstallationId = installations.find(item=>item.id===requestedInstallationId)?.id
+    ?? installations[0]?.id ?? ''
   const workspaceState = snapshot.agentWorkspace
-  const hasWork = workspaceState.sourceId === sourceId &&
+  const hasWork = workspaceState.sourceId === sourceId
+    && workspaceState.installationId === selectedInstallationId &&
     Boolean(workspaceState.response?.features.some(feature => feature.availability === 'available' || feature.availability === 'partial' || feature.availability === 'error'))
   const requestedView = searchParams.get('view')
   const pendingWorkLink = requestedView === 'work' && Boolean(sourceId) && hasSelectedSummary
-    && (workspaceState.sourceId !== sourceId
+    && (workspaceState.sourceId !== sourceId || workspaceState.installationId !== selectedInstallationId
       || (!workspaceState.response && (workspaceState.loading || Boolean(workspaceState.error))))
   const activeView: AgentWorkspaceView = requestedView === 'management'
     ? 'management'
@@ -57,13 +64,14 @@ export function AgentsResponsivePage({
   }, [model, sourceId, hasSelectedSummary])
 
   useEffect(() => {
-    if (!sourceId || !hasSelectedSummary) return
-    void model.ensureAgentWorkspace(sourceId)
-  }, [model,sourceId,hasSelectedSummary])
+    if (!sourceId || !hasSelectedSummary || !selectedInstallationId) return
+    void model.ensureAgentWorkspace(sourceId,selectedInstallationId)
+  }, [model,sourceId,hasSelectedSummary,selectedInstallationId])
 
   useEffect(() => {
     // A stale/unsupported deep link is never kept as a fake working tab.
     if (requestedView !== 'work' || workspaceState.sourceId !== sourceId
+      || workspaceState.installationId !== selectedInstallationId || !selectedInstallationId
       || workspaceState.loading || workspaceState.error || !workspaceState.response || hasWork) return
     const next = new URLSearchParams(searchParams)
     next.delete('view')
@@ -90,6 +98,7 @@ export function AgentsResponsivePage({
     if (nextSourceId !== sourceId) {
       next.delete('view')
       next.delete('section')
+      next.delete('installation')
     }
     setSearchParams(next, { replace: true })
   }
@@ -120,7 +129,8 @@ export function AgentsResponsivePage({
     <div ref={shellRef} className={`agents-responsive-shell ${showInsights ? '' : 'without-insights'} ${activeView === 'management' ? 'is-management' : ''}`.trim()}>
       {activeView === 'management'
         ? <IntegrationManagementPage model={model} toolbarHost={toolbarHost ?? null}/>
-        : activeView === 'work' ? <AgentWorkPage key={sourceId} sourceId={sourceId} model={model}/>
+        : activeView === 'work' ? <AgentWorkPage key={sourceId+':'+selectedInstallationId} sourceId={sourceId}
+          installationId={selectedInstallationId} installations={installations} model={model}/>
         : <div className={`agents-overview-layout ${showInsights ? '' : 'without-insights'}`.trim()}>
           <AgentsPage model={model} sourceId={sourceId} piView={activeView}/>
           {showInsights && <AgentInsightsRail snapshot={snapshot} sourceId={sourceId}/>}
