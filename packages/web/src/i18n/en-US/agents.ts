@@ -3,6 +3,8 @@ import type { LocaleMessagesDto } from '@agent-lens/protocol'
 export const englishAgentsMessages: LocaleMessagesDto = {
   agents: {
     work: {
+      receiptUnavailable: 'The dispatch receipt is unavailable. Refresh native execution history to verify the outcome.',
+      runCaution: 'This starts a native Hermes run immediately, even for paused jobs. Confirm the profile and job ID. Native history is the final authority.',
       writeEnable: 'Enable writes',
       writeDisable: 'Disable writes',
       writeLoading: 'Checking write access…',
@@ -29,7 +31,7 @@ export const englishAgentsMessages: LocaleMessagesDto = {
         task_link:'Add dependency',task_unlink:'Remove dependency',task_archive:'Archive task',
         task_block:'Block task',task_unblock:'Unblock task',task_complete:'Complete task',task_promote:'Promote to ready',
         cron_create:'Create schedule',cron_edit:'Edit schedule',cron_pause:'Pause',
-        cron_resume:'Resume',cron_remove:'Delete schedule',cron_cancel:'Cancel running job',
+        cron_resume:'Resume',cron_remove:'Delete schedule',cron_run: 'Run now',cron_cancel:'Cancel running job',
       },
       installation: 'Installation',
       noInstallation: 'No readable installation is available',
