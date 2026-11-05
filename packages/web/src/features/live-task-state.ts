@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react'
-import type { LiveCommandDto, LiveEventDto, LiveHistoryIndexDto, LiveMessageActionContributionDto, LiveModelControlDto, LiveQueueStateDto, LiveRuntimeDisclosureContributionDto, LiveRuntimeStateDto, LiveSnapshotDto, LiveThinkingControlDto, LiveMessageDto } from '@agent-lens/protocol'
+import type { LiveCommandDto, LiveHistoryIndexDto, LiveMessageActionContributionDto, LiveModelControlDto, LiveQueueStateDto, LiveRuntimeDisclosureContributionDto, LiveRuntimeStateDto, LiveSnapshotDto, LiveThinkingControlDto, LiveMessageDto } from '@agent-lens/protocol'
 import type { LiveProductMetadata } from '../client/live'
 import { LiveFollowController } from './live-follow-controller'
 import { LiveTaskRoundProjector, type LiveTaskProjectionItem } from './live-task-projection'
