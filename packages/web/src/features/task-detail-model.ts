@@ -43,6 +43,13 @@ export interface TaskToolModel {
   kindLabel: string
   toolSourceType?: 'builtin' | 'mcp' | 'plugin' | 'extension' | 'skill-runtime' | 'unknown' | undefined
   mcpServerId?: string | undefined
+  /** Native source identifiers for explicit nested tool calls; do not infer ancestry from position. */
+  callId?: string | undefined
+  parentToolCallId?: string | undefined
+  /** Resolved only when the referenced parent tool is in the loaded round. */
+  parentToolName?: string | undefined
+  /** Number of source-linked direct children in the currently loaded round. */
+  loadedChildCallCount?: number | undefined
   status: TaskToolStatus
   /** 历史调用未记录到结果，不表示进程当前仍在执行。 */
   resultMissing?: boolean | undefined
