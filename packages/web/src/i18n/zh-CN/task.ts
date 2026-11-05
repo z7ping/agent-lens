@@ -133,6 +133,14 @@ export const chineseTaskMessages: LocaleMessagesDto = {
       preciseHoursMinutesSeconds: '{{hours}}小时{{minutes}}分{{seconds}}秒',
     },
     live: {
+      nativeEntries: {
+        branchSummary: '分支摘要',
+        contextExcluded: '已从模型上下文排除内容',
+        contextReplaced: '模型上下文内容已替换',
+        customMessage: '扩展上下文消息',
+        customHidden: '隐藏的扩展上下文消息',
+        bashExecution: 'Pi Shell 执行',
+      },
       processEvent: {
         outputTruncated: '模型输出达到长度限制，内容可能不完整',
         retryStart: '自动重试已安排',
