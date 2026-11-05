@@ -3,6 +3,20 @@ import type { LocaleMessagesDto } from '@agent-lens/protocol'
 export const englishAgentsMessages: LocaleMessagesDto = {
   agents: {
     work: {
+      loadedRuns: '{{count}} on this page',
+      showAllExecutions: 'Show all {{count}} loaded records',
+      showFewerExecutions: 'Show latest 5',
+      executionCompleted: 'Completed',
+      executionRunning: 'Running',
+      executionClaimed: 'Claimed',
+      executionFailed: 'Failed',
+      executionError: 'Error',
+      executionCancelled: 'Cancelled',
+      executionTimedOut: 'Timed out',
+      deliverySuppressed: 'Delivery suppressed',
+      deliverySuppressedPage: 'Delivery suppressed for all records on this page',
+      deliveryDelivered: 'Delivered',
+      deliveryFailed: 'Delivery failed',
       taskStateDone: 'Done',
       taskStateRunning: 'Running',
       taskStateBlocked: 'Blocked',

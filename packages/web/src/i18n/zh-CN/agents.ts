@@ -3,6 +3,20 @@ import type { LocaleMessagesDto } from '@agent-lens/protocol'
 export const chineseAgentsMessages: LocaleMessagesDto = {
   agents: {
     work: {
+      loadedRuns: '本页 {{count}} 条',
+      showAllExecutions: '展开本页 {{count}} 条',
+      showFewerExecutions: '收起到最近 5 条',
+      executionCompleted: '已完成',
+      executionRunning: '运行中',
+      executionClaimed: '已领取',
+      executionFailed: '失败',
+      executionError: '错误',
+      executionCancelled: '已取消',
+      executionTimedOut: '已超时',
+      deliverySuppressed: '投递已抑制',
+      deliverySuppressedPage: '本页投递均已抑制',
+      deliveryDelivered: '已投递',
+      deliveryFailed: '投递失败',
       taskStateDone: '已完成',
       taskStateRunning: '运行中',
       taskStateBlocked: '已阻塞',

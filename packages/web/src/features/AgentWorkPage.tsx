@@ -4,13 +4,15 @@ import { useNavigate, useSearchParams } from 'react-router-dom'
 import type { AgentWorkTaskDto, AgentWorkScheduleDto, AgentWorkOutputResponseDto, AgentInstallationOverviewDto, AgentWorkMutationDto } from '@agent-lens/protocol'
 import type { AgentLensClientModel } from '../client/model'
 import { useClientSnapshot } from '../client/use-client-snapshot'
-import { Button, Dialog, IconButton, Input, Popover, Textarea, SelectMenu, StatusBadge, UiIcon } from '../components/ui'
+import { Button, Dialog, Disclosure, IconButton, Input, Popover, Textarea, SelectMenu, StatusBadge, UiIcon } from '../components/ui'
 import { WorkspaceViewTabs } from '../components/WorkspaceViewTabs'
 import { formatAgentWorkSchedule } from './agent-work-schedule-label'
+import { agentWorkExecutionStatusKey, agentWorkDeliveryKey, visibleAgentWorkExecutions } from './agent-work-execution-label'
 import { MarkdownContent } from '../components/MarkdownContent'
 
 const PAGE_SIZE = 40
 const MAX_EXECUTION_PAGE = 200
+const PREVIEW_EXECUTION_COUNT = 5
 const actionLabelKey=(kind:AgentWorkMutationDto['kind'])=>'work.actions.'+kind.replace('.','_')
 const formatDate = (value: string | undefined): string => {
   if (!value) return '—'
@@ -137,6 +139,7 @@ export function AgentWorkPage({model,sourceId,installationId,installations}: {
     }
   }
   const [executionOffset,setExecutionOffset] = useState(0)
+  const [showAllExecutions,setShowAllExecutions] = useState(false)
   const [scheduleOffset,setScheduleOffset] = useState(0)
   const [offset,setOffset] = useState(0)
   const [taskEventOffset,setTaskEventOffset] = useState(0)
@@ -155,6 +158,7 @@ export function AgentWorkPage({model,sourceId,installationId,installations}: {
     setSelectedJob(null)
     setOutputOffset(0)
     setExecutionOffset(0)
+    setShowAllExecutions(false)
     setScheduleOffset(0)
     setOffset(0)
     setTaskEventOffset(0)
@@ -236,6 +240,7 @@ export function AgentWorkPage({model,sourceId,installationId,installations}: {
     : panel === 'schedules' && !schedulesAvailable && boardAvailable ? 'boards'
     : panel
   const openJob = (job:AgentWorkScheduleDto) => {
+    setShowAllExecutions(false)
     const identity=job.profile+':'+job.id
     const next=selectedJob===identity?null:identity
     setSelectedJob(next)
@@ -251,6 +256,7 @@ export function AgentWorkPage({model,sourceId,installationId,installations}: {
     })
   }
   const goExecutionPage = (job:AgentWorkScheduleDto,offset:number) => {
+    setShowAllExecutions(false)
     setExecutionOffset(offset)
     void refreshWorkspace({
       board:response?.selectedBoard,jobId:job.id,profile:job.profile,executionOffset:offset,scheduleOffset,
@@ -263,12 +269,19 @@ export function AgentWorkPage({model,sourceId,installationId,installations}: {
     setCronOutputError('')
     outputRequest.current++
     setExecutionOffset(0)
+    setShowAllExecutions(false)
     void refreshWorkspace({
       board:response?.selectedBoard,scheduleOffset:nextOffset,limit:PAGE_SIZE,
     })
   }
   const selectedSchedule:AgentWorkScheduleDto|undefined = response?.schedules.find(item =>
     item.profile + ':' + item.id === selectedJob)
+  const selectedExecutions = selectedSchedule
+    ? (response?.executions ?? []).filter(run =>
+      run.jobId===selectedSchedule.id && run.profile===selectedSchedule.profile)
+    : []
+  const sharedSuppressedDelivery = selectedExecutions.length>0
+    && selectedExecutions.every(run=>run.deliveryOutcome==='suppressed')
   const permitted=(kind:AgentWorkMutationDto['kind'])=>
     accessStatus==='ready' && accessEnabled && (response?.availableActions?.includes(kind) ?? false)
   const changeWriteAccess=async()=>{
@@ -585,22 +598,49 @@ export function AgentWorkPage({model,sourceId,installationId,installations}: {
                   kind:'cron.remove',profile:job.profile,jobId:job.id,
                 })}>{t('work.actions.cron_remove')}</Button>}
               </div>
-              <div className="section-heading-row"><h3>{t('work.runs')}</h3></div>
-              {response.executions.filter(run=>run.jobId===job.id && run.profile===job.profile).map(run=><div key={run.id} className="runtime-config-row">
-                <StatusBadge tone={run.status==='failed'?'danger':run.status==='completed'?'success':'neutral'}>{run.status}</StatusBadge>
-                <span>{formatDate(run.startedAt ?? run.claimedAt)}</span>
-                {run.deliveryOutcome && <span>{t('work.delivery')} {run.deliveryOutcome}</span>}
-                {run.error && <div className="agent-path-error">{run.error}</div>}
-              </div>)}
-              <div className="runtime-config-row">
-                {executionOffset>0 && <Button size="small" disabled={snapshot.loading} onClick={()=>goExecutionPage(job,Math.max(0,executionOffset-MAX_EXECUTION_PAGE))}>{t('work.previous')}</Button>}
-                {response.executionsHasMore && <Button size="small" disabled={snapshot.loading} onClick={()=>goExecutionPage(job,executionOffset+MAX_EXECUTION_PAGE)}>{t('work.next')}</Button>}
-              </div>
-              <section className="agent-secondary">
-                <div className="section-heading-row"><h3>{t('work.output')}</h3></div>
+              <Disclosure className="agent-work-history" summary={t('work.runs')}
+                summaryMeta={snapshot.loading ? t('work.loading')
+                  : selectedExecutions.length
+                    ? t('work.loadedRuns',{count:selectedExecutions.length}) + (response.executionsHasMore?'+':'')
+                      + (sharedSuppressedDelivery ? ' · '+t('work.deliverySuppressedPage') : '')
+                    : t('work.noRuns')}>
+                {selectedExecutions.length===0 && !snapshot.loading &&
+                  <p className="muted-empty compact">{t('work.noRuns')}</p>}
+                {visibleAgentWorkExecutions(selectedExecutions,showAllExecutions,PREVIEW_EXECUTION_COUNT).map(run=>{
+                  const statusKey=agentWorkExecutionStatusKey(run.status)
+                  const deliveryKey=run.deliveryOutcome?agentWorkDeliveryKey(run.deliveryOutcome):undefined
+                  return <div key={run.id} className="agent-work-execution-row">
+                    <time dateTime={run.startedAt ?? run.claimedAt} className="agent-work-execution-time">
+                      {formatDate(run.startedAt ?? run.claimedAt)}
+                    </time>
+                    <StatusBadge tone={['failed','error','timed_out'].includes(run.status)?'danger'
+                      :run.status==='completed'?'success':'neutral'}>
+                      {statusKey?t(statusKey):run.status}
+                    </StatusBadge>
+                    {run.deliveryOutcome && !sharedSuppressedDelivery &&
+                      <span className="agent-work-execution-delivery">
+                        {deliveryKey?t(deliveryKey):t('work.delivery')+' '+run.deliveryOutcome}
+                      </span>}
+                    {run.error && <div className="agent-path-error" role="alert">{run.error}</div>}
+                  </div>
+                })}
+                {selectedExecutions.length>PREVIEW_EXECUTION_COUNT &&
+                  <Button size="small" variant="quiet" onClick={()=>setShowAllExecutions(value=>!value)}>
+                    {t(showAllExecutions?'work.showFewerExecutions':'work.showAllExecutions',
+                      {count:selectedExecutions.length})}
+                  </Button>}
+                {(executionOffset>0 || response.executionsHasMore) && <div className="agent-work-pagination">
+                  {executionOffset>0 && <Button size="small" disabled={snapshot.loading}
+                    onClick={()=>goExecutionPage(job,Math.max(0,executionOffset-MAX_EXECUTION_PAGE))}>{t('work.previous')}</Button>}
+                  {response.executionsHasMore && <Button size="small" disabled={snapshot.loading}
+                    onClick={()=>goExecutionPage(job,executionOffset+MAX_EXECUTION_PAGE)}>{t('work.next')}</Button>}
+                </div>}
+              </Disclosure>
+              {(cronOutputLoading || Boolean(cronOutputError) || Boolean(cronOutput?.files.length) || Boolean(cronOutput?.preview)) &&
+                <Disclosure className="agent-work-output" summary={t('work.output')}>
                 {cronOutputLoading && <div className="muted-empty compact" role="status">{t('work.loading')}</div>}
                 {cronOutputError && <div className="agent-path-error" role="alert">{cronOutputError}</div>}
-                {(cronOutput?.state === 'unavailable' || (cronOutput?.state === 'available' && !cronOutput.files.length)) &&
+                {(cronOutput?.state === 'unavailable' || (cronOutput?.state === 'available' && !cronOutput.files.length && !cronOutput.preview)) &&
                   <div className="muted-empty compact">{t('work.noOutput')}</div>}
                 {cronOutput?.files.map(file=><div key={file.name} className="runtime-config-row">
                   <Button size="small" variant="quiet" disabled={cronOutputLoading}
@@ -617,7 +657,7 @@ export function AgentWorkPage({model,sourceId,installationId,installations}: {
                   <div className="section-heading-row"><h3>{cronOutput.preview.name}</h3></div>
                   <MarkdownContent text={cronOutput.preview.text}/>
                 </div>}
-              </section>
+              </Disclosure>}
               </div>}
           </div>)}
         </section>}
