@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next'
 import type { LiveMessageActionContributionDto } from '@agent-lens/protocol'
 import { VirtualRoundMount } from '../components/VirtualRoundMount'
 import { IconButton, UiIcon } from '../components/ui'
-import { liveTaskRoundEstimate, type LiveTaskProjectionItem, type LiveTaskRoundProjection } from './live-task-projection'
+import { liveTaskRoundEstimate, liveLoadedToolRelations, type LiveLoadedToolRelation, type LiveTaskProjectionItem, type LiveTaskRoundProjection } from './live-task-projection'
 import { sameStableLiveTaskRoundProps } from './live-task-render-boundary'
 import { TaskReadingRound } from './TaskReadingRound'
 import { TaskEvent } from './TaskEvent'
@@ -30,6 +30,7 @@ function GenericLiveItem({
   actionPending,
   runtimeStreaming,
   showContentActions = false,
+  relations,
   onMessageAction,
 }: {
   item: LiveTaskProjectionItem
@@ -38,6 +39,7 @@ function GenericLiveItem({
   actionPending: string | null
   runtimeStreaming: boolean
   showContentActions?: boolean
+  relations?: ReadonlyMap<string, LiveLoadedToolRelation> | undefined
   onMessageAction(action: LiveMessageActionContributionDto, item: Extract<LiveTaskProjectionItem, { kind: 'message' }>): void
 }) {
   const { t, i18n } = useTranslation('task')
@@ -129,13 +131,15 @@ function GenericLiveItem({
       streaming={item.streaming}
     />
   }
-  return <TaskSessionTool model={liveTaskToolModel(item, t('tool.kind.tool'))}/>
+  return <TaskSessionTool model={liveTaskToolModel(item, t('tool.kind.tool'), relations?.get(item.callId))}/>
 
 }
 
-function liveTaskToolModel(item: Extract<LiveTaskProjectionItem, { kind: 'tool' }>, kindLabel: string): TaskToolModel {
+function liveTaskToolModel(item: Extract<LiveTaskProjectionItem, { kind: 'tool' }>, kindLabel: string, relation?: LiveLoadedToolRelation): TaskToolModel {
   return {
     id: item.id,
+    callId: item.callId,
+    ...(relation ?? (item.parentToolCallId ? { parentToolCallId: item.parentToolCallId } : {})),
     name: item.name,
     kind: 'tool',
     kindLabel,
@@ -216,9 +220,10 @@ export const GenericLiveRound = memo(function GenericLiveRound({
   const processItems = reading.process.map(fact => fact.value)
   const visibleItems = [...reading.prompts, ...reading.answers, ...reading.auxiliary].map(fact => fact.value)
   const lastAnswerId = reading.answers.at(-1)?.id
+  const relations = liveLoadedToolRelations(projection.items)
   const renderItem = (item: LiveTaskProjectionItem) => <GenericLiveItem
     key={item.id} item={item} agentLabel={agentLabel} messageActions={messageActions}
-    actionPending={actionPending} runtimeStreaming={runtimeStreaming}
+    actionPending={actionPending} runtimeStreaming={runtimeStreaming} relations={relations}
     showContentActions={item.kind === 'message' && item.role === 'assistant'
       && !item.error && item.id === lastAnswerId && projection.model.state !== 'running' && showAnswerActions}
     onMessageAction={onMessageAction}
@@ -235,7 +240,7 @@ export const GenericLiveRound = memo(function GenericLiveRound({
     !processIds.has(item.id)
       ? { type: 'content', key: `boundary:${item.id}`, content: null }
       : item.kind === 'tool'
-        ? { type: 'tool', key: item.id, tool: liveTaskToolModel(item, t('tool.kind.tool')) }
+        ? { type: 'tool', key: item.id, tool: liveTaskToolModel(item, t('tool.kind.tool'), relations.get(item.callId)) }
         : { type: 'content', key: item.id, content: renderProcessItem(item) })
   const processContent = <TaskProcessSequence id={projection.model.id} sequence={processSequence} expansionStore={processExpansionStore}/>
 
