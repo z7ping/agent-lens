@@ -3,6 +3,14 @@ import type { LocaleMessagesDto } from '@agent-lens/protocol'
 export const englishAgentsMessages: LocaleMessagesDto = {
   agents: {
     work: {
+      workspaceTitle: 'Workspace',
+      moreActions: 'Workspace actions',
+      defaultBoard: 'Default board',
+      noBoards: 'No boards yet',
+      taskCount: '{{count}} tasks',
+      scheduleCount: '{{count}} jobs',
+      tasksUnavailable: 'The current task list is not fully available',
+      schedulesUnavailable: 'Scheduled jobs are not fully available',
       refreshFailed: 'Automatic refresh failed; refresh native data manually',
       noSupportedActions: 'No workspace write operation was confirmed for this installation. Check the Hermes CLI version and executable.',
       writeConfirmed: 'Change confirmed from Hermes native data',
