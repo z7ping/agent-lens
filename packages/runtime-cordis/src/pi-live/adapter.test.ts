@@ -813,3 +813,11 @@ test('Pi Live Slim native resume and whole-session fork use authorized Catalog i
     ['/verified/native.jsonl','/verified/native.jsonl','/verified/native.jsonl'])
   assert.equal((actions.at(-1) as {branchFromEntryId?:string}|undefined)?.branchFromEntryId,'assistant-1')
 })
+
+
+test('Pi native extension dialogs dismiss only their matching request ID', () => {
+  assert.deepEqual(normalizePiLiveEvent({
+    type: 'extension_ui_dismissed', requestId: 'req-a',
+  }), { type: 'ui.dismiss', requestId: 'req-a' })
+  assert.equal(normalizePiLiveEvent({ type: 'extension_ui_dismissed', requestId: '' }), undefined)
+})
