@@ -86,6 +86,25 @@ function GenericLiveItem({
         : undefined}
     />
   }
+  if (item.kind === 'native') {
+    const type = item.nativeType
+    const label = type === 'branch_summary' ? t('live.nativeEntries.branchSummary')
+      : type === 'context_edit' ? t(item.source.replacement === null
+        ? 'live.nativeEntries.contextExcluded'
+        : item.source.replacement !== undefined ? 'live.nativeEntries.contextReplaced'
+        : 'context_edit')
+        : type === 'custom_message' ? t(item.source.display === false
+          ? 'live.nativeEntries.customHidden' : 'live.nativeEntries.customMessage')
+          : t('live.nativeEntries.bashExecution')
+    return <TaskEvent model={{
+      id: item.id,
+      category: type === 'bashExecution' ? 'lifecycle' : 'context',
+      label,
+      ...(item.preview ? { summary: item.preview } : {}),
+      ...(item.at ? { time: taskSessionMessageTime(item.at) } : {}),
+      nativeType: type,
+    }} raw={item.source}/>
+  }
   if (item.kind === 'event') {
     const detail = item.process
     const prefix = detail.operation === 'retry' ? 'retry' : detail.operation === 'compaction' ? 'compaction' : 'output'
@@ -204,7 +223,7 @@ export const GenericLiveRound = memo(function GenericLiveRound({
   const reading = projectTaskReading(projection.items
     .filter(item => item.kind !== 'thinking' || item.streaming || Boolean(item.text.trim()))
     .map(item => {
-      const kind: TaskReadingFact<LiveTaskProjectionItem>['kind'] = item.kind === 'event' ? 'process-block'
+      const kind: TaskReadingFact<LiveTaskProjectionItem>['kind'] = item.kind === 'event' || item.kind === 'native' ? 'process-block'
         : item.kind === 'thinking'
         ? 'reasoning'
         : item.kind === 'tool' ? 'tool'

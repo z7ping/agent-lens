@@ -133,6 +133,14 @@ export const englishTaskMessages: LocaleMessagesDto = {
       preciseHoursMinutesSeconds: '{{hours}}h {{minutes}}m {{seconds}}s',
     },
     live: {
+      nativeEntries: {
+        branchSummary: 'Branch summary',
+        contextExcluded: 'Content omitted from model context',
+        contextReplaced: 'Model context content replaced',
+        customMessage: 'Extension context message',
+        customHidden: 'Hidden extension context message',
+        bashExecution: 'Pi shell execution',
+      },
       processEvent: {
         outputTruncated: 'Model output reached the length limit; the response may be incomplete',
         retryStart: 'Automatic retry scheduled',

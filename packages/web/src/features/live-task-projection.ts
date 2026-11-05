@@ -10,6 +10,16 @@ export type LiveTaskProjectionAttachment = ReviewMessageAttachmentDto & {
 export type LiveTaskProjectionItem =
   | {
       id: string
+      kind: 'native'
+      nativeType: 'branch_summary' | 'custom_message' | 'context_edit' | 'bashExecution'
+      /** Compact source-backed preview; never promote an extension context entry to a user turn. */
+      preview: string
+      /** Source journal entry, exposed through the existing TaskEvent evidence detail. */
+      source: Record<string, unknown>
+      at?: string | undefined
+    }
+  | {
+      id: string
       kind: 'event'
       process: LiveProcessEventDetailDto
       at?: string | undefined
@@ -228,6 +238,51 @@ export function projectLiveSnapshotEntries(entries: readonly unknown[]): LiveTas
         streaming: false,
         ...(at ? { at } : {}),
       })
+    }
+
+    // Pi's special session entries are distinct from user/assistant messages.
+    // In particular, custom_message.display=false means Pi deliberately hides
+    // the injected content, so only identify the entry in the process timeline.
+    if (item.type === 'branch_summary') {
+      projected.push({
+        id: `native-branch-summary:${baseId}`,
+        kind: 'native', nativeType: 'branch_summary',
+        preview: text(item.summary).replace(/\s+/g, ' ').trim().slice(0, 180),
+        source: item,
+        ...(at ? { at } : {}),
+      })
+      return
+    }
+    if (item.type === 'custom_message') {
+      const preview = item.display === true ? contentText(item.content).replace(/\s+/g, ' ').trim().slice(0, 180) : ''
+      projected.push({
+        id: `native-custom-message:${baseId}`,
+        kind: 'native', nativeType: 'custom_message',
+        preview: [text(item.customType), preview].filter(Boolean).join(' · '),
+        source: item,
+        ...(at ? { at } : {}),
+      })
+      return
+    }
+    if (item.type === 'context_edit') {
+      projected.push({
+        id: `native-context-edit:${baseId}`,
+        kind: 'native', nativeType: 'context_edit',
+        preview: text(item.targetId),
+        source: item,
+        ...(at ? { at } : {}),
+      })
+      return
+    }
+    if (item.type === 'message' && rawRole === 'bashExecution') {
+      projected.push({
+        id: `native-bash:${baseId}`,
+        kind: 'native', nativeType: 'bashExecution',
+        preview: text(nested.command).trim().slice(0, 180),
+        source: item,
+        ...(at ? { at } : {}),
+      })
+      return
     }
 
     // Pi's persisted compaction journal row is the source of truth after
@@ -1224,7 +1279,8 @@ export function liveTaskRoundEstimate(round: LiveTaskRoundProjection): number {
   const messageCount = round.items.filter(item => item.kind === 'message').length
   const thinkingCount = round.items.filter(item => item.kind === 'thinking').length
   const toolCount = round.items.filter(item => item.kind === 'tool').length
-  return Math.max(180, Math.min(1200, 120 + messageCount * 120 + thinkingCount * 150 + toolCount * 110))
+  const nativeCount = round.items.filter(item => item.kind === 'native').length
+  return Math.max(180, Math.min(1200, 120 + messageCount * 120 + thinkingCount * 150 + toolCount * 110 + nativeCount * 40))
 }
 
 export function projectLiveInputHistory(
