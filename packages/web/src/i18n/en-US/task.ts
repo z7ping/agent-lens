@@ -216,6 +216,8 @@ export const englishTaskMessages: LocaleMessagesDto = {
         tools: 'Running tools',
         responding: 'Generating response',
         processing: 'Model working',
+        retrying: 'Automatically retrying',
+        compacting: 'Compacting context',
       },
       terminate: 'End task',
       empty: 'Waiting for task input.',
