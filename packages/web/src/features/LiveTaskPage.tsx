@@ -21,6 +21,8 @@ import { messageText, resolveLiveSlash } from './live-task-input'
 import { scrollReaderToLastUserTurn } from './session-reader-positioning'
 import { LIVE_TASK_SNAPSHOT_PAGE_LIMIT, historyPageBlock, aggregateHistoryPage, splitLiveProjectionItems } from './live-task-history-window'
 import { GenericLiveRound, StableLiveRounds, liveRoundOwnsAnswerActions } from './LiveTaskTimeline'
+import { liveMessageQuote } from './live-message-quote'
+import type { LiveTaskProjectionItem } from './live-task-projection'
 import { UiIcon } from '../components/UiIcon'
 import { AgentLogo } from '../components/AgentLogo'
 import { liveTaskResponseActivity, projectLiveInputHistory, projectLiveSnapshotEntries } from './live-task-projection'
@@ -144,6 +146,18 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
     if (composerRef.current) composerRef.current.clear()
     else setComposerValue('')
   }, [setComposerValue])
+
+  const quoteMessage = useCallback((
+    _item: Extract<LiveTaskProjectionItem, { kind: 'message' }>,
+    value: string,
+  ) => {
+    const quote = liveMessageQuote(value)
+    if (!quote || !composerRef.current) return
+    // The existing Lexical insertion preserves any unsent text and attachments.
+    composerRef.current.restoreMessage({ parts: [{ type: 'text', text: quote }] })
+    setComposerExpanded(true)
+    composerRef.current.focus({ preventScroll: true })
+  }, [composerRef, setComposerExpanded])
 
   useEffect(() => {
     setComposerValue(composerDraftKey ? readLiveComposerDraft(composerDraftKey) : '')
@@ -666,6 +680,7 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
             runtimeStreaming={state?.isStreaming ?? false}
             processExpansionStore={processExpansionStore}
             onMessageAction={runMessageAction}
+            onQuoteMessage={quoteMessage}
           />
           {noProgressWarning && <div className="live-task-sync-warning" role="status">
             <UiIcon name="alert" size={14}/>
@@ -683,6 +698,7 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
             showResponsePending={Boolean(state?.isStreaming) && index === roundSegments.active.length - 1}
             processExpansionStore={processExpansionStore}
             onMessageAction={runMessageAction}
+            onQuoteMessage={quoteMessage}
           />)}
           {historyPage?.hasLater && <div
             ref={historyNewerSentinelRef}
