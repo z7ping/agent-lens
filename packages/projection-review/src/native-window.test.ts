@@ -588,4 +588,18 @@ test('Pi subagent tool result preserves its exact linked native details for shar
   assert.deepEqual(subagent.resultDetails, details)
   assert.equal(shell.resultDetails, undefined)
   assert.equal(subagent.status, 'error')
+
+  // Oversized native tool results stay in the SHA-verified paged reader.
+  // Do not send an additional unbounded child transcript as DTO metadata.
+  const oversized = projectNativeReviewWindow({
+    ...page,
+    observations: [
+      candidate('tool.call', 1, { callId: 'large', nativeToolName: 'subagent' }),
+      candidate('tool.result', 2, { callId: 'large', success: true, details,
+        nativeLazyText: { recordSha256: 'a'.repeat(64), totalTextFragments: 90 } }),
+    ],
+    observationRecordIds: ['large-call', 'large-result'],
+  })
+  const largeTool = oversized.interactions[0]?.nodes.find(node => node.type === 'tool')
+  assert.equal(largeTool?.type === 'tool' ? largeTool.resultDetails : undefined, undefined)
 })

@@ -50,6 +50,8 @@ test('subagent messages keep text, thinking, tool call and raw-only unknown cont
   assert.deepEqual(parsed?.parts.map(part => part.kind), ['text', 'thinking', 'toolCall'])
   assert.match(parsed?.parts[2]?.text ?? '', /src\/main\.ts/)
   assert.equal(parsed?.omittedParts, 0)
+  assert.deepEqual(piSubagentTranscriptMessage({ role: 'user', content: 'Task: inspect' })?.parts,
+    [{ kind: 'text', text: 'Task: inspect', truncated: false }])
   assert.equal(piSubagentTranscriptMessage({ role: 'system', content: [] }), undefined)
   assert.equal(piSubagentTranscriptMessage({ role: 'user', content: [
     { type: 'text', text: 'x'.repeat(17_000) },

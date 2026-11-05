@@ -267,7 +267,8 @@ export function buildNodes(items: TimelineItemDto[], registry = new ToolRegistra
         // The Pi subagent extension persists its child transcript in the
         // paired native tool-result details, not as child session files.
         // Do not attach arbitrary unmatched or other-tool metadata here.
-        if (linked.name === 'subagent' && payload.details !== undefined) linked.resultDetails = payload.details
+        if (linked.name === 'subagent' && payload.details !== undefined
+          && payload.nativeLazyText === undefined) linked.resultDetails = payload.details
         linked.evidence = [...new Map([...linked.evidence, ...item.evidence]
           .map(entry => [entry.id, entry])).values()]
         linked.observationIds = [...new Set([...linked.observationIds, item.id])]

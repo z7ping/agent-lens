@@ -89,7 +89,8 @@ export function piSubagentResult(value: unknown): PiSubagentResult | undefined {
 export function piSubagentTranscriptMessage(value: unknown): PiSubagentTranscriptMessage | undefined {
   const message = record(value)
   if (!message || (message.role !== 'user' && message.role !== 'assistant' && message.role !== 'toolResult')) return undefined
-  const original = Array.isArray(message.content) ? message.content : []
+  const original = Array.isArray(message.content) ? message.content
+    : typeof message.content === 'string' ? [{ type: 'text', text: message.content }] : []
   const parts: PiSubagentTranscriptPart[] = []
   for (const value of original.slice(0, 40)) {
     const block = record(value)
