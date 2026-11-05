@@ -3,6 +3,17 @@ import type { LocaleMessagesDto } from '@agent-lens/protocol'
 export const chineseAgentsMessages: LocaleMessagesDto = {
   agents: {
     work: {
+      taskStateDone: '已完成',
+      taskStateRunning: '运行中',
+      taskStateBlocked: '已阻塞',
+      scheduleStateScheduled: '已安排',
+      scheduleStatePaused: '已暂停',
+      scheduleStateDisabled: '已停用',
+      scheduleStateError: '出错',
+      scheduleSeconds: '每 {{count}} 秒',
+      scheduleMinutes: '每 {{count}} 分钟',
+      scheduleHours: '每 {{count}} 小时',
+      scheduleDays: '每 {{count}} 天',
       workspaceTitle: '工作台',
       moreActions: '工作台操作',
       defaultBoard: '默认看板',
