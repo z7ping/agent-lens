@@ -5,6 +5,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef } from 'react'
 import { liveApi } from '../client/live'
 import { emptyLiveQueue, firstUserEntryCursor } from './live-task-queue'
 import { enqueueLiveUiRequest, dismissLiveUiRequest } from './live-extension-request-queue'
+import { reduceLiveExtensionState } from './live-extension-state'
 import { LIVE_TASK_SNAPSHOT_PAGE_LIMIT, historyPageBlock, aggregateHistoryPage, splitLiveProjectionItems, loadBoundedRecoverySnapshot, captureLiveReaderAnchor, restoreLiveReaderAnchor, appendUniqueLiveProjectionItems } from './live-task-history-window'
 import { projectLiveInputHistory, projectLiveSnapshotEntries, liveEventChangesTaskTranscript, mergeLiveActiveProjectionItems, reconcileLiveSnapshotProjection, preserveOptimisticImagePreviews, reduceLiveTaskEvent } from './live-task-projection'
 import { LiveFollowController, liveFollowTextRevision } from './live-follow-controller'
@@ -50,6 +51,7 @@ export function useLiveTaskRuntime({
     thinking,
     setThinking,
     setExtensions,
+    setExtensionUiState,
     setExtensionPendingRequestId,
     queue,
     setQueue,
@@ -131,6 +133,7 @@ export function useLiveTaskRuntime({
     setModelControl(null)
     setThinking(null)
     setExtensions([])
+    setExtensionUiState([])
     setExtensionPendingRequestId(null)
     setQueue(emptyLiveQueue())
     setPendingQueue([])
@@ -498,6 +501,7 @@ export function useLiveTaskRuntime({
     }, 5_000)
 
     setConnected(false)
+    setExtensionUiState([])
     const unsubscribe = liveApi.subscribe(
       current.liveId,
       current.runtimeSessionId,
@@ -522,6 +526,9 @@ export function useLiveTaskRuntime({
         if (product.capabilities.includes('extension-ui') && envelope.normalizedEvent?.type === 'ui.request') {
           const request = envelope.normalizedEvent
           setExtensions(previous => enqueueLiveUiRequest(previous, request))
+        }
+        if (product.capabilities.includes('extension-ui') && envelope.normalizedEvent?.type === 'ui.state') {
+          setExtensionUiState(previous => reduceLiveExtensionState(previous, envelope.normalizedEvent! as Extract<NonNullable<typeof envelope.normalizedEvent>, { type: 'ui.state' }>))
         }
         if (envelope.normalizedEvent?.type === 'ui.dismiss') {
           const requestId = envelope.normalizedEvent.requestId
