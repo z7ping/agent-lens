@@ -640,7 +640,7 @@ export function AgentWorkPage({model,sourceId,installationId,installations}: {
                 <Disclosure className="agent-work-output" summary={t('work.output')}>
                 {cronOutputLoading && <div className="muted-empty compact" role="status">{t('work.loading')}</div>}
                 {cronOutputError && <div className="agent-path-error" role="alert">{cronOutputError}</div>}
-                {(cronOutput?.state === 'unavailable' || (cronOutput?.state === 'available' && !cronOutput.files.length)) &&
+                {(cronOutput?.state === 'unavailable' || (cronOutput?.state === 'available' && !cronOutput.files.length && !cronOutput.preview)) &&
                   <div className="muted-empty compact">{t('work.noOutput')}</div>}
                 {cronOutput?.files.map(file=><div key={file.name} className="runtime-config-row">
                   <Button size="small" variant="quiet" disabled={cronOutputLoading}
