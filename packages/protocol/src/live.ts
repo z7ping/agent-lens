@@ -392,6 +392,9 @@ export type LiveEventDto =
       steering: string[]
       followUp: string[]
     }
+  | { type: 'ui.state'; kind: 'status'; key: string; text: string | null }
+  | { type: 'ui.state'; kind: 'widget'; key: string; lines: string[] | null;
+      placement?: 'aboveEditor' | 'belowEditor' | undefined }
   | { type: 'ui.dismiss'; requestId: string }
   | {
       type: 'ui.request'
@@ -819,6 +822,25 @@ export function parseLiveEventDto(value: unknown): LiveEventDto | null {
     const followUp = rawFollowUp.filter((item): item is string => typeof item === 'string')
     if (steering.length !== rawSteering.length || followUp.length !== rawFollowUp.length) return null
     return { type, steering, followUp }
+  }
+  if (type === 'ui.state') {
+    const key = eventText(event.key)?.trim()
+    if (!key || key.length > 128) return null
+    if (event.kind === 'status') {
+      if (event.text !== null && typeof event.text !== 'string') return null
+      return { type, kind: 'status', key,
+        text: typeof event.text === 'string' ? event.text.slice(0, 4_096) : null }
+    }
+    if (event.kind === 'widget') {
+      if (event.lines !== null
+        && (!Array.isArray(event.lines) || !event.lines.every(line => typeof line === 'string'))) return null
+      const lines = Array.isArray(event.lines)
+        ? (event.lines as string[]).slice(0, 64).map(line => line.slice(0, 4_096)) : null
+      return { type, kind: 'widget', key, lines,
+        ...(event.placement === 'aboveEditor' || event.placement === 'belowEditor'
+          ? { placement: event.placement } : {}) }
+    }
+    return null
   }
   if (type === 'ui.dismiss') {
     return typeof event.requestId === 'string' && event.requestId.trim()
