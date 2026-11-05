@@ -106,6 +106,12 @@ export const englishTaskMessages: LocaleMessagesDto = {
       original: 'Raw',
       formatted: 'Formatted',
     },
+    largeContent: {
+      summary: 'Large content · {{count}} characters (copy captures full original)',
+      range: '{{start}}–{{end}} / {{total}}',
+      previous: 'Previous',
+      next: 'Next',
+    },
     process: {
       details: 'Processing details',
       detailsWithThinking: 'Processing details ({{thinking}})',

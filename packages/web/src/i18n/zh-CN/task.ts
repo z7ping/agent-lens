@@ -106,6 +106,12 @@ export const chineseTaskMessages: LocaleMessagesDto = {
       original: '原文',
       formatted: '格式化',
     },
+    largeContent: {
+      summary: '内容过长，已分块阅读 · 共 {{count}} 字符（复制按钮复制全文）',
+      range: '{{start}}–{{end}} / {{total}}',
+      previous: '上一段',
+      next: '下一段',
+    },
     process: {
       details: '处理详情',
       detailsWithThinking: '处理详情（{{thinking}}）',

@@ -7,6 +7,7 @@ import { copyText } from '../client/clipboard'
 import { Button, Disclosure, IconButton, UiIcon } from '../components/ui'
 import { presentTaskError, type TaskErrorDiagnostic } from './task-error-presentation'
 import { ImagePreview } from '../components/ImagePreview'
+import { isLargeTaskText, TaskTextWindow } from './TaskTextWindow'
 
 export type TaskMessageRole = 'user' | 'assistant'
 
@@ -254,7 +255,11 @@ export function TaskMessage({
             className={`markdown-surface ${canCollapse && !expanded ? 'is-collapsed' : ''}`}
             style={canCollapse && !expanded && collapsedHeight ? { maxHeight: `${collapsedHeight}px` } : undefined}
           >
-            {view === 'rendered' ? <MarkdownContent text={text} streaming={streaming}/> : <CopyableCodeBlock className="markdown-source" copyValue={text}>{text}</CopyableCodeBlock>}
+            {isLargeTaskText(text)
+              ? <TaskTextWindow text={text}/>
+              : view === 'rendered'
+                ? <MarkdownContent text={text} streaming={streaming}/>
+                : <CopyableCodeBlock className="markdown-source" copyValue={text}>{text}</CopyableCodeBlock>}
             {canCollapse && !expanded && <span className="markdown-fade" aria-hidden="true"/>}
           </div>
           {(canCollapse || Boolean(!user && actions) || (!user && (showContentActions || streaming))) && <div className="markdown-message-actions">

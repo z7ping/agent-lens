@@ -5,6 +5,7 @@ import { TaskThinking } from './TaskThinking'
 import { TaskToolRow } from './TaskToolRow'
 import { TaskProcessGroup, type TaskProcessGroupProps } from './TaskProcessGroup'
 import type { TaskThinkingModel, TaskToolModel } from './task-detail-model'
+import { isLargeTaskText, TaskTextWindow } from './TaskTextWindow'
 
 /**
  * Single renderer for Review and Live session facts.
@@ -50,7 +51,9 @@ export function TaskSessionProcessText({
   role?: 'commentary' | 'reasoning'
 }) {
   return <div className="task-process-message" data-message-role={role}>
-    <div className="markdown-message"><MarkdownContent text={text} streaming={streaming}/></div>
+    <div className="markdown-message">{isLargeTaskText(text)
+      ? <TaskTextWindow text={text}/>
+      : <MarkdownContent text={text} streaming={streaming}/>}</div>
   </div>
 }
 
@@ -77,7 +80,9 @@ export function TaskSessionThinking({
     actions={actions}
     expansionStore={expansionStore}
   >
-    <div className="markdown-message"><MarkdownContent text={model.text} streaming={streaming}/></div>
+    <div className="markdown-message">{isLargeTaskText(model.text)
+      ? <TaskTextWindow text={model.text}/>
+      : <MarkdownContent text={model.text} streaming={streaming}/>}</div>
     {nested}
   </TaskThinking>
 }

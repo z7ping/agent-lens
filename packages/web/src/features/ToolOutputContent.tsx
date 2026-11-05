@@ -3,11 +3,14 @@ import { useTranslation } from 'react-i18next'
 import { CopyableCodeBlock } from '../components/CopyableCodeBlock'
 import { codeLanguageFromContent, normalizedCodeLanguage } from '../components/code-language'
 import { MarkdownContent } from '../components/MarkdownContent'
+import { isLargeTaskText, TaskTextWindow } from './TaskTextWindow'
 
 export type ToolOutputFormat = 'json' | 'markdown' | null
 
 /** Do not guess Markdown from arbitrary logs or pipe-separated diagnostic lines. */
 export function detectToolOutputFormat(text: string): ToolOutputFormat {
+  // Skip unbounded trim/JSON.parse/split for giant original results.
+  if (isLargeTaskText(text)) return null
   const value = text.trim()
   if (!value) return null
   if ((value.startsWith('{') && value.endsWith('}')) || (value.startsWith('[') && value.endsWith(']'))) {
@@ -28,6 +31,11 @@ export function detectToolOutputFormat(text: string): ToolOutputFormat {
 export function ToolOutputContent({ text, streaming = false, highlight = true }: { text: string; streaming?: boolean; highlight?: boolean }) {
   const { t } = useTranslation('task')
   const [formatted, setFormatted] = useState(false)
+  if (isLargeTaskText(text)) {
+    return <div className="task-tool-output-content" data-view="window">
+      <TaskTextWindow text={text}/>
+    </div>
+  }
   const format = streaming ? null : detectToolOutputFormat(text)
   const view = formatted && format ? 'formatted' : 'original'
   let pretty = text
