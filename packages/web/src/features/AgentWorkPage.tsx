@@ -344,7 +344,7 @@ export function AgentWorkPage({model,sourceId,installationId,installations}: {
     }finally{setActionBusy(false)}
   }
   return <main className="workspace-page agent-work-page">
-    <div className="page-content agents-content">
+    <div className="page-content agents-content agent-work-content">
       {snapshot.sourceId === sourceId && snapshot.installationId === installationId && snapshot.error && <div className="agent-path-error" role="alert">{snapshot.error} <Button size="small" onClick={() => void refreshWorkspace()}>{t('work.retry')}</Button></div>}
       {!installationId && <div className="muted-empty compact" role="status">{t('work.noInstallation')}</div>}
       {installations.length > 1 && <div className="runtime-config-row">
@@ -370,7 +370,9 @@ export function AgentWorkPage({model,sourceId,installationId,installations}: {
         </div>)}
         <header className="agent-work-toolbar">
           <div className="agent-work-heading">
-            <h2>{t('work.workspaceTitle')}</h2>
+            {!(boardAvailable && schedulesAvailable) && <h2>{
+              t(boardAvailable ? 'work.boards' : schedulesAvailable ? 'work.schedules' : 'work.title')
+            }</h2>}
             {boardAvailable && schedulesAvailable && <WorkspaceViewTabs
               inline label={t('work.title')} value={activePanel}
               tabs={[
@@ -501,7 +503,6 @@ export function AgentWorkPage({model,sourceId,installationId,installations}: {
         </>}
         {activePanel==='schedules' && schedulesAvailable && <section className="agent-work-section">
           <div className="agent-work-board-heading">
-            {!(boardAvailable && schedulesAvailable) && <h3>{t('work.schedules')}</h3>}
             {response.schedulesTotal>0 && <span className="agent-work-meta">{t('work.scheduleCount',{count:response.schedulesTotal})}</span>}
             {response.schedules.length>0 && permitted('cron.create') && <Button size="small"
               onClick={()=>askAction({kind:'cron.create',profile:'default',schedule:'',prompt:''})}>
