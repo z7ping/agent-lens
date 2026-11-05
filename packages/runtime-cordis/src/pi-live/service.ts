@@ -89,7 +89,7 @@ interface OwnedRuntime {
   hydrationTask?: Promise<void> | undefined
   cachedState?: PiLiveRuntimeState | undefined
   cacheMetrics?: PiLiveCacheMetrics | undefined
-  pendingExtensionRequestIds: Set<string>
+  pendingExtensionRequests: Map<string, Record<string, unknown>>
 }
 
 interface PiLiveRuntimeLifecycleOptions {
@@ -921,7 +921,7 @@ export class DefaultPiLiveService implements PiLiveService {
       subscriberCount: 0,
       lastActiveAt: now,
       suspended: false,
-      pendingExtensionRequestIds: new Set<string>(),
+      pendingExtensionRequests: new Map<string, Record<string, unknown>>(),
       workspacePath,
       projectName: basename(workspacePath) || workspacePath,
       ...(restored && normalizedInput.sessionPath ? { recoverySessionPath: normalizedInput.sessionPath } : {}),
@@ -1598,7 +1598,7 @@ export class DefaultPiLiveService implements PiLiveService {
     if (!requestId) throw new Error('Pi extension request id is required')
     const runtime = await this.readyRuntime(id)
     await runtime.handle!.respondToExtension(requestId, response)
-    runtime.pendingExtensionRequestIds.delete(requestId)
+    runtime.pendingExtensionRequests.delete(requestId)
     this.markRuntimeActive(runtime)
   }
 
@@ -1608,6 +1608,12 @@ export class DefaultPiLiveService implements PiLiveService {
     runtime.subscriberCount += 1
     this.markRuntimeActive(runtime)
     const unsubscribe = runtime.events.subscribe(listener)
+    // Re-emit still-pending native dialogs on reconnect/page refresh. The Web
+    // request-id queue deduplicates these without persisting prompt payloads.
+    // All subscribers may see the replay; native request identity is stable.
+    for (const request of runtime.pendingExtensionRequests.values()) {
+      runtime.events.publish(request)
+    }
     void this.ensureRuntimeHydrated(runtime).catch(error => {
       this.recoveryDiagnostic(runtime, 'Pi Live background hydration failed', error)
     })
@@ -1718,7 +1724,7 @@ export class DefaultPiLiveService implements PiLiveService {
       && !runtime.activeAssistantMessageId
       && runtime.queue.steering.length === 0
       && runtime.queue.followUp.length === 0
-      && runtime.pendingExtensionRequestIds.size === 0
+      && runtime.pendingExtensionRequests.size === 0
   }
 
   private async checkpointRuntimeState(runtime: OwnedRuntime, state: PiLiveRuntimeState): Promise<boolean> {
@@ -1775,7 +1781,7 @@ export class DefaultPiLiveService implements PiLiveService {
     runtime.activeAssistantMessageId = undefined
     runtime.isStreaming = false
     runtime.isCompacting = false
-    runtime.pendingExtensionRequestIds.clear()
+    runtime.pendingExtensionRequests.clear()
     runtime.queue = { steering: [], followUp: [] }
     runtime.lastActiveAt = now
     this.publish(runtime, { type: 'runtime_status', status: runtime.status, stage: runtime.stage, message: runtime.message })
@@ -1839,7 +1845,7 @@ export class DefaultPiLiveService implements PiLiveService {
     runtime.activeAssistantMessageId = undefined
     runtime.isStreaming = false
     runtime.isCompacting = false
-    runtime.pendingExtensionRequestIds.clear()
+    runtime.pendingExtensionRequests.clear()
     runtime.queue = { steering: [], followUp: [] }
     this.clearIdleTimer(runtime)
     await handle.terminate().catch(() => undefined)
@@ -2282,7 +2288,7 @@ export class DefaultPiLiveService implements PiLiveService {
       runtime.isStreaming = true
     }
     if (type === 'extension_ui_dismissed' && typeof event.requestId === 'string') {
-      runtime.pendingExtensionRequestIds.delete(event.requestId)
+      runtime.pendingExtensionRequests.delete(event.requestId)
     }
     if (type === 'extension_ui_request') {
       const cache = parsePiCacheOptimizerStatus(event)
@@ -2299,7 +2305,7 @@ export class DefaultPiLiveService implements PiLiveService {
           ? event.requestId
           : ''
       if (requestId && ['select', 'confirm', 'input', 'editor'].includes(String(event.method))) {
-        runtime.pendingExtensionRequestIds.add(requestId)
+        runtime.pendingExtensionRequests.set(requestId, event)
       }
     }
 
@@ -2339,7 +2345,7 @@ export class DefaultPiLiveService implements PiLiveService {
       runtime.lastAssistantAttemptFailed = undefined
       runtime.isStreaming = false
       runtime.isCompacting = false
-      runtime.pendingExtensionRequestIds.clear()
+      runtime.pendingExtensionRequests.clear()
       if (runtime.subscriberCount === 0) this.scheduleIdleCheck(runtime)
     }
   }
