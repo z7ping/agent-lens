@@ -114,7 +114,7 @@ function nativeUsageNumber(value: unknown): number | undefined {
   return typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : undefined
 }
 
-export function piNativeUsageDetail(
+export function sourceNativeUsageDetail(
   value: unknown,
   origin: LiveNativeUsageDetail['origin'],
   metadata: unknown,
@@ -288,7 +288,7 @@ export function projectLiveSnapshotEntries(entries: readonly unknown[]): LiveTas
               : rawRole === 'toolResult' || rawRole === 'tool_result' ? 'toolResult'
                 : undefined
     if (usageOrigin) {
-      const usage = piNativeUsageDetail(
+      const usage = sourceNativeUsageDetail(
         usageOrigin === 'assistant' || usageOrigin === 'toolResult'
           ? nested.usage ?? item.usage : item.usage,
         usageOrigin,
