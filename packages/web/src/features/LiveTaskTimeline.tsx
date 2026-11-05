@@ -90,7 +90,9 @@ function GenericLiveItem({
     const type = item.nativeType
     const label = type === 'branch_summary' ? t('live.nativeEntries.branchSummary')
       : type === 'context_edit' ? t(item.source.replacement === null
-        ? 'live.nativeEntries.contextExcluded' : 'live.nativeEntries.contextReplaced')
+        ? 'live.nativeEntries.contextExcluded'
+        : item.source.replacement !== undefined ? 'live.nativeEntries.contextReplaced'
+        : 'live.nativeEntries.contextUpdated')
         : type === 'custom_message' ? t(item.source.display === false
           ? 'live.nativeEntries.customHidden' : 'live.nativeEntries.customMessage')
           : t('live.nativeEntries.bashExecution')
