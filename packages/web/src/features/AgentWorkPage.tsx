@@ -545,10 +545,10 @@ export function AgentWorkPage({model,sourceId,installationId,installations}: {
                   {job.name}
                 </Button>
                 <div className="agent-work-record-meta">
-                  {job.schedule && <span>{formatAgentWorkSchedule(job.schedule,{
-                    seconds:t('work.scheduleSeconds'),minutes:t('work.scheduleMinutes'),
-                    hours:t('work.scheduleHours'),days:t('work.scheduleDays'),
-                  })}</span>}
+                  {job.schedule && <span>{formatAgentWorkSchedule(job.schedule,(unit,count)=>t(
+                    unit==='s'?'work.scheduleSeconds':unit==='m'?'work.scheduleMinutes'
+                      :unit==='h'?'work.scheduleHours':'work.scheduleDays',{count},
+                  ))}</span>}
                   {job.nextRunAt && <span>{t('work.nextRun')} {formatDate(job.nextRunAt)}</span>}
                   {job.profile!=='default' && <span>{job.profile}</span>}
                   {job.noAgent && <span>{t('work.scriptOnly')}</span>}
