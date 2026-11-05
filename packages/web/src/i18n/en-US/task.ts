@@ -513,6 +513,9 @@ export const englishTaskMessages: LocaleMessagesDto = {
       outputPending: 'Waiting for tool result',
       resultMissing: 'No tool result recorded',
       resultDetails: 'Native result details',
+      ancestry: 'Call hierarchy',
+      parentCall: 'Parent call',
+      loadedChildCalls: '{{count}} loaded child calls',
       inspect: 'View source evidence',
       calls: '{{count}} tool calls',
       status: {
