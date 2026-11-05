@@ -1080,3 +1080,51 @@
   .task-surface .task-thinking-running-mark svg,
   .task-surface .task-tool-status-run .task-tool-status-mark svg { animation: none; }
 }
+
+/* Source-backed child results remain inside the shared TaskToolRow.
+ * Existing Disclosure/StatusBadge primitives own their own appearance. */
+.task-surface .task-tool-subagent-list,
+.task-surface .task-tool-subagent-body,
+.task-surface .task-tool-subagent-messages {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+.task-surface .task-tool-subagent-overview,
+.task-surface .task-tool-subagent-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  color: var(--al-muted);
+  font-size: var(--text-task-meta);
+}
+.task-surface .task-tool-subagent-name { overflow-wrap: anywhere; }
+.task-surface .task-tool-subagent-fact { display: grid; gap: 3px; min-width: 0; }
+.task-surface .task-tool-subagent-fact strong,
+.task-surface .task-tool-subagent-message-role,
+.task-surface .task-tool-subagent-message-kind {
+  font-size: var(--text-task-meta);
+  color: var(--al-muted);
+}
+.task-surface .task-tool-subagent-text,
+.task-surface .task-tool-subagent-error {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.task-surface .task-tool-subagent-error { color: var(--al-danger); }
+.task-surface .task-tool-subagent-usage {
+  color: var(--al-muted);
+  font-size: var(--text-task-meta);
+  overflow-wrap: anywhere;
+}
+.task-surface .task-tool-subagent-message {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+  padding-top: 8px;
+  border-top: 1px solid var(--al-line);
+}
+.task-surface .task-tool-subagent-message-part { display: grid; gap: 4px; min-width: 0; }
+.task-surface .task-tool-subagent-message-part .task-tool-output-content { min-width: 0; }
