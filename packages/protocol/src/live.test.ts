@@ -345,3 +345,25 @@ test('Live status process detail retains only source-attested retry/compaction f
     type: 'status', status: 'ready',
   })
 })
+
+test('Live protocol preserves native message length boundary without inventing a terminal failure', () => {
+  assert.deepEqual(parseLiveEventDto({
+    type: 'message.end', role: 'assistant', messageId: 'native-msg-1',
+    stopReason: 'length',
+  }), {
+    type: 'message.end', role: 'assistant', messageId: 'native-msg-1',
+    stopReason: 'length',
+  })
+  assert.deepEqual(parseLiveEventDto({
+    type: 'message.end', role: 'assistant', stopReason: 'unverified',
+  }), { type: 'message.end', role: 'assistant' })
+  assert.deepEqual(parseLiveEventDto({
+    type: 'status', status: 'running',
+    process: { operation: 'output', phase: 'end',
+      outcome: 'truncated', reason: 'length' },
+  }), {
+    type: 'status', status: 'running',
+    process: { operation: 'output', phase: 'end',
+      outcome: 'truncated', reason: 'length' },
+  })
+})
