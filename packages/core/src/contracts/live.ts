@@ -459,6 +459,13 @@ export interface LiveQueueUpdateEvent {
   followUp: readonly string[]
 }
 
+/** Source-owned transient extension status/widget; a null value clears the key.
+ * Never persisted as an invented session message or notification. */
+export type LiveUiStateEvent =
+  | { type: 'ui.state'; kind: 'status'; key: string; text: string | null }
+  | { type: 'ui.state'; kind: 'widget'; key: string; lines: readonly string[] | null;
+      placement?: 'aboveEditor' | 'belowEditor' | undefined }
+
 export type LiveUiRequestMethod = 'select' | 'confirm' | 'input' | 'editor'
 
 /** An SDK UI request was answered, aborted, or expired. */
@@ -492,6 +499,7 @@ export type LiveEvent =
   | LiveQueueUpdateEvent
   | LiveUiRequestEvent
   | LiveUiDismissEvent
+  | LiveUiStateEvent
   | LiveNotificationEvent
   | LiveErrorEvent
   | LiveCompletedEvent

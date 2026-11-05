@@ -163,6 +163,7 @@ export const chineseTaskMessages: LocaleMessagesDto = {
       toolGroupFailed: '{{count}} 失败',
       toolGroupMore: '展开 {{count}} 项',
       toolGroupLess: '收起',
+      extensionStatus: '扩展运行状态',
       invalidRuntime: '实时任务地址无效。',
       productUnavailable: '当前实时智能体不可用。',
       runtimeId: '运行时 ID',

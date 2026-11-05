@@ -673,16 +673,33 @@ test('Pi Live Adapter exposes native session tree only through the generic sessi
   assert.equal(Object.hasOwn(tree.nodes[0]!, 'entry'), false)
 })
 
-test('Pi native extension notify is normalized while status widgets remain transient', () => {
+test('Pi native extension notification and keyed transient states are normalized', () => {
   assert.deepEqual(normalizePiLiveEvent({
     type: 'extension_ui_request', id: 'notice-571', method: 'notify',
     message: 'Background task completed', notifyType: 'success',
   }), {
     type: 'notification', id: 'notice-571', level: 'success', message: 'Background task completed',
   })
-  assert.equal(normalizePiLiveEvent({
+  assert.deepEqual(normalizePiLiveEvent({
     type: 'extension_ui_request', id: 'status-1', method: 'setStatus',
     statusKey: 'sync', statusText: '42%',
+  }), { type: 'ui.state', kind: 'status', key: 'sync', text: '42%' })
+  assert.deepEqual(normalizePiLiveEvent({
+    type: 'extension_ui_request', id: 'status-2', method: 'setStatus',
+    statusKey: 'sync', statusText: undefined,
+  }), { type: 'ui.state', kind: 'status', key: 'sync', text: null })
+  assert.deepEqual(normalizePiLiveEvent({
+    type: 'extension_ui_request', id: 'widget-1', method: 'setWidget',
+    widgetKey: 'plan', widgetLines: ['Step 1', 'Step 2'], widgetPlacement: 'belowEditor',
+  }), { type: 'ui.state', kind: 'widget', key: 'plan',
+    lines: ['Step 1', 'Step 2'], placement: 'belowEditor' })
+  assert.deepEqual(normalizePiLiveEvent({
+    type: 'extension_ui_request', id: 'widget-2', method: 'setWidget',
+    widgetKey: 'plan',
+  }), { type: 'ui.state', kind: 'widget', key: 'plan', lines: null })
+  assert.equal(normalizePiLiveEvent({
+    type: 'extension_ui_request', method: 'setWidget',
+    widgetKey: 'arbitrary-component', widgetLines: { render: 'unknown' },
   }), undefined)
 })
 

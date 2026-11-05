@@ -8,6 +8,7 @@ import { type LiveMarkdownComposerDraft, type LiveMarkdownComposerHandle } from 
 import { emptyLiveQueue, type PendingQueueSubmission, type RestoredQueueDraft, type LiveQueueMode } from './live-task-queue'
 
 import type { LiveUiRequest } from './live-extension-request-queue'
+import type { LiveExtensionState } from './live-extension-state'
 
 /** Live 会话单一状态所有者；运行时、历史、操作 Hook 按领域消费同一引用。 */
 export function useLiveTaskState() {
@@ -32,6 +33,7 @@ export function useLiveTaskState() {
   // Preserve native request order. A second approval must not overwrite the first.
   const [extensions, setExtensions] = useState<LiveUiRequest[]>([])
   const extension = extensions[0] ?? null
+  const [extensionUiState, setExtensionUiState] = useState<LiveExtensionState[]>([])
   const [extensionPendingRequestId, setExtensionPendingRequestId] = useState<string | null>(null)
   const extensionPending = extension !== null && extensionPendingRequestId === extension.requestId
   const [streamingBehavior, setStreamingBehavior] = useState<LiveQueueMode>('steer')
@@ -111,6 +113,8 @@ export function useLiveTaskState() {
     setThinking,
     extension,
     setExtensions,
+    extensionUiState,
+    setExtensionUiState,
     extensionPending,
     setExtensionPendingRequestId,
     streamingBehavior,

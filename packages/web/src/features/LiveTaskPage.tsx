@@ -11,6 +11,7 @@ import { liveComposerDraftKey, readLiveComposerDraft } from '../components/live-
 import { ErrorStateBanner, OperationProgress } from '../components/StateViews'
 import { Button, IconButton, Popover } from '../components/ui'
 import { LiveExtensionPrompt } from './LiveExtensionPrompt'
+import { TaskEvent } from './TaskEvent'
 import { useLiveTaskState } from './live-task-state'
 import { useLiveTaskRuntime } from './use-live-task-runtime'
 import { useLiveTaskHistory } from './use-live-task-history'
@@ -90,6 +91,7 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
     setModelControl,
     thinking,
     extension,
+    extensionUiState,
     extensionPending,
     streamingBehavior,
     setStreamingBehavior,
@@ -717,6 +719,19 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
           </div>}
           {extension && <LiveExtensionPrompt request={extension} pending={extensionPending} onAnswer={value => { void answerExtension(value) }}/>}
         </div>
+        {extensionUiState.length > 0 && <div role="status" aria-label={t('live.extensionStatus')}>
+          {extensionUiState.map(item => <TaskEvent
+            key={`${item.kind}:${item.key}`}
+            model={{
+              id: `extension:${item.kind}:${item.key}`,
+              category: 'lifecycle',
+              label: item.key,
+              summary: item.kind === 'status' ? item.text ?? ''
+                : (item.lines ?? []).join(' · ').slice(0, 220),
+            }}
+            raw={item}
+          />)}
+        </div>}
         <TaskSessionComposer
           queueContent={queueContent}
           editorRef={composerRef}

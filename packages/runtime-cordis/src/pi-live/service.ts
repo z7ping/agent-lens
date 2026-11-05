@@ -90,6 +90,8 @@ interface OwnedRuntime {
   cachedState?: PiLiveRuntimeState | undefined
   cacheMetrics?: PiLiveCacheMetrics | undefined
   pendingExtensionRequests: Map<string, Record<string, unknown>>
+  /** Active Pi setStatus/setWidget facts, never persisted as session content. */
+  extensionUiState: Map<string, Record<string, unknown>>
 }
 
 interface PiLiveRuntimeLifecycleOptions {
@@ -922,6 +924,7 @@ export class DefaultPiLiveService implements PiLiveService {
       lastActiveAt: now,
       suspended: false,
       pendingExtensionRequests: new Map<string, Record<string, unknown>>(),
+      extensionUiState: new Map<string, Record<string, unknown>>(),
       workspacePath,
       projectName: basename(workspacePath) || workspacePath,
       ...(restored && normalizedInput.sessionPath ? { recoverySessionPath: normalizedInput.sessionPath } : {}),
@@ -1614,6 +1617,9 @@ export class DefaultPiLiveService implements PiLiveService {
     for (const request of runtime.pendingExtensionRequests.values()) {
       runtime.events.publish(request)
     }
+    for (const state of runtime.extensionUiState.values()) {
+      runtime.events.publish(state)
+    }
     void this.ensureRuntimeHydrated(runtime).catch(error => {
       this.recoveryDiagnostic(runtime, 'Pi Live background hydration failed', error)
     })
@@ -1782,6 +1788,7 @@ export class DefaultPiLiveService implements PiLiveService {
     runtime.isStreaming = false
     runtime.isCompacting = false
     runtime.pendingExtensionRequests.clear()
+    runtime.extensionUiState.clear()
     runtime.queue = { steering: [], followUp: [] }
     runtime.lastActiveAt = now
     this.publish(runtime, { type: 'runtime_status', status: runtime.status, stage: runtime.stage, message: runtime.message })
@@ -1846,6 +1853,7 @@ export class DefaultPiLiveService implements PiLiveService {
     runtime.isStreaming = false
     runtime.isCompacting = false
     runtime.pendingExtensionRequests.clear()
+    runtime.extensionUiState.clear()
     runtime.queue = { steering: [], followUp: [] }
     this.clearIdleTimer(runtime)
     await handle.terminate().catch(() => undefined)
@@ -2291,6 +2299,20 @@ export class DefaultPiLiveService implements PiLiveService {
       runtime.pendingExtensionRequests.delete(event.requestId)
     }
     if (type === 'extension_ui_request') {
+      const key = event.method === 'setStatus'
+        ? (typeof event.statusKey === 'string' ? event.statusKey.trim() : '')
+        : event.method === 'setWidget'
+          ? (typeof event.widgetKey === 'string' ? event.widgetKey.trim() : '')
+          : ''
+      if (key) {
+        const mapKey = `${String(event.method)}:${key}`
+        const active = event.method === 'setStatus'
+          ? typeof event.statusText === 'string' && event.statusText.length > 0
+          : Array.isArray(event.widgetLines) && event.widgetLines.length > 0
+            && event.widgetLines.every(line => typeof line === 'string')
+        if (active) runtime.extensionUiState.set(mapKey, event)
+        else runtime.extensionUiState.delete(mapKey)
+      }
       const cache = parsePiCacheOptimizerStatus(event)
       if (cache !== undefined) {
         runtime.cacheMetrics = cache ?? undefined
@@ -2346,6 +2368,7 @@ export class DefaultPiLiveService implements PiLiveService {
       runtime.isStreaming = false
       runtime.isCompacting = false
       runtime.pendingExtensionRequests.clear()
+      if (type === 'runtime_exit') runtime.extensionUiState.clear()
       if (runtime.subscriberCount === 0) this.scheduleIdleCheck(runtime)
     }
   }

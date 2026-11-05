@@ -367,3 +367,27 @@ test('Live protocol preserves native message length boundary without inventing a
       outcome: 'truncated', reason: 'length' },
   })
 })
+
+test('Live protocol preserves source-keyed extension status/widget updates and clears', () => {
+  assert.deepEqual(parseLiveEventDto({
+    type: 'ui.state', kind: 'status', key: 'sync', text: '42%',
+  }), { type: 'ui.state', kind: 'status', key: 'sync', text: '42%' })
+  assert.deepEqual(parseLiveEventDto({
+    type: 'ui.state', kind: 'status', key: 'sync', text: null,
+  }), { type: 'ui.state', kind: 'status', key: 'sync', text: null })
+  assert.deepEqual(parseLiveEventDto({
+    type: 'ui.state', kind: 'widget', key: 'plan',
+    lines: ['Step 1', 'Step 2'], placement: 'belowEditor',
+  }), { type: 'ui.state', kind: 'widget', key: 'plan',
+    lines: ['Step 1', 'Step 2'], placement: 'belowEditor' })
+  assert.deepEqual(parseLiveEventDto({
+    type: 'ui.state', kind: 'widget', key: 'plan', lines: null,
+  }), { type: 'ui.state', kind: 'widget', key: 'plan', lines: null })
+  assert.equal(parseLiveEventDto({
+    type: 'ui.state', kind: 'widget', key: 'plan',
+    lines: [{ type: 'unknown-tui-component' }],
+  }), null)
+  assert.equal(parseLiveEventDto({
+    type: 'ui.state', kind: 'status', key: '', text: 'bad',
+  }), null)
+})
