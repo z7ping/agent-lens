@@ -30,12 +30,12 @@ test('empty board, schedule and project states do not expose fake zero loads', (
   assert.match(work, /<div className="agent-work-empty" role="status">/)
   assert.match(work, /board\?\.taskCount===0/)
   assert.match(work, /offset>0 \|\| response\.tasksHasMore/)
-  assert.match(work, /projectsAvailable && \(response\.projects\.length>0 \|\| response\.projectsTotal>0/)
+  assert.match(work, /projectsAvailable && \(!boardAvailable \|\| activePanel==='boards'\)/)
   assert.doesNotMatch(work, /<span>\{t\('work\.loaded'\)\} 0 \/ 0<\/span>/)
 })
 
 test('Workbench styles are scoped and reuse shared primitive tokens', () => {
-  const workCss = agentsCss.slice(agentsCss.indexOf('/* Hermes workbench layout:'))
+  const workCss = agentsCss.slice(agentsCss.indexOf('/* Hermes workbench:'))
   assert.match(workCss, /\.agent-work-toolbar\s*\{/)
   assert.match(workCss, /\.agent-work-empty\s*\{/)
   assert.match(workCss, /var\(--al-line\)/)
