@@ -1,11 +1,12 @@
 import { useMemo, useState } from 'react'
 import type { TFunction } from 'i18next'
 import { useTranslation } from 'react-i18next'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import type {
   AgentAssetBindingDto,
   AgentAssetInventoryDto,
   AgentOverviewDto,
+  AgentWorkspaceResponseDto,
   IntegrationManagementItemDto,
   IntegrationToolDiscoveryItemDto,
   ManagedAssetRoot,
@@ -215,6 +216,7 @@ function AssetCard({
   onPathError,
 }: {
   agent: AgentOverviewDto
+  work?: AgentWorkspaceResponseDto
   asset: AgentAssetInventoryDto
   onPreview?(asset: AgentAssetInventoryDto, binding: AgentAssetBindingDto): void
   onOpenPath(path: string): Promise<unknown>
@@ -404,7 +406,7 @@ function PiConfigurationSummary({ agent, rules }: { agent: AgentOverviewDto; rul
   </section>
 }
 
-function AgentCard({ model, agent, management, discovery, discoveryScanning, discoveryError, piView, onManageIntegration }: {
+function AgentCard({ model, agent, work, management, discovery, discoveryScanning, discoveryError, piView, onManageIntegration, onOpenWork }: {
   model: AgentLensClientModel
   agent: AgentOverviewDto
   management: IntegrationManagementItemDto | undefined
@@ -413,6 +415,7 @@ function AgentCard({ model, agent, management, discovery, discoveryScanning, dis
   discoveryError: string
   piView: PiAgentView
   onManageIntegration(integrationId: string): void
+  onOpenWork(): void
 }) {
   const { t } = useTranslation('agents')
   const { t: tPi } = useTranslation('piEcosystem')
@@ -424,7 +427,8 @@ function AgentCard({ model, agent, management, discovery, discoveryScanning, dis
     binding: AgentAssetBindingDto
   } | null>(null)
   const choices = useMemo(() => installationChoices(agent.installations), [agent.installations])
-  const [selectedInstallationId, setSelectedInstallationId] = useState(choices[0]?.id ?? '')
+  const [searchParams,setSearchParams] = useSearchParams()
+  const selectedInstallationId = searchParams.get('installation') ?? ''
   const installation = choices.find(item => item.id === selectedInstallationId) ?? choices[0]
   const grouped = useMemo(() => {
     const map = new Map<string, AgentAssetInventoryDto[]>()
@@ -473,6 +477,8 @@ function AgentCard({ model, agent, management, discovery, discoveryScanning, dis
   const status = agentObservationState(agent, discovery, discoveryScanning, t, discoveryError)
   const presencePath = integrationToolPresencePath(discovery)
   const configPath = installation?.configRoot ?? discovery?.configRoot ?? discovery?.dataRoot
+  const visibleWork = work?.features.filter(feature => feature.availability === 'available' || feature.availability === 'partial') ?? []
+  const hasWork = Boolean(work?.features.some(feature => feature.availability !== 'unknown'))
   const assetsAvailable = agent.integration?.capabilities.some(capability =>
     capability.capability === 'assets' && capability.availability === 'available'
   ) ?? false
@@ -531,7 +537,9 @@ function AgentCard({ model, agent, management, discovery, discoveryScanning, dis
               }
             })}
             onChange={value => {
-              setSelectedInstallationId(value)
+              const next = new URLSearchParams(searchParams)
+              next.set('installation',value)
+              setSearchParams(next)
               setManagedRoot(null)
               setPreviewAsset(null)
               setShowAllBindings(false)
@@ -551,6 +559,20 @@ function AgentCard({ model, agent, management, discovery, discoveryScanning, dis
       onManage={onManageIntegration}
     />}
 
+    {hasWork && piView !== 'ecosystem' && <section className="agent-primary-section">
+      <div className="section-heading-row">
+        <h3>{t('work.title')}</h3>
+        <Button size="small" variant="quiet" onClick={onOpenWork}>{t('work.open')}</Button>
+      </div>
+      {visibleWork.length > 0 ? <div className="asset-kpis">
+        {visibleWork.some(f=>f.id==='boards') && <div className="asset-kpi">
+          <strong>{work?.boardsTotal ?? '—'}</strong><span>{t('work.boards')}</span></div>}
+        {visibleWork.some(f=>f.id==='schedules') && <div className="asset-kpi">
+          <strong>{work?.schedulesTotal ?? '—'}</strong><span>{t('work.schedules')}</span></div>}
+        {visibleWork.some(f=>f.id==='projects') && <div className="asset-kpi">
+          <strong>{work?.projectsTotal ?? '—'}</strong><span>{t('work.projects')}</span></div>}
+      </div> : <div className="muted-empty compact">{t('work.unavailable')}</div>}
+    </section>}
     {isPi && piView === 'ecosystem' ? <PiEcosystemPanel agent={agent}/> : <>
     {isPi ? <>
       <PiConfigurationSummary agent={agent} rules={piProjectRuleAssets}/>
@@ -743,6 +765,11 @@ export function AgentsPage({
     : fallbackRow?.sourceId ?? ''
   const selectedRow = rows.find(row => row.sourceId === selectedSourceId || row.id === selectedSourceId)
   const selectedAgent = selectedRow?.agent
+  const [overviewSearchParams] = useSearchParams()
+  const selectedOverviewInstallationId = (() => {
+    const choices = installationChoices(selectedAgent?.installations ?? [])
+    return choices.find(item=>item.id===overviewSearchParams.get('installation'))?.id ?? choices[0]?.id ?? ''
+  })()
   const selectedManagement = selectedRow?.management
   const selectedDiscovery = selectedRow?.discovery
   const detailPending = Boolean(
@@ -758,6 +785,10 @@ export function AgentsPage({
             key={selectedAgent.sourceId}
             model={model}
             agent={selectedAgent}
+            {...(snapshot.agentWorkspace.sourceId === selectedAgent.sourceId
+              && snapshot.agentWorkspace.installationId === selectedOverviewInstallationId && snapshot.agentWorkspace.response
+              ? {work:snapshot.agentWorkspace.response}: {})}
+            onOpenWork={() => navigate(`/agents?view=work&agent=${encodeURIComponent(selectedAgent.sourceId)}${selectedOverviewInstallationId ? `&installation=${encodeURIComponent(selectedOverviewInstallationId)}` : ''}`)}
             management={selectedManagement}
             discovery={selectedDiscovery}
             discoveryScanning={discoveryScanning}

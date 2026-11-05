@@ -4,6 +4,10 @@ import { hermesSourcePlugin } from '@agent-lens/source-hermes'
 import { integrationManifest } from './manifest'
 
 export { integrationManifest as hermesIntegrationManifest } from './manifest'
+export { readHermesWorkspace } from './workspace.js'
+export { mutateHermesWorkspace, hermesWorkMutationArgv, readHermesCronRunReceipt } from './workspace-actions.js'
+export { readHermesCronOutput } from './cron-output.js'
+export { probeHermesWorkspaceActions } from './workspace-action-capabilities.js'
 
 export const hermesIntegration = defineAgentLensIntegration(
   integrationManifest,

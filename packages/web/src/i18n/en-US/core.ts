@@ -243,6 +243,7 @@ export const englishCoreMessages: LocaleMessagesDto = {
     sessionDetail: 'Session Details',
     overview: 'Overview',
     agentOverview: 'Agent Overview',
+    agentWork: 'Work',
     settings: 'Settings',
     agentIntegration: 'Agent Integration',
     integrationManagement: 'Integration Management',

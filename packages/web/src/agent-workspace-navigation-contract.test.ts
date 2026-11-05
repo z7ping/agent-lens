@@ -48,3 +48,12 @@ test('normal integration tab retains selected agent; explicit manage-entry links
   assert.doesNotMatch(app, /agentManagementId/)
   assert.match(agentsPage, /navigate\(`\/agents\?view=management&agent=/)
 })
+
+test('Agent work visibility follows provider availability while missing providers do not create tabs', () => {
+  assert.match(app, /const hasAgentWork = workPending/)
+  assert.match(app, /feature\.availability === 'partial'/)
+  assert.match(app, /value:'work',label:t\('navigation:agentWork'\)/)
+  assert.match(workspace, /const hasWork = workspaceState\.sourceId === sourceId/)
+  assert.match(workspace, /activeView === 'work' \? <AgentWorkPage/)
+  assert.match(workspace, /if \(nextSourceId !== sourceId\) \{/)
+});

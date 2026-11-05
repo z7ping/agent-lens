@@ -1,4 +1,4 @@
-import type { AgentCoverageResponseDto, AgentDetailResponseDto, AgentEnrichmentResponseDto, AgentOverviewResponseDto, AgentRescanResponseDto, AgentSummaryResponseDto, CapturePolicyResponseDto, FacetResponseDto, HealthResponseDto, HostFilePreviewResponseDto, IntegrationManagementResponseDto, IntegrationPreferencesResponseDto, IntegrationToolDiscoveryResponseDto, ManagedAssetDirectoryResponseDto, ManagedAssetFilePreviewResponseDto, ManagedAssetRoot, LiveUpdateEventDto, ReviewInteractionDto, ReviewMessageAttachmentDto, ReviewResponseDto, ReviewSessionDetailDto, NativeSessionCatalogResponseDto, SessionRelationshipResponseDto, SourceRecordResponseDto, TaskFileChangesResponseDto, ToolAssetUsageResponseDto } from '@agent-lens/protocol'
+import type { AgentCoverageResponseDto, AgentDetailResponseDto, AgentEnrichmentResponseDto, AgentOverviewResponseDto, AgentWorkspaceResponseDto, AgentWorkOutputResponseDto, AgentWorkMutationDto, AgentWorkMutationResultDto, AgentWorkMutationReceiptDto, AgentWorkWriteAccessDto, AgentRescanResponseDto, AgentSummaryResponseDto, CapturePolicyResponseDto, FacetResponseDto, HealthResponseDto, HostFilePreviewResponseDto, IntegrationManagementResponseDto, IntegrationPreferencesResponseDto, IntegrationToolDiscoveryResponseDto, ManagedAssetDirectoryResponseDto, ManagedAssetFilePreviewResponseDto, ManagedAssetRoot, LiveUpdateEventDto, ReviewInteractionDto, ReviewMessageAttachmentDto, ReviewResponseDto, ReviewSessionDetailDto, NativeSessionCatalogResponseDto, SessionRelationshipResponseDto, SourceRecordResponseDto, TaskFileChangesResponseDto, ToolAssetUsageResponseDto } from '@agent-lens/protocol'
 import { AgentLensApi, type QueryFilters, type ReviewFilters } from './api'
 import { loadNativeImagePreview } from './native-media-preview'
 import { translateProduct } from '../i18n/runtime'
@@ -24,6 +24,7 @@ export interface ClientSnapshot {
   agents: AgentOverviewResponseDto | null
   agentDetailLoadingSourceId: string
   agentDetailError: string
+  agentWorkspace: {sourceId:string;installationId:string;response:AgentWorkspaceResponseDto|null;loading:boolean;error:string}
   capturePolicy: CapturePolicyResponseDto | null
   agentsLoading: boolean
   agentsError: string
@@ -139,6 +140,7 @@ export abstract class AgentLensModelBase {
     agents: null,
     agentDetailLoadingSourceId: '',
     agentDetailError: '',
+    agentWorkspace: {sourceId:'',installationId:'',response:null,loading:false,error:''},
     capturePolicy: null,
     agentsLoading: false,
     agentsError: '',
@@ -205,6 +207,7 @@ export abstract class AgentLensModelBase {
   protected facetsLastLoadedAt = 0
   protected agentsInFlight: Promise<void> | null = null
   protected readonly agentDetailInFlight = new Map<string, Promise<void>>()
+  protected workspaceGeneration = 0
   protected readonly agentEnrichmentInFlight = new Map<string, Promise<void>>()
   protected agentCoverageInFlight: Promise<void> | null = null
   protected agentsRescanInFlight: Promise<AgentRescanResponseDto> | null = null
@@ -486,6 +489,85 @@ export abstract class AgentLensModelBase {
     } else if (discovery?.status === 'complete') {
       this.integrationDiscoveryPolls = 0
     }
+  }
+
+  async refreshAgentWorkspace(
+    sourceId: string,
+    options: {installationId:string;board?:string;offset?:number;limit?:number;jobId?:string;profile?:string;executionOffset?:number;scheduleOffset?:number;taskId?:string;taskEventOffset?:number;runOffset?:number;commentOffset?:number;projectOffset?:number;boardOffset?:number} = {},
+  ): Promise<void> {
+    const generation = ++this.workspaceGeneration
+    const installationId = options.installationId
+    const matches = this.snapshot.agentWorkspace.sourceId === sourceId
+      && this.snapshot.agentWorkspace.installationId === installationId
+    this.patch({agentWorkspace:{sourceId,installationId,response:matches
+      ? this.snapshot.agentWorkspace.response : null,loading:true,error:''}})
+    try {
+      const response = await this.api.agentWorkspace(sourceId,options)
+      if (generation === this.workspaceGeneration) this.patch({
+        agentWorkspace:{sourceId,installationId,response,loading:false,error:''},
+      })
+    } catch (error) {
+      if (generation === this.workspaceGeneration) this.patch({
+        agentWorkspace:{sourceId,installationId,response:this.snapshot.agentWorkspace.sourceId===sourceId
+          && this.snapshot.agentWorkspace.installationId===installationId
+          ? this.snapshot.agentWorkspace.response : null,loading:false,error:error instanceof Error?error.message:String(error)},
+      })
+    }
+  }
+
+  ensureAgentWorkspace(sourceId: string,installationId: string): Promise<void> {
+    if (!sourceId || !installationId) return Promise.resolve()
+    if (this.snapshot.agentWorkspace.sourceId === sourceId
+      && this.snapshot.agentWorkspace.installationId === installationId
+      && (this.snapshot.agentWorkspace.response !== null || this.snapshot.agentWorkspace.loading)) return Promise.resolve()
+    return this.refreshAgentWorkspace(sourceId,{installationId})
+  }
+
+  /** Confirmed native mutations remain source-owned; re-read after CLI acceptance. */
+  agentWorkReceipt(sourceId:string,installationId:string,receiptId:string):Promise<AgentWorkMutationReceiptDto>{
+    return this.api.agentWorkReceipt(sourceId,installationId,receiptId)
+  }
+  agentWorkWriteAccess(sourceId:string,installationId:string):Promise<AgentWorkWriteAccessDto>{
+    return this.api.agentWorkWriteAccess(sourceId,installationId)
+  }
+  setAgentWorkWriteAccess(sourceId:string,installationId:string,enabled:boolean):Promise<AgentWorkWriteAccessDto>{
+    return this.api.setAgentWorkWriteAccess(sourceId,installationId,enabled)
+  }
+  agentWorkMutate(sourceId:string,installationId:string,action:AgentWorkMutationDto):Promise<AgentWorkMutationResultDto>{
+    return this.api.agentWorkMutate(sourceId,installationId,action)
+  }
+
+  agentWorkOutput(sourceId: string, input:{
+    installationId:string;jobId:string;profile:string;file?:string;offset?:number
+  }):Promise<AgentWorkOutputResponseDto> {
+    return this.api.agentWorkOutput(sourceId,input)
+  }
+
+  /** Exact indexed native identity only: never match by title, time or project name. */
+  async resolveAgentNativeSession(sourceId: string, nativeSessionId: string, installationId: string): Promise<
+    { state: 'linked'; reviewSessionId: string } | { state: 'missing' | 'ambiguous' | 'incomplete' }
+  > {
+    if (!sourceId || !nativeSessionId || !installationId || nativeSessionId.length > 256) return {state:'missing'}
+    const matches = new Set<string>()
+    let cursor: string | undefined
+    for (let page = 0; page < 10; page++) {
+      const response = await this.api.nativeSessions({
+        sourceId,installationId,search: nativeSessionId, limit: 100,
+        ...(cursor ? {cursor} : {}),
+      })
+      for (const item of response.items) {
+        if (item.sourceId === sourceId && item.installationId === installationId
+          && item.nativeSessionId === nativeSessionId) matches.add(item.id)
+      }
+      if (matches.size > 1) return {state:'ambiguous'}
+      if (!response.hasMore) {
+        const id = [...matches][0]
+        return id ? {state:'linked',reviewSessionId:id} : {state:'missing'}
+      }
+      if (!response.nextCursor || response.nextCursor === cursor) return {state:'incomplete'}
+      cursor = response.nextCursor
+    }
+    return {state:'incomplete'}
   }
 
   ensureAgentDetail(sourceId: string): Promise<void> {

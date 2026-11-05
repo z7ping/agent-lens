@@ -50,6 +50,8 @@ import {
 import { discoverLocalePacks } from './locale-packs'
 import { handleLiveRequest } from './live-http'
 import { handleHermesLiveSetupRequest, type HermesLiveSetupController } from './hermes-live-setup-http'
+import { handleAgentWorkspaceRequest, type AgentWorkspaceReader, type AgentWorkspaceOutputReader, type AgentWorkspaceMutationRunner, type AgentWorkspaceReceiptReader, type AgentWorkspaceCapabilityReader } from './agent-workspace-http'
+import type { WorkspaceWriteAccess } from './agent-workspace-write-access'
 import { handleLiveAttachmentRequest } from './live-attachments-http'
 import { nativeMetricContribution } from './native-metrics-contribution'
 import { nativeOnlyInsightsResponse, nativeOnlyToolUsageResponse } from './native-only-usage-insights'
@@ -93,6 +95,12 @@ export interface NativeOnlyHttpOptions {
   lives?: LiveService
   liveAttachments?: LiveAttachmentService
   hermesLiveSetup?: HermesLiveSetupController
+  workspaceReaders?: Readonly<Record<string, AgentWorkspaceReader>>
+  workspaceOutputReaders?: Readonly<Record<string, AgentWorkspaceOutputReader>>
+  workspaceMutationRunners?: Readonly<Record<string, AgentWorkspaceMutationRunner>>
+  workspaceReceiptReaders?: Readonly<Record<string, AgentWorkspaceReceiptReader>>
+  workspaceCapabilityReaders?: Readonly<Record<string, AgentWorkspaceCapabilityReader>>
+  workspaceWriteAccess?: WorkspaceWriteAccess
   integrationDiscovery?:IntegrationDiscoveryController
   integrationManagement?:IntegrationManagementController
   integrationStatus?:(productId:string)=>Promise<AgentIntegrationRuntimeStatus|null>
@@ -155,6 +163,20 @@ export async function startNativeOnlyHttpSurface(
       if(await handleIntegrationPackageRequest(
         request,response,url,options.integrationPackages))return
       if(await handleHermesLiveSetupRequest(request,response,url,options.hermesLiveSetup))return
+      if(await handleAgentWorkspaceRequest(request,response,url,options.workspaceReaders,
+        options.sources,options.capturePolicy,async (sourceId,installationId)=>{
+          const source=options.sources.list().find(item=>item.manifest.sourceId===sourceId)
+          if (!source) return null
+          const facets=await storage.nativeFacets.query()
+          const installed=facets.installedProducts.find(item=>
+            item.productId===source.manifest.productId && item.installationIds.includes(installationId))
+          if (!installed) return null
+          const record=await storage.installations.get(installationId)
+          if (!record || record.productId!==source.manifest.productId) return null
+          const root=record.configRoot || record.dataRoot
+          return root ? {root,...(record.executable ? {executable:record.executable}:{})} : null
+        },options.workspaceOutputReaders,options.workspaceMutationRunners,options.workspaceWriteAccess,
+        options.workspaceReceiptReaders,options.workspaceCapabilityReaders))return
       if(await handleLiveAttachmentRequest(request,response,url,options.liveAttachments))return
       if(await handleLiveRequest(request,response,url,options.lives,
         options.selectProjectDirectory,{

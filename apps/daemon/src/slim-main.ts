@@ -14,8 +14,9 @@ import { piSourceDefinition } from '@agent-lens/source-pi'
 import { codexSourceDefinition } from '@agent-lens/source-codex'
 import { claudeSourceDefinition } from '@agent-lens/source-claude'
 import { hermesSourceDefinition } from '@agent-lens/source-hermes'
+import { readHermesWorkspace, readHermesCronOutput, mutateHermesWorkspace, readHermesCronRunReceipt, probeHermesWorkspaceActions } from '@agent-lens/integration-hermes'
 import { openCodeSourceDefinition } from '@agent-lens/source-opencode'
-import { startNativeOnlyHttpSurface, previewLocalHostTextFile, type IntegrationPackageController } from '@agent-lens/surface-http'
+import { startNativeOnlyHttpSurface, previewLocalHostTextFile, createWorkspaceWriteAccess, type IntegrationPackageController } from '@agent-lens/surface-http'
 import type { PiEcosystemQueryService } from '@agent-lens/protocol'
 import { openLocalPath } from './local-path-opener.js'
 import { createProjectDirectoryPicker } from './project-directory-picker.js'
@@ -45,6 +46,8 @@ export interface SlimDaemonOptions {
   capturePolicy?:CapturePolicyService
   /** Tests can inject the official package lifecycle, no second implementation. */
   integrationPackages?:IntegrationPackageController
+  /** Test-only override of the local AgentLens write-permission preference path. */
+  workspaceWriteAccessPath?:string
 }
 
 export function resolveSlimWebRoot(configured?:string):string{
@@ -165,11 +168,25 @@ export async function startSlimNativeDaemon(options:SlimDaemonOptions){
     let notifyActivity=()=>{}
     const coordinator=new SlimSourceCoordinator(runtime,sources,policy,policy,
       ()=>notifyActivity())
+    // Permission state failure must never prevent the read-only daemon from starting.
+    let workspaceWriteAccess:Awaited<ReturnType<typeof createWorkspaceWriteAccess>>|undefined
+    try {
+      workspaceWriteAccess=await createWorkspaceWriteAccess(
+        options.workspaceWriteAccessPath??join(homedir(),'.agent-lens','1.0','workspace-write-access.json'))
+    } catch (error) {
+      console.warn('[AgentLens] Workspace writes disabled: permission file unavailable or invalid',error)
+    }
     const http=await startNativeOnlyHttpSurface(httpPort,{
       backgroundProgress:()=>coordinator.snapshot(),
       rescanAgents:id=>coordinator.rescan(id),
       ...(options.port===undefined?{}:{port:options.port}),
       sources,capturePolicy:policy,
+      workspaceReaders: {hermes: readHermesWorkspace},
+      workspaceOutputReaders: {hermes: readHermesCronOutput},
+      workspaceMutationRunners: {hermes: mutateHermesWorkspace},
+      workspaceReceiptReaders: {hermes: readHermesCronRunReceipt},
+      workspaceCapabilityReaders: {hermes: probeHermesWorkspaceActions},
+      workspaceWriteAccess,
       ...(policy.isSourceEnabled('pi')?{
         piEcosystem:options.piEcosystem??new NpmPiEcosystemProvider(),
       }:{}),

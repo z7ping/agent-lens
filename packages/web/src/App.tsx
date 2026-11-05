@@ -17,6 +17,7 @@ import { WorkspaceViewTabs } from './components/WorkspaceViewTabs'
 import { MarkdownThemeManager } from './components/MarkdownThemeManager'
 import { ErrorStateBanner, PageLoadingState } from './components/StateViews'
 import { useTaskNotifications } from './features/task-notifications'
+import { installationChoices } from './features/agent-installation-choices'
 import { IntegrationOnboarding } from './features/IntegrationOnboarding'
 import { Breadcrumb, Button, IconButton, StatusBadge, UiIcon } from './components/ui'
 
@@ -398,6 +399,19 @@ function Shell({ model }: { model: AgentLensClientModel }) {
   }
 
   const currentView = new URLSearchParams(location.search).get('view')
+  const workspaceState = snapshot.agentWorkspace
+  const currentAgentInstallations = snapshot.agents?.items.find(item=>item.sourceId===resolvedAgentOverviewSourceId)?.installations ?? []
+  const availableInstallations = installationChoices(currentAgentInstallations)
+  const currentInstallationId = availableInstallations.find(item=>item.id===new URLSearchParams(location.search).get('installation'))?.id
+    ?? availableInstallations[0]?.id ?? ''
+  const workPending = currentView === 'work' && Boolean(resolvedAgentOverviewSourceId)
+    && (workspaceState.sourceId !== resolvedAgentOverviewSourceId || workspaceState.installationId !== currentInstallationId
+      || (!workspaceState.response && (workspaceState.loading || Boolean(workspaceState.error))))
+  const hasAgentWork = workPending || (workspaceState.sourceId === resolvedAgentOverviewSourceId
+    && workspaceState.installationId === currentInstallationId &&
+    Boolean(workspaceState.response?.features.some(feature =>
+      feature.availability === 'available' || feature.availability === 'partial' || feature.availability === 'error')))
+  const agentInstallationQuery = currentInstallationId ? `&installation=${encodeURIComponent(currentInstallationId)}` : ''
   const workspaceTabs = onTools || onInsights
     ? [
         { value: 'overview', label: t('navigation:usageOverview'), to: '/insights' },
@@ -405,15 +419,16 @@ function Shell({ model }: { model: AgentLensClientModel }) {
       ]
     : onAgents
       ? [
-          { value: 'overview', label: t('navigation:overview'), to: `/agents${resolvedAgentOverviewSourceId ? `?agent=${encodeURIComponent(resolvedAgentOverviewSourceId)}` : ''}` },
-          { value: 'management', label: t('navigation:integrationManagement'), to: `/agents?view=management${resolvedAgentOverviewSourceId ? `&agent=${encodeURIComponent(resolvedAgentOverviewSourceId)}` : ''}` },
+          { value: 'overview', label: t('navigation:overview'), to: `/agents${resolvedAgentOverviewSourceId ? `?agent=${encodeURIComponent(resolvedAgentOverviewSourceId)}${agentInstallationQuery}` : ''}` },
+          ...(hasAgentWork ? [{value:'work',label:t('navigation:agentWork'),to:`/agents?view=work&agent=${encodeURIComponent(resolvedAgentOverviewSourceId)}${agentInstallationQuery}`}] : []),
+          { value: 'management', label: t('navigation:integrationManagement'), to: `/agents?view=management${resolvedAgentOverviewSourceId ? `&agent=${encodeURIComponent(resolvedAgentOverviewSourceId)}${agentInstallationQuery}` : ''}` },
         ]
       : [
           { value: 'assets', label: t('backup:assetView.currentTab'), to: '/backup' },
           { value: 'history', label: t('backup:assetView.historyTab'), to: '/backup?view=history' },
         ]
   const selectedWorkspaceTab = onTools ? 'tools'
-    : onAgents ? (currentView === 'management' ? 'management' : 'overview')
+    : onAgents ? (currentView === 'management' ? 'management' : currentView === 'work' && hasAgentWork ? 'work' : 'overview')
       : onBackup ? (currentView === 'history' ? 'history' : 'assets') : 'overview'
 
   return <PinnedAgentsProvider agents={agents}>

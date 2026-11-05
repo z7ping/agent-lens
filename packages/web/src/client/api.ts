@@ -1,6 +1,12 @@
 import {
   parseLiveUpdateEvent,
   type AgentCoverageResponseDto,
+  type AgentWorkspaceResponseDto,
+  type AgentWorkOutputResponseDto,
+  type AgentWorkMutationDto,
+  type AgentWorkMutationResultDto,
+  type AgentWorkMutationReceiptDto,
+  type AgentWorkWriteAccessDto,
   type AgentDetailResponseDto,
   type AgentEnrichmentResponseDto,
   type AgentOverviewResponseDto,
@@ -206,6 +212,60 @@ export class AgentLensApi {
       'agent-coverage',
       () => requestJson('/api/v1/agents/coverage'),
     )
+  }
+  agentWorkReceipt(sourceId:string,installationId:string,receiptId:string):Promise<AgentWorkMutationReceiptDto>{
+    return requestJson<AgentWorkMutationReceiptDto>(
+      '/api/v1/agents/'+encodeURIComponent(sourceId)+'/workspace/receipt?'+
+      new URLSearchParams({installationId,receiptId}).toString())
+  }
+  agentWorkWriteAccess(sourceId:string,installationId:string):Promise<AgentWorkWriteAccessDto>{
+    return requestJson<AgentWorkWriteAccessDto>(
+      '/api/v1/agents/'+encodeURIComponent(sourceId)+'/workspace/write-access?installationId='+encodeURIComponent(installationId))
+  }
+  setAgentWorkWriteAccess(sourceId:string,installationId:string,enabled:boolean):Promise<AgentWorkWriteAccessDto>{
+    return requestJson<AgentWorkWriteAccessDto>(
+      '/api/v1/agents/'+encodeURIComponent(sourceId)+'/workspace/write-access?installationId='+encodeURIComponent(installationId),
+      {method:'PUT',headers:{'content-type':'application/json','x-agent-lens-workspace-action':'confirmed'},
+       body:JSON.stringify({confirmed:true,enabled})},
+    )
+  }
+  agentWorkMutate(sourceId:string,installationId:string,action:AgentWorkMutationDto):Promise<AgentWorkMutationResultDto>{
+    return requestJson<AgentWorkMutationResultDto>(
+      '/api/v1/agents/'+encodeURIComponent(sourceId)+'/workspace/action?installationId='+encodeURIComponent(installationId),
+      {method:'POST',headers:{'content-type':'application/json','x-agent-lens-workspace-action':'confirmed'},
+       body:JSON.stringify({confirmed:true,action})},
+    )
+  }
+
+  agentWorkOutput(sourceId: string, input: {
+    installationId: string
+    jobId: string
+    profile: string
+    file?: string
+    offset?: number
+  }): Promise<AgentWorkOutputResponseDto> {
+    const params = new URLSearchParams({installationId: input.installationId,jobId: input.jobId, profile: input.profile})
+    if (input.file) params.set('file',input.file)
+    if (input.offset) params.set('offset',String(input.offset))
+    return requestJson<AgentWorkOutputResponseDto>('/api/v1/agents/'+encodeURIComponent(sourceId)+'/workspace/output?'+params.toString())
+  }
+
+  agentWorkspace(sourceId: string, options: {installationId:string;board?:string;offset?:number;limit?:number;jobId?:string;profile?:string;executionOffset?:number;scheduleOffset?:number;taskId?:string;taskEventOffset?:number;runOffset?:number;commentOffset?:number;projectOffset?:number;boardOffset?:number} = {}): Promise<AgentWorkspaceResponseDto> {
+    const params = new URLSearchParams({installationId:options.installationId})
+    if (options.board) params.set('board', options.board)
+    if (options.offset) params.set('offset', String(options.offset))
+    if (options.limit) params.set('limit', String(options.limit))
+    if (options.jobId && options.profile) { params.set('jobId', options.jobId); params.set('profile',options.profile) }
+    if (options.executionOffset) params.set('executionOffset',String(options.executionOffset))
+    if (options.scheduleOffset) params.set('scheduleOffset',String(options.scheduleOffset))
+    if (options.taskId) params.set('taskId',options.taskId)
+    if (options.taskEventOffset) params.set('taskEventOffset',String(options.taskEventOffset))
+    if (options.runOffset) params.set('runOffset',String(options.runOffset))
+    if (options.commentOffset) params.set('commentOffset',String(options.commentOffset))
+    if (options.projectOffset) params.set('projectOffset',String(options.projectOffset))
+    if (options.boardOffset) params.set('boardOffset',String(options.boardOffset))
+    const suffix = params.size ? '?' + params.toString() : ''
+    return requestJson<AgentWorkspaceResponseDto>('/api/v1/agents/' + encodeURIComponent(sourceId) + '/workspace' + suffix)
   }
   agentDetail(sourceId: string): Promise<AgentDetailResponseDto | null> {
     const requestPath = `/api/v1/agents/${encodeURIComponent(sourceId)}`
