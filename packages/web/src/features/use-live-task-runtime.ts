@@ -49,7 +49,6 @@ export function useLiveTaskRuntime({
     setModelControl,
     thinking,
     setThinking,
-    extension,
     setExtensions,
     setExtensionPendingRequestId,
     queue,
