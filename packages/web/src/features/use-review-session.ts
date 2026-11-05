@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useLocation, useNavigate, useParams } from 'react-router-dom'
+import { taskTurnRailAnswerPreview } from './task-turn-rail-answer-preview'
 import { useTranslation } from 'react-i18next'
 import type { HubReviewSessionSummaryDto, LiveMessageDto, NativeSessionSummaryDto, ReviewNodeDto, NativeReviewTurnIndexResponseDto } from '@agent-lens/protocol'
 import { fetchHubReviewSessions } from '../client/hub-review'
@@ -753,16 +754,22 @@ export function useReviewSession(model: AgentLensClientModel, embedded: boolean)
     })
   }, [detail, taskDetailModel])
   const turnRailItems = useMemo(
-    () => annotatedInteractions.map(({ round }) => ({
-      id: round.id,
-      semanticId: round.semanticId,
-      ...(round.ordinal ? {ordinal:round.ordinal,loaded:true} : {}),
-      label: round.label,
-      preview: round.preview,
-      error: round.errorCount > 0,
-      state: round.state,
-    })),
-    [annotatedInteractions],
+    () => annotatedInteractions.map(({ round, interaction }) => {
+      const answer = interaction.nodes.flatMap(node => node.type === 'message'
+        && node.role === 'assistant' && node.text.trim() ? [node.text] : []).at(-1)
+      return {
+        id: round.id,
+        semanticId: round.semanticId,
+        ...(round.ordinal ? { ordinal: round.ordinal, loaded: true } : {}),
+        label: round.label,
+        preview: taskTurnRailAnswerPreview(round.preview, answer, {
+          question: t('task:surface.questionPreview'), answer: t('task:surface.answerPreview'),
+        }),
+        error: round.errorCount > 0,
+        state: round.state,
+      }
+    }),
+    [annotatedInteractions, t],
   )
   const pageIncomplete = detail?.page.hasMore ?? false
   const isBackward = detail?.page.direction === 'backward'

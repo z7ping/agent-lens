@@ -77,6 +77,8 @@ export const englishTaskMessages: LocaleMessagesDto = {
       fileAttachment: 'File attachment',
     },
     surface: {
+      questionPreview: 'Q',
+      answerPreview: 'A',
       turnRail: 'Turn rail',
       backgroundActivity: 'Background activity',
       roundOrdinal: 'Round {{count}}',

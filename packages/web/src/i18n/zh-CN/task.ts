@@ -77,6 +77,8 @@ export const chineseTaskMessages: LocaleMessagesDto = {
       fileAttachment: '文件附件',
     },
     surface: {
+      questionPreview: '问',
+      answerPreview: '答',
       turnRail: '轮次导轨',
       backgroundActivity: '后台活动',
       roundOrdinal: '第 {{count}} 轮',
