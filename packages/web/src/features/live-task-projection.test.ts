@@ -1367,3 +1367,48 @@ test('Pi native compaction, branch summary and nested tool usage stay independen
   assert.equal(rows.find(item => item.kind === 'event')?.kind, 'event')
   assert.equal(rows.find(item => item.kind === 'native')?.kind, 'native')
 })
+
+test('Pi native system prompt/tool loadout changes stay source-backed and collapsed preview is safe', () => {
+  const first = {
+    type: 'message', id: 'system-1', timestamp: '2026-11-05T12:00:00.000Z',
+    message: { role: 'system', content: 'PRIVATE SYSTEM PROMPT',
+      sections: { preamble: 'SECRET PREAMBLE', tools: '<tools>secret list</tools>', cwd: '/repo' },
+      toolsAdded: [{ name: 'read', description: 'Read a file' }, { name: 'edit' }] },
+  }
+  const patch = {
+    type: 'message', id: 'system-2', timestamp: '2026-11-05T12:01:00.000Z',
+    message: { role: 'system', content: '',
+      sections: { tools: null, skills: 'Updated skills' },
+      toolsRemoved: [{ name: 'edit' }] },
+  }
+  const rows = projectLiveSnapshotEntries([first, patch, {
+    type: 'message', id: 'user-1', message: { role: 'user', content: 'hello' },
+  }])
+  assert.deepEqual(rows.map(item => item.kind), ['native', 'native', 'message'])
+  assert.equal(rows[0]?.id, 'native-system:system-1')
+  assert.ok(rows[0]?.kind === 'native')
+  assert.equal(rows[0].nativeType, 'system')
+  assert.match(rows[0].preview, /sections: preamble, tools, cwd/)
+  assert.match(rows[0].preview, /\+ read, edit/)
+  assert.doesNotMatch(rows[0].preview, /PRIVATE SYSTEM PROMPT|SECRET PREAMBLE|secret list/)
+  assert.equal(rows[0].source, first)
+  assert.ok(rows[1]?.kind === 'native')
+  assert.equal(rows[1].preview, 'sections: tools, skills · − edit')
+  assert.equal(rows[1].source, patch)
+  assert.equal(rows.some(item => item.kind === 'message' && item.role === 'assistant'), false)
+  // Distinct historical declarations are never collapsed into a guessed
+  // "effective current prompt" from a possibly paginated native window.
+  assert.equal(rows.filter(item => item.kind === 'native').length, 2)
+})
+
+test('Pi native system records without sections retain exact source without a fabricated tool list', () => {
+  const record = { type: 'message', id: 'system-legacy',
+    message: { role: 'system', content: 'Older system prompt' } }
+  const rows = projectLiveSnapshotEntries([record])
+  assert.equal(rows.length, 1)
+  const system = rows[0]
+  assert.ok(system?.kind === 'native')
+  assert.equal(system.nativeType, 'system')
+  assert.equal(system.preview, '')
+  assert.equal(system.source, record)
+})
