@@ -134,6 +134,7 @@ export const chineseTaskMessages: LocaleMessagesDto = {
     },
     live: {
       processEvent: {
+        outputTruncated: '模型输出达到长度限制，内容可能不完整',
         retryStart: '自动重试已安排',
         retrySuccess: '自动重试成功',
         retryFailed: '自动重试失败',
@@ -153,6 +154,7 @@ export const chineseTaskMessages: LocaleMessagesDto = {
           manual: '手动',
           threshold: '达到上下文阈值',
           overflow: '上下文溢出',
+          length: '输出长度限制',
         },
       },
       toolGroup: '工具调用',
