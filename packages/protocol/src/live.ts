@@ -375,6 +375,7 @@ export type LiveEventDto =
       steering: string[]
       followUp: string[]
     }
+  | { type: 'ui.dismiss'; requestId: string }
   | {
       type: 'ui.request'
       requestId: string
@@ -774,6 +775,10 @@ export function parseLiveEventDto(value: unknown): LiveEventDto | null {
     const followUp = rawFollowUp.filter((item): item is string => typeof item === 'string')
     if (steering.length !== rawSteering.length || followUp.length !== rawFollowUp.length) return null
     return { type, steering, followUp }
+  }
+  if (type === 'ui.dismiss') {
+    return typeof event.requestId === 'string' && event.requestId.trim()
+      ? { type, requestId: event.requestId } : null
   }
   if (type === 'ui.request') {
     if (typeof event.requestId !== 'string' || !event.requestId) return null

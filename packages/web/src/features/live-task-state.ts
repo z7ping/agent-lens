@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react'
-import type { LiveCommandDto, LiveEventDto, LiveHistoryIndexDto, LiveMessageActionContributionDto, LiveModelControlDto, LiveQueueStateDto, LiveRuntimeDisclosureContributionDto, LiveRuntimeStateDto, LiveSnapshotDto, LiveThinkingControlDto, LiveMessageDto } from '@agent-lens/protocol'
+import type { LiveCommandDto, LiveHistoryIndexDto, LiveMessageActionContributionDto, LiveModelControlDto, LiveQueueStateDto, LiveRuntimeDisclosureContributionDto, LiveRuntimeStateDto, LiveSnapshotDto, LiveThinkingControlDto, LiveMessageDto } from '@agent-lens/protocol'
 import type { LiveProductMetadata } from '../client/live'
 import { LiveFollowController } from './live-follow-controller'
 import { LiveTaskRoundProjector, type LiveTaskProjectionItem } from './live-task-projection'
@@ -7,7 +7,7 @@ import type { LiveHistoryPageBlock } from './live-task-history-window'
 import { type LiveMarkdownComposerDraft, type LiveMarkdownComposerHandle } from '../components/LiveMarkdownComposer'
 import { emptyLiveQueue, type PendingQueueSubmission, type RestoredQueueDraft, type LiveQueueMode } from './live-task-queue'
 
-type LiveUiRequest = Extract<LiveEventDto, { type: 'ui.request' }>
+import type { LiveUiRequest } from './live-extension-request-queue'
 
 /** Live 会话单一状态所有者；运行时、历史、操作 Hook 按领域消费同一引用。 */
 export function useLiveTaskState() {
@@ -29,8 +29,11 @@ export function useLiveTaskState() {
   const [commands, setCommands] = useState<LiveCommandDto[]>([])
   const [modelControl, setModelControl] = useState<LiveModelControlDto | null>(null)
   const [thinking, setThinking] = useState<LiveThinkingControlDto | null>(null)
-  const [extension, setExtension] = useState<LiveUiRequest | null>(null)
-  const [extensionPending, setExtensionPending] = useState(false)
+  // Preserve native request order. A second approval must not overwrite the first.
+  const [extensions, setExtensions] = useState<LiveUiRequest[]>([])
+  const extension = extensions[0] ?? null
+  const [extensionPendingRequestId, setExtensionPendingRequestId] = useState<string | null>(null)
+  const extensionPending = extension !== null && extensionPendingRequestId === extension.requestId
   const [streamingBehavior, setStreamingBehavior] = useState<LiveQueueMode>('steer')
   const [queue, setQueue] = useState<LiveQueueStateDto>(() => emptyLiveQueue())
   const [pendingQueue, setPendingQueue] = useState<PendingQueueSubmission[]>([])
@@ -107,9 +110,9 @@ export function useLiveTaskState() {
     thinking,
     setThinking,
     extension,
-    setExtension,
+    setExtensions,
     extensionPending,
-    setExtensionPending,
+    setExtensionPendingRequestId,
     streamingBehavior,
     setStreamingBehavior,
     queue,

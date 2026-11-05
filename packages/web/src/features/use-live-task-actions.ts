@@ -2,6 +2,7 @@ import type { useTranslation } from 'react-i18next'
 import type { useNavigate } from 'react-router-dom'
 import type { TaskLiveRuntimeLocation } from './task-live-runtime'
 import type { LiveTaskState } from './live-task-state'
+import { dismissLiveUiRequest } from './live-extension-request-queue'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { LiveMessageActionContributionDto, LiveMessageDto, LiveRuntimeActionContributionDto } from '@agent-lens/protocol'
 import { liveApi } from '../client/live'
@@ -41,9 +42,9 @@ export function useLiveTaskActions({
     thinking,
     setThinking,
     extension,
-    setExtension,
+    setExtensions,
     extensionPending,
-    setExtensionPending,
+    setExtensionPendingRequestId,
     streamingBehavior,
     setStreamingBehavior,
     queue,
@@ -382,17 +383,18 @@ export function useLiveTaskActions({
 
   const answerExtension = useCallback(async (value: unknown) => {
     if (!current || !extension || extensionPending) return
-    setExtensionPending(true)
+    const requestId = extension.requestId
+    setExtensionPendingRequestId(requestId)
     setError('')
     try {
-      await liveApi.respondToExtension(current.liveId, current.runtimeSessionId, extension.requestId, value)
-      // A queued approval may arrive over SSE before this HTTP request completes.
-      setExtension(previous => previous?.requestId === extension.requestId ? null : previous)
+      await liveApi.respondToExtension(current.liveId, current.runtimeSessionId, requestId, value)
+      // An independent request may have arrived while this answer was in flight.
+      setExtensions(previous => dismissLiveUiRequest(previous, requestId))
       composerRef.current?.focus({ preventScroll: true })
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : String(reason))
     } finally {
-      setExtensionPending(false)
+      setExtensionPendingRequestId(previous => previous === requestId ? null : previous)
     }
   }, [current, extension, extensionPending])
 
