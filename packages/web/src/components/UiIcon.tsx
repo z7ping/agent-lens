@@ -43,6 +43,7 @@ import {
   ListTodo,
   Maximize2,
   Menu,
+  MessageSquareQuote,
   Ellipsis,
   Minimize2,
   Moon,
@@ -94,6 +95,7 @@ export type UiIconName =
   | 'close'
   | 'collapse'
   | 'copy'
+  | 'quote'
   | 'dot'
   | 'drag'
   | 'exclamation'
@@ -165,6 +167,7 @@ const icons = {
   close: X,
   collapse: Minimize2,
   copy: Copy,
+  quote: MessageSquareQuote,
   dot: Dot,
   drag: GripVertical,
   exclamation: CircleAlert,
