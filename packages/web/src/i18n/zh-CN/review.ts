@@ -358,6 +358,7 @@ export const chineseReviewMessages: LocaleMessagesDto = {
         },
       },
       relationship: {
+        openVerifiedSubagent: '查看已验证子智能体会话',
         sessionTree: '会话关系 · {{count}} 条',
       },
       roundNav: {
