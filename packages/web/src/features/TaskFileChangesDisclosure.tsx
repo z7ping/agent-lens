@@ -1,10 +1,13 @@
 import { useEffect, useState } from 'react'
 import { PatchDiff } from '@pierre/diffs/react'
-import type { TaskFileChangeDto, TaskFileChangesResponseDto, TaskFileDiffResponseDto } from '@agent-lens/protocol'
+import type { HostFilePreviewResponseDto, TaskFileChangeDto, TaskFileChangesResponseDto, TaskFileDiffResponseDto } from '@agent-lens/protocol'
 import { useTranslation } from 'react-i18next'
 import { AgentLensApi } from '../client/api'
 import { copyText } from '../client/clipboard'
 import { CopyableCodeBlock } from '../components/CopyableCodeBlock'
+import { ImagePreview } from '../components/ImagePreview'
+import { MarkdownContent } from '../components/MarkdownContent'
+import { workspaceFilePreviewPath } from './workspace-file-preview-path'
 import { LocalResourceReference } from '../components/LocalResourceReference'
 import { Button, Disclosure, Drawer, UiIcon } from '../components/ui'
 
@@ -70,6 +73,11 @@ export function TaskFileChangesDisclosure({
   const { t } = useTranslation('review')
   const [showAll, setShowAll] = useState(false)
   const [diffPath, setDiffPath] = useState<string | null>(null)
+  const [previewPath, setPreviewPath] = useState<string | null>(null)
+  const [preview, setPreview] = useState<HostFilePreviewResponseDto | null>(null)
+  const [previewLoading, setPreviewLoading] = useState(false)
+  const [previewError, setPreviewError] = useState(false)
+  const [previewRetry, setPreviewRetry] = useState(0)
   const [diff, setDiff] = useState<TaskFileDiffResponseDto | null>(null)
   const [diffLoading, setDiffLoading] = useState(false)
   const [diffError, setDiffError] = useState(false)
@@ -101,6 +109,23 @@ export function TaskFileChangesDisclosure({
       setDiffCopyState('error')
     }
   }
+  useEffect(() => {
+    if (!previewPath) { setPreview(null); setPreviewError(false); setPreviewLoading(false); return }
+    let alive = true
+    setPreview(null)
+    setPreviewError(false)
+    setPreviewLoading(true)
+    void api.previewHostFile(previewPath)
+      .then(result => { if (alive) setPreview(result) })
+      .catch(() => { if (alive) setPreviewError(true) })
+      .finally(() => { if (alive) setPreviewLoading(false) })
+    return () => { alive = false }
+  }, [previewPath, previewRetry])
+
+  useEffect(() => {
+    setPreviewPath(null)
+  }, [value?.logicalSessionId, value?.interactionId])
+
   const sessionId = value?.logicalSessionId
   const isInteraction = Boolean(value?.interactionId)
 
@@ -124,9 +149,9 @@ export function TaskFileChangesDisclosure({
   const hasExactDelta = value?.summary.additions !== undefined || value?.summary.deletions !== undefined
   const hasUnverifiedFiles = Boolean(value?.interactionId || value?.summary.observedCount || items.some(isObservedOnly))
   const isObserved = Boolean(value?.interactionId)
-  const selected = Boolean(evidenceItem || diffPath)
+  const selected = Boolean(evidenceItem || diffPath || previewPath)
   const inspectingInline = inlineDetails && selected
-  const inspectedFilePath = evidenceItem?.path ?? diffPath ?? ''
+  const inspectedFilePath = evidenceItem?.path ?? diffPath ?? previewPath ?? ''
   const inspectedFile = fileNameAndDirectory(inspectedFilePath)
   const evidenceContent = evidenceItem && <div className="task-file-change-evidence">
     <div className="task-file-change-verdict" role="status">
@@ -195,8 +220,25 @@ export function TaskFileChangesDisclosure({
       </>}
     {diff?.truncated && <p className="task-file-diff-notice">{t('local.fileChanges.diffTruncated')}</p>}
   </div>
+  const previewContent = previewPath && <div className="task-file-diff-view" data-file-preview>
+    {previewLoading && <p className="task-file-diff-notice" role="status">{t('local.fileChanges.previewLoading')}</p>}
+    {previewError && <p className="task-file-diff-notice" role="alert">{t('local.fileChanges.previewUnavailable')}
+      <Button size="small" variant="quiet" onClick={() => setPreviewRetry(value => value + 1)}>{t('local.fileChanges.previewRetry')}</Button>
+    </p>}
+    {preview?.redacted && <p className="task-file-diff-notice">{t('local.fileChanges.previewRedacted')}</p>}
+    {preview?.dataUrl && <ImagePreview src={preview.dataUrl} alt={preview.name}/>}
+    {preview?.content !== undefined && <div className="task-file-diff-code">
+      {/\.(?:md|markdown|mdown|mkd)$/i.test(preview.name)
+        ? <MarkdownContent text={preview.content} frontmatter/>
+        : <CopyableCodeBlock language={preview.name.split('.').at(-1)} copyValue={preview.content}>
+            <code>{preview.content}</code>
+          </CopyableCodeBlock>}
+    </div>}
+    {preview && preview.content === undefined && !preview.dataUrl
+      && <p className="task-file-diff-notice">{t('local.fileChanges.previewUnavailable')}</p>}
+  </div>
   const detailContent = selected && <section className="task-file-changes task-file-changes-detail">
-      <Button size="small" className="task-file-detail-back" onClick={() => { setEvidenceItem(null); setDiffPath(null) }}><UiIcon name="arrow-left" size={14}/>{t('local.fileChanges.backToFiles')}</Button>
+      <Button size="small" className="task-file-detail-back" onClick={() => { setEvidenceItem(null); setDiffPath(null); setPreviewPath(null) }}><UiIcon name="arrow-left" size={14}/>{t('local.fileChanges.backToFiles')}</Button>
       <div className="task-file-detail-heading">
         <span className="task-file-detail-icon" aria-hidden="true"><UiIcon name="file-code" size={20}/></span>
         <div className="task-file-detail-identity">
@@ -204,7 +246,7 @@ export function TaskFileChangesDisclosure({
           {inspectedFile.directory && <p title={inspectedFile.directory}>{inspectedFile.directory}</p>}
         </div>
       </div>
-      {evidenceContent}{diffContent}
+      {evidenceContent}{diffContent}{previewContent}
     </section>
   return <>
     {inspectingInline ? detailContent : <section className="task-file-changes">
@@ -229,6 +271,8 @@ export function TaskFileChangesDisclosure({
             ? undefined
             : absoluteFilePath(value?.rootPath ?? value?.workspacePath, item.path)
           const observedOnly = isObservedOnly(item) || isObserved
+          const previewTarget = item.changeType === 'deleted'
+            ? undefined : workspaceFilePreviewPath(value?.rootPath ?? value?.workspacePath, item.path)
           return <div className="task-file-change-row" key={`${item.changeType}:${item.oldPath ?? ''}:${item.path}`}>
             <span className={`task-file-change-status ${observedOnly ? 'is-observed' : `is-${item.changeType}`}`} title={t(observedOnly ? 'local.fileChanges.observed' : `local.fileChanges.status.${item.changeType}`)}>{observedOnly ? t('local.fileChanges.observed') : statusCode(item)}</span>
             <span className="task-file-change-path">
@@ -245,8 +289,9 @@ export function TaskFileChangesDisclosure({
             </span>
             {item.additions !== undefined && <span className="task-file-change-added">+{item.additions}</span>}
             {item.deletions !== undefined && <span className="task-file-change-deleted">-{item.deletions}</span>}
-            {!observedOnly && <Button size="small" className="task-file-change-diff-action" onClick={() => { setDiff(null); setDiffError(false); setDiffLoading(true); setDiffPath(item.path) }}>{t('local.fileChanges.viewDiff')}</Button>}
-            {observedOnly && <Button size="small" className="task-file-change-evidence-action" onClick={() => setEvidenceItem(item)}>{t('local.fileChanges.viewEvidence')}</Button>}
+            {!observedOnly && <Button size="small" className="task-file-change-diff-action" onClick={() => { setPreviewPath(null); setEvidenceItem(null); setDiff(null); setDiffError(false); setDiffLoading(true); setDiffPath(item.path) }}>{t('local.fileChanges.viewDiff')}</Button>}
+            {previewTarget && <Button size="small" variant="quiet" onClick={() => { setEvidenceItem(null); setDiffPath(null); setPreviewPath(previewTarget); setPreviewRetry(value => value + 1) }}>{t('local.fileChanges.viewFile')}</Button>}
+            {observedOnly && <Button size="small" className="task-file-change-evidence-action" onClick={() => { setPreviewPath(null); setDiffPath(null); setEvidenceItem(item) }}>{t('local.fileChanges.viewEvidence')}</Button>}
           </div>
         })}
         {value?.meta.truncated && <div className="task-file-changes-error">{t('local.fileChanges.truncated')}</div>}
@@ -261,8 +306,8 @@ export function TaskFileChangesDisclosure({
     {!inlineDetails && selected && <Drawer
       open
       className="task-file-detail-drawer"
-      title={t(diffPath ? 'local.fileChanges.viewDiff' : 'local.fileChanges.viewEvidence')}
-      onClose={() => { setEvidenceItem(null); setDiffPath(null) }}
+      title={t(previewPath ? 'local.fileChanges.viewFile' : diffPath ? 'local.fileChanges.viewDiff' : 'local.fileChanges.viewEvidence')}
+      onClose={() => { setEvidenceItem(null); setDiffPath(null); setPreviewPath(null) }}
     >{detailContent}</Drawer>}
   </>
 }
