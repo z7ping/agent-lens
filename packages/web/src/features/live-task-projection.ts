@@ -54,6 +54,11 @@ export type LiveTaskProjectionItem =
       mcpServerId?: string | undefined
       inputPreview?: string | undefined
       output?: string | undefined
+      /** Persisted native tool result replaces any bounded SSE output preview. */
+      nativeResult?: true | undefined
+      attachments?: ReviewMessageAttachmentDto[] | undefined
+      /** Original Pi tool result details; rendered only when the shared row expands. */
+      resultDetails?: unknown
       status: 'running' | 'success' | 'error'
       durationMs?: number | undefined
       at?: string | undefined
@@ -181,6 +186,8 @@ export function projectLiveSnapshotEntries(entries: readonly unknown[]): LiveTas
       name: item.name === 'tool' ? current.name : item.name,
       inputPreview: item.inputPreview ?? current.inputPreview,
       output: item.output ?? current.output,
+      attachments: item.attachments ?? current.attachments,
+      resultDetails: item.resultDetails ?? current.resultDetails,
     }
   }
 
@@ -248,13 +255,18 @@ export function projectLiveSnapshotEntries(entries: readonly unknown[]): LiveTas
       const output = contentText(nested.content) || contentText(item.content)
         || text(nested.output) || text(item.output) || errorMessage
         || (failed ? agentLensI18n.t('task:message.requestFailed') : '')
+      const attachments = messageAttachments(item, nested)
+      const resultDetails = nested.details ?? item.details
       pushTool({
         id: `tool:${callId}`,
         kind: 'tool',
         callId,
         name: text(nested.toolName) || text(nested.tool_name) || text(item.toolName) || text(item.tool_name) || 'tool',
         status: failed ? 'error' : 'success',
+        nativeResult: true,
         ...(output ? { output } : {}),
+        ...(attachments.length ? { attachments } : {}),
+        ...(resultDetails !== undefined ? { resultDetails } : {}),
         ...(at ? { at } : {}),
       })
       return
@@ -500,8 +512,17 @@ export function mergeLiveActiveProjectionItems(
     if (existingIndex !== undefined) {
       const existing = merged[existingIndex]
       if (existing?.kind === 'tool' && item.kind === 'tool'
-        && existing.status === 'running' && item.status !== 'running') {
-        merged[existingIndex] = { ...existing, ...item }
+        && (item.nativeResult === true
+          || (existing.status === 'running' && item.status !== 'running'))) {
+        // A persisted native result is authoritative, even if SSE already
+        // marked the invocation successful with a truncated text preview.
+        merged[existingIndex] = { ...existing, ...item,
+          inputPreview: item.inputPreview ?? existing.inputPreview,
+          parentToolCallId: item.parentToolCallId ?? existing.parentToolCallId,
+          toolSourceType: item.toolSourceType ?? existing.toolSourceType,
+          mcpServerId: item.mcpServerId ?? existing.mcpServerId,
+          ...(item.nativeResult === true ? { output: item.output } : {}),
+        }
       }
       continue
     }
