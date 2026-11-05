@@ -882,3 +882,28 @@ test('Pi compaction preserves official reason, full summary and token counts', (
     process: { operation: 'compaction', phase: 'end' },
   })
 })
+
+test('Pi tool result SSE preview excludes inline image data and native details', () => {
+  const image = { type: 'image', mimeType: 'image/png', data: 'YmFzZTY0LXBheWxvYWQ=' }
+  const detail = { huge: 'private-structured-result'.repeat(100) }
+  const content = [{ type: 'text', text: 'summary' }, image]
+  assert.deepEqual(normalizePiLiveEvent({
+    type: 'tool_execution_end', toolCallId: 'tool-image', toolName: 'view',
+    result: { content, details: detail }, isError: false,
+  }), {
+    type: 'tool.end', callId: 'tool-image', name: 'view',
+    status: 'success', output: 'summary',
+  })
+  assert.deepEqual(normalizePiLiveEvent({
+    type: 'tool_execution_update', toolCallId: 'tool-image',
+    partialResult: { content: [image] },
+  }), undefined)
+  const longText = 'x'.repeat(5_000)
+  const result = normalizePiLiveEvent({
+    type: 'tool_execution_end', toolCallId: 'tool-long',
+    result: { content: [{ type: 'text', text: longText }] },
+  })
+  assert.ok(result?.type === 'tool.end')
+  assert.equal(result.output?.length, 4_001)
+  assert.equal(result.output, longText.slice(0, 4_000) + '…')
+})
