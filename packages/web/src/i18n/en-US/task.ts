@@ -166,6 +166,7 @@ export const englishTaskMessages: LocaleMessagesDto = {
         retryFailed: 'Automatic retry failed',
         retryAborted: 'Automatic retry aborted',
         retryEnd: 'Automatic retry ended',
+        retrySource: { compaction: 'Context summary', branchSummary: 'Branch summary' },
         compactionStart: 'Context compaction started',
         compactionSuccess: 'Context compaction completed',
         compactionFailed: 'Context compaction failed',

@@ -159,6 +159,7 @@ function GenericLiveItem({
         : detail.outcome === 'failed' ? 'Failed'
           : detail.outcome === 'aborted' ? 'Aborted' : 'End'
     const parts = [
+      ...(detail.retrySource ? [t(`live.processEvent.retrySource.${detail.retrySource}`)] : []),
       ...(detail.reason ? [t(`live.processEvent.reason.${detail.reason}`)] : []),
       ...(detail.attempt !== undefined ? [t('live.processEvent.attempt', {
         attempt: detail.attempt, max: detail.maxAttempts ?? '—',
@@ -174,7 +175,7 @@ function GenericLiveItem({
     return <TaskEvent
       model={{
         id: item.id,
-        category: detail.operation === 'compaction' ? 'context' : 'lifecycle',
+        category: detail.operation === 'compaction' || detail.retrySource ? 'context' : 'lifecycle',
         label: t(`live.processEvent.${prefix}${result}`),
         ...(parts.length ? { summary: parts.join(' · ') } : {}),
         ...(item.at ? { time: taskSessionMessageTime(item.at) } : {}),

@@ -943,3 +943,48 @@ test('Pi output length boundary is source-attested and does not replace message.
     message: { role: 'assistant', id: 'native-msg-3', stopReason: 'pending' },
   }), { type: 'message.end', role: 'assistant', messageId: 'native-msg-3' })
 })
+
+test('Pi summarization retry maps source-backed lifecycle without declaring success', () => {
+  assert.deepEqual(normalizePiLiveEvent({
+    type: 'summarization_retry_scheduled', attempt: 2, maxAttempts: 3,
+    delayMs: 2500, errorMessage: 'temporary provider failure',
+  }), {
+    type: 'status', status: 'running',
+    process: { operation: 'retry', phase: 'start', attempt: 2, maxAttempts: 3,
+      delayMs: 2500, errorMessage: 'temporary provider failure' },
+  })
+  assert.deepEqual(normalizePiLiveEvent({
+    type: 'summarization_retry_attempt_start', source: 'compaction', reason: 'overflow',
+  }), {
+    type: 'status', status: 'running',
+    process: { operation: 'retry', phase: 'start', retrySource: 'compaction', reason: 'overflow' },
+  })
+  assert.deepEqual(normalizePiLiveEvent({
+    type: 'summarization_retry_attempt_start', source: 'branchSummary',
+  }), {
+    type: 'status', status: 'running',
+    process: { operation: 'retry', phase: 'start', retrySource: 'branchSummary' },
+  })
+  assert.deepEqual(normalizePiLiveEvent({
+    type: 'summarization_retry_attempt_start', source: 'unknown', reason: 'unsupported',
+  }), {
+    type: 'status', status: 'running',
+    process: { operation: 'retry', phase: 'start' },
+  })
+  assert.deepEqual(normalizePiLiveEvent({ type: 'summarization_retry_finished' }), {
+    type: 'status', status: 'running', process: { operation: 'retry', phase: 'end' },
+  })
+})
+
+test('Pi native appended entries and direct RPC bash deltas retain raw evidence without fake tool rows', () => {
+  const appended = { type: 'entry_appended', entry: { type: 'custom', id: 'native-1' } }
+  const bash = { type: 'bash_execution_update', id: 'rpc-42', delta: 'partial stdout' }
+  for (const [sequence, raw] of [appended, bash].entries()) {
+    assert.equal(normalizePiLiveEvent(raw), undefined)
+    const envelope = {
+      runtimeSessionId: 'runtime-1', sequence: sequence + 1,
+      receivedAt: '2026-11-06T00:00:00Z', event: raw,
+    }
+    assert.deepEqual(normalizePiLiveRuntimeEvent(envelope), envelope)
+  }
+})

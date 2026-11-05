@@ -325,6 +325,43 @@ export function normalizePiLiveEvent(event: Readonly<Record<string, unknown>>): 
       },
     }
   }
+
+  // Pi has separate retry events for compaction/branch summarization.
+  // A finished retry loop is not proof of summarization success.
+  if (type === 'summarization_retry_scheduled') {
+    return {
+      type: 'status', status: 'running',
+      process: {
+        operation: 'retry', phase: 'start',
+        ...(liveNonnegative(event.attempt) !== undefined ? { attempt: liveNonnegative(event.attempt) } : {}),
+        ...(liveNonnegative(event.maxAttempts) !== undefined ? { maxAttempts: liveNonnegative(event.maxAttempts) } : {}),
+        ...(liveNonnegative(event.delayMs) !== undefined ? { delayMs: liveNonnegative(event.delayMs) } : {}),
+        ...(liveText(event.errorMessage) ? { errorMessage: liveText(event.errorMessage) } : {}),
+      },
+    }
+  }
+  if (type === 'summarization_retry_attempt_start') {
+    const retrySource = event.source === 'compaction' || event.source === 'branchSummary'
+      ? event.source : undefined
+    return {
+      type: 'status', status: 'running',
+      process: {
+        operation: 'retry', phase: 'start',
+        ...(retrySource ? { retrySource } : {}),
+        ...(retrySource === 'compaction' && piCompactionReason(event.reason)
+          ? { reason: piCompactionReason(event.reason) } : {}),
+      },
+    }
+  }
+  if (type === 'summarization_retry_finished') {
+    return { type: 'status', status: 'running', process: { operation: 'retry', phase: 'end' } }
+  }
+  // Appended extension entries are projected from the native JSONL Source.
+  // Emitting another Live message would create duplicate text and evidence.
+  if (type === 'entry_appended') return undefined
+  // Direct RPC bash deltas have no SDK-owned tool call start/end in this
+  // adapter. Keep the original event/id, never synthesize an orphan tool row.
+  if (type === 'bash_execution_update') return undefined
   if (type === 'compaction_start') {
     return {
       type: 'status', status: 'compacting',

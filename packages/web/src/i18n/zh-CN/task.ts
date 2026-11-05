@@ -166,6 +166,7 @@ export const chineseTaskMessages: LocaleMessagesDto = {
         retryFailed: '自动重试失败',
         retryAborted: '自动重试已取消',
         retryEnd: '自动重试结束',
+        retrySource: { compaction: '上下文摘要', branchSummary: '分支摘要' },
         compactionStart: '开始压缩上下文',
         compactionSuccess: '上下文压缩完成',
         compactionFailed: '上下文压缩失败',
