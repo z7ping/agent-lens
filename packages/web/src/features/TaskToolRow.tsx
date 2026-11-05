@@ -215,12 +215,20 @@ export function TaskToolRow({ model, meta, details, onClick, className = '', com
     data-status={model.status}
     data-kind={visualKind}
     data-command={commandTarget}
+    data-tool-call-id={model.callId}
+    data-parent-tool-call-id={model.parentToolCallId}
+    data-loaded-child-call-count={model.loadedChildCallCount}
   >
-    <summary className="task-tool-row" aria-label={`${t(`tool.kind.${visualKind}`)} · ${heading}${hasTarget ? ` · ${target}` : ''} · ${status}`}>
+    <summary className="task-tool-row" aria-label={`${t(`tool.kind.${visualKind}`)} · ${heading}${hasTarget ? ` · ${target}` : ''}${model.parentToolCallId ? ` · ${t('tool.parentCall')}: ${model.parentToolName ?? model.parentToolCallId}` : ''} · ${status}`}>
       <span className={`task-tool-kind task-tool-kind-${visualKind}`}>
         <ToolKindIcon kind={visualKind}/>
       </span>
-      <span className="task-tool-summary-text" title={heading}>{heading}</span>
+      <span className="task-tool-summary-text" title={model.parentToolCallId
+        ? `${heading} · ${t('tool.parentCall')}: ${model.parentToolName ?? model.parentToolCallId}`
+        : heading}>
+        {model.parentToolCallId && <UiIcon name="fork" size={12}/>}
+        {heading}
+      </span>
       <span className="task-tool-preview-slot">
         {commandTarget
           ? <code className="task-tool-command-preview" title={target}>
@@ -246,6 +254,21 @@ export function TaskToolRow({ model, meta, details, onClick, className = '', com
       <UiIcon className="task-tool-row-chevron" name="chevron-right" size={14}/>
     </summary>
     {(!compact || expanded) && <div className="task-tool-sections">
+      {(model.parentToolCallId || model.loadedChildCallCount) && <section
+        className="task-tool-section"
+        data-tool-section="ancestry"
+        aria-label={t('tool.ancestry')}
+      >
+        <div className="task-tool-section-title">{t('tool.ancestry')}</div>
+        {model.parentToolCallId && <div>
+          {t('tool.parentCall')}: <code title={model.parentToolCallId}>
+            {model.parentToolName ? `${model.parentToolName} (${model.parentToolCallId})` : model.parentToolCallId}
+          </code>
+        </div>}
+        {model.loadedChildCallCount !== undefined && <div>
+          {t('tool.loadedChildCalls', { count: model.loadedChildCallCount })}
+        </div>}
+      </section>}
       <section className="task-tool-section" data-tool-section="input" aria-label={t('tool.input')}>
         <div className="task-tool-section-title">{input === undefined && preview ? t('tool.inputPreview') : t('tool.input')}</div>
         {input !== undefined
