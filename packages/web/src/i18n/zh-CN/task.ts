@@ -513,6 +513,9 @@ export const chineseTaskMessages: LocaleMessagesDto = {
       outputPending: '等待工具返回',
       resultMissing: '未记录到工具结果',
       resultDetails: '原生结果详情',
+      ancestry: '调用关系',
+      parentCall: '父调用',
+      loadedChildCalls: '已加载子调用 {{count}} 项',
       inspect: '查看原始证据',
       calls: '{{count}} 次工具调用',
       status: {
