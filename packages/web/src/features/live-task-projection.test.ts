@@ -1094,3 +1094,54 @@ test('Pi compaction recovery merges matching SSE finish with native journal rath
   const distinct = mergeLiveActiveProjectionItems(merged, other)
   assert.equal(distinct.filter(item => item.kind === 'event').length, 2)
 })
+
+test('Pi source-attested length stop shows a nonterminal process warning with complete message', () => {
+  const initial = reduceLiveTaskEvent([], event(1, {
+    type: 'text.end', text: 'answer cut at native limit',
+    messageId: 'native-msg-1', contentIndex: 0,
+  }))
+  const finished = reduceLiveTaskEvent(initial, event(2, {
+    type: 'message.end', role: 'assistant', messageId: 'native-msg-1',
+    stopReason: 'length',
+  }))
+  assert.ok(finished.some(item => item.kind === 'message'
+    && item.text === 'answer cut at native limit' && !item.streaming))
+  const truncated = finished.filter(item => item.kind === 'event')
+  assert.equal(truncated.length, 1)
+  assert.deepEqual(truncated[0]?.kind === 'event' ? truncated[0].process : null, {
+    operation: 'output', phase: 'end', outcome: 'truncated', reason: 'length',
+  })
+  assert.equal(truncated[0]?.id, 'live-output:native-msg-1')
+  const settled = reduceLiveTaskEvent(finished, event(3, {
+    type: 'completed', status: 'completed',
+  }))
+  const round = projectLiveTaskRounds(settled)[0]
+  assert.equal(round?.model.errorCount, 0)
+  assert.equal(round?.model.warningCount, 1)
+  assert.equal(round?.model.terminalFailure, false)
+  assert.equal(round?.model.state, 'settled')
+})
+
+test('Pi persisted assistant length boundary survives history reload without claiming a normal final', () => {
+  const rows = projectLiveSnapshotEntries([{
+    type: 'message', id: 'entry-123', timestamp: '2026-11-05T10:00:00.000Z',
+    message: { role: 'assistant', id: 'native-msg-1', stopReason: 'length',
+      content: [{ type: 'text', text: 'cut short' }] },
+  }])
+  assert.deepEqual(rows.map(row => row.kind), ['message', 'event'])
+  assert.equal(rows[1]?.id, 'live-output:native-msg-1')
+  assert.equal(rows[1]?.kind === 'event' ? rows[1].process.outcome : null, 'truncated')
+  const live = reduceLiveTaskEvent([], event(2, {
+    type: 'message.end', role: 'assistant', messageId: 'native-msg-1',
+    stopReason: 'length',
+  }))
+  const merged = mergeLiveActiveProjectionItems(live, rows)
+  assert.equal(merged.filter(row => row.kind === 'event').length, 1)
+  const ordinary = projectLiveSnapshotEntries([{
+    type: 'message', id: 'entry-ok', message: {
+      role: 'assistant', stopReason: 'stop',
+      content: [{ type: 'text', text: 'complete' }],
+    },
+  }])
+  assert.equal(ordinary.filter(row => row.kind === 'event').length, 0)
+})
