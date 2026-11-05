@@ -358,6 +358,7 @@ export const englishReviewMessages: LocaleMessagesDto = {
         },
       },
       relationship: {
+        openVerifiedSubagent: 'Open verified subagent session',
         sessionTree: 'Session relationships · {{count}}',
       },
       roundNav: {
