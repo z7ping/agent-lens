@@ -516,7 +516,7 @@ function settleSupersededLiveText(items: readonly LiveTaskProjectionItem[]): Liv
       && item.streaming && index !== latestStage ? { ...item, streaming: false } : item)
 }
 
-export type LiveTaskResponseActivity = 'waiting' | 'thinking' | 'tools' | 'responding' | 'processing'
+export type LiveTaskResponseActivity = 'waiting' | 'thinking' | 'tools' | 'responding' | 'processing' | 'retrying' | 'compacting'
 
 /** Native facts only; elapsed silence is not a completion signal. */
 export function liveTaskResponseActivity(
@@ -529,6 +529,13 @@ export function liveTaskResponseActivity(
   if (last.kind === 'thinking' && last.streaming) return 'thinking'
   if (last.kind === 'message' && last.role === 'assistant' && last.streaming) return 'responding'
   if (items.some(item => item.kind === 'tool' && item.status === 'running')) return 'tools'
+  // Only a matching native process start without a later end can override
+  // generic "processing". Do not infer retry/compaction from silent gaps.
+  const mostRecentProcess = [...items].reverse().find(item =>
+    item.kind === 'event' && (item.process.operation === 'retry' || item.process.operation === 'compaction'))
+  if (mostRecentProcess?.kind === 'event' && mostRecentProcess.process.phase === 'start') {
+    return mostRecentProcess.process.operation === 'retry' ? 'retrying' : 'compacting'
+  }
   return 'processing'
 }
 
