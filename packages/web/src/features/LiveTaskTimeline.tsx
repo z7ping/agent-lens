@@ -112,7 +112,8 @@ function GenericLiveItem({
   }
   if (item.kind === 'native') {
     const type = item.nativeType
-    const label = type === 'branch_summary' ? t('live.nativeEntries.branchSummary')
+    const label = type === 'system' ? t('live.nativeEntries.system')
+      : type === 'branch_summary' ? t('live.nativeEntries.branchSummary')
       : type === 'context_edit' ? t(item.source.replacement === null
         ? 'live.nativeEntries.contextExcluded'
         : item.source.replacement !== undefined ? 'live.nativeEntries.contextReplaced'

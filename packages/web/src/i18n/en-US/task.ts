@@ -148,6 +148,7 @@ export const englishTaskMessages: LocaleMessagesDto = {
         catalogCost: 'Catalog-estimated cost ${{value}}',
       },
       nativeEntries: {
+        system: 'Native system context record',
         branchSummary: 'Branch summary',
         contextExcluded: 'Content omitted from model context',
         contextReplaced: 'Model context content replaced',
