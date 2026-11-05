@@ -309,6 +309,11 @@ export const chineseReviewMessages: LocaleMessagesDto = {
         selectSession: '选择一个会话开始复盘',
       },
       fileChanges: {
+        viewFile: '预览文件',
+        previewLoading: '正在读取当前文件…',
+        previewUnavailable: '文件不可预览或已不存在',
+        previewRedacted: '敏感内容已按宿主策略处理',
+        previewRetry: '重试',
         pathTransition: '{{oldPath}} → {{path}}',
         roundTitle: '本轮变更 {{count}} 个文件',
         titleCount: '本次会话修改 {{count}} 个文件',
