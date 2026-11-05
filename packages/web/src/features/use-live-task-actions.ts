@@ -2,6 +2,7 @@ import type { useTranslation } from 'react-i18next'
 import type { useNavigate } from 'react-router-dom'
 import type { TaskLiveRuntimeLocation } from './task-live-runtime'
 import type { LiveTaskState } from './live-task-state'
+import { dismissLiveUiRequest } from './live-extension-request-queue'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { LiveMessageActionContributionDto, LiveMessageDto, LiveRuntimeActionContributionDto } from '@agent-lens/protocol'
 import { liveApi } from '../client/live'
@@ -388,7 +389,7 @@ export function useLiveTaskActions({
     try {
       await liveApi.respondToExtension(current.liveId, current.runtimeSessionId, requestId, value)
       // An independent request may have arrived while this answer was in flight.
-      setExtensions(previous => previous.filter(item => item.requestId !== requestId))
+      setExtensions(previous => dismissLiveUiRequest(previous, requestId))
       composerRef.current?.focus({ preventScroll: true })
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : String(reason))
