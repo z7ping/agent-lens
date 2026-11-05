@@ -254,6 +254,8 @@ export function normalizePiLiveEvent(event: Readonly<Record<string, unknown>>): 
       ...(type === 'message_end' && role === 'assistant' && ['toolUse', 'stop'].includes(liveText(message.stopReason))
         ? { phase: liveText(message.stopReason) === 'toolUse' ? 'commentary' as const : 'final' as const } : {}),
       ...(messageId ? { messageId } : {}),
+      ...(type === 'message_end' && role === 'assistant' && message.stopReason === 'length'
+        ? { stopReason: 'length' as const } : {}),
     }
   }
   if (type === 'message_update') return piMessageUpdateEvent(event)
