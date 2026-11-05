@@ -939,3 +939,32 @@ test('等待首 token、思考、工具、正文及间隙按原生事实展示',
   assert.equal(liveTaskResponseActivity([user, { id: 'a', kind: 'message', role: 'assistant', text: '你好', streaming: true }], true), 'responding')
   assert.equal(liveTaskResponseActivity([user, { id: 'tool', kind: 'tool', callId: 'a', name: 'read', status: 'success' }], true), 'processing')
 })
+
+test('Native retry and compaction are shared process facts, not terminal failures', () => {
+  const user = { id: 'user', kind: 'message' as const, role: 'user' as const, text: 'help', streaming: false }
+  const retry = reduceLiveTaskEvent([user], event(1, { type: 'status', status: 'running',
+    process: { operation: 'retry', phase: 'start', attempt: 1, maxAttempts: 3, delayMs: 2000,
+      errorMessage: 'service overloaded' } }))
+  const compaction = reduceLiveTaskEvent(retry, event(2, { type: 'status', status: 'compacting',
+    process: { operation: 'compaction', phase: 'start', reason: 'overflow' } }))
+  const compacted = reduceLiveTaskEvent(compaction, event(3, { type: 'status', status: 'ready',
+    process: { operation: 'compaction', phase: 'end', reason: 'overflow',
+      outcome: 'success', summary: 'summary', tokensBefore: 150000,
+      estimatedTokensAfter: 32000, willRetry: true } }))
+  const failedRetry = reduceLiveTaskEvent(compacted, event(4, { type: 'status', status: 'running',
+    process: { operation: 'retry', phase: 'end', outcome: 'failed',
+      attempt: 3, errorMessage: 'final error' } }))
+  const events = failedRetry.filter(item => item.kind === 'event')
+  assert.deepEqual(events.map(item => item.kind === 'event' ? item.process.operation : ''), [
+    'retry', 'compaction', 'compaction', 'retry',
+  ])
+  assert.equal(events[2]?.kind === 'event' ? events[2].process.summary : undefined, 'summary')
+  assert.ok(liveEventChangesTaskTranscript({ type: 'status', status: 'compacting',
+    process: { operation: 'compaction', phase: 'start' } }))
+  const round = projectLiveTaskRounds(failedRetry)[0]
+  assert.equal(round?.model.terminalFailure, false)
+  assert.equal(round?.model.errorCount, 0)
+  assert.equal(round?.model.toolCount, 0)
+  // An event without native process facts must not mutate the transcript.
+  assert.equal(liveEventChangesTaskTranscript({ type: 'status', status: 'compacting' }), false)
+})
