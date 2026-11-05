@@ -41,9 +41,9 @@ export function useLiveTaskActions({
     thinking,
     setThinking,
     extension,
-    setExtension,
+    setExtensions,
     extensionPending,
-    setExtensionPending,
+    setExtensionPendingRequestId,
     streamingBehavior,
     setStreamingBehavior,
     queue,
@@ -382,17 +382,18 @@ export function useLiveTaskActions({
 
   const answerExtension = useCallback(async (value: unknown) => {
     if (!current || !extension || extensionPending) return
-    setExtensionPending(true)
+    const requestId = extension.requestId
+    setExtensionPendingRequestId(requestId)
     setError('')
     try {
-      await liveApi.respondToExtension(current.liveId, current.runtimeSessionId, extension.requestId, value)
-      // A queued approval may arrive over SSE before this HTTP request completes.
-      setExtension(previous => previous?.requestId === extension.requestId ? null : previous)
+      await liveApi.respondToExtension(current.liveId, current.runtimeSessionId, requestId, value)
+      // An independent request may have arrived while this answer was in flight.
+      setExtensions(previous => previous.filter(item => item.requestId !== requestId))
       composerRef.current?.focus({ preventScroll: true })
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : String(reason))
     } finally {
-      setExtensionPending(false)
+      setExtensionPendingRequestId(previous => previous === requestId ? null : previous)
     }
   }, [current, extension, extensionPending])
 
