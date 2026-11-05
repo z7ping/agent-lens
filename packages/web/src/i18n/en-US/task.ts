@@ -134,6 +134,7 @@ export const englishTaskMessages: LocaleMessagesDto = {
     },
     live: {
       processEvent: {
+        outputTruncated: 'Model output reached the length limit; the response may be incomplete',
         retryStart: 'Automatic retry scheduled',
         retrySuccess: 'Automatic retry succeeded',
         retryFailed: 'Automatic retry failed',
@@ -153,6 +154,7 @@ export const englishTaskMessages: LocaleMessagesDto = {
           manual: 'Manual',
           threshold: 'Context threshold',
           overflow: 'Context overflow',
+          length: 'Output length limit',
         },
       },
       toolGroup: 'Tool calls',

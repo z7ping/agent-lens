@@ -334,10 +334,10 @@ export type LiveCompletionStatus = 'completed' | 'cancelled' | 'interrupted' | '
 /** Native operation facts used by the shared Live process reader. Optional
  * values are source-attested; absence is not zero or a successful outcome. */
 export interface LiveProcessEventDetail {
-  operation: 'retry' | 'compaction'
+  operation: 'retry' | 'compaction' | 'output'
   phase: 'start' | 'end'
-  outcome?: 'success' | 'failed' | 'aborted' | undefined
-  reason?: 'manual' | 'threshold' | 'overflow' | undefined
+  outcome?: 'success' | 'failed' | 'aborted' | 'truncated' | undefined
+  reason?: 'manual' | 'threshold' | 'overflow' | 'length' | undefined
   attempt?: number | undefined
   maxAttempts?: number | undefined
   delayMs?: number | undefined
@@ -375,6 +375,8 @@ export interface LiveMessageBoundaryEvent {
   phase?: 'commentary' | 'final' | undefined
   role?: 'user' | 'assistant' | 'tool' | 'system' | 'unknown' | undefined
   messageId?: string | undefined
+  /** Only the source-attested output length boundary, not an inferred failure. */
+  stopReason?: 'length' | undefined
 }
 
 export interface LiveContentEvent {

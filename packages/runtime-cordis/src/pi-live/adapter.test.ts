@@ -907,3 +907,22 @@ test('Pi tool result SSE preview excludes inline image data and native details',
   assert.equal(result.output?.length, 4_001)
   assert.equal(result.output, longText.slice(0, 4_000) + '…')
 })
+
+test('Pi output length boundary is source-attested and does not replace message.end', () => {
+  assert.deepEqual(normalizePiLiveEvent({
+    type: 'message_end',
+    message: { role: 'assistant', id: 'native-msg-1', stopReason: 'length',
+      content: [{ type: 'text', text: 'partial answer' }] },
+  }), { type: 'message.end', role: 'assistant',
+    messageId: 'native-msg-1', stopReason: 'length' })
+  // An ordinary stop is not truncated; other native stop reasons are
+  // deliberately not inferred as length failures.
+  assert.deepEqual(normalizePiLiveEvent({
+    type: 'message_end',
+    message: { role: 'assistant', id: 'native-msg-2', stopReason: 'stop' },
+  }), { type: 'message.end', role: 'assistant', phase: 'final', messageId: 'native-msg-2' })
+  assert.deepEqual(normalizePiLiveEvent({
+    type: 'message_end',
+    message: { role: 'assistant', id: 'native-msg-3', stopReason: 'pending' },
+  }), { type: 'message.end', role: 'assistant', messageId: 'native-msg-3' })
+})

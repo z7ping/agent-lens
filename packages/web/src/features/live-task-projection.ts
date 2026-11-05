@@ -321,6 +321,16 @@ export function projectLiveSnapshotEntries(entries: readonly unknown[]): LiveTas
       return
     }
 
+    const pushTruncation = () => {
+      if (nested.stopReason !== 'length' && item.stopReason !== 'length') return
+      projected.push({
+        id: `live-output:${text(nested.id) || baseId}`,
+        kind: 'event',
+        process: { operation: 'output', phase: 'end', outcome: 'truncated', reason: 'length' },
+        ...(at ? { at } : {}),
+      })
+    }
+
     const pushAssistantError = () => {
       if (!errorMessage && !assistantFailed) return
       const detail = errorMessage || agentLensI18n.t('task:message.requestFailed')
@@ -336,7 +346,7 @@ export function projectLiveSnapshotEntries(entries: readonly unknown[]): LiveTas
         || contentText(item.text)
         || contentText(nested.content)
         || contentText(nested.text)
-      if (!body) { pushAssistantError(); return }
+      if (!body) { pushAssistantError(); pushTruncation(); return }
       projected.push({
         id: baseId,
         kind: 'message',
@@ -348,6 +358,7 @@ export function projectLiveSnapshotEntries(entries: readonly unknown[]): LiveTas
         ...(at ? { at } : {}),
       })
       pushAssistantError()
+      pushTruncation()
       return
     }
 
@@ -417,6 +428,7 @@ export function projectLiveSnapshotEntries(entries: readonly unknown[]): LiveTas
       }
     })
     pushAssistantError()
+    pushTruncation()
   })
 
   return projected
@@ -863,7 +875,7 @@ export function reduceLiveTaskEvent(
     const lastMessage = findLastProjectionIndex(items, item => item.kind === 'message' && item.role === 'assistant')
     const prefix = event.messageId ? `message:${event.messageId}:` : undefined
     const thinkingPrefix = event.messageId ? `thinking:${event.messageId}:` : undefined
-    return items.map((item, index) => {
+    const settled = items.map((item, index) => {
       if (item.kind === 'thinking' && item.streaming
         && (thinkingPrefix ? item.id.startsWith(thinkingPrefix) : true)) {
         return { ...item, streaming: false }
@@ -872,6 +884,15 @@ export function reduceLiveTaskEvent(
         && (prefix ? item.id.startsWith(prefix) : index === lastMessage && index > lastUser)
         ? { ...item, ...(event.phase ? { phase: event.phase } : {}), streaming: false } : item
     })
+    if (event.stopReason !== 'length') return settled
+    const id = `live-output:${event.messageId || fallback}`
+    return settled.some(item => item.kind === 'event' && item.id === id)
+      ? settled : [...settled, {
+        id, kind: 'event' as const,
+        process: { operation: 'output' as const, phase: 'end' as const,
+          outcome: 'truncated' as const, reason: 'length' as const },
+        at: envelope.receivedAt,
+      }]
   }
 
   if (event.type === 'text.start' || event.type === 'text.delta' || event.type === 'text.end') {
@@ -1019,11 +1040,13 @@ function buildRoundModel(
     || (item.kind === 'event' && item.process.outcome === 'failed')).length
   const warningCount = items.filter(item => (item.kind === 'tool' && item.status === 'error')
     || (item.kind === 'message' && item.error === true && !item.terminalFailure)
-    || (item.kind === 'event' && item.process.outcome === 'failed')).length
+    || (item.kind === 'event' && (item.process.outcome === 'failed'
+      || item.process.outcome === 'truncated'))).length
   const terminalFailure = items.some(item =>
     item.kind === 'message' && item.terminalFailure === true)
   const running = items.some(item =>
-    (item.kind === 'message' || item.kind === 'thinking') ? item.streaming : item.status === 'running',
+    (item.kind === 'message' || item.kind === 'thinking') ? item.streaming
+      : item.kind === 'tool' && item.status === 'running',
   )
   return {
     id,

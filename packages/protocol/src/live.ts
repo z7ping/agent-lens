@@ -325,10 +325,10 @@ export type LiveEventStatusDto =
 export type LiveCompletionStatusDto = 'completed' | 'cancelled' | 'interrupted' | 'failed'
 
 export interface LiveProcessEventDetailDto {
-  operation: 'retry' | 'compaction'
+  operation: 'retry' | 'compaction' | 'output'
   phase: 'start' | 'end'
-  outcome?: 'success' | 'failed' | 'aborted' | undefined
-  reason?: 'manual' | 'threshold' | 'overflow' | undefined
+  outcome?: 'success' | 'failed' | 'aborted' | 'truncated' | undefined
+  reason?: 'manual' | 'threshold' | 'overflow' | 'length' | undefined
   attempt?: number | undefined
   maxAttempts?: number | undefined
   delayMs?: number | undefined
@@ -352,6 +352,7 @@ export type LiveEventDto =
       phase?: 'commentary' | 'final' | undefined
       role?: 'user' | 'assistant' | 'tool' | 'system' | 'unknown' | undefined
       messageId?: string | undefined
+      stopReason?: 'length' | undefined
     }
   | {
       type:
@@ -689,11 +690,11 @@ function eventCount(value: unknown): number | undefined {
 
 function parseLiveProcessDetail(value: unknown): LiveProcessEventDetailDto | null {
   const data = record(value)
-  if (!data || (data.operation !== 'retry' && data.operation !== 'compaction')
+  if (!data || (data.operation !== 'retry' && data.operation !== 'compaction' && data.operation !== 'output')
     || (data.phase !== 'start' && data.phase !== 'end')) return null
-  const outcome = data.outcome === 'success' || data.outcome === 'failed' || data.outcome === 'aborted'
+  const outcome = data.outcome === 'success' || data.outcome === 'failed' || data.outcome === 'aborted' || data.outcome === 'truncated'
     ? data.outcome : undefined
-  const reason = data.reason === 'manual' || data.reason === 'threshold' || data.reason === 'overflow'
+  const reason = data.reason === 'manual' || data.reason === 'threshold' || data.reason === 'overflow' || data.reason === 'length'
     ? data.reason : undefined
   return {
     operation: data.operation,
@@ -759,6 +760,7 @@ export function parseLiveEventDto(value: unknown): LiveEventDto | null {
       ...(role === undefined ? {} : { role }),
       ...(event.phase === 'commentary' || event.phase === 'final' ? { phase: event.phase } : {}),
       ...(eventText(event.messageId) !== undefined ? { messageId: eventText(event.messageId) } : {}),
+      ...(type === 'message.end' && event.stopReason === 'length' ? { stopReason: 'length' as const } : {}),
     }
   }
   if (type === 'text.start' || type === 'text.delta' || type === 'text.end'
