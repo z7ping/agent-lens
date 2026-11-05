@@ -49,6 +49,14 @@ function text(value: unknown): string | undefined {
 
 /** Exact tool name AND the official mode/results envelope are required.
  * This does not infer an agent relationship from an arbitrary nested object. */
+export function isPiSubagentTool(
+  toolName: string,
+  toolSourceType?: string,
+  mcpServerId?: string,
+): boolean {
+  return toolName === 'subagent' && toolSourceType !== 'mcp' && !mcpServerId?.trim()
+}
+
 export function piSubagentToolDetails(toolName: string, value: unknown): PiSubagentToolDetails | undefined {
   if (toolName !== 'subagent') return undefined
   const details = record(value)

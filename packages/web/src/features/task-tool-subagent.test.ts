@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { piSubagentResult, piSubagentToolDetails, piSubagentTranscriptMessage } from './task-tool-subagent'
+import { isPiSubagentTool, piSubagentResult, piSubagentToolDetails, piSubagentTranscriptMessage } from './task-tool-subagent'
 
 test('official Pi subagent modes read results without inventing a child session', () => {
   for (const mode of ['single', 'parallel', 'chain'] as const) {
@@ -13,6 +13,20 @@ test('official Pi subagent modes read results without inventing a child session'
   }
   assert.deepEqual(piSubagentToolDetails('subagent', { mode: 'single', results: [] }),
     { mode: 'single', results: [] })
+})
+
+test('subagent identity is explicit even before a result, without mislabeling MCP tools', () => {
+  assert.equal(isPiSubagentTool('subagent'), true)
+  assert.equal(isPiSubagentTool('subagent', 'extension'), true)
+  assert.equal(isPiSubagentTool('subagent', 'mcp'), false)
+  assert.equal(isPiSubagentTool('subagent', undefined, 'remote'), false)
+  assert.equal(isPiSubagentTool('subagent', 'unknown', 'remote'), false)
+  assert.equal(isPiSubagentTool('my-subagent'), false)
+  assert.equal(isPiSubagentTool('subagent_worker'), false)
+  assert.equal(isPiSubagentTool('Subagent'), false)
+  // Identity alone must not fabricate mode, count, child sessions or success.
+  assert.equal(piSubagentToolDetails('subagent', undefined), undefined)
+  assert.equal(piSubagentToolDetails('subagent', { results: [{ agent: 'scout' }] }), undefined)
 })
 
 test('only official tool details are recognized, malformed evidence is not guessed', () => {

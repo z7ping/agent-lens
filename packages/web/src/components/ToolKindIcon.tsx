@@ -2,6 +2,8 @@ import { UiIcon, type UiIconName } from './UiIcon'
 import { agentLensI18n } from '../i18n/runtime'
 
 export type ToolVisualKind = 'shell' | 'read' | 'edit' | 'search' | 'test' | 'mcp' | 'web' | 'tool'
+/** A verified subagent invocation is a display variant, not a new generic kind classifier. */
+export type ToolDisplayKind = ToolVisualKind | 'subagent'
 
 /** Tool identity belongs to the native registration, not a substring in the name. */
 export interface ToolOriginEvidence {
@@ -26,7 +28,7 @@ export function toolVisualLabel(kind: ToolVisualKind): string {
   return agentLensI18n.t(`task:tool.kind.${kind}`)
 }
 
-const iconByKind: Record<ToolVisualKind, UiIconName> = {
+const iconByKind: Record<ToolDisplayKind, UiIconName> = {
   shell: 'tool-shell',
   read: 'tool-read',
   edit: 'tool-edit',
@@ -35,9 +37,10 @@ const iconByKind: Record<ToolVisualKind, UiIconName> = {
   mcp: 'tool-mcp',
   web: 'tool-web',
   tool: 'tool-generic',
+  subagent: 'event-subagent',
 }
 
-export function ToolKindIcon({ kind, className = '' }: { kind: ToolVisualKind; className?: string }) {
+export function ToolKindIcon({ kind, className = '' }: { kind: ToolDisplayKind; className?: string }) {
   return <span className={`tool-kind-svg tool-kind-${kind} ${className}`.trim()} aria-hidden="true">
     <UiIcon name={iconByKind[kind]} size={16}/>
   </span>

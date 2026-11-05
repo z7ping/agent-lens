@@ -7,7 +7,7 @@ import { CopyableCodeBlock } from '../components/CopyableCodeBlock'
 import { codeLanguageFromContent } from '../components/code-language'
 import { ToolOutputContent } from './ToolOutputContent'
 import { Button, Disclosure, StatusBadge } from '../components/ui'
-import { piSubagentResult, piSubagentToolDetails, piSubagentTranscriptMessage } from './task-tool-subagent'
+import { isPiSubagentTool, piSubagentResult, piSubagentToolDetails, piSubagentTranscriptMessage } from './task-tool-subagent'
 import { PatchDiff } from '@pierre/diffs/react'
 import { ImagePreview } from '../components/ImagePreview'
 import { reviewToolCommand } from './review-tool-command'
@@ -168,7 +168,14 @@ export function TaskToolRow({ model, meta, details, onClick, className = '', com
   const [diffTheme, setDiffTheme] = useState<'light' | 'dark'>(() =>
     typeof document !== 'undefined' && document.documentElement.dataset.theme === 'dark' ? 'dark' : 'light')
   const nativePatch = expanded ? taskToolNativePatch(model.resultDetails) : undefined
-  const nativeSubagents = expanded ? piSubagentToolDetails(model.name, model.resultDetails) : undefined
+  // An exact native subagent tool name is enough for its identity while running,
+  // but mode/count require the official toolResult.details envelope.
+  const isSubagentTool = isPiSubagentTool(model.name, model.toolSourceType, model.mcpServerId)
+  const verifiedSubagents = isSubagentTool ? piSubagentToolDetails(model.name, model.resultDetails) : undefined
+  const nativeSubagents = expanded ? verifiedSubagents : undefined
+  const subagentSummary = verifiedSubagents
+    ? `${t('tool.subagent.mode.' + verifiedSubagents.mode)} · ${t('tool.subagent.count', { count: verifiedSubagents.results.length })}`
+    : undefined
   const visualKind = model.kind === 'tool'
     ? toolVisualKind(model.name, { sourceType: model.toolSourceType, mcpServerId: model.mcpServerId })
     : model.kind
@@ -183,9 +190,10 @@ export function TaskToolRow({ model, meta, details, onClick, className = '', com
   const mcpToolName = mcpPrefix && model.name.startsWith(mcpPrefix)
     ? model.name.slice(mcpPrefix.length)
     : model.name
-  const heading = model.toolSourceType === 'mcp' && model.mcpServerId
-    ? `${model.mcpServerId} · ${mcpToolName}`
-    : model.name
+  const heading = isSubagentTool ? t('tool.subagent.label')
+    : model.toolSourceType === 'mcp' && model.mcpServerId
+      ? `${model.mcpServerId} · ${mcpToolName}`
+      : model.name
   // A preview is not necessarily the original invocation. Show it as a
   // summary rather than silently relabeling it as complete input parameters.
   const input = model.rawInput
@@ -213,6 +221,8 @@ export function TaskToolRow({ model, meta, details, onClick, className = '', com
     ?? (model.durationMs !== undefined ? durationLabel(model.durationMs) : undefined)
     ?? (model.status === 'running' && model.startedAtMs !== undefined ? durationLabel(now - model.startedAtMs) : undefined)
   const status = model.resultMissing ? t('tool.resultMissing') : statusLabel(model.status, t)
+  const summaryDetail = subagentSummary ?? (hasTarget ? target : undefined)
+  const accessibleHeading = isSubagentTool ? heading : `${t(`tool.kind.${visualKind}`)} · ${heading}`
 
   return <details
     className={`task-tool-call ${model.status === 'error' ? 'task-tool-row-error ' : ''}${className}`.trim()}
@@ -225,9 +235,9 @@ export function TaskToolRow({ model, meta, details, onClick, className = '', com
     data-parent-tool-call-id={model.parentToolCallId}
     data-loaded-child-call-count={model.loadedChildCallCount}
   >
-    <summary className="task-tool-row" aria-label={`${t(`tool.kind.${visualKind}`)} · ${heading}${hasTarget ? ` · ${target}` : ''}${model.parentToolCallId ? ` · ${t('tool.parentCall')}: ${model.parentToolName ?? model.parentToolCallId}` : ''} · ${status}`}>
-      <span className={`task-tool-kind task-tool-kind-${visualKind}`}>
-        <ToolKindIcon kind={visualKind}/>
+    <summary className="task-tool-row" aria-label={`${accessibleHeading}${summaryDetail ? ` · ${summaryDetail}` : ''}${model.parentToolCallId ? ` · ${t('tool.parentCall')}: ${model.parentToolName ?? model.parentToolCallId}` : ''} · ${status}`}>
+      <span className={`task-tool-kind task-tool-kind-${isSubagentTool ? 'subagent' : visualKind}`}>
+        <ToolKindIcon kind={isSubagentTool ? 'subagent' : visualKind}/>
       </span>
       <span className="task-tool-summary-text" title={model.parentToolCallId
         ? `${heading} · ${t('tool.parentCall')}: ${model.parentToolName ?? model.parentToolCallId}`
@@ -236,7 +246,9 @@ export function TaskToolRow({ model, meta, details, onClick, className = '', com
         {heading}
       </span>
       <span className="task-tool-preview-slot">
-        {commandTarget
+        {subagentSummary
+          ? <span className="task-tool-target" title={subagentSummary}>{subagentSummary}</span>
+          : commandTarget
           ? <code className="task-tool-command-preview" title={target}>
               {commandParts?.prefix && <span className="task-tool-command-context">{commandParts.prefix}</span>}
               {commandParts?.command ?? target}

@@ -543,6 +543,7 @@ export const chineseTaskMessages: LocaleMessagesDto = {
       resultMissing: '未记录到工具结果',
       resultDetails: '原生结果详情',
       subagent: {
+        label: '子智能体',
         mode: { single: '单任务', parallel: '并行任务', chain: '链式任务' },
         count: '{{count}} 个子任务',
         status: { pending: '等待中', running: '执行中', completed: '完成',
