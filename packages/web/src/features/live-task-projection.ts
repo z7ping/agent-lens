@@ -122,20 +122,27 @@ export function sourceNativeUsageDetail(
   const usage = record(value)
   const meta = record(metadata)
   const cost = record(usage.cost)
+  const input = nativeUsageNumber(usage.input)
+  const output = nativeUsageNumber(usage.output)
+  const cacheRead = nativeUsageNumber(usage.cacheRead)
+  const cacheWrite = nativeUsageNumber(usage.cacheWrite)
+  const reasoning = nativeUsageNumber(usage.reasoning)
+  const totalTokens = nativeUsageNumber(usage.totalTokens)
+  const costTotal = nativeUsageNumber(cost.total)
   const detail: LiveNativeUsageDetail = {
     origin,
     ...(text(meta.provider) ? { provider: text(meta.provider) } : {}),
     ...(text(meta.model) ? { model: text(meta.model) } : {}),
     ...(origin === 'usage' && text(meta.kind) ? { kind: text(meta.kind) } : {}),
-    ...(nativeUsageNumber(usage.input) !== undefined ? { input: nativeUsageNumber(usage.input) } : {}),
-    ...(nativeUsageNumber(usage.output) !== undefined ? { output: nativeUsageNumber(usage.output) } : {}),
-    ...(nativeUsageNumber(usage.cacheRead) !== undefined ? { cacheRead: nativeUsageNumber(usage.cacheRead) } : {}),
-    ...(nativeUsageNumber(usage.cacheWrite) !== undefined ? { cacheWrite: nativeUsageNumber(usage.cacheWrite) } : {}),
-    ...(nativeUsageNumber(usage.reasoning) !== undefined ? { reasoning: nativeUsageNumber(usage.reasoning) } : {}),
-    ...(nativeUsageNumber(usage.totalTokens) !== undefined ? { totalTokens: nativeUsageNumber(usage.totalTokens) } : {}),
-    ...(nativeUsageNumber(cost.total) !== undefined ? { costTotal: nativeUsageNumber(cost.total) } : {}),
-    ...(typeof cost.totalFromProvider === 'boolean'
-      && nativeUsageNumber(cost.total) !== undefined ? { costTotalFromProvider: cost.totalFromProvider } : {}),
+    ...(input !== undefined ? { input } : {}),
+    ...(output !== undefined ? { output } : {}),
+    ...(cacheRead !== undefined ? { cacheRead } : {}),
+    ...(cacheWrite !== undefined ? { cacheWrite } : {}),
+    ...(reasoning !== undefined ? { reasoning } : {}),
+    ...(totalTokens !== undefined ? { totalTokens } : {}),
+    ...(costTotal !== undefined ? { costTotal } : {}),
+    ...(typeof cost.totalFromProvider === 'boolean' && costTotal !== undefined
+      ? { costTotalFromProvider: cost.totalFromProvider } : {}),
   }
   return Object.keys(detail).some(key => key !== 'origin' && key !== 'provider'
     && key !== 'model' && key !== 'kind') ? detail : undefined
