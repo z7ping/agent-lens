@@ -331,10 +331,29 @@ export type LiveEventStatus =
 
 export type LiveCompletionStatus = 'completed' | 'cancelled' | 'interrupted' | 'failed'
 
+/** Native operation facts used by the shared Live process reader. Optional
+ * values are source-attested; absence is not zero or a successful outcome. */
+export interface LiveProcessEventDetail {
+  operation: 'retry' | 'compaction'
+  phase: 'start' | 'end'
+  outcome?: 'success' | 'failed' | 'aborted' | undefined
+  reason?: 'manual' | 'threshold' | 'overflow' | undefined
+  attempt?: number | undefined
+  maxAttempts?: number | undefined
+  delayMs?: number | undefined
+  errorMessage?: string | undefined
+  summary?: string | undefined
+  tokensBefore?: number | undefined
+  estimatedTokensAfter?: number | undefined
+  firstKeptEntryId?: string | undefined
+  willRetry?: boolean | undefined
+}
+
 export interface LiveStatusEvent {
   type: 'status'
   status: LiveEventStatus
   message?: string | undefined
+  process?: LiveProcessEventDetail | undefined
 }
 
 export interface LiveTitleUpdateEvent {

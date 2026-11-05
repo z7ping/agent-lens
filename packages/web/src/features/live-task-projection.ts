@@ -1,4 +1,4 @@
-import { reviewMessageAttachmentsFromPayload, type LiveEventDto, type LiveRuntimeEventDto, type ReviewMessageAttachmentDto } from '@agent-lens/protocol'
+import { reviewMessageAttachmentsFromPayload, type LiveEventDto, type LiveProcessEventDetailDto, type LiveRuntimeEventDto, type ReviewMessageAttachmentDto } from '@agent-lens/protocol'
 import { agentLensI18n } from '../i18n/runtime'
 import type { TaskRoundModel } from './task-detail-model'
 
@@ -8,6 +8,12 @@ export type LiveTaskProjectionAttachment = ReviewMessageAttachmentDto & {
 }
 
 export type LiveTaskProjectionItem =
+  | {
+      id: string
+      kind: 'event'
+      process: LiveProcessEventDetailDto
+      at?: string | undefined
+    }
   | {
       id: string
       kind: 'message'
@@ -703,7 +709,7 @@ export function liveEventChangesTaskTranscript(event: LiveEventDto | undefined):
     || event.type === 'tool.output'
     || event.type === 'tool.end'
     || event.type === 'error'
-    || (event.type === 'status' && event.status === 'failed')
+    || (event.type === 'status' && (event.status === 'failed' || event.process !== undefined))
     || event.type === 'completed'
 }
 
@@ -765,6 +771,15 @@ export function reduceLiveTaskEvent(
             ...(event.retryable !== undefined ? { retryable: event.retryable } : {}),
           } } : {}),
       streaming: false,
+      at: envelope.receivedAt,
+    }]
+  }
+
+  if (event.type === 'status' && event.process) {
+    return [...settleCurrentLiveText(items), {
+      id: `live-process:${fallback}`,
+      kind: 'event',
+      process: event.process,
       at: envelope.receivedAt,
     }]
   }
@@ -928,9 +943,11 @@ function buildRoundModel(
   )
   const toolCount = items.filter(item => item.kind === 'tool').length
   const errorCount = items.filter(item => (item.kind === 'tool' && item.status === 'error')
-    || (item.kind === 'message' && item.error === true)).length
+    || (item.kind === 'message' && item.error === true)
+    || (item.kind === 'event' && item.process.outcome === 'failed')).length
   const warningCount = items.filter(item => (item.kind === 'tool' && item.status === 'error')
-    || (item.kind === 'message' && item.error === true && !item.terminalFailure)).length
+    || (item.kind === 'message' && item.error === true && !item.terminalFailure)
+    || (item.kind === 'event' && item.process.outcome === 'failed')).length
   const terminalFailure = items.some(item =>
     item.kind === 'message' && item.terminalFailure === true)
   const running = items.some(item =>

@@ -6,6 +6,7 @@ import { IconButton, UiIcon } from '../components/ui'
 import { liveTaskRoundEstimate, type LiveTaskProjectionItem, type LiveTaskRoundProjection } from './live-task-projection'
 import { sameStableLiveTaskRoundProps } from './live-task-render-boundary'
 import { TaskReadingRound } from './TaskReadingRound'
+import { TaskEvent } from './TaskEvent'
 import { TaskSessionMessage, TaskSessionThinking, TaskSessionTool, TaskSessionProcessText, TaskSessionProcess, taskSessionMessageTime } from './TaskSessionContent'
 import { projectTaskReading, type TaskReadingFact } from './task-reading-semantics'
 import { TaskProcessSequence, type TaskToolGroupSequenceEntry } from './TaskToolGroup'
@@ -81,6 +82,38 @@ function GenericLiveItem({
             ><UiIcon name={icon} size={14}/></IconButton>
           })
         : undefined}
+    />
+  }
+  if (item.kind === 'event') {
+    const detail = item.process
+    const prefix = detail.operation === 'retry' ? 'retry' : 'compaction'
+    const result = detail.phase === 'start' ? 'Start'
+      : detail.outcome === 'success' ? 'Success'
+        : detail.outcome === 'failed' ? 'Failed'
+          : detail.outcome === 'aborted' ? 'Aborted' : 'End'
+    const parts = [
+      ...(detail.reason ? [t(`live.processEvent.reason.${detail.reason}`)] : []),
+      ...(detail.attempt !== undefined ? [t('live.processEvent.attempt', {
+        attempt: detail.attempt, max: detail.maxAttempts ?? '—',
+      })] : []),
+      ...(detail.delayMs !== undefined ? [t('live.processEvent.delay', { ms: detail.delayMs })] : []),
+      ...(detail.tokensBefore !== undefined ? [t('live.processEvent.tokensBefore', { count: detail.tokensBefore })] : []),
+      ...(detail.estimatedTokensAfter !== undefined
+        ? [t('live.processEvent.tokensAfter', { count: detail.estimatedTokensAfter })] : []),
+      ...(detail.willRetry === true ? [t('live.processEvent.willRetry')] : []),
+      ...(detail.errorMessage ? [detail.errorMessage.slice(0, 300)] : []),
+      ...(detail.summary ? [detail.summary.slice(0, 160)] : []),
+    ]
+    return <TaskEvent
+      model={{
+        id: item.id,
+        category: detail.operation === 'compaction' ? 'context' : 'lifecycle',
+        label: t(`live.processEvent.${prefix}${result}`),
+        ...(parts.length ? { summary: parts.join(' · ') } : {}),
+        ...(item.at ? { time: taskSessionMessageTime(item.at) } : {}),
+      }}
+      raw={detail}
+      error={detail.outcome === 'failed'}
     />
   }
   if (item.kind === 'thinking') {
@@ -165,7 +198,8 @@ export const GenericLiveRound = memo(function GenericLiveRound({
   const reading = projectTaskReading(projection.items
     .filter(item => item.kind !== 'thinking' || item.streaming || Boolean(item.text.trim()))
     .map(item => {
-      const kind: TaskReadingFact<LiveTaskProjectionItem>['kind'] = item.kind === 'thinking'
+      const kind: TaskReadingFact<LiveTaskProjectionItem>['kind'] = item.kind === 'event' ? 'process-block'
+        : item.kind === 'thinking'
         ? 'reasoning'
         : item.kind === 'tool' ? 'tool'
           : item.error ? 'process-block'
@@ -173,7 +207,8 @@ export const GenericLiveRound = memo(function GenericLiveRound({
             : item.phase === 'commentary' ? 'commentary'
               : item.phase === 'final' ? 'answer' : 'unclassified-answer'
       return { id: item.id, kind, value: item,
-        ...((item.kind === 'tool' && item.status === 'error') || (item.kind === 'message' && item.error) ? { error: true } : {}),
+        ...((item.kind === 'tool' && item.status === 'error') || (item.kind === 'message' && item.error)
+          || (item.kind === 'event' && item.process.outcome === 'failed') ? { error: true } : {}),
       }
     }))
   const processItems = reading.process.map(fact => fact.value)

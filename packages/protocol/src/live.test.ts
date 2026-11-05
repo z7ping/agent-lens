@@ -310,3 +310,38 @@ test('Live protocol validates extension dismissal as a separate request-scoped e
   assert.equal(parseLiveEventDto({ type: 'ui.dismiss', requestId: '' }), null)
   assert.equal(parseLiveEventDto({ type: 'ui.dismiss', requestId: 42 }), null)
 })
+
+test('Live status process detail retains only source-attested retry/compaction fields', () => {
+  assert.deepEqual(parseLiveEventDto({
+    type: 'status', status: 'running',
+    process: { operation: 'retry', phase: 'start', attempt: 1,
+      maxAttempts: 3, delayMs: 2000, errorMessage: '529 overloaded' },
+  }), {
+    type: 'status', status: 'running',
+    process: { operation: 'retry', phase: 'start', attempt: 1,
+      maxAttempts: 3, delayMs: 2000, errorMessage: '529 overloaded' },
+  })
+  assert.deepEqual(parseLiveEventDto({
+    type: 'status', status: 'ready',
+    process: { operation: 'compaction', phase: 'end', reason: 'overflow',
+      outcome: 'success', summary: 'full text', tokensBefore: 123,
+      estimatedTokensAfter: 23, firstKeptEntryId: 'native-1', willRetry: true },
+  }), {
+    type: 'status', status: 'ready',
+    process: { operation: 'compaction', phase: 'end', reason: 'overflow',
+      outcome: 'success', summary: 'full text', tokensBefore: 123,
+      estimatedTokensAfter: 23, firstKeptEntryId: 'native-1', willRetry: true },
+  })
+  assert.deepEqual(parseLiveEventDto({
+    type: 'status', status: 'compacting',
+    process: { operation: 'compaction', phase: 'start',
+      tokensBefore: -1, estimatedTokensAfter: '42' },
+  }), {
+    type: 'status', status: 'compacting',
+    process: { operation: 'compaction', phase: 'start' },
+  })
+  assert.deepEqual(parseLiveEventDto({ type: 'status', status: 'ready',
+    process: { operation: 'made-up', phase: 'end' } }), {
+    type: 'status', status: 'ready',
+  })
+})
