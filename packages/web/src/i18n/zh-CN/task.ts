@@ -133,6 +133,20 @@ export const chineseTaskMessages: LocaleMessagesDto = {
       preciseHoursMinutesSeconds: '{{hours}}小时{{minutes}}分{{seconds}}秒',
     },
     live: {
+      nativeUsage: {
+        assistant: '模型调用用量',
+        toolResult: '工具内模型用量',
+        usage: '额外模型用量',
+        compaction: '上下文压缩用量',
+        branch_summary: '分支摘要用量',
+        tokens: '{{count}} Token',
+        input: '输入 {{count}}',
+        output: '输出 {{count}}',
+        cacheRead: '缓存读取 {{count}}',
+        cacheWrite: '缓存写入 {{count}}',
+        reportedCost: '服务商报告费用 ${{value}}',
+        catalogCost: '目录价格估算 ${{value}}',
+      },
       nativeEntries: {
         branchSummary: '分支摘要',
         contextExcluded: '已从模型上下文排除内容',
