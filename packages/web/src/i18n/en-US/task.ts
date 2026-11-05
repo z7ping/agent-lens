@@ -133,6 +133,7 @@ export const englishTaskMessages: LocaleMessagesDto = {
       preciseHoursMinutesSeconds: '{{hours}}h {{minutes}}m {{seconds}}s',
     },
     live: {
+      quoteToComposer: 'Quote into composer',
       nativeUsage: {
         assistant: 'Model invocation usage',
         toolResult: 'Tool model usage',
