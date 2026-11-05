@@ -197,5 +197,7 @@ export class PiExtensionUiBridge {
     this.pending.delete(id)
     if (pending.timer) clearTimeout(pending.timer)
     if (pending.signal && pending.onAbort) pending.signal.removeEventListener('abort', pending.onAbort)
+    // Native completion, timeout and AbortSignal all settle exactly this request.
+    this.options.publish({ type: 'extension_ui_dismissed', requestId: id })
   }
 }
