@@ -1040,3 +1040,57 @@ test('Pi persisted native tool result replaces settled truncated SSE output with
   assert.equal(merged.nativeResult, true)
   assert.deepEqual(merged.resultDetails, { result: 'complete' })
 })
+
+test('Pi native compaction journal restores exact summary and tokens after refresh', () => {
+  const summary = 'Source-backed summary '.repeat(250)
+  const rows = projectLiveSnapshotEntries([{
+    type: 'compaction', id: 'compaction-1',
+    timestamp: '2026-11-05T08:00:00.000Z',
+    summary, firstKeptEntryId: 'message-7', tokensBefore: 140_000,
+  }])
+  assert.equal(rows.length, 1)
+  const item = rows[0]
+  assert.ok(item?.kind === 'event')
+  assert.equal(item.id, 'native-compaction:compaction-1')
+  assert.deepEqual(item.process, {
+    operation: 'compaction', phase: 'end', outcome: 'success',
+    summary, firstKeptEntryId: 'message-7', tokensBefore: 140_000,
+  })
+  assert.equal(item.at, '2026-11-05T08:00:00.000Z')
+  assert.equal(projectLiveSnapshotEntries([{ type: 'compaction', id: 'unknown', summary: '' }])
+    .at(0)?.kind, 'event')
+})
+
+test('Pi compaction recovery merges matching SSE finish with native journal rather than duplicating', () => {
+  const transcript = [
+    { id: 'user-1', kind: 'message' as const, role: 'user' as const,
+      text: 'fix long conversation', streaming: false },
+  ]
+  const transient = reduceLiveTaskEvent(transcript, event(1, {
+    type: 'status', status: 'ready', process: {
+      operation: 'compaction', phase: 'end', reason: 'overflow',
+      summary: 'real summary', firstKeptEntryId: 'message-7',
+      tokensBefore: 140_000, estimatedTokensAfter: 30_000, outcome: 'success',
+    },
+  }))
+  const durable = projectLiveSnapshotEntries([{
+    type: 'compaction', id: 'compaction-1',
+    summary: 'real summary', firstKeptEntryId: 'message-7', tokensBefore: 140_000,
+  }])
+  const merged = mergeLiveActiveProjectionItems(transient, durable)
+  const events = merged.filter(item => item.kind === 'event')
+  assert.equal(events.length, 1)
+  assert.equal(events[0]?.id, 'native-compaction:compaction-1')
+  assert.equal(events[0]?.kind === 'event' ? events[0].process.reason : '', 'overflow')
+  assert.equal(events[0]?.kind === 'event'
+    ? events[0].process.estimatedTokensAfter : -1, 30_000)
+  assert.equal(events[0]?.kind === 'event' ? events[0].process.tokensBefore : -1, 140_000)
+
+  // Different native compactions cannot be collapsed on mere sequence proximity.
+  const other = projectLiveSnapshotEntries([{
+    type: 'compaction', id: 'compaction-2',
+    summary: 'a different compaction', firstKeptEntryId: 'message-12',
+  }])
+  const distinct = mergeLiveActiveProjectionItems(merged, other)
+  assert.equal(distinct.filter(item => item.kind === 'event').length, 2)
+})
