@@ -49,7 +49,8 @@ export function useLiveTaskRuntime({
     thinking,
     setThinking,
     extension,
-    setExtension,
+    setExtensions,
+    setExtensionPendingRequestId,
     queue,
     setQueue,
     setPendingQueue,
@@ -129,7 +130,8 @@ export function useLiveTaskRuntime({
     setCommands([])
     setModelControl(null)
     setThinking(null)
-    setExtension(null)
+    setExtensions([])
+    setExtensionPendingRequestId(null)
     setQueue(emptyLiveQueue())
     setPendingQueue([])
     setRestoredQueue([])
@@ -452,7 +454,7 @@ export function useLiveTaskRuntime({
         const canRecover = runtime.status === 'ready' || runtime.status === 'initializing'
         // SSE 可能在 Worker 退出时断开；对账发现失败也要刷新已有恢复操作。
         if ((changed || forceRecovery) && runtime.status === 'failed') {
-          setExtension(null)
+          setExtensions([])
           const disclosures = await liveApi.runtimeDisclosures(current.liveId, current.runtimeSessionId)
           if (!recoveryActive || epoch !== reconcileEpoch) return
           setRuntimeDisclosures(disclosures)
@@ -518,7 +520,13 @@ export function useLiveTaskRuntime({
           return next
         })
         if (product.capabilities.includes('extension-ui') && envelope.normalizedEvent?.type === 'ui.request') {
-          setExtension(envelope.normalizedEvent)
+          const request = envelope.normalizedEvent
+          setExtensions(previous => previous.some(item => item.requestId === request.requestId)
+            ? previous : [...previous, request])
+        }
+        if (envelope.normalizedEvent?.type === 'ui.dismiss') {
+          const requestId = envelope.normalizedEvent.requestId
+          setExtensions(previous => previous.filter(item => item.requestId !== requestId))
         }
         if (envelope.normalizedEvent?.type === 'runtime-disclosure.changed') {
           void liveApi.runtimeDisclosures(current.liveId, current.runtimeSessionId).then(
@@ -569,7 +577,7 @@ export function useLiveTaskRuntime({
             runtimeCompacting = false
             runtimeActive = false
             setActivityStatus(null)
-            setExtension(null)
+            setExtensions([])
           }
           if (envelope.normalizedEvent.status === 'failed' && envelope.normalizedEvent.message
             && !historyAtLatestRef.current) {
@@ -629,7 +637,7 @@ export function useLiveTaskRuntime({
         }
         if (envelope.normalizedEvent?.type === 'completed') {
           // Terminal turns cannot retain a stale native approval dialog.
-          setExtension(null)
+          setExtensions([])
           runtimeCompacting = false
           runtimeActive = false
           if (envelope.normalizedEvent.status === 'failed' && envelope.normalizedEvent.message
