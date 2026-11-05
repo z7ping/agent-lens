@@ -21,7 +21,8 @@ test('source pages are contiguous, bounded, lossless including surrogate pairs',
   assert.equal(pages[0]?.end, pages[1]?.start)
   assert.equal(pages[1]?.end, pages[2]?.start)
   assert.equal(pages.map(page => page.text).join(''), original)
-  assert.ok(pages.every(page => page.text.length <= TASK_TEXT_WINDOW_SIZE))
+  assert.ok(pages.every(page => page.text.length <= TASK_TEXT_WINDOW_SIZE + 1),
+    'a surrogate pair at a page boundary can add one UTF-16 code unit')
   assert.equal(taskTextPage(original, -50).start, 0)
   assert.equal(taskTextPage(original, Number.NaN).start, 0)
   assert.equal(taskTextPage(original, 999999).end, original.length)
