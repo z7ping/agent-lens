@@ -355,8 +355,9 @@ export function TaskToolRow({ model, meta, details, onClick, className = '', com
                       </StatusBadge>
                     </span>}
                     onToggle={event => {
+                      const open = event.currentTarget.open
                       event.stopPropagation()
-                      setOpenSubagents(previous => ({ ...previous, [index]: event.currentTarget.open }))
+                      setOpenSubagents(previous => ({ ...previous, [index]: open }))
                     }}
                   >
                     {opened && <div className="task-tool-subagent-body">
