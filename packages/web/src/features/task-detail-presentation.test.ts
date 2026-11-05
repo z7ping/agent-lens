@@ -7,7 +7,7 @@ import { presentTaskError } from './task-error-presentation'
 import { TaskEvent } from './TaskEvent'
 import { TaskRound } from './TaskRound'
 import { TaskToolGroup } from './TaskToolGroup'
-import { TaskToolRow, taskShellCommandParts, taskToolTargetText } from './TaskToolRow'
+import { TaskToolRow, taskShellCommandParts, taskToolTargetText, taskToolNativePatch } from './TaskToolRow'
 import { TaskThinking } from './TaskThinking'
 import { readableTaskHeaderTitle, taskRoundPreview, type TaskRoundModel, type TaskToolGroupModel } from './task-detail-model'
 
@@ -311,4 +311,26 @@ test('普通 assistant 文本不走错误详情展示', () => {
   }))
   assert.match(html, /markdown-surface/)
   assert.doesNotMatch(html, /task-message-failure/)
+})
+
+test('Native Pi edit details.patch uses the existing unified diff renderer only for verified patches', () => {
+  const patch = [
+    '===================================================================',
+    '--- src/a.ts',
+    '+++ src/a.ts',
+    '@@ -1,2 +1,2 @@',
+    '-const before = 1',
+    '+const after = 2',
+    ' export {}',
+  ].join('\n')
+  assert.equal(taskToolNativePatch({
+    diff: '-1 const before = 1\n+1 const after = 2',
+    patch,
+    firstChangedLine: 1,
+  }), patch)
+  // Official display-oriented diff is not a standard patch.
+  assert.equal(taskToolNativePatch({ diff: patch }), undefined)
+  assert.equal(taskToolNativePatch({ patch: '--- a.ts\n+++ a.ts\nnot a hunk' }), undefined)
+  assert.equal(taskToolNativePatch({ patch: patch + '\n' + 'x'.repeat(512 * 1024) }), undefined)
+  assert.equal(taskToolNativePatch({ patch: null }), undefined)
 })
