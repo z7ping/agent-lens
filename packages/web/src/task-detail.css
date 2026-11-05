@@ -1151,3 +1151,14 @@
   gap: 8px;
 }
 .task-surface .task-text-window-range { margin-right: auto; }
+/* User text bubbles use their own semantic ink/background, including paged
+ * source snippets; don't leave light-background code with inherited white ink. */
+.task-surface .task-message-bubble-user .task-text-window-heading,
+.task-surface .task-message-bubble-user .task-text-window-range {
+  color: var(--al-user-bubble-muted);
+}
+.task-surface .task-message-bubble-user .task-text-window .copyable-code-block {
+  color: var(--al-user-bubble-text);
+  background: var(--al-user-bubble-code);
+  border-color: transparent;
+}
