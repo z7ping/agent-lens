@@ -463,7 +463,7 @@ test('Pi 1.2 MCP 注册来源与 Codemode 嵌套调用保留为通用 Live 事�
   }), {
     type: 'tool.end', callId: 'parent-1/0', parentToolCallId: 'parent-1',
     name: 'mcp__dbx__execute_query', status: 'success',
-    output: '{"content":[{"type":"text","text":"ok"}]}',
+    output: 'ok',
   })
   const unknown = normalizePiLiveEvent({
     type: 'tool_execution_start', toolCallId: 'tool-2',
