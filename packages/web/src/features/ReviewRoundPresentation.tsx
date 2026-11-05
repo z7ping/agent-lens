@@ -16,6 +16,7 @@ import { TaskSessionMessage, TaskSessionThinking, TaskSessionProcessText, TaskSe
 import { ToolOutputContent } from './ToolOutputContent'
 import { agentLensI18n } from '../i18n/runtime'
 import { taskUserRequestText, type TaskRoundModel, type TaskThinkingModel, type TaskToolModel } from './task-detail-model'
+import { reviewQuoteableText } from './review-message-quote'
 import { formatClock, duration, elapsed } from './review-session-format'
 import { brief, EvidenceBadges, sourceEventSummary, toolPresentation, toolOutputText } from './ReviewEvidenceInspector'
 
@@ -167,9 +168,7 @@ function MessageBubble({
 
   const messageTime = taskSessionMessageTime(node.at)
   // A bounded native body may be lazy: never quote its loading placeholder.
-  const visibleText = node.nativeLazyText
-    ? nativeBody?.text ?? ''
-    : node.role === 'user' ? taskUserRequestText(node.text) : node.text
+  const visibleText = reviewQuoteableText(node, nativeBody?.text)
   const quoteAction = onQuoteMessage && visibleText.trim()
     ? <IconButton
         size="small"
