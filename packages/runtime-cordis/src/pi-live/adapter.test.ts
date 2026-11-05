@@ -124,12 +124,12 @@ test('Pi Live Adapter maps native control and compaction changes into generic ev
     control: 'thinking',
   })
   assert.deepEqual(normalizePiLiveEvent({ type: 'compaction_start' }), {
-    type: 'status',
-    status: 'compacting',
+    type: 'status', status: 'compacting',
+    process: { operation: 'compaction', phase: 'start' },
   })
   assert.deepEqual(normalizePiLiveEvent({ type: 'compaction_end' }), {
-    type: 'status',
-    status: 'ready',
+    type: 'status', status: 'ready',
+    process: { operation: 'compaction', phase: 'end' },
   })
 })
 
@@ -820,4 +820,65 @@ test('Pi native extension dialogs dismiss only their matching request ID', () =>
     type: 'extension_ui_dismissed', requestId: 'req-a',
   }), { type: 'ui.dismiss', requestId: 'req-a' })
   assert.equal(normalizePiLiveEvent({ type: 'extension_ui_dismissed', requestId: '' }), undefined)
+})
+
+test('Pi auto retry maps official attempts and outcome without making a failed run final', () => {
+  assert.deepEqual(normalizePiLiveEvent({
+    type: 'auto_retry_start', attempt: 1, maxAttempts: 3,
+    delayMs: 2000, errorMessage: '529 overloaded',
+  }), {
+    type: 'status', status: 'running',
+    process: { operation: 'retry', phase: 'start', attempt: 1,
+      maxAttempts: 3, delayMs: 2000, errorMessage: '529 overloaded' },
+  })
+  assert.deepEqual(normalizePiLiveEvent({
+    type: 'auto_retry_end', success: true, attempt: 2,
+  }), {
+    type: 'status', status: 'running',
+    process: { operation: 'retry', phase: 'end', outcome: 'success', attempt: 2 },
+  })
+  assert.deepEqual(normalizePiLiveEvent({
+    type: 'auto_retry_end', success: false, attempt: 3, finalError: 'limit reached',
+  }), {
+    type: 'status', status: 'running',
+    process: { operation: 'retry', phase: 'end', outcome: 'failed',
+      attempt: 3, errorMessage: 'limit reached' },
+  })
+})
+
+test('Pi compaction preserves official reason, full summary and token counts', () => {
+  assert.deepEqual(normalizePiLiveEvent({ type: 'compaction_start', reason: 'overflow' }), {
+    type: 'status', status: 'compacting',
+    process: { operation: 'compaction', phase: 'start', reason: 'overflow' },
+  })
+  const summary = 'Full original summary. '.repeat(300)
+  assert.deepEqual(normalizePiLiveEvent({
+    type: 'compaction_end', reason: 'overflow', aborted: false, willRetry: true,
+    result: { summary, firstKeptEntryId: 'entry-1',
+      tokensBefore: 150000, estimatedTokensAfter: 32000, details: { readFiles: ['a.ts'] } },
+  }), {
+    type: 'status', status: 'ready',
+    process: { operation: 'compaction', phase: 'end', reason: 'overflow',
+      outcome: 'success', summary, firstKeptEntryId: 'entry-1',
+      tokensBefore: 150000, estimatedTokensAfter: 32000, willRetry: true },
+  })
+  assert.deepEqual(normalizePiLiveEvent({
+    type: 'compaction_end', reason: 'manual', aborted: true,
+  }), {
+    type: 'status', status: 'ready',
+    process: { operation: 'compaction', phase: 'end', reason: 'manual', outcome: 'aborted' },
+  })
+  assert.deepEqual(normalizePiLiveEvent({
+    type: 'compaction_end', reason: 'threshold', aborted: false,
+    result: undefined, errorMessage: 'rate limited',
+  }), {
+    type: 'status', status: 'ready',
+    process: { operation: 'compaction', phase: 'end', reason: 'threshold',
+      outcome: 'failed', errorMessage: 'rate limited' },
+  })
+  // Absent fields remain unknown. No guessed token usage, outcome, or summary.
+  assert.deepEqual(normalizePiLiveEvent({ type: 'compaction_end' }), {
+    type: 'status', status: 'ready',
+    process: { operation: 'compaction', phase: 'end' },
+  })
 })
