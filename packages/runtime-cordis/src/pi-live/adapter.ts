@@ -127,6 +127,14 @@ function livePreview(value: unknown, max = 4_000): string {
   return text.length > max ? `${text.slice(0, max)}…` : text
 }
 
+function liveNonnegative(value: unknown): number | undefined {
+  return typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : undefined
+}
+
+function piCompactionReason(value: unknown): 'manual' | 'threshold' | 'overflow' | undefined {
+  return value === 'manual' || value === 'threshold' || value === 'overflow' ? value : undefined
+}
+
 function liveContentIndex(value: unknown): number | undefined {
   return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0 ? value : undefined
 }
@@ -268,8 +276,64 @@ export function normalizePiLiveEvent(event: Readonly<Record<string, unknown>>): 
         : {}),
     }
   }
-  if (type === 'compaction_start') return { type: 'status', status: 'compacting' }
-  if (type === 'compaction_end') return { type: 'status', status: 'ready' }
+  // Pi's official AgentSessionEvent fields are authoritative. Retry and
+  // compaction details accompany the existing generic status lifecycle so
+  // Live and Review retain one shared Task Surface, with no second renderer.
+  if (type === 'auto_retry_start') {
+    return {
+      type: 'status', status: 'running',
+      process: {
+        operation: 'retry', phase: 'start',
+        ...(liveNonnegative(event.attempt) !== undefined ? { attempt: liveNonnegative(event.attempt) } : {}),
+        ...(liveNonnegative(event.maxAttempts) !== undefined ? { maxAttempts: liveNonnegative(event.maxAttempts) } : {}),
+        ...(liveNonnegative(event.delayMs) !== undefined ? { delayMs: liveNonnegative(event.delayMs) } : {}),
+        ...(liveText(event.errorMessage) ? { errorMessage: liveText(event.errorMessage) } : {}),
+      },
+    }
+  }
+  if (type === 'auto_retry_end') {
+    return {
+      type: 'status', status: 'running',
+      process: {
+        operation: 'retry', phase: 'end',
+        ...(event.success === true ? { outcome: 'success' as const }
+          : event.success === false ? { outcome: 'failed' as const } : {}),
+        ...(liveNonnegative(event.attempt) !== undefined ? { attempt: liveNonnegative(event.attempt) } : {}),
+        ...(liveText(event.finalError) ? { errorMessage: liveText(event.finalError) } : {}),
+      },
+    }
+  }
+  if (type === 'compaction_start') {
+    return {
+      type: 'status', status: 'compacting',
+      process: {
+        operation: 'compaction', phase: 'start',
+        ...(piCompactionReason(event.reason) ? { reason: piCompactionReason(event.reason) } : {}),
+      },
+    }
+  }
+  if (type === 'compaction_end') {
+    const result = liveRecord(event.result)
+    const hasResult = event.result !== null && event.result !== undefined
+      && typeof event.result === 'object' && !Array.isArray(event.result)
+    return {
+      type: 'status', status: 'ready',
+      process: {
+        operation: 'compaction', phase: 'end',
+        ...(piCompactionReason(event.reason) ? { reason: piCompactionReason(event.reason) } : {}),
+        ...(event.aborted === true ? { outcome: 'aborted' as const }
+          : hasResult ? { outcome: 'success' as const }
+            : liveText(event.errorMessage) ? { outcome: 'failed' as const } : {}),
+        ...(liveText(result.summary) ? { summary: liveText(result.summary) } : {}),
+        ...(liveText(result.firstKeptEntryId) ? { firstKeptEntryId: liveText(result.firstKeptEntryId) } : {}),
+        ...(liveNonnegative(result.tokensBefore) !== undefined ? { tokensBefore: liveNonnegative(result.tokensBefore) } : {}),
+        ...(liveNonnegative(result.estimatedTokensAfter) !== undefined
+          ? { estimatedTokensAfter: liveNonnegative(result.estimatedTokensAfter) } : {}),
+        ...(typeof event.willRetry === 'boolean' ? { willRetry: event.willRetry } : {}),
+        ...(liveText(event.errorMessage) ? { errorMessage: liveText(event.errorMessage) } : {}),
+      },
+    }
+  }
   if (type === 'runtime_initialization') {
     const stage = liveText(event.stage)
     return {
