@@ -6,6 +6,7 @@ import { UiIcon } from '../components/UiIcon'
 import { CopyableCodeBlock } from '../components/CopyableCodeBlock'
 import { codeLanguageFromContent } from '../components/code-language'
 import { ToolOutputContent } from './ToolOutputContent'
+import { PatchDiff } from '@pierre/diffs/react'
 import { ImagePreview } from '../components/ImagePreview'
 import { reviewToolCommand } from './review-tool-command'
 import type { TaskToolModel } from './task-detail-model'
@@ -59,6 +60,17 @@ function parseToolInput(value: string | undefined): unknown {
 function record(value: unknown): Record<string, unknown> | undefined {
   return value !== null && typeof value === 'object' && !Array.isArray(value)
     ? value as Record<string, unknown> : undefined
+}
+
+/** The official Pi edit tool reports a standard unified patch at details.patch.
+ * Do not try to reinterpret its display-only details.diff as unified diff. */
+export function taskToolNativePatch(details: unknown): string | undefined {
+  const patch = record(details)?.patch
+  if (typeof patch !== 'string' || patch.length > 512 * 1024) return undefined
+  return /^--- .+$/m.test(patch)
+    && /^\+\+\+ .+$/m.test(patch)
+    && /^@@ -\d+(?:,\d+)? \+\d+(?:,\d+)? @@/m.test(patch)
+      ? patch : undefined
 }
 
 const targetKeys: Record<ReturnType<typeof toolVisualKind>, readonly string[]> = {
@@ -147,6 +159,10 @@ export function TaskToolRow({ model, meta, details, onClick, className = '', com
   const [now, setNow] = useState(() => Date.now())
   // Avoid Prism tokenization across every collapsed tool in long Review/Live sessions.
   const [expanded, setExpanded] = useState(false)
+  const [rawResultDetails, setRawResultDetails] = useState(false)
+  const [diffTheme, setDiffTheme] = useState<'light' | 'dark'>(() =>
+    typeof document !== 'undefined' && document.documentElement.dataset.theme === 'dark' ? 'dark' : 'light')
+  const nativePatch = expanded ? taskToolNativePatch(model.resultDetails) : undefined
   const visualKind = model.kind === 'tool'
     ? toolVisualKind(model.name, { sourceType: model.toolSourceType, mcpServerId: model.mcpServerId })
     : model.kind
@@ -169,6 +185,16 @@ export function TaskToolRow({ model, meta, details, onClick, className = '', com
   const input = model.rawInput
   const preview = !input && hasTarget ? target : undefined
   const commandTarget = visualKind === 'shell' && hasTarget
+
+  useEffect(() => {
+    if (!nativePatch) return
+    const root = document.documentElement
+    const syncTheme = () => setDiffTheme(root.dataset.theme === 'dark' ? 'dark' : 'light')
+    syncTheme()
+    const observer = new MutationObserver(syncTheme)
+    observer.observe(root, { attributes: true, attributeFilter: ['data-theme'] })
+    return () => observer.disconnect()
+  }, [nativePatch])
 
   useEffect(() => {
     if (model.status !== 'running' || model.startedAtMs === undefined) return
@@ -246,13 +272,27 @@ export function TaskToolRow({ model, meta, details, onClick, className = '', com
             ? <span className="task-tool-section-empty">{model.resultMissing ? t('tool.resultMissing') : model.status === 'running' ? t('tool.outputPending') : t('tool.outputUnavailable')}</span>
             : null}
       </section>
-      {model.resultDetails !== undefined && <section className="task-tool-section" data-tool-section="details" aria-label={t('tool.resultDetails')}>
+      {expanded && model.resultDetails !== undefined && <section className="task-tool-section" data-tool-section="details" aria-label={t('tool.resultDetails')}>
         <div className="task-tool-section-title">{t('tool.resultDetails')}</div>
-        <ToolOutputContent
-          text={typeof model.resultDetails === 'string'
-            ? model.resultDetails : JSON.stringify(model.resultDetails, null, 2) ?? String(model.resultDetails)}
-          highlight={expanded}
-        />
+        {nativePatch && <div className="task-tool-output-format-actions">
+          <button type="button" aria-pressed={!rawResultDetails}
+            onClick={() => setRawResultDetails(false)}>{t('toolOutput.formatted')}</button>
+          <button type="button" aria-pressed={rawResultDetails}
+            onClick={() => setRawResultDetails(true)}>{t('toolOutput.original')}</button>
+        </div>}
+        {nativePatch && !rawResultDetails
+          ? <div className="task-file-diff-code">
+              <PatchDiff patch={nativePatch} options={{
+                diffStyle: 'unified',
+                theme: diffTheme === 'dark' ? 'pierre-dark' : 'pierre-light',
+                hunkSeparators: 'line-info',
+              }}/>
+            </div>
+          : <ToolOutputContent
+              text={typeof model.resultDetails === 'string'
+                ? model.resultDetails : JSON.stringify(model.resultDetails, null, 2) ?? String(model.resultDetails)}
+              highlight={expanded}
+            />}
       </section>}
       {(meta || elapsedLabel || onClick || details) && <div className="task-tool-detail-footer">
         {elapsedLabel && <span>{status} · {elapsedLabel}</span>}
