@@ -389,6 +389,26 @@ export function normalizePiLiveEvent(event: Readonly<Record<string, unknown>>): 
   if (type === 'extension_ui_request' && event.method === 'setStatus') {
     const cache = parsePiCacheOptimizerStatus(event)
     if (cache !== undefined) return { type: 'runtime.metrics.changed', cacheMetrics: cache }
+    const key = liveText(event.statusKey).trim()
+    if (!key) return undefined
+    const value = typeof event.statusText === 'string' && event.statusText
+      ? event.statusText : null
+    return { type: 'ui.state', kind: 'status', key, text: value }
+  }
+  if (type === 'extension_ui_request' && event.method === 'setWidget') {
+    const key = liveText(event.widgetKey).trim()
+    if (!key) return undefined
+    // Pi supports lines of text and clearing via undefined; an arbitrary
+    // TUI component must not be serialized or guessed as printable text.
+    const lines = event.widgetLines
+    if (lines !== undefined && lines !== null
+      && (!Array.isArray(lines) || !lines.every(part => typeof part === 'string'))) return undefined
+    return {
+      type: 'ui.state', kind: 'widget', key,
+      lines: Array.isArray(lines) && lines.length ? lines as string[] : null,
+      ...(event.widgetPlacement === 'aboveEditor' || event.widgetPlacement === 'belowEditor'
+        ? { placement: event.widgetPlacement } : {}),
+    }
   }
   if (type === 'extension_ui_request' && liveText(event.method) === 'notify') {
     const message = liveText(event.message).trim()
