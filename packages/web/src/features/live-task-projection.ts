@@ -230,6 +230,29 @@ export function projectLiveSnapshotEntries(entries: readonly unknown[]): LiveTas
       })
     }
 
+    // Pi's persisted compaction journal row is the source of truth after
+    // reconnect. Only native fields become facts; no inferred reason or token
+    // count, and no copy of the native session journal is stored.
+    if (item.type === 'compaction') {
+      const summary = text(item.summary)
+      const firstKeptEntryId = text(item.firstKeptEntryId)
+      const tokensBefore = typeof item.tokensBefore === 'number'
+        && Number.isFinite(item.tokensBefore) && item.tokensBefore >= 0
+          ? item.tokensBefore : undefined
+      projected.push({
+        id: `native-compaction:${baseId}`,
+        kind: 'event',
+        process: {
+          operation: 'compaction', phase: 'end', outcome: 'success',
+          ...(summary ? { summary } : {}),
+          ...(firstKeptEntryId ? { firstKeptEntryId } : {}),
+          ...(tokensBefore !== undefined ? { tokensBefore } : {}),
+        },
+        ...(at ? { at } : {}),
+      })
+      return
+    }
+
     // Explicit non-message failures may also be present in native snapshot histories.
     // Restrict this branch to failure facts; ordinary status and metadata are not answers.
     const nativeFailure = item.type === 'error' || item.type === 'extension_error'
