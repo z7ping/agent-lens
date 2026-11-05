@@ -341,6 +341,7 @@ export function TaskToolRow({ model, meta, details, onClick, className = '', com
                   ]
                   return <Disclosure
                     key={index}
+                    open={opened}
                     className="task-tool-subagent-entry"
                     summary={<span className="task-tool-subagent-name">
                       {child.step !== undefined ? t('tool.subagent.step', { step: child.step }) + ' · ' : ''}{child.agent}
