@@ -7,7 +7,7 @@ import { useClientSnapshot } from '../client/use-client-snapshot'
 import { Button, Dialog, Disclosure, IconButton, Input, Popover, Textarea, SelectMenu, StatusBadge, UiIcon } from '../components/ui'
 import { WorkspaceViewTabs } from '../components/WorkspaceViewTabs'
 import { formatAgentWorkSchedule } from './agent-work-schedule-label'
-import { agentWorkExecutionStatusKey, agentWorkDeliveryKey } from './agent-work-execution-label'
+import { agentWorkExecutionStatusKey, agentWorkDeliveryKey, visibleAgentWorkExecutions } from './agent-work-execution-label'
 import { MarkdownContent } from '../components/MarkdownContent'
 
 const PAGE_SIZE = 40
@@ -636,8 +636,7 @@ export function AgentWorkPage({model,sourceId,installationId,installations}: {
                     onClick={()=>goExecutionPage(job,executionOffset+MAX_EXECUTION_PAGE)}>{t('work.next')}</Button>}
                 </div>}
               </Disclosure>
-              <section className="agent-secondary">
-                <div className="section-heading-row"><h3>{t('work.output')}</h3></div>
+              <Disclosure className="agent-work-output" summary={t('work.output')}>
                 {cronOutputLoading && <div className="muted-empty compact" role="status">{t('work.loading')}</div>}
                 {cronOutputError && <div className="agent-path-error" role="alert">{cronOutputError}</div>}
                 {(cronOutput?.state === 'unavailable' || (cronOutput?.state === 'available' && !cronOutput.files.length)) &&
@@ -657,7 +656,7 @@ export function AgentWorkPage({model,sourceId,installationId,installations}: {
                   <div className="section-heading-row"><h3>{cronOutput.preview.name}</h3></div>
                   <MarkdownContent text={cronOutput.preview.text}/>
                 </div>}
-              </section>
+              </Disclosure>
               </div>}
           </div>)}
         </section>}
