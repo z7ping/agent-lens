@@ -16,6 +16,7 @@ import { TaskSessionMessage, TaskSessionThinking, TaskSessionProcessText, TaskSe
 import { ToolOutputContent } from './ToolOutputContent'
 import { agentLensI18n } from '../i18n/runtime'
 import { taskUserRequestText, type TaskRoundModel, type TaskThinkingModel, type TaskToolModel } from './task-detail-model'
+import { reviewQuoteableText } from './review-message-quote'
 import { formatClock, duration, elapsed } from './review-session-format'
 import { brief, EvidenceBadges, sourceEventSummary, toolPresentation, toolOutputText } from './ReviewEvidenceInspector'
 
@@ -113,6 +114,7 @@ function MessageBubble({
   modelLabel,
   showContentActions = false,
   onForkAt,
+  onQuoteMessage,
   forkPending = false,
 }: {
   sessionId:string
@@ -126,6 +128,7 @@ function MessageBubble({
   modelLabel?: string | undefined
   showContentActions?: boolean | undefined
   onForkAt?: ((nativeEventId: string) => void) | undefined
+  onQuoteMessage?: ((text: string) => void) | undefined
   forkPending?: boolean | undefined
 }) {
   const { t } = useTranslation('review')
@@ -164,11 +167,28 @@ function MessageBubble({
   }
 
   const messageTime = taskSessionMessageTime(node.at)
+  // A bounded native body may be lazy: never quote its loading placeholder.
+  const visibleText = reviewQuoteableText(node, nativeBody?.text)
+  const quoteAction = onQuoteMessage && visibleText.trim()
+    ? <IconButton
+        size="small"
+        className="task-message-live-action"
+        aria-label={t('task:live.quoteToComposer')}
+        title={t('task:live.quoteToComposer')}
+        onClick={event => {
+          const bubble = event.currentTarget.closest('.task-message-row')
+          const content = bubble?.querySelector('.markdown-surface')
+          const selection = window.getSelection()
+          const selected = selection && !selection.isCollapsed && content
+            && selection.anchorNode && selection.focusNode
+            && content.contains(selection.anchorNode) && content.contains(selection.focusNode)
+              ? selection.toString() : ''
+          onQuoteMessage(selected || visibleText)
+        }}
+      ><UiIcon name="quote" size={14}/></IconButton> : null
   return <TaskSessionMessage
     role={node.role === 'user' ? 'user' : 'assistant'}
-    text={node.nativeLazyText
-      ?nativeBody?.text??t('local.roundNav.nativeBodyLazy')
-      :node.role === 'user' ? taskUserRequestText(node.text) : node.text}
+    text={node.nativeLazyText ? nativeBody?.text ?? t('local.roundNav.nativeBodyLazy') : visibleText}
     attachments={attachments}
     {...(loadImage?{loadImage:(attachment:ReviewMessageAttachmentDto,signal:AbortSignal)=>
       loadImage(node.id,attachment,signal)}:{})}
@@ -178,7 +198,8 @@ function MessageBubble({
       ...(messageTime ? { time: messageTime } : {}),
     }}
     showContentActions={node.role === 'assistant' && showContentActions}
-    actions={Boolean(node.nativeLazyText)||node.evidence.length > 0 || (showContentActions && node.role === 'assistant' && node.nativeEventId && onForkAt) ? <>
+    actions={Boolean(node.nativeLazyText) || quoteAction || node.evidence.length > 0 || (showContentActions && node.role === 'assistant' && node.nativeEventId && onForkAt) ? <>
+      {quoteAction}
       {node.nativeLazyText&&<>
         {nativeBody&&<span>{t('local.roundNav.nativeBodyWindow',{
           from:nativeBody.offset+1,
@@ -482,6 +503,7 @@ export function ReviewRoundAdapter({
   onShowAllEvents,
   fileChangesEnabled,
   onForkAt,
+  onQuoteMessage,
   forkPending = false,
   contentIncomplete = false,
 }: {
@@ -498,6 +520,7 @@ export function ReviewRoundAdapter({
   onShowAllEvents: () => void
   fileChangesEnabled?: boolean
   onForkAt?: ((nativeEventId: string) => void) | undefined
+  onQuoteMessage?: ((text: string) => void) | undefined
   forkPending?: boolean | undefined
   contentIncomplete?: boolean | undefined
 }) {
@@ -653,7 +676,7 @@ export function ReviewRoundAdapter({
       return showAllEvents ? <RawEventGroup key={`raw-${index}`} items={entry.items} inspect={inspect}/> : null
     }
     if (entry.type === 'reasoning') return <MessageBubble key={entry.node.id} sessionId={sessionId} node={entry.node} nestedTools={entry.tools} inspect={inspect} loadAttachments={loadAttachments} loadImage={loadImage} expansionStore={expansionStore}/>
-    if (entry.type === 'message') return <MessageBubble key={entry.node.id} sessionId={sessionId} node={entry.node} inspect={inspect} loadAttachments={loadAttachments} loadImage={loadImage} modelLabel={modelLabels.get(entry.node.id)} showContentActions={entry.node.id === lastAssistantId} onForkAt={onForkAt} forkPending={forkPending}/>
+    if (entry.type === 'message') return <MessageBubble key={entry.node.id} sessionId={sessionId} node={entry.node} inspect={inspect} loadAttachments={loadAttachments} loadImage={loadImage} modelLabel={modelLabels.get(entry.node.id)} showContentActions={entry.node.id === lastAssistantId} onForkAt={onForkAt} onQuoteMessage={onQuoteMessage} forkPending={forkPending}/>
     if (entry.type === 'event') {
       if (isConsolidatedEvent(entry.node)) return null
       return <EventRow key={entry.node.id} event={entry.node} inspect={inspect}/>
