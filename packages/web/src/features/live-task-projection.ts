@@ -1068,11 +1068,13 @@ function buildRoundModel(
 
 /** Explicit native nested-tool links for the currently loaded round.
  * Never infer a parent from adjacency or assume paginated siblings are complete. */
-export function liveLoadedToolRelations(items: readonly LiveTaskProjectionItem[]): Map<string, {
+export interface LiveLoadedToolRelation {
   parentToolCallId?: string
   parentToolName?: string
   loadedChildCallCount?: number
-}> {
+}
+
+export function liveLoadedToolRelations(items: readonly LiveTaskProjectionItem[]): Map<string, LiveLoadedToolRelation> {
   const tools = new Map(items.filter((item): item is Extract<LiveTaskProjectionItem, { kind: 'tool' }> =>
     item.kind === 'tool').map(item => [item.callId, item] as const))
   const children = new Map<string, number>()
@@ -1081,11 +1083,7 @@ export function liveLoadedToolRelations(items: readonly LiveTaskProjectionItem[]
     if (!parentId || parentId === tool.callId || !tools.has(parentId)) continue
     children.set(parentId, (children.get(parentId) ?? 0) + 1)
   }
-  const relations = new Map<string, {
-    parentToolCallId?: string
-    parentToolName?: string
-    loadedChildCallCount?: number
-  }>()
+  const relations = new Map<string, LiveLoadedToolRelation>()
   for (const tool of tools.values()) {
     const parentId = tool.parentToolCallId !== tool.callId ? tool.parentToolCallId : undefined
     const parent = parentId ? tools.get(parentId) : undefined
