@@ -6,6 +6,8 @@ import { isLargeTaskText, TASK_TEXT_WINDOW_SIZE, TASK_TEXT_WINDOW_THRESHOLD,
   taskTextPage, TaskTextWindow } from './TaskTextWindow'
 import { TaskSessionProcessText, TaskSessionThinking } from './TaskSessionContent'
 import { TaskMessage } from './TaskMessage'
+import { TaskToolRow } from './TaskToolRow'
+import { brief } from './ReviewEvidenceInspector'
 
 test('64 Ki-character threshold keeps normal text on existing path', () => {
   assert.equal(isLargeTaskText('x'.repeat(TASK_TEXT_WINDOW_THRESHOLD)), false)
@@ -65,4 +67,33 @@ test('short Markdown continues to use the original rich renderer', () => {
   }))
   assert.match(html, /<strong>This is bold<\/strong>/)
   assert.doesNotMatch(html, /data-text-window="true"/)
+})
+
+
+test('oversized native tool input is windowed instead of JSON parsed or tokenized', () => {
+  const fullInput = '{"payload":"' + 'x'.repeat(900_000) + '","tail":"HIDDEN-INPUT-TAIL"}'
+  const html = renderToStaticMarkup(createElement(TaskToolRow, {
+    model: {
+      id: 'long-tool-input',
+      name: 'exec',
+      kind: 'tool',
+      kindLabel: 'Tool',
+      status: 'success',
+      rawInput: fullInput,
+    },
+  }))
+  assert.match(html, /data-tool-fact="true"/)
+  assert.match(html, /data-text-window="true"/)
+  assert.doesNotMatch(html, /HIDDEN-INPUT-TAIL/)
+  assert.doesNotMatch(html, /data-code-language="json"/)
+  assert.ok(html.length < 40_000)
+})
+
+test('Review tool summary does not normalize entire huge native output', () => {
+  const input = 'record '.repeat(180_000) + 'TAIL-MARKER'
+  const summary = brief(input, 100)
+  assert.ok(summary.length <= 101)
+  assert.match(summary, /^record/)
+  assert.doesNotMatch(summary, /TAIL-MARKER/)
+  assert.equal(brief('a  b\n c', 100), 'a b c')
 })
