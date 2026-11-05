@@ -301,3 +301,12 @@ test('Live cache telemetry is bounded, attributed, and propagates clears through
   assert.equal(parseLiveCacheMetricsDto({ ...value, source: 'unknown' }), null)
   assert.equal(parseLiveEventDto({ type: 'runtime.metrics.changed', cacheMetrics: { ...value, compatibility: 'invented' } }), null)
 })
+
+
+test('Live protocol validates extension dismissal as a separate request-scoped event', () => {
+  assert.deepEqual(parseLiveEventDto({ type: 'ui.dismiss', requestId: 'req-a' }), {
+    type: 'ui.dismiss', requestId: 'req-a',
+  })
+  assert.equal(parseLiveEventDto({ type: 'ui.dismiss', requestId: '' }), null)
+  assert.equal(parseLiveEventDto({ type: 'ui.dismiss', requestId: 42 }), null)
+})
