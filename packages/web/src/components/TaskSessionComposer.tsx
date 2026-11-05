@@ -33,7 +33,7 @@ export interface TaskSessionComposerProps extends LiveMarkdownComposerProps {
   interruptAvailable?: boolean
   interruptBusy?: boolean
   onInterrupt?(): void
-  responseActivity?: 'waiting' | 'thinking' | 'tools' | 'responding' | 'processing' | null
+  responseActivity?: 'waiting' | 'thinking' | 'tools' | 'responding' | 'processing' | 'retrying' | 'compacting' | null
   sendFeedback?: 'idle' | 'sending' | 'accepted' | 'queued' | 'failed'
   /** Optional Live-only metrics; Review omits this rather than implying a running native session. */
   runtimeMetrics?: { contextUsage?: LiveContextUsage | undefined; cacheMetrics?: LiveCacheMetricsDto | undefined } | undefined
