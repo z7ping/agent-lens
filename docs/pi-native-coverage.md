@@ -33,3 +33,13 @@
 - 已新增/调整静态回归用例，**未运行** `typecheck`、自动化测试、构建、真实 Pi 以及浏览器跨平台验收。
 - 后续先完成 **原生 observation→turn** 和 **toolCallId→childSession** 的验证契约，再在已有 Review/Live 入口补精确跳转。任何无法证实的数据保持未支持，不以近似 ID、时间或执行顺序代替。
 - 原生会话正文不复制为第二份业务数据库；Review/Live UI 优先沿用 `TaskSurface`、`TaskMessage`、`TaskToolRow`、`TaskEvent` 及既有控件。
+
+## 官方 AgentSessionEvent 覆盖门禁
+
+依据 Pi SDK `AgentSessionEvent['type']`（当前依赖 `@earendil-works/pi-coding-agent@1.2.0`），`packages/runtime-cordis/src/pi-live/adapter.test.ts` 用编译期类型约束枚举了当前 23 类事件。新增 SDK 事件需要明确选择处理策略，不能静默忽略。
+
+- **统一 Live 语义**：消息、工具、队列、压缩、两类自动重试、推理级别、运行结算等事件复用当前 Task Surface。
+- **运行时转译**：`session_info_changed` 经 Pi Service 产生 `session_title`，不在 Adapter 重复派发。
+- **原生日志负责**：`entry_appended` 由 Source JSONL 快照还原，不复制正文。
+- **只保留原文**：`agent_end` 不能作为整轮结算；`turn_start/turn_end` 不重复制造轮次；直接 RPC `bash_execution_update` 当前没有可归属的 SDK ToolCall，不能伪造工具。
+- **边界**：该类型门禁只覆盖官方 SDK 声明的事件集合，Worker 私有事件和 Extension UI 使用既有独立契约；代码/测试已提交不等于本机实际运行或跨平台验收。

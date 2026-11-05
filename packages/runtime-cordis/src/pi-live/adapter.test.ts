@@ -2,6 +2,7 @@ import { Buffer } from 'node:buffer'
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import type { LiveAttachmentService } from '@agent-lens/core'
+import type { AgentSessionEvent } from '@earendil-works/pi-coding-agent'
 import { normalizePiLiveEvent, normalizePiLiveRuntimeEvent, PiLiveAdapter } from './adapter'
 import type { PiLiveImageInput, PiLiveRuntimeState, PiLiveService } from './types'
 
@@ -987,4 +988,49 @@ test('Pi native appended entries and direct RPC bash deltas retain raw evidence 
     }
     assert.deepEqual(normalizePiLiveRuntimeEvent(envelope), envelope)
   }
+})
+
+// This deliberately tracks the *installed SDK type*, not a handwritten event
+// list independent of upstream. Adding an AgentSessionEvent variant breaks
+// typecheck until a maintainer classifies its projection or raw-only contract.
+// The SDK's helper/control/extension-ui events are handled separately.
+const piSdkEventStrategy = {
+  agent_start: 'live',
+  agent_end: 'raw-boundary',
+  agent_settled: 'live',
+  turn_start: 'raw-boundary',
+  turn_end: 'raw-boundary',
+  message_start: 'live',
+  message_update: 'live',
+  message_end: 'live',
+  tool_execution_start: 'live',
+  tool_execution_update: 'live',
+  tool_execution_end: 'live',
+  queue_update: 'live',
+  entry_appended: 'source-journal',
+  session_info_changed: 'service-reconciled',
+  thinking_level_changed: 'live',
+  compaction_start: 'live',
+  compaction_end: 'live',
+  auto_retry_start: 'live',
+  auto_retry_end: 'live',
+  summarization_retry_scheduled: 'live',
+  summarization_retry_attempt_start: 'live',
+  summarization_retry_finished: 'live',
+  bash_execution_update: 'raw-rpc-only',
+} as const
+
+type UnclassifiedPiSdkEvent = Exclude<AgentSessionEvent['type'], keyof typeof piSdkEventStrategy>
+const allPiSdkEventsClassified: UnclassifiedPiSdkEvent extends never ? true : never = true
+
+test('Pi SDK event vocabulary is exhaustive and raw-boundary events do not fabricate settlement', () => {
+  assert.equal(allPiSdkEventsClassified, true)
+  assert.equal(Object.keys(piSdkEventStrategy).length, 23)
+  assert.equal(piSdkEventStrategy.entry_appended, 'source-journal')
+  assert.equal(piSdkEventStrategy.bash_execution_update, 'raw-rpc-only')
+  for (const type of ['agent_end', 'turn_start', 'turn_end'] as const) {
+    assert.equal(piSdkEventStrategy[type], 'raw-boundary')
+    assert.equal(normalizePiLiveEvent({ type }), undefined)
+  }
+  assert.equal(piSdkEventStrategy.session_info_changed, 'service-reconciled')
 })
