@@ -1,6 +1,6 @@
 /** Only derive preview targets from a verified absolute workspace root and
  * a workspace-relative source path. The host preview endpoint owns final
- * file existence, redaction, size and symlink checks. */
+ * file existence, redaction and preview-size policy. */
 export function workspaceFilePreviewPath(
   rootPath: string | undefined,
   path: string,
