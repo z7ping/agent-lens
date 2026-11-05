@@ -21,6 +21,7 @@ import { messageText, resolveLiveSlash } from './live-task-input'
 import { scrollReaderToLastUserTurn } from './session-reader-positioning'
 import { LIVE_TASK_SNAPSHOT_PAGE_LIMIT, historyPageBlock, aggregateHistoryPage, splitLiveProjectionItems } from './live-task-history-window'
 import { GenericLiveRound, StableLiveRounds, liveRoundOwnsAnswerActions } from './LiveTaskTimeline'
+import { taskTurnRailAnswerPreview } from './task-turn-rail-answer-preview'
 import { liveMessageQuote } from './live-message-quote'
 import type { LiveTaskProjectionItem } from './live-task-projection'
 import { UiIcon } from '../components/UiIcon'
@@ -373,6 +374,14 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
       const indexed = cursor
         ? historyIndex?.items.find(item => item.cursor === cursor)
         : historyIndex?.items.find(item => ordinal !== undefined && item.ordinal === ordinal)
+      const answerMessage = [...round.items].reverse().find(item =>
+        item.kind === 'message' && item.role === 'assistant'
+        && !item.error && item.phase !== 'commentary' && Boolean(item.text.trim()))
+      const preview = taskTurnRailAnswerPreview(
+        round.model.preview,
+        answerMessage?.kind === 'message' ? answerMessage.text : undefined,
+        { question: t('surface.questionPreview'), answer: t('surface.answerPreview') },
+      )
       const failed = round.model.terminalFailure === true
         || (round.model.state !== 'running' && indexed?.summary?.terminal?.status === 'error')
       return {
@@ -381,7 +390,7 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
         ...(cursor ? { cursor } : {}),
         ...(ordinal ? { ordinal } : {}),
         label: ordinal ? t('surface.roundOrdinal', { count: ordinal }) : round.model.label,
-        preview: round.model.preview,
+        preview,
         error: failed,
         warning: !failed && ((round.model.warningCount ?? 0) > 0
           || (indexed?.summary?.process.errorCount ?? 0) > 0),
