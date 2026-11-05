@@ -6,6 +6,7 @@ import { UiIcon } from '../components/UiIcon'
 import { CopyableCodeBlock } from '../components/CopyableCodeBlock'
 import { codeLanguageFromContent } from '../components/code-language'
 import { ToolOutputContent } from './ToolOutputContent'
+import { isLargeTaskText, TaskTextWindow } from './TaskTextWindow'
 import { Button, Disclosure, StatusBadge } from '../components/ui'
 import { isPiSubagentTool, piSubagentResult, piSubagentToolDetails, piSubagentTranscriptMessage } from './task-tool-subagent'
 import { PatchDiff } from '@pierre/diffs/react'
@@ -55,6 +56,7 @@ function durationLabel(ms: number): string {
 function parseToolInput(value: string | undefined): unknown {
   const input = value?.trim()
   if (!input) return undefined
+  if (isLargeTaskText(input)) return undefined
   if (!['{', '[', '"'].includes(input[0]!)) return input
   try { return JSON.parse(input) as unknown } catch { return undefined }
 }
@@ -290,7 +292,8 @@ export function TaskToolRow({ model, meta, details, onClick, className = '', com
       <section className="task-tool-section" data-tool-section="input" aria-label={t('tool.input')}>
         <div className="task-tool-section-title">{input === undefined && preview ? t('tool.inputPreview') : t('tool.input')}</div>
         {input !== undefined
-          ? <CopyableCodeBlock copyValue={input} language={expanded ? codeLanguageFromContent(input, visualKind === 'shell' ? (/powershell|pwsh/i.test(model.name) ? 'powershell' : 'bash') : undefined) : undefined}>{input}</CopyableCodeBlock>
+          ? isLargeTaskText(input) ? <TaskTextWindow text={input}/>
+            : <CopyableCodeBlock copyValue={input} language={expanded ? codeLanguageFromContent(input, visualKind === 'shell' ? (/powershell|pwsh/i.test(model.name) ? 'powershell' : 'bash') : undefined) : undefined}>{input}</CopyableCodeBlock>
           : preview ? <CopyableCodeBlock copyValue={preview} language={expanded ? codeLanguageFromContent(preview, visualKind === 'shell' ? 'bash' : undefined) : undefined}>{preview}</CopyableCodeBlock>
             : <span className="task-tool-section-empty">{t('tool.inputUnavailable')}</span>}
       </section>

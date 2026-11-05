@@ -13,6 +13,7 @@ export function isLargeTaskText(text: string): boolean {
 }
 
 export interface TaskTextPage {
+  pageIndex: number
   start: number
   end: number
   total: number
@@ -27,13 +28,19 @@ export function taskTextPage(text: string, requestedPage: number): TaskTextPage 
   const lastPage = Math.max(0, Math.ceil(text.length / TASK_TEXT_WINDOW_SIZE) - 1)
   const page = Number.isSafeInteger(requestedPage)
     ? Math.max(0, Math.min(requestedPage, lastPage)) : 0
-  const start = page * TASK_TEXT_WINDOW_SIZE
-  const end = Math.min(start + TASK_TEXT_WINDOW_SIZE, text.length)
+  // Keep surrogate pairs together across fixed UTF-16 page boundaries.
+  // The next page starts at the same adjusted boundary, without duplication.
+  const safeBoundary = (offset: number): number => offset > 0 && offset < text.length
+    && text.charCodeAt(offset) >= 0xDC00 && text.charCodeAt(offset) <= 0xDFFF
+    && text.charCodeAt(offset - 1) >= 0xD800 && text.charCodeAt(offset - 1) <= 0xDBFF
+      ? offset - 1 : offset
+  const start = safeBoundary(page * TASK_TEXT_WINDOW_SIZE)
+  const end = safeBoundary(Math.min((page + 1) * TASK_TEXT_WINDOW_SIZE, text.length))
   return {
-    start, end, total: text.length,
+    pageIndex: page, start, end, total: text.length,
     text: text.slice(start, end),
     hasPrevious: page > 0,
-    hasNext: end < text.length,
+    hasNext: page < lastPage,
   }
 }
 
@@ -57,11 +64,11 @@ export function TaskTextWindow({ text }: { text: string }) {
         {t('largeContent.range', { start: page.start + 1, end: page.end, total: page.total })}
       </span>
       <Button size="small" variant="quiet" disabled={!page.hasPrevious}
-        onClick={() => setPageIndex(Math.max(0, Math.floor(page.start / TASK_TEXT_WINDOW_SIZE) - 1))}>
+        onClick={() => setPageIndex(page.pageIndex - 1)}>
         {t('largeContent.previous')}
       </Button>
       <Button size="small" variant="quiet" disabled={!page.hasNext}
-        onClick={() => setPageIndex(Math.floor(page.start / TASK_TEXT_WINDOW_SIZE) + 1)}>
+        onClick={() => setPageIndex(page.pageIndex + 1)}>
         {t('largeContent.next')}
       </Button>
     </div>
