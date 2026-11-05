@@ -92,7 +92,7 @@ function GenericLiveItem({
       : type === 'context_edit' ? t(item.source.replacement === null
         ? 'live.nativeEntries.contextExcluded'
         : item.source.replacement !== undefined ? 'live.nativeEntries.contextReplaced'
-        : 'live.nativeEntries.contextUpdated')
+        : 'context_edit')
         : type === 'custom_message' ? t(item.source.display === false
           ? 'live.nativeEntries.customHidden' : 'live.nativeEntries.customMessage')
           : t('live.nativeEntries.bashExecution')
