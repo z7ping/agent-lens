@@ -3,6 +3,14 @@ import type { LocaleMessagesDto } from '@agent-lens/protocol'
 export const chineseAgentsMessages: LocaleMessagesDto = {
   agents: {
     work: {
+      workspaceTitle: '工作台',
+      moreActions: '工作台操作',
+      defaultBoard: '默认看板',
+      noBoards: '暂无看板',
+      taskCount: '{{count}} 个任务',
+      scheduleCount: '{{count}} 项任务',
+      tasksUnavailable: '当前任务列表尚未完整加载',
+      schedulesUnavailable: '定时任务数据暂未完整加载',
       refreshFailed: '自动刷新失败，请手动刷新核对原生状态',
       noSupportedActions: '当前安装实例未确认支持工作区写操作，请检查 Hermes CLI 版本和可执行文件。',
       writeConfirmed: '已从 Hermes 原生数据确认变更',

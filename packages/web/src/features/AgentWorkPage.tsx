@@ -4,7 +4,8 @@ import { useNavigate, useSearchParams } from 'react-router-dom'
 import type { AgentWorkTaskDto, AgentWorkScheduleDto, AgentWorkOutputResponseDto, AgentInstallationOverviewDto, AgentWorkMutationDto } from '@agent-lens/protocol'
 import type { AgentLensClientModel } from '../client/model'
 import { useClientSnapshot } from '../client/use-client-snapshot'
-import { Button, Dialog, Input, Textarea, SelectMenu, StatusBadge } from '../components/ui'
+import { Button, Dialog, IconButton, Input, Popover, Textarea, SelectMenu, StatusBadge, UiIcon } from '../components/ui'
+import { WorkspaceViewTabs } from '../components/WorkspaceViewTabs'
 import { MarkdownContent } from '../components/MarkdownContent'
 
 const PAGE_SIZE = 40
@@ -23,6 +24,8 @@ export function AgentWorkPage({model,sourceId,installationId,installations}: {
   const navigate = useNavigate()
   const [workSearchParams,setWorkSearchParams] = useSearchParams()
   const [pendingAction,setPendingAction] = useState<AgentWorkMutationDto|null>(null)
+  const [workMenuOpen,setWorkMenuOpen] = useState(false)
+  const workMenuAnchor = useRef<HTMLButtonElement>(null)
   const scopeGeneration=useRef(0)
   const [accessChange,setAccessChange] = useState<boolean|null>(null)
   const [accessBusy,setAccessBusy] = useState(false)
@@ -38,6 +41,7 @@ export function AgentWorkPage({model,sourceId,installationId,installations}: {
     setAccessError('')
     setAccessChange(null)
     setPendingAction(null)
+    setWorkMenuOpen(false)
     setReceiptId(null)
     if(installationId) {
       void model.agentWorkWriteAccess(sourceId,installationId).then(value=>{
@@ -99,12 +103,11 @@ export function AgentWorkPage({model,sourceId,installationId,installations}: {
     setWorkSearchParams(next)
   }
   const panel = workSearchParams.get('section') === 'schedules' ? 'schedules' : 'boards'
-  const selectPanel=(section:'boards'|'schedules')=>{
-    if (section===panel) return
+  const panelLink=(section:'boards'|'schedules')=>{
     const next=new URLSearchParams(workSearchParams)
     if (section==='boards') next.delete('section')
     else next.set('section',section)
-    setWorkSearchParams(next)
+    return '/agents?'+next.toString()
   }
   const [selectedTask,setSelectedTask] = useState<string|null>(null)
   const [selectedJob,setSelectedJob] = useState<string|null>(null)
@@ -340,7 +343,7 @@ export function AgentWorkPage({model,sourceId,installationId,installations}: {
         setActionError(error instanceof Error?error.message:t('work.actionRejected'))
     }finally{setActionBusy(false)}
   }
-  return <main className="workspace-page">
+  return <main className="workspace-page agent-work-page">
     <div className="page-content agents-content">
       {snapshot.sourceId === sourceId && snapshot.installationId === installationId && snapshot.error && <div className="agent-path-error" role="alert">{snapshot.error} <Button size="small" onClick={() => void refreshWorkspace()}>{t('work.retry')}</Button></div>}
       {!installationId && <div className="muted-empty compact" role="status">{t('work.noInstallation')}</div>}
@@ -365,51 +368,111 @@ export function AgentWorkPage({model,sourceId,installationId,installations}: {
         {response.features.filter(f=>f.availability==='error' || f.availability==='partial').map(feature=><div key={feature.id} role="alert" className="agent-path-error">
           {t(feature.availability==='partial'?'work.featurePartial':'work.featureError',{name:feature.id})} {feature.reason}
         </div>)}
-        <div className="agent-primary-section">
-          <div className="section-heading-row">
-            <h2>{t('work.title')}</h2>
-            <div className="runtime-config-row">
-              {response.writeControlAvailable && <Button size="small" variant={accessEnabled?'danger':'default'}
-                disabled={accessStatus==='loading' || accessBusy || actionBusy}
-                onClick={()=>accessStatus==='error'?setAccessRetry(value=>value+1):setAccessChange(!accessEnabled)}>{t(accessStatus==='loading'?'work.writeLoading':accessStatus==='error'?'work.retry':accessEnabled?'work.writeDisable':'work.writeEnable')}</Button>}
-              <Button size="small" loading={snapshot.loading} onClick={() => void refreshWorkspace({board:response.selectedBoard,offset,limit:PAGE_SIZE,scheduleOffset,projectOffset,...(selectedTask?{taskId:selectedTask,taskEventOffset,runOffset,commentOffset}:{}),...(selectedSchedule?{jobId:selectedSchedule.id,profile:selectedSchedule.profile,executionOffset}:{})})}>{t('work.refresh')}</Button>
-            </div>
+        <header className="agent-work-toolbar">
+          <div className="agent-work-heading">
+            <h2>{t('work.workspaceTitle')}</h2>
+            {boardAvailable && schedulesAvailable && <WorkspaceViewTabs
+              inline label={t('work.title')} value={activePanel}
+              tabs={[
+                {value:'boards',label:t('work.boards'),to:panelLink('boards')},
+                {value:'schedules',label:t('work.schedules'),to:panelLink('schedules')},
+              ]}
+            />}
           </div>
-          <div className="runtime-config-row">
-            {boardAvailable && <Button size="small" variant={activePanel==='boards'?'primary':'default'} onClick={() => selectPanel('boards')}>{t('work.boards')}</Button>}
-            {schedulesAvailable && <Button size="small" variant={activePanel==='schedules'?'primary':'default'} onClick={() => selectPanel('schedules')}>{t('work.schedules')}</Button>}
+          <div className="agent-work-toolbar-actions">
+            <IconButton size="small" aria-label={t('work.refresh')} title={t('work.refresh')}
+              disabled={snapshot.loading} onClick={() => void refreshWorkspace({
+                board:response.selectedBoard,offset,limit:PAGE_SIZE,scheduleOffset,projectOffset,
+                ...(selectedTask?{taskId:selectedTask,taskEventOffset,runOffset,commentOffset}:{}),
+                ...(selectedSchedule?{jobId:selectedSchedule.id,profile:selectedSchedule.profile,executionOffset}:{}),
+              })}><UiIcon name="refresh" size={14}/></IconButton>
+            {response.writeControlAvailable && <>
+              <IconButton ref={workMenuAnchor} size="small" aria-label={t('work.moreActions')}
+                title={t('work.moreActions')} aria-expanded={workMenuOpen}
+                onClick={() => setWorkMenuOpen(open => !open)}><UiIcon name="more" size={14}/></IconButton>
+              <Popover open={workMenuOpen} anchorRef={workMenuAnchor}
+                onClose={() => setWorkMenuOpen(false)}>
+                <div className="agent-work-menu">
+                  <Button size="small" variant="quiet"
+                    disabled={accessStatus==='loading' || accessBusy || actionBusy}
+                    onClick={() => {
+                      setWorkMenuOpen(false)
+                      if(accessStatus==='error') setAccessRetry(value=>value+1)
+                      else setAccessChange(!accessEnabled)
+                    }}>{t(accessStatus==='loading'?'work.writeLoading':accessStatus==='error'?'work.retry':accessEnabled?'work.writeDisable':'work.writeEnable')}</Button>
+                  {activePanel==='boards' && permitted('board.create') && <Button size="small" variant="quiet"
+                    onClick={() => {setWorkMenuOpen(false);askAction({kind:'board.create',slug:''})}}>
+                    {t('work.actions.board_create')}
+                  </Button>}
+                  {activePanel==='boards' && permitted('board.rename') && response.selectedBoard && <Button size="small" variant="quiet"
+                    onClick={() => {setWorkMenuOpen(false);askAction({
+                      kind:'board.rename',slug:response.selectedBoard!,name:board?.name??response.selectedBoard!,
+                    })}}>{t('work.actions.board_rename')}</Button>}
+                  {activePanel==='boards' && permitted('board.archive') && response.selectedBoard && response.selectedBoard!=='default'
+                    && <Button size="small" variant="danger" onClick={() => {
+                      setWorkMenuOpen(false)
+                      askAction({kind:'board.archive',slug:response.selectedBoard!})
+                    }}>{t('work.actions.board_archive')}</Button>}
+                </div>
+              </Popover>
+            </>}
           </div>
-        </div>
+        </header>
+        {!boardAvailable && !schedulesAvailable && <div className="agent-work-section">
+          <div className="agent-work-empty" role="status">
+            <UiIcon name="task" size={20}/>
+            <strong>{t('work.unavailable')}</strong>
+          </div>
+        </div>}
         {activePanel==='boards' && boardAvailable && <>
-          <section className="agent-primary-section">
-            <div className="section-heading-row"><h3>{t('work.boardTasks')}</h3>
-              <span className="section-total">{board?.taskCount ?? '—'}</span>
-              {permitted('board.create') && <Button size="small" onClick={()=>askAction({
-                kind:'board.create',slug:'',
-              })}>{t('work.actions.board_create')}</Button>}
-              {permitted('board.rename') && response.selectedBoard && <Button size="small" onClick={()=>askAction({
-                kind:'board.rename',slug:response.selectedBoard!,name:board?.name??response.selectedBoard!,
-              })}>{t('work.actions.board_rename')}</Button>}
-              {permitted('board.archive') && response.selectedBoard && response.selectedBoard!=='default'
-                && <Button size="small" variant="danger" onClick={()=>askAction({
-                  kind:'board.archive',slug:response.selectedBoard!,
-                })}>{t('work.actions.board_archive')}</Button>}
-              {permitted('task.create') && response.selectedBoard && <Button size="small" onClick={()=>askAction({
-                kind:'task.create',boardId:response.selectedBoard!,title:'',
-              })}>{t('work.actions.task_create')}</Button>}
+          <section className="agent-work-section">
+            <div className="agent-work-board-heading">
+              <div className="agent-work-board-identity">
+                {(response.boardsTotal>1 || response.boardsHasMore || boardOffset>0 || !response.selectedBoard)
+                  ? <SelectMenu ariaLabel={t('work.selectBoard')}
+                      value={response.selectedBoard ?? ''} searchable
+                      selectedOption={response.selectedBoard ? {
+                        value:response.selectedBoard,
+                        label:board?.name ?? (response.selectedBoard==='default'
+                          ? t('work.defaultBoard') : response.selectedBoard),
+                      } : undefined}
+                      options={response.boards.map(item => ({
+                        value:item.id,
+                        label:(item.id==='default' && item.name==='default' ? t('work.defaultBoard') : item.name)
+                          + (item.archived?t('work.archived'):''),
+                      }))} onChange={value=>loadBoard(value)}/>
+                  : <h3>{board
+                    ? board.id==='default' && board.name==='default' ? t('work.defaultBoard') : board.name
+                    : response.selectedBoard==='default' ? t('work.defaultBoard')
+                      : response.selectedBoard || t('work.noSelectedBoard')}</h3>}
+                {board && <span className="agent-work-meta">{t('work.taskCount',{count:board.taskCount})}</span>}
+              </div>
+              {response.selectedBoard && response.tasks.length>0 && permitted('task.create') &&
+                <Button size="small" onClick={() => askAction({
+                  kind:'task.create',boardId:response.selectedBoard!,title:'',
+                })}><UiIcon name="plus" size={14}/>{t('work.actions.task_create')}</Button>}
             </div>
-            <SelectMenu ariaLabel={t('work.selectBoard')} value={response.selectedBoard ?? ''} searchable
-              options={response.boards.map(item => ({value:item.id,label:item.name + (item.archived?t('work.archived'):'')}))}
-              onChange={value=>loadBoard(value)}/>
-            <div className="runtime-config-row">
-              <span>{response.boardsTotal}</span>
-              {boardOffset>0 && <Button size="small" disabled={snapshot.loading}
+            {(boardOffset>0 || response.boardsHasMore) && <div className="agent-work-pagination">
+              {boardOffset>0 && <Button size="small" variant="quiet" disabled={snapshot.loading}
                 onClick={()=>nextBoards(Math.max(0,boardOffset-24))}>{t('work.previous')}</Button>}
-              {response.boardsHasMore && <Button size="small" disabled={snapshot.loading}
+              {response.boardsHasMore && <Button size="small" variant="quiet" disabled={snapshot.loading}
                 onClick={()=>nextBoards(boardOffset+24)}>{t('work.next')}</Button>}
-            </div>
-            {!response.selectedBoard && <div className="muted-empty compact">{t('work.noSelectedBoard')}</div>}
-            {response.selectedBoard && response.tasks.length===0 && <div className="muted-empty compact">{t('work.noTasks')}</div>}
+            </div>}
+            {!response.selectedBoard && <div className="agent-work-empty">
+              <UiIcon name="task" size={20}/>
+              <strong>{t(response.boardsTotal===0?'work.noBoards':'work.noSelectedBoard')}</strong>
+              {response.boardsTotal===0 && permitted('board.create') &&
+                <Button size="small" onClick={() => askAction({kind:'board.create',slug:''})}>{t('work.actions.board_create')}</Button>}
+            </div>}
+            {response.selectedBoard && response.tasks.length===0 && <div className="agent-work-empty" role="status">
+              <UiIcon name="task" size={20}/>
+              <strong>{board?.taskCount===0 && response.features.find(f=>f.id==='boards')?.availability==='available'
+                ? t('work.noTasks') : t('work.tasksUnavailable')}</strong>
+              {permitted('task.create') &&
+                <Button size="small" onClick={() => askAction({
+                  kind:'task.create',boardId:response.selectedBoard!,title:'',
+                })}>{t('work.actions.task_create')}</Button>}
+            </div>}
             {response.tasks.map(item => <div className="asset-item" key={item.id}>
               <div className="asset-item-head">
                 <StatusBadge tone={item.status==='done'?'success':item.status==='blocked'?'warning':item.status==='running'?'accent':'neutral'}>{item.status}</StatusBadge>
@@ -427,21 +490,32 @@ export function AgentWorkPage({model,sourceId,installationId,installations}: {
                 commentOffset={commentOffset} commentsHasMore={response.taskCommentsHasMore} onCommentPage={nextTaskComments}
                 permitted={permitted} onAction={askAction}/>} 
             </div>)}
-            <div className="runtime-config-row">
+            {(offset>0 || response.tasksHasMore) && <div className="agent-work-pagination">
               <span>{t('work.loaded')} {offset+response.tasks.length} / {board?.taskCount ?? '—'}</span>
-              {offset>0 && <Button size="small" disabled={snapshot.loading} onClick={()=>loadBoard(response.selectedBoard??'default',Math.max(0,offset-PAGE_SIZE))}>{t('work.previous')}</Button>}
-              {response.tasksHasMore && <Button size="small" disabled={snapshot.loading} onClick={()=>loadBoard(response.selectedBoard??'default',offset+PAGE_SIZE)}>{t('work.next')}</Button>}
-            </div>
+              {offset>0 && <Button size="small" variant="quiet" disabled={snapshot.loading}
+                onClick={()=>loadBoard(response.selectedBoard??'default',Math.max(0,offset-PAGE_SIZE))}>{t('work.previous')}</Button>}
+              {response.tasksHasMore && <Button size="small" variant="quiet" disabled={snapshot.loading}
+                onClick={()=>loadBoard(response.selectedBoard??'default',offset+PAGE_SIZE)}>{t('work.next')}</Button>}
+            </div>}
           </section>
         </>}
-        {activePanel==='schedules' && schedulesAvailable && <section className="agent-primary-section">
-          <div className="section-heading-row"><h3>{t('work.schedules')}</h3>
-            <span className="section-total">{response.schedulesTotal}</span>
+        {activePanel==='schedules' && schedulesAvailable && <section className="agent-work-section">
+          <div className="agent-work-board-heading">
+            {!(boardAvailable && schedulesAvailable) && <h3>{t('work.schedules')}</h3>}
+            {response.schedulesTotal>0 && <span className="agent-work-meta">{t('work.scheduleCount',{count:response.schedulesTotal})}</span>}
+            {response.schedules.length>0 && permitted('cron.create') && <Button size="small"
+              onClick={()=>askAction({kind:'cron.create',profile:'default',schedule:'',prompt:''})}>
+              <UiIcon name="plus" size={14}/>{t('work.actions.cron_create')}
+            </Button>}
+          </div>
+          {!response.schedules.length && <div className="agent-work-empty" role="status">
+            <UiIcon name="clock" size={20}/>
+            <strong>{response.features.find(f=>f.id==='schedules')?.availability==='available'
+              ? t('work.noSchedules') : t('work.schedulesUnavailable')}</strong>
             {permitted('cron.create') && <Button size="small" onClick={()=>askAction({
               kind:'cron.create',profile:'default',schedule:'',prompt:'',
             })}>{t('work.actions.cron_create')}</Button>}
-          </div>
-          {!response.schedules.length && <div className="muted-empty compact">{t('work.noSchedules')}</div>}
+          </div>}
           {response.schedules.map(job=><div className="asset-item" key={job.profile+':'+job.id}>
             <div className="asset-item-head">
               <StatusBadge tone={job.state==='error'?'danger':job.enabled?'success':'neutral'}>{job.state}</StatusBadge>
@@ -509,7 +583,7 @@ export function AgentWorkPage({model,sourceId,installationId,installations}: {
             </>}
           </div>)}
         </section>}
-        {projectsAvailable && <section className="agent-primary-section">
+        {projectsAvailable && (response.projects.length>0 || response.projectsTotal>0 || response.projectsHasMore || projectOffset>0) && <section className="agent-work-section">
           <div className="section-heading-row"><h3>{t('work.projects')}</h3><span className="section-total">{response.projectsTotal}</span></div>
           {response.projects.map(project=><div className="runtime-config-row" key={project.profile+':'+project.id}>
             <span>{project.name}</span><span className="asset-scope">{project.profile}</span>
