@@ -216,6 +216,8 @@ export const chineseTaskMessages: LocaleMessagesDto = {
         tools: '正在调用工具',
         responding: '正在生成回复',
         processing: '模型处理中',
+        retrying: '正在自动重试',
+        compacting: '正在压缩上下文',
       },
       terminate: '结束任务',
       empty: '等待输入任务。',
