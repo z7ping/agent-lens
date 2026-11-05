@@ -1179,3 +1179,79 @@ test('Unknown parent outside current window is labeled by its native ID, never a
   assert.deepEqual(relations.get('child'), { parentToolCallId: 'not-in-loaded-window' })
   assert.equal(relations.has('self'), false)
 })
+
+test('Pi special native journal entries keep source order, provenance and visibility', () => {
+  const originalUser = {
+    type: 'message', id: 'user-1', timestamp: '2026-11-05T12:00:00.000Z',
+    message: { role: 'user', content: [{ type: 'text', text: 'Explain this' }] },
+  }
+  const branch = {
+    type: 'branch_summary', id: 'branch-1', fromId: 'old-branch',
+    summary: 'Previous branch covered an earlier approach',
+    timestamp: '2026-11-05T12:00:01.000Z',
+  }
+  const visible = {
+    type: 'custom_message', id: 'custom-visible', customType: 'my-extension',
+    display: true, content: 'Visible injected context',
+  }
+  const hidden = {
+    type: 'custom_message', id: 'custom-hidden', customType: 'private-extension',
+    display: false, content: 'Not shown in the Pi TUI',
+  }
+  const excluded = {
+    type: 'context_edit', id: 'ctx-omitted', targetId: 'user-1', replacement: null,
+  }
+  const replaced = {
+    type: 'context_edit', id: 'ctx-replaced', targetId: 'user-1',
+    replacement: { content: 'Updated model context' },
+  }
+  const bash = {
+    type: 'message', id: 'bash-1',
+    message: { role: 'bashExecution', command: 'echo hello',
+      output: 'hello', exitCode: 0, cancelled: false, truncated: false },
+  }
+  const items = projectLiveSnapshotEntries([
+    originalUser, branch, visible, hidden, excluded, replaced, bash,
+  ])
+  assert.deepEqual(items.map(item => item.kind), [
+    'message', 'native', 'native', 'native', 'native', 'native', 'native',
+  ])
+  assert.deepEqual(items.map(item => item.id), [
+    'user-1', 'native-branch-summary:branch-1', 'native-custom-message:custom-visible',
+    'native-custom-message:custom-hidden', 'native-context-edit:ctx-omitted',
+    'native-context-edit:ctx-replaced', 'native-bash:bash-1',
+  ])
+  assert.ok(items[1]?.kind === 'native')
+  assert.equal(items[1].preview, branch.summary)
+  assert.equal(items[1].source.fromId, 'old-branch')
+  assert.ok(items[2]?.kind === 'native')
+  assert.match(items[2].preview, /Visible injected context/)
+  assert.ok(items[3]?.kind === 'native')
+  assert.equal(items[3].preview, 'private-extension')
+  assert.equal(items[3].source.display, false)
+  assert.ok(items[4]?.kind === 'native')
+  assert.equal(items[4].source.replacement, null)
+  assert.ok(items[5]?.kind === 'native')
+  assert.deepEqual(items[5].source.replacement, { content: 'Updated model context' })
+  assert.ok(items[6]?.kind === 'native')
+  assert.equal(items[6].nativeType, 'bashExecution')
+  assert.equal(items[6].preview, 'echo hello')
+  assert.equal(projectLiveTaskRounds(items).length, 1)
+  assert.equal(projectLiveTaskRounds(items)[0]?.model.toolCount, 0)
+})
+
+test('Hidden/unknown Pi extension display state never promotes its content to a visible answer', () => {
+  const items = projectLiveSnapshotEntries([
+    { type: 'custom_message', id: 'hidden', customType: 'ext',
+      content: 'hidden payload', display: false },
+    { type: 'custom_message', id: 'unspecified', customType: 'ext',
+      content: 'undetermined payload' },
+    { type: 'context_edit', id: 'omitted', targetId: 'target', replacement: null },
+  ])
+  assert.equal(items.filter(item => item.kind === 'message').length, 0)
+  for (const item of items) {
+    assert.ok(item.kind === 'native')
+    assert.doesNotMatch(item.preview, /hidden payload|undetermined payload/)
+  }
+  assert.equal(items[2]?.id, 'native-context-edit:omitted')
+})
