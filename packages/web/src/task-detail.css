@@ -1128,3 +1128,37 @@
 }
 .task-surface .task-tool-subagent-message-part { display: grid; gap: 4px; min-width: 0; }
 .task-surface .task-tool-subagent-message-part .task-tool-output-content { min-width: 0; }
+
+/* Task Process large-text reading: one bounded plain-text page, no secondary
+ * viewer skin or button overrides; controls reuse shared Button/CodeBlock. */
+.task-surface .task-text-window { display: grid; min-width: 0; gap: 6px; }
+.task-surface .task-text-window-heading,
+.task-surface .task-text-window-range {
+  color: var(--al-muted);
+  font-size: var(--text-task-meta);
+  overflow-wrap: anywhere;
+}
+.task-surface .task-text-window .copyable-code-block > pre {
+  max-height: 320px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.task-surface .task-text-window-nav {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+.task-surface .task-text-window-range { margin-right: auto; }
+/* User text bubbles use their own semantic ink/background, including paged
+ * source snippets; don't leave light-background code with inherited white ink. */
+.task-surface .task-message-bubble-user .task-text-window-heading,
+.task-surface .task-message-bubble-user .task-text-window-range {
+  color: var(--al-user-bubble-muted);
+}
+.task-surface .task-message-bubble-user .task-text-window .copyable-code-block {
+  color: var(--al-user-bubble-text);
+  background: var(--al-user-bubble-code);
+  border-color: transparent;
+}

@@ -22,6 +22,14 @@ function jsonString(value: unknown): string {
 }
 
 export function brief(value: unknown, max = 120): string {
+  // Most large native tool results are strings. Never normalize their entire
+  // body only to draw a 120-character row summary. The source stays untouched.
+  if (typeof value === 'string') {
+    const prefixSize = Math.max(512, max * 4)
+    const prefix = value.slice(0, prefixSize).replace(/\s+/g, ' ').trim()
+    return value.length > prefixSize || prefix.length > max
+      ? `${prefix.slice(0, max)}…` : prefix
+  }
   const normalized = jsonString(value).replace(/\s+/g, ' ').trim()
   return normalized.length > max ? `${normalized.slice(0, max)}…` : normalized
 }

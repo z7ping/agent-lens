@@ -44,7 +44,7 @@ export function TaskThinking({
   // Collapsed thinking shows a concise preview; expanded thinking owns one full body.
   // Do not repeat the same reasoning text in both the header and Markdown content.
   const preview = !expanded
-    ? (model.preview?.trim() || model.text.replace(/\s+/g, ' ').trim().slice(0, 220))
+    ? (model.preview?.trim() || model.text.slice(0, 512).replace(/\s+/g, ' ').trim().slice(0, 220))
     : ''
 
   useEffect(() => {
