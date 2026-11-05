@@ -254,7 +254,7 @@ export function projectLiveSnapshotEntries(entries: readonly unknown[]): LiveTas
       return
     }
     if (item.type === 'custom_message') {
-      const preview = item.display === false ? '' : contentText(item.content).replace(/\s+/g, ' ').trim().slice(0, 180)
+      const preview = item.display === true ? contentText(item.content).replace(/\s+/g, ' ').trim().slice(0, 180) : ''
       projected.push({
         id: `native-custom-message:${baseId}`,
         kind: 'native', nativeType: 'custom_message',
