@@ -943,9 +943,11 @@ function buildRoundModel(
   )
   const toolCount = items.filter(item => item.kind === 'tool').length
   const errorCount = items.filter(item => (item.kind === 'tool' && item.status === 'error')
-    || (item.kind === 'message' && item.error === true)).length
+    || (item.kind === 'message' && item.error === true)
+    || (item.kind === 'event' && item.process.outcome === 'failed')).length
   const warningCount = items.filter(item => (item.kind === 'tool' && item.status === 'error')
-    || (item.kind === 'message' && item.error === true && !item.terminalFailure)).length
+    || (item.kind === 'message' && item.error === true && !item.terminalFailure)
+    || (item.kind === 'event' && item.process.outcome === 'failed')).length
   const terminalFailure = items.some(item =>
     item.kind === 'message' && item.terminalFailure === true)
   const running = items.some(item =>
