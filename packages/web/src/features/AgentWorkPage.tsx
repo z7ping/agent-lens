@@ -6,6 +6,7 @@ import type { AgentLensClientModel } from '../client/model'
 import { useClientSnapshot } from '../client/use-client-snapshot'
 import { Button, Dialog, IconButton, Input, Popover, Textarea, SelectMenu, StatusBadge, UiIcon } from '../components/ui'
 import { WorkspaceViewTabs } from '../components/WorkspaceViewTabs'
+import { formatAgentWorkSchedule } from './agent-work-schedule-label'
 import { MarkdownContent } from '../components/MarkdownContent'
 
 const PAGE_SIZE = 40
@@ -533,17 +534,37 @@ export function AgentWorkPage({model,sourceId,installationId,installations}: {
               kind:'cron.create',profile:'default',schedule:'',prompt:'',
             })}>{t('work.actions.cron_create')}</Button>}
           </div>}
-          {response.schedules.map(job=><div className="asset-item" key={job.profile+':'+job.id}>
-            <div className="asset-item-head">
-              <StatusBadge tone={job.state==='error'?'danger':job.enabled?'success':'neutral'}>{job.state}</StatusBadge>
-              <span className="asset-scope">{job.profile}</span>
-              {job.noAgent && <span className="asset-scope">{t('work.scriptOnly')}</span>}
+          {response.schedules.map(job=><div className="agent-work-record" key={job.profile+':'+job.id}>
+            <div className="agent-work-record-line">
+              <div className="agent-work-record-main">
+                <Button size="small" variant="quiet" className="agent-work-record-title"
+                  aria-expanded={Boolean(selectedSchedule && selectedSchedule.id===job.id && selectedSchedule.profile===job.profile)}
+                  onClick={()=>openJob(job)}>
+                  <UiIcon name={selectedSchedule && selectedSchedule.id===job.id && selectedSchedule.profile===job.profile
+                    ? 'chevron-down':'chevron-right'} size={14}/>
+                  {job.name}
+                </Button>
+                <div className="agent-work-record-meta">
+                  {job.schedule && <span>{formatAgentWorkSchedule(job.schedule,{
+                    seconds:t('work.scheduleSeconds'),minutes:t('work.scheduleMinutes'),
+                    hours:t('work.scheduleHours'),days:t('work.scheduleDays'),
+                  })}</span>}
+                  {job.nextRunAt && <span>{t('work.nextRun')} {formatDate(job.nextRunAt)}</span>}
+                  {job.profile!=='default' && <span>{job.profile}</span>}
+                  {job.noAgent && <span>{t('work.scriptOnly')}</span>}
+                </div>
+              </div>
+              <StatusBadge tone={job.state==='error'?'danger':job.enabled?'success':'neutral'}>
+                {job.state==='scheduled'?t('work.scheduleStateScheduled')
+                  :job.state==='paused'?t('work.scheduleStatePaused')
+                  :job.state==='disabled'?t('work.scheduleStateDisabled')
+                  :job.state==='error'?t('work.scheduleStateError'):job.state}
+              </StatusBadge>
             </div>
-            <Button size="small" variant="quiet" onClick={()=>openJob(job)}>{job.name}</Button>
-            <div className="runtime-config-row"><span>{job.schedule || '—'}</span><span>{t('work.nextRun')} {formatDate(job.nextRunAt)}</span></div>
-            {job.lastError && <div className="agent-path-error">{job.lastError}</div>}
-            {selectedSchedule && selectedSchedule.id===job.id && selectedSchedule.profile===job.profile && <>
-              <div className="runtime-config-row">
+            {job.lastError && <div className="agent-path-error" role="alert">{job.lastError}</div>}
+            {selectedSchedule && selectedSchedule.id===job.id && selectedSchedule.profile===job.profile &&
+              <div className="agent-work-record-details">
+                <div className="runtime-config-row">
                 {permitted('cron.edit') && <Button size="small" onClick={()=>askAction({
                   kind:'cron.edit',profile:job.profile,jobId:job.id,name:job.name,
                 })}>{t('work.actions.cron_edit')}</Button>}
@@ -597,7 +618,7 @@ export function AgentWorkPage({model,sourceId,installationId,installations}: {
                   <MarkdownContent text={cronOutput.preview.text}/>
                 </div>}
               </section>
-            </>}
+              </div>}
           </div>)}
         </section>}
         {projectsAvailable && (response.projects.length>0 || response.projectsTotal>0 || response.projectsHasMore || projectOffset>0) && <section className="agent-work-section">
