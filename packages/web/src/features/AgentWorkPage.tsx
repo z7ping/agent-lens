@@ -418,11 +418,17 @@ export function AgentWorkPage({model,sourceId,installationId,installations}: {
             </>}
           </div>
         </header>
+        {!boardAvailable && !schedulesAvailable && <div className="agent-work-section">
+          <div className="agent-work-empty" role="status">
+            <UiIcon name="task" size={20}/>
+            <strong>{t('work.unavailable')}</strong>
+          </div>
+        </div>}
         {activePanel==='boards' && boardAvailable && <>
           <section className="agent-work-section">
             <div className="agent-work-board-heading">
               <div className="agent-work-board-identity">
-                {(response.boardsTotal>1 || response.boardsHasMore || boardOffset>0)
+                {(response.boardsTotal>1 || response.boardsHasMore || boardOffset>0 || !response.selectedBoard)
                   ? <SelectMenu ariaLabel={t('work.selectBoard')}
                       value={response.selectedBoard ?? ''} searchable
                       selectedOption={response.selectedBoard ? {
