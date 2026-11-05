@@ -527,8 +527,9 @@ export function useLiveTaskRuntime({
           const request = envelope.normalizedEvent
           setExtensions(previous => enqueueLiveUiRequest(previous, request))
         }
-        if (product.capabilities.includes('extension-ui') && envelope.normalizedEvent?.type === 'ui.state') {
-          setExtensionUiState(previous => reduceLiveExtensionState(previous, envelope.normalizedEvent! as Extract<NonNullable<typeof envelope.normalizedEvent>, { type: 'ui.state' }>))
+        const extensionStateEvent = envelope.normalizedEvent
+        if (product.capabilities.includes('extension-ui') && extensionStateEvent?.type === 'ui.state') {
+          setExtensionUiState(previous => reduceLiveExtensionState(previous, extensionStateEvent))
         }
         if (envelope.normalizedEvent?.type === 'ui.dismiss') {
           const requestId = envelope.normalizedEvent.requestId
