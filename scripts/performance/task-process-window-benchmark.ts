@@ -12,7 +12,9 @@ import { ToolOutputContent } from '../../packages/web/src/features/ToolOutputCon
  * Run: npm run perf:task-process-window
  */
 function measure(name: string, view: ReactElement) {
-  if (global.gc) global.gc()
+  // GC is optional; absent without --expose-gc. Never assume a clean heap.
+  const gc = (globalThis as { gc?: () => void }).gc
+  gc?.()
   const before = process.memoryUsage().heapUsed
   const start = performance.now()
   const html = renderToStaticMarkup(view)

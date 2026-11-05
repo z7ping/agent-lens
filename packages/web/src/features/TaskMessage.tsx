@@ -275,7 +275,7 @@ export function TaskMessage({
               onClick={() => void copyMessage()}
             ><UiIcon name={copyState === 'copied' ? 'check' : 'copy'} size={14}/></IconButton>}
             {user && canCollapse && <button type="button" onClick={() => setExpanded(value => !value)}>{expanded ? t('message.collapse') : t('message.expand')}</button>}
-            {!user && showContentActions && <IconButton
+            {!user && showContentActions && !isLargeTaskText(text) && <IconButton
               size="small"
               className="task-message-source-action"
               aria-label={sourceActionLabel}
