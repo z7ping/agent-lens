@@ -475,22 +475,38 @@ export function AgentWorkPage({model,sourceId,installationId,installations}: {
                   kind:'task.create',boardId:response.selectedBoard!,title:'',
                 })}>{t('work.actions.task_create')}</Button>}
             </div>}
-            {response.tasks.map(item => <div className="asset-item" key={item.id}>
-              <div className="asset-item-head">
-                <StatusBadge tone={item.status==='done'?'success':item.status==='blocked'?'warning':item.status==='running'?'accent':'neutral'}>{item.status}</StatusBadge>
-                {item.assignee && <span className="asset-scope">{item.assignee}</span>}
-                {item.projectId && <span className="asset-scope">{item.projectId}</span>}
+            {response.tasks.map(item => <div className="agent-work-record" key={item.id}>
+              <div className="agent-work-record-line">
+                <div className="agent-work-record-main">
+                  <Button size="small" variant="quiet" className="agent-work-record-title"
+                    onClick={()=>openTask(item)} aria-expanded={selectedTask===item.id}>
+                    <UiIcon name={selectedTask===item.id?'chevron-down':'chevron-right'} size={14}/>
+                    {item.title}
+                  </Button>
+                  {(item.assignee || item.projectId) && <div className="agent-work-record-meta">
+                    {item.assignee && <span>{item.assignee}</span>}
+                    {item.projectId && <span>{item.projectId}</span>}
+                  </div>}
+                </div>
+                <StatusBadge tone={item.status==='done'?'success':item.status==='blocked'?'warning':item.status==='running'?'accent':'neutral'}>
+                  {item.status==='done'?t('work.taskStateDone')
+                    :item.status==='running'?t('work.taskStateRunning')
+                    :item.status==='blocked'?t('work.taskStateBlocked'):item.status}
+                </StatusBadge>
               </div>
-              <Button size="small" variant="quiet" onClick={()=>openTask(item)} aria-expanded={selectedTask===item.id}>{item.title}</Button>
-              {item.lastError && <div className="agent-path-error">{item.lastError}</div>}
-              {selectedTask===item.id && <TaskRuns task={item} runs={response.runs.filter(run=>run.taskId===item.id)}
-                links={response.detailTaskId===item.id?response.taskLinks:[]}
-                comments={response.detailTaskId===item.id?response.taskComments:[]}
-                events={response.detailTaskId===item.id?response.taskEvents:[]}
-                hasMore={response.taskEventsHasMore} eventOffset={taskEventOffset} onEventPage={nextTaskEvents} loading={snapshot.loading} onOpenSession={openNativeSession} sessionPending={sessionPending}
-                runOffset={runOffset} runsHasMore={response.runsHasMore} onRunPage={nextTaskRuns}
-                commentOffset={commentOffset} commentsHasMore={response.taskCommentsHasMore} onCommentPage={nextTaskComments}
-                permitted={permitted} onAction={askAction}/>} 
+              {item.lastError && <div className="agent-path-error" role="alert">{item.lastError}</div>}
+              {selectedTask===item.id && <div className="agent-work-record-details">
+                <TaskRuns task={item} runs={response.runs.filter(run=>run.taskId===item.id)}
+                  links={response.detailTaskId===item.id?response.taskLinks:[]}
+                  comments={response.detailTaskId===item.id?response.taskComments:[]}
+                  events={response.detailTaskId===item.id?response.taskEvents:[]}
+                  hasMore={response.taskEventsHasMore} eventOffset={taskEventOffset}
+                  onEventPage={nextTaskEvents} loading={snapshot.loading}
+                  onOpenSession={openNativeSession} sessionPending={sessionPending}
+                  runOffset={runOffset} runsHasMore={response.runsHasMore} onRunPage={nextTaskRuns}
+                  commentOffset={commentOffset} commentsHasMore={response.taskCommentsHasMore}
+                  onCommentPage={nextTaskComments} permitted={permitted} onAction={askAction}/>
+              </div>}
             </div>)}
             {(offset>0 || response.tasksHasMore) && <div className="agent-work-pagination">
               <span>{t('work.loaded')} {offset+response.tasks.length} / {board?.taskCount ?? '—'}</span>
