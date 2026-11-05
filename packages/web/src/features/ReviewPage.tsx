@@ -18,6 +18,7 @@ import { formatTime, formatDateTime, sessionRelativeTime, duration, compactTitle
 import { Inspector } from './ReviewEvidenceInspector'
 import { ReviewRoundAdapter, interactionStats } from './ReviewRoundPresentation'
 import { TaskFileChangesDisclosure } from './TaskFileChangesDisclosure'
+import { liveMessageQuote } from './live-message-quote'
 import { AgentLensApi } from '../client/api'
 import { loadNativeImagePreview } from '../client/native-media-preview'
 import type { AgentLensClientModel } from '../client/model'
@@ -501,6 +502,14 @@ export function ReviewPage({ model, embedded = false, latestRequest = 0 }: { mod
     setAttachmentPending(false)
   }, [draftKey])
   const canCompose = Boolean(detailLiveInteraction?.canResume && detailLiveInteraction.canSend)
+  const quoteReviewMessage = (text: string) => {
+    if (!canCompose || historyInteractionPending || historyInteractionBlocked) return
+    const quote = liveMessageQuote(text)
+    if (!quote || !composerRef.current) return
+    composerRef.current.restoreMessage({ parts: [{ type: 'text', text: quote }] })
+    setComposerExpanded(true)
+    composerRef.current.focus({ preventScroll: true })
+  }
 
   return <main className={`review-page ${embedded ? 'review-page-embedded' : ''}`}>
     {!embedded && <Toolbar className="workspace-toolbar" aria-label={t('local.filters.toolbarAria')}>
@@ -953,6 +962,7 @@ export function ReviewPage({ model, embedded = false, latestRequest = 0 }: { mod
                     loadImage={model.reviewAttachmentImage}
                   loadProcess={model.reviewProcessDetail}
                   onForkAt={detailLiveInteraction?.canForkAt ? nativeEventId => { void forkReviewAt(nativeEventId) } : undefined}
+                  onQuoteMessage={canCompose ? quoteReviewMessage : undefined}
                   forkPending={Boolean(historyInteractionPending)}
                 />
               </VirtualRoundMount>)}
