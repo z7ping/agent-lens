@@ -86,8 +86,8 @@ function GenericLiveItem({
   }
   if (item.kind === 'event') {
     const detail = item.process
-    const prefix = detail.operation === 'retry' ? 'retry' : 'compaction'
-    const result = detail.phase === 'start' ? 'Start'
+    const prefix = detail.operation === 'retry' ? 'retry' : detail.operation === 'compaction' ? 'compaction' : 'output'
+    const result = detail.outcome === 'truncated' ? 'Truncated' : detail.phase === 'start' ? 'Start'
       : detail.outcome === 'success' ? 'Success'
         : detail.outcome === 'failed' ? 'Failed'
           : detail.outcome === 'aborted' ? 'Aborted' : 'End'
