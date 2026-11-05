@@ -35,7 +35,7 @@ export type LiveTaskProjectionItem =
   | {
       id: string
       kind: 'native'
-      nativeType: 'branch_summary' | 'custom_message' | 'context_edit' | 'bashExecution'
+      nativeType: 'branch_summary' | 'custom_message' | 'context_edit' | 'bashExecution' | 'system'
       /** Compact source-backed preview; never promote an extension context entry to a user turn. */
       preview: string
       /** Source journal entry, exposed through the existing TaskEvent evidence detail. */
@@ -325,6 +325,32 @@ export function projectLiveSnapshotEntries(entries: readonly unknown[]): LiveTas
         streaming: false,
         ...(at ? { at } : {}),
       })
+    }
+
+    // System messages persist exact prompt section and tool-loadout changes.
+    // This is a historical declaration, not an inferred current state; a
+    // bounded snapshot may omit earlier declarations. Do not leak the prompt
+    // body into the collapsed process preview.
+    if (item.type === 'message' && rawRole === 'system') {
+      const sections = record(nested.sections)
+      const sectionKeys = Object.keys(sections).filter(key => key.length > 0)
+      const toolNames = (value: unknown): string[] => Array.isArray(value)
+        ? value.map(entry => text(record(entry).name)).filter(Boolean) : []
+      const added = toolNames(nested.toolsAdded)
+      const removed = toolNames(nested.toolsRemoved)
+      const markers = [
+        ...(sectionKeys.length ? [`sections: ${sectionKeys.join(', ')}`] : []),
+        ...(added.length ? [`+ ${added.join(', ')}`] : []),
+        ...(removed.length ? [`− ${removed.join(', ')}`] : []),
+      ]
+      projected.push({
+        id: `native-system:${baseId}`,
+        kind: 'native', nativeType: 'system',
+        preview: markers.join(' · ').slice(0, 240),
+        source: item,
+        ...(at ? { at } : {}),
+      })
+      return
     }
 
     // Pi's special session entries are distinct from user/assistant messages.
