@@ -2281,6 +2281,9 @@ export class DefaultPiLiveService implements PiLiveService {
       runtime.activeAssistantMessageId = messageId || `live-assistant:${randomUUID()}`
       runtime.isStreaming = true
     }
+    if (type === 'extension_ui_dismissed' && typeof event.requestId === 'string') {
+      runtime.pendingExtensionRequestIds.delete(event.requestId)
+    }
     if (type === 'extension_ui_request') {
       const cache = parsePiCacheOptimizerStatus(event)
       if (cache !== undefined) {
