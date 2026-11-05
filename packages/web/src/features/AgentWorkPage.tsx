@@ -621,7 +621,9 @@ export function AgentWorkPage({model,sourceId,installationId,installations}: {
               </div>}
           </div>)}
         </section>}
-        {projectsAvailable && (response.projects.length>0 || response.projectsTotal>0 || response.projectsHasMore || projectOffset>0) && <section className="agent-work-section">
+        {projectsAvailable && (!boardAvailable || activePanel==='boards')
+          && (response.projects.length>0 || response.projectsTotal>0 || response.projectsHasMore || projectOffset>0)
+          && <section className="agent-work-section">
           <div className="section-heading-row"><h3>{t('work.projects')}</h3><span className="section-total">{response.projectsTotal}</span></div>
           {response.projects.map(project=><div className="runtime-config-row" key={project.profile+':'+project.id}>
             <span>{project.name}</span><span className="asset-scope">{project.profile}</span>
