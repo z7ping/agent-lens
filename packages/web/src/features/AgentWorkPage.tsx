@@ -4,13 +4,15 @@ import { useNavigate, useSearchParams } from 'react-router-dom'
 import type { AgentWorkTaskDto, AgentWorkScheduleDto, AgentWorkOutputResponseDto, AgentInstallationOverviewDto, AgentWorkMutationDto } from '@agent-lens/protocol'
 import type { AgentLensClientModel } from '../client/model'
 import { useClientSnapshot } from '../client/use-client-snapshot'
-import { Button, Dialog, IconButton, Input, Popover, Textarea, SelectMenu, StatusBadge, UiIcon } from '../components/ui'
+import { Button, Dialog, Disclosure, IconButton, Input, Popover, Textarea, SelectMenu, StatusBadge, UiIcon } from '../components/ui'
 import { WorkspaceViewTabs } from '../components/WorkspaceViewTabs'
 import { formatAgentWorkSchedule } from './agent-work-schedule-label'
+import { agentWorkExecutionStatusKey, agentWorkDeliveryKey } from './agent-work-execution-label'
 import { MarkdownContent } from '../components/MarkdownContent'
 
 const PAGE_SIZE = 40
 const MAX_EXECUTION_PAGE = 200
+const PREVIEW_EXECUTION_COUNT = 5
 const actionLabelKey=(kind:AgentWorkMutationDto['kind'])=>'work.actions.'+kind.replace('.','_')
 const formatDate = (value: string | undefined): string => {
   if (!value) return '—'
@@ -137,6 +139,7 @@ export function AgentWorkPage({model,sourceId,installationId,installations}: {
     }
   }
   const [executionOffset,setExecutionOffset] = useState(0)
+  const [showAllExecutions,setShowAllExecutions] = useState(false)
   const [scheduleOffset,setScheduleOffset] = useState(0)
   const [offset,setOffset] = useState(0)
   const [taskEventOffset,setTaskEventOffset] = useState(0)
@@ -155,6 +158,7 @@ export function AgentWorkPage({model,sourceId,installationId,installations}: {
     setSelectedJob(null)
     setOutputOffset(0)
     setExecutionOffset(0)
+    setShowAllExecutions(false)
     setScheduleOffset(0)
     setOffset(0)
     setTaskEventOffset(0)
@@ -236,6 +240,7 @@ export function AgentWorkPage({model,sourceId,installationId,installations}: {
     : panel === 'schedules' && !schedulesAvailable && boardAvailable ? 'boards'
     : panel
   const openJob = (job:AgentWorkScheduleDto) => {
+    setShowAllExecutions(false)
     const identity=job.profile+':'+job.id
     const next=selectedJob===identity?null:identity
     setSelectedJob(next)
@@ -251,6 +256,7 @@ export function AgentWorkPage({model,sourceId,installationId,installations}: {
     })
   }
   const goExecutionPage = (job:AgentWorkScheduleDto,offset:number) => {
+    setShowAllExecutions(false)
     setExecutionOffset(offset)
     void refreshWorkspace({
       board:response?.selectedBoard,jobId:job.id,profile:job.profile,executionOffset:offset,scheduleOffset,
@@ -263,12 +269,19 @@ export function AgentWorkPage({model,sourceId,installationId,installations}: {
     setCronOutputError('')
     outputRequest.current++
     setExecutionOffset(0)
+    setShowAllExecutions(false)
     void refreshWorkspace({
       board:response?.selectedBoard,scheduleOffset:nextOffset,limit:PAGE_SIZE,
     })
   }
   const selectedSchedule:AgentWorkScheduleDto|undefined = response?.schedules.find(item =>
     item.profile + ':' + item.id === selectedJob)
+  const selectedExecutions = selectedSchedule
+    ? (response?.executions ?? []).filter(run =>
+      run.jobId===selectedSchedule.id && run.profile===selectedSchedule.profile)
+    : []
+  const sharedSuppressedDelivery = selectedExecutions.length>0
+    && selectedExecutions.every(run=>run.deliveryOutcome==='suppressed')
   const permitted=(kind:AgentWorkMutationDto['kind'])=>
     accessStatus==='ready' && accessEnabled && (response?.availableActions?.includes(kind) ?? false)
   const changeWriteAccess=async()=>{
