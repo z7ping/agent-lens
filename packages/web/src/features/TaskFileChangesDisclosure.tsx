@@ -150,7 +150,8 @@ export function TaskFileChangesDisclosure({
   const hasUnverifiedFiles = Boolean(value?.interactionId || value?.summary.observedCount || items.some(isObservedOnly))
   const isObserved = Boolean(value?.interactionId)
   const selected = Boolean(evidenceItem || diffPath || previewPath)
-  const inspectingInline = inlineDetails && selected
+  // Frequent file previews use the existing inline detail region, not a Drawer.
+  const inspectingInline = selected && (inlineDetails || Boolean(previewPath))
   const inspectedFilePath = evidenceItem?.path ?? diffPath ?? previewPath ?? ''
   const inspectedFile = fileNameAndDirectory(inspectedFilePath)
   const evidenceContent = evidenceItem && <div className="task-file-change-evidence">
@@ -303,7 +304,7 @@ export function TaskFileChangesDisclosure({
         </Button>}
       </div>
     </section>}
-    {!inlineDetails && selected && <Drawer
+    {!inspectingInline && selected && <Drawer
       open
       className="task-file-detail-drawer"
       title={t(previewPath ? 'local.fileChanges.viewFile' : diffPath ? 'local.fileChanges.viewDiff' : 'local.fileChanges.viewEvidence')}
