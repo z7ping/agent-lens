@@ -133,6 +133,20 @@ export const englishTaskMessages: LocaleMessagesDto = {
       preciseHoursMinutesSeconds: '{{hours}}h {{minutes}}m {{seconds}}s',
     },
     live: {
+      nativeUsage: {
+        assistant: 'Model invocation usage',
+        toolResult: 'Tool model usage',
+        usage: 'Additional model usage',
+        compaction: 'Context compaction usage',
+        branch_summary: 'Branch summary usage',
+        tokens: '{{count}} tokens',
+        input: 'Input {{count}}',
+        output: 'Output {{count}}',
+        cacheRead: 'Cache read {{count}}',
+        cacheWrite: 'Cache write {{count}}',
+        reportedCost: 'Provider-reported cost ${{value}}',
+        catalogCost: 'Catalog-estimated cost ${{value}}',
+      },
       nativeEntries: {
         branchSummary: 'Branch summary',
         contextExcluded: 'Content omitted from model context',
