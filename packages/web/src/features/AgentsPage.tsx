@@ -409,6 +409,7 @@ function PiConfigurationSummary({ agent, rules }: { agent: AgentOverviewDto; rul
 function AgentCard({ model, agent, work, management, discovery, discoveryScanning, discoveryError, piView, onManageIntegration, onOpenWork }: {
   model: AgentLensClientModel
   agent: AgentOverviewDto
+  work?: AgentWorkspaceResponseDto
   management: IntegrationManagementItemDto | undefined
   discovery: IntegrationToolDiscoveryItemDto | undefined
   discoveryScanning: boolean

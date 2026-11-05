@@ -87,7 +87,7 @@ export async function handleAgentWorkspaceRequest(
     return true
   }
   const installationId = url.searchParams.get('installationId')
-  if (installationId && (installationId.length > 256 || /[\\x00-\\x1f]/.test(installationId))) {
+  if (installationId && (installationId.length > 256 || /[\x00-\x1f]/.test(installationId))) {
     throw badRequest('Invalid installation identity')
   }
   if (match[2] === '/action' || (match[2] === '/write-access' && request.method === 'PUT')) {

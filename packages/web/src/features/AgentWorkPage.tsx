@@ -305,7 +305,7 @@ export function AgentWorkPage({model,sourceId,installationId,installations}: {
       }
       if(!result.accepted)throw new Error(result.message||t('work.actionRejected'))
       setActionFeedback(result.message+' · '+(result.verification==='confirmed'
-        ?t('work.writeConfirmed'):t('work.writeUnconfirmed'))
+        ?t('work.writeConfirmed'):t('work.writeUnconfirmed')))
       setPendingAction(null)
       if(pendingAction.kind==='board.create'||pendingAction.kind==='board.archive') {
         setBoardOffset(0)
