@@ -7,7 +7,31 @@ export type LiveTaskProjectionAttachment = ReviewMessageAttachmentDto & {
   previewUrl?: string | undefined
 }
 
+/** Source-recorded model invocation, not a round-total estimate. */
+export interface LiveNativeUsageDetail {
+  origin: 'assistant' | 'toolResult' | 'usage' | 'compaction' | 'branch_summary'
+  provider?: string
+  model?: string
+  kind?: string
+  input?: number
+  output?: number
+  cacheRead?: number
+  cacheWrite?: number
+  reasoning?: number
+  totalTokens?: number
+  costTotal?: number
+  costTotalFromProvider?: boolean
+}
+
 export type LiveTaskProjectionItem =
+  | {
+      id: string
+      kind: 'usage'
+      details: LiveNativeUsageDetail
+      /** Exact native source entry, no shadow copy of the session file. */
+      source: Record<string, unknown>
+      at?: string | undefined
+    }
   | {
       id: string
       kind: 'native'
@@ -82,6 +106,39 @@ function record(value: unknown): Record<string, unknown> {
 
 function text(value: unknown): string {
   return typeof value === 'string' ? value : ''
+}
+
+/** Pi usage fields are independently optional; never infer missing totals.
+ * In Pi, reasoning is a subset of output and cacheWrite1h of cacheWrite. */
+function nativeUsageNumber(value: unknown): number | undefined {
+  return typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : undefined
+}
+
+export function piNativeUsageDetail(
+  value: unknown,
+  origin: LiveNativeUsageDetail['origin'],
+  metadata: unknown,
+): LiveNativeUsageDetail | undefined {
+  const usage = record(value)
+  const meta = record(metadata)
+  const cost = record(usage.cost)
+  const detail: LiveNativeUsageDetail = {
+    origin,
+    ...(text(meta.provider) ? { provider: text(meta.provider) } : {}),
+    ...(text(meta.model) ? { model: text(meta.model) } : {}),
+    ...(origin === 'usage' && text(meta.kind) ? { kind: text(meta.kind) } : {}),
+    ...(nativeUsageNumber(usage.input) !== undefined ? { input: nativeUsageNumber(usage.input) } : {}),
+    ...(nativeUsageNumber(usage.output) !== undefined ? { output: nativeUsageNumber(usage.output) } : {}),
+    ...(nativeUsageNumber(usage.cacheRead) !== undefined ? { cacheRead: nativeUsageNumber(usage.cacheRead) } : {}),
+    ...(nativeUsageNumber(usage.cacheWrite) !== undefined ? { cacheWrite: nativeUsageNumber(usage.cacheWrite) } : {}),
+    ...(nativeUsageNumber(usage.reasoning) !== undefined ? { reasoning: nativeUsageNumber(usage.reasoning) } : {}),
+    ...(nativeUsageNumber(usage.totalTokens) !== undefined ? { totalTokens: nativeUsageNumber(usage.totalTokens) } : {}),
+    ...(nativeUsageNumber(cost.total) !== undefined ? { costTotal: nativeUsageNumber(cost.total) } : {}),
+    ...(typeof cost.totalFromProvider === 'boolean'
+      && nativeUsageNumber(cost.total) !== undefined ? { costTotalFromProvider: cost.totalFromProvider } : {}),
+  }
+  return Object.keys(detail).some(key => key !== 'origin' && key !== 'provider'
+    && key !== 'model' && key !== 'kind') ? detail : undefined
 }
 
 /** Read native error facts independent of HTTP status or provider. Do not infer failures from prose. */
@@ -223,6 +280,29 @@ export function projectLiveSnapshotEntries(entries: readonly unknown[]): LiveTas
       : Array.isArray(item.content)
         ? item.content
         : undefined
+    const usageOrigin: LiveNativeUsageDetail['origin'] | undefined =
+      item.type === 'usage' ? 'usage'
+        : item.type === 'compaction' ? 'compaction'
+          : item.type === 'branch_summary' ? 'branch_summary'
+            : rawRole === 'assistant' ? 'assistant'
+              : rawRole === 'toolResult' || rawRole === 'tool_result' ? 'toolResult'
+                : undefined
+    if (usageOrigin) {
+      const usage = piNativeUsageDetail(
+        usageOrigin === 'assistant' || usageOrigin === 'toolResult'
+          ? nested.usage ?? item.usage : item.usage,
+        usageOrigin,
+        usageOrigin === 'assistant' || usageOrigin === 'toolResult' ? nested : item,
+      )
+      if (usage) projected.push({
+        id: `native-usage:${baseId}`,
+        kind: 'usage',
+        details: usage,
+        source: item,
+        ...(at ? { at } : {}),
+      })
+    }
+    if (item.type === 'usage') return
 
     const pushError = (message: string, scope?: 'attempt', terminal = false) => {
       const diagnostic = nativeErrorDiagnostic(item, nested)
@@ -1286,7 +1366,7 @@ export function liveTaskRoundEstimate(round: LiveTaskRoundProjection): number {
   const messageCount = round.items.filter(item => item.kind === 'message').length
   const thinkingCount = round.items.filter(item => item.kind === 'thinking').length
   const toolCount = round.items.filter(item => item.kind === 'tool').length
-  const nativeCount = round.items.filter(item => item.kind === 'native').length
+  const nativeCount = round.items.filter(item => item.kind === 'native' || item.kind === 'usage').length
   return Math.max(180, Math.min(1200, 120 + messageCount * 120 + thinkingCount * 150 + toolCount * 110 + nativeCount * 40))
 }
 
