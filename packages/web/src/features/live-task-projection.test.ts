@@ -963,7 +963,8 @@ test('Native retry and compaction are shared process facts, not terminal failure
     process: { operation: 'compaction', phase: 'start' } }))
   const round = projectLiveTaskRounds(failedRetry)[0]
   assert.equal(round?.model.terminalFailure, false)
-  assert.equal(round?.model.errorCount, 0)
+  assert.equal(round?.model.errorCount, 1)
+  assert.equal(round?.model.warningCount, 1)
   assert.equal(round?.model.toolCount, 0)
   // An event without native process facts must not mutate the transcript.
   assert.equal(liveEventChangesTaskTranscript({ type: 'status', status: 'compacting' }), false)
