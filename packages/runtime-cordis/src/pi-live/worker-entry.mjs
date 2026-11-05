@@ -1251,11 +1251,18 @@ function createExtensionUi() {
     if (options?.signal?.aborted) return Promise.resolve(fallback)
     const id = randomUUID()
     return new Promise(resolveDialog => {
-      const finish = value => { pending.delete(id); resolveDialog(value) }
+      const finish = value => {
+        if (!pending.has(id)) return
+        pending.delete(id)
+        if (timer) clearTimeout(timer)
+        options?.signal?.removeEventListener('abort', onAbort)
+        send('event', { type: 'extension_ui_dismissed', requestId: id })
+        resolveDialog(value)
+      }
       const onAbort = () => finish(fallback)
       options?.signal?.addEventListener('abort', onAbort, { once: true })
       const timer = options?.timeout > 0 ? setTimeout(onAbort, options.timeout) : undefined
-      pending.set(id, { finish: response => { if (timer) clearTimeout(timer); options?.signal?.removeEventListener('abort', onAbort); finish(parse(record(response))) }, cancel: onAbort })
+      pending.set(id, { finish: response => finish(parse(record(response))), cancel: onAbort })
       send('event', { type: 'extension_ui_request', id, method, ...payload })
     })
   }
