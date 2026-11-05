@@ -32,6 +32,7 @@ function GenericLiveItem({
   showContentActions = false,
   relations,
   onMessageAction,
+  onQuoteMessage,
 }: {
   item: LiveTaskProjectionItem
   agentLabel: string
@@ -41,6 +42,7 @@ function GenericLiveItem({
   showContentActions?: boolean
   relations?: ReadonlyMap<string, LiveLoadedToolRelation> | undefined
   onMessageAction(action: LiveMessageActionContributionDto, item: Extract<LiveTaskProjectionItem, { kind: 'message' }>): void
+  onQuoteMessage?: ((item: Extract<LiveTaskProjectionItem, { kind: 'message' }>, text: string) => void) | undefined
 }) {
   const { t, i18n } = useTranslation('task')
   if (item.kind === 'message') {
@@ -48,6 +50,24 @@ function GenericLiveItem({
       ? messageActions.filter(action => action.roles.includes(item.role))
       : []
     const messageTime = taskSessionMessageTime(item.at)
+    const quoteAction = onQuoteMessage && !item.error && item.text.trim()
+      ? <IconButton
+          size="small"
+          className="task-message-live-action"
+          aria-label={t('live.quoteToComposer')}
+          title={t('live.quoteToComposer')}
+          onClick={event => {
+            const message = event.currentTarget.closest('.task-message-row')
+            const content = message?.querySelector('.markdown-surface')
+            const selection = window.getSelection()
+            const selected = selection && !selection.isCollapsed && content
+              && selection.anchorNode && selection.focusNode
+              && content.contains(selection.anchorNode) && content.contains(selection.focusNode)
+                ? selection.toString() : ''
+            onQuoteMessage(item, selected || item.text)
+          }}
+        ><UiIcon name="quote" size={14}/></IconButton>
+      : null
     return <TaskSessionMessage
       role={item.role}
       text={item.text}
@@ -62,8 +82,9 @@ function GenericLiveItem({
       errorScope={item.errorScope}
       errorDiagnostic={item.errorDiagnostic}
       showContentActions={showContentActions && !item.error}
-      actions={actions.length
-        ? actions.map(action => {
+      actions={actions.length || quoteAction ? <>
+        {quoteAction}
+        {actions.map(action => {
             const key = `${action.actionId}:${item.entryId}`
             const disabled = actionPending !== null || (action.requiresIdle === true && runtimeStreaming)
             const label = contributionText(action.label, i18n.language)
@@ -82,8 +103,8 @@ function GenericLiveItem({
               title={tooltip}
               onClick={() => onMessageAction(action, item)}
             ><UiIcon name={icon} size={14}/></IconButton>
-          })
-        : undefined}
+          })}
+        </> : undefined}
     />
   }
   if (item.kind === 'usage') {
@@ -225,6 +246,7 @@ export const GenericLiveRound = memo(function GenericLiveRound({
   showResponsePending = false,
   showAnswerActions = true,
   onMessageAction,
+  onQuoteMessage,
 }: {
   projection: LiveTaskRoundProjection
   agentLabel: string
@@ -236,6 +258,7 @@ export const GenericLiveRound = memo(function GenericLiveRound({
   runtimeStreaming: boolean
   processExpansionStore?: Map<string, boolean> | undefined
   onMessageAction(action: LiveMessageActionContributionDto, item: Extract<LiveTaskProjectionItem, { kind: 'message' }>): void
+  onQuoteMessage?: ((item: Extract<LiveTaskProjectionItem, { kind: 'message' }>, text: string) => void) | undefined
 }) {
   const { t } = useTranslation('task')
   const awaitingResponse = showResponsePending
@@ -272,6 +295,7 @@ export const GenericLiveRound = memo(function GenericLiveRound({
     showContentActions={item.kind === 'message' && item.role === 'assistant'
       && !item.error && item.id === lastAnswerId && projection.model.state !== 'running' && showAnswerActions}
     onMessageAction={onMessageAction}
+    onQuoteMessage={onQuoteMessage}
   />
   const renderProcessItem = (item: LiveTaskProjectionItem) =>
     item.kind === 'message' && !item.error
@@ -345,6 +369,7 @@ export const StableLiveRounds = memo(function StableLiveRounds({
   runtimeStreaming,
   processExpansionStore,
   onMessageAction,
+  onQuoteMessage,
 }: {
   rounds: readonly LiveTaskRoundProjection[]
   agentLabel: string
@@ -354,6 +379,7 @@ export const StableLiveRounds = memo(function StableLiveRounds({
   runtimeStreaming: boolean
   processExpansionStore?: Map<string, boolean> | undefined
   onMessageAction(action: LiveMessageActionContributionDto, item: Extract<LiveTaskProjectionItem, { kind: 'message' }>): void
+  onQuoteMessage?: ((item: Extract<LiveTaskProjectionItem, { kind: 'message' }>, text: string) => void) | undefined
 }) {
   return <>
     {rounds.map((round, index) => <GenericLiveRound
@@ -367,6 +393,7 @@ export const StableLiveRounds = memo(function StableLiveRounds({
       runtimeStreaming={runtimeStreaming}
       processExpansionStore={processExpansionStore}
       onMessageAction={onMessageAction}
+      onQuoteMessage={onQuoteMessage}
     />)}
   </>
 })
