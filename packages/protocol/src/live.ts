@@ -324,9 +324,25 @@ export type LiveEventStatusDto =
 
 export type LiveCompletionStatusDto = 'completed' | 'cancelled' | 'interrupted' | 'failed'
 
+export interface LiveProcessEventDetailDto {
+  operation: 'retry' | 'compaction'
+  phase: 'start' | 'end'
+  outcome?: 'success' | 'failed' | 'aborted' | undefined
+  reason?: 'manual' | 'threshold' | 'overflow' | undefined
+  attempt?: number | undefined
+  maxAttempts?: number | undefined
+  delayMs?: number | undefined
+  errorMessage?: string | undefined
+  summary?: string | undefined
+  tokensBefore?: number | undefined
+  estimatedTokensAfter?: number | undefined
+  firstKeptEntryId?: string | undefined
+  willRetry?: boolean | undefined
+}
+
 export type LiveEventDto =
   | { type: 'runtime.metrics.changed'; cacheMetrics: LiveCacheMetricsDto | null }
-  | { type: 'status'; status: LiveEventStatusDto; message?: string | undefined }
+  | { type: 'status'; status: LiveEventStatusDto; message?: string | undefined; process?: LiveProcessEventDetailDto | undefined }
   | { type: 'title.update'; title: string }
   | { type: 'control.changed'; control: 'model' | 'thinking' }
   | { type: 'runtime-disclosure.changed' }
@@ -671,6 +687,31 @@ function eventCount(value: unknown): number | undefined {
   return typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : undefined
 }
 
+function parseLiveProcessDetail(value: unknown): LiveProcessEventDetailDto | null {
+  const data = record(value)
+  if (!data || (data.operation !== 'retry' && data.operation !== 'compaction')
+    || (data.phase !== 'start' && data.phase !== 'end')) return null
+  const outcome = data.outcome === 'success' || data.outcome === 'failed' || data.outcome === 'aborted'
+    ? data.outcome : undefined
+  const reason = data.reason === 'manual' || data.reason === 'threshold' || data.reason === 'overflow'
+    ? data.reason : undefined
+  return {
+    operation: data.operation,
+    phase: data.phase,
+    ...(outcome ? { outcome } : {}),
+    ...(reason ? { reason } : {}),
+    ...(eventCount(data.attempt) !== undefined ? { attempt: eventCount(data.attempt) } : {}),
+    ...(eventCount(data.maxAttempts) !== undefined ? { maxAttempts: eventCount(data.maxAttempts) } : {}),
+    ...(eventCount(data.delayMs) !== undefined ? { delayMs: eventCount(data.delayMs) } : {}),
+    ...(eventText(data.errorMessage) !== undefined ? { errorMessage: eventText(data.errorMessage) } : {}),
+    ...(eventText(data.summary) !== undefined ? { summary: eventText(data.summary) } : {}),
+    ...(eventCount(data.tokensBefore) !== undefined ? { tokensBefore: eventCount(data.tokensBefore) } : {}),
+    ...(eventCount(data.estimatedTokensAfter) !== undefined ? { estimatedTokensAfter: eventCount(data.estimatedTokensAfter) } : {}),
+    ...(eventText(data.firstKeptEntryId) !== undefined ? { firstKeptEntryId: eventText(data.firstKeptEntryId) } : {}),
+    ...(typeof data.willRetry === 'boolean' ? { willRetry: data.willRetry } : {}),
+  }
+}
+
 export function parseLiveEventDto(value: unknown): LiveEventDto | null {
   const event = record(value)
   if (!event || typeof event.type !== 'string') return null
@@ -683,6 +724,7 @@ export function parseLiveEventDto(value: unknown): LiveEventDto | null {
       type,
       status: status as LiveEventStatusDto,
       ...(eventText(event.message) !== undefined ? { message: eventText(event.message) } : {}),
+      ...(parseLiveProcessDetail(event.process) ? { process: parseLiveProcessDetail(event.process)! } : {}),
     }
   }
   if (type === 'title.update') {
