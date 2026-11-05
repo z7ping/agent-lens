@@ -42,6 +42,11 @@ test('workspace handler validates source, policy and bounded read options', asyn
     assert.deepEqual(options,[{roots:['/verified/a'],board:'team',offset:10,limit:20,scheduleOffset:0,projectOffset:0,boardOffset:0}])
     assert.equal((await fetch(base+'/api/v1/agents/hermes/workspace')).status,400)
     assert.equal((await fetch(base+'/api/v1/agents/hermes/workspace?installationId=unknown')).status,404)
+    const discoveredInstallationId='installation-0123456789abcdef0123456789abcdef'
+    assert.equal((await fetch(base+'/api/v1/agents/pi/workspace?installationId='+discoveredInstallationId)).status,200)
+    for (const character of ['\u0000','\u001f']) {
+      assert.equal((await fetch(base+'/api/v1/agents/hermes/workspace?installationId='+encodeURIComponent('install-a'+character))).status,400)
+    }
     const post=await fetch(base+'/api/v1/agents/hermes/workspace/action?installationId=install-a',{
       method:'POST',headers:{'content-type':'application/json','x-agent-lens-workspace-action':'confirmed'},
       body:JSON.stringify({confirmed:true,action:{kind:'cron.pause',profile:'default',jobId:'job1'}}),
