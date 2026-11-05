@@ -263,6 +263,8 @@ export interface ReviewToolNodeDto extends ReviewNodeSourceDto {
   durationMs?: number
   input?: JsonValue
   output?: JsonValue
+  /** Exact native toolResult.details for supported structured tool results. */
+  resultDetails?: JsonValue
   payload: JsonValue
   evidence: TimelineEvidenceDto[]
   observationIds: string[]

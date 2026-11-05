@@ -557,3 +557,35 @@ test('native shared projector recognizes result-only error flags without an expl
   const succeeded=success.interactions[0]?.nodes.find(node=>node.type==='tool')
   if(succeeded?.type==='tool')assert.equal(succeeded.status,'success')
 })
+
+test('Pi subagent tool result preserves its exact linked native details for shared Review', () => {
+  const details = {
+    mode: 'parallel',
+    results: [
+      { agent: 'scout', status: 'completed', task: 'find tests', messages: [
+        { role: 'assistant', content: [{ type: 'text', text: 'found tests' }] },
+      ] },
+      { agent: 'reviewer', status: 'failed', task: 'review', errorMessage: 'failed', messages: [] },
+    ],
+  }
+  const result = projectNativeReviewWindow({
+    ...page,
+    observations: [
+      candidate('message.user', 1, { text: 'delegate' }),
+      candidate('tool.call', 2, { callId: 'subagent-call', nativeToolName: 'subagent' }),
+      candidate('tool.result', 3, { callId: 'subagent-call', success: false, output: 'failed', details }),
+      candidate('tool.call', 4, { callId: 'shell-call', nativeToolName: 'shell' }),
+      candidate('tool.result', 5, { callId: 'shell-call', success: true, output: 'ok',
+        details: { mode: 'single', results: [{ agent: 'fake' }] } }),
+    ],
+    observationRecordIds: ['user', 'subagent-call', 'subagent-result', 'shell-call', 'shell-result'],
+  })
+  const tools = result.interactions[0]?.nodes.filter(node => node.type === 'tool') ?? []
+  assert.equal(tools.length, 2)
+  const subagent = tools[0]
+  const shell = tools[1]
+  assert.ok(subagent?.type === 'tool' && shell?.type === 'tool')
+  assert.deepEqual(subagent.resultDetails, details)
+  assert.equal(shell.resultDetails, undefined)
+  assert.equal(subagent.status, 'error')
+})
