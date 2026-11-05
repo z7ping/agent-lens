@@ -222,6 +222,7 @@ export function TaskToolRow({ model, meta, details, onClick, className = '', com
     ?? (model.status === 'running' && model.startedAtMs !== undefined ? durationLabel(now - model.startedAtMs) : undefined)
   const status = model.resultMissing ? t('tool.resultMissing') : statusLabel(model.status, t)
   const summaryDetail = subagentSummary ?? (hasTarget ? target : undefined)
+  const accessibleHeading = isSubagentTool ? heading : `${t(`tool.kind.${visualKind}`)} · ${heading}`
 
   return <details
     className={`task-tool-call ${model.status === 'error' ? 'task-tool-row-error ' : ''}${className}`.trim()}
@@ -234,7 +235,7 @@ export function TaskToolRow({ model, meta, details, onClick, className = '', com
     data-parent-tool-call-id={model.parentToolCallId}
     data-loaded-child-call-count={model.loadedChildCallCount}
   >
-    <summary className="task-tool-row" aria-label={`${isSubagentTool ? heading : `${t(`tool.kind.${visualKind}`)} · ${heading}`}${summaryDetail ? ` · ${summaryDetail}` : ''}${model.parentToolCallId ? ` · ${t('tool.parentCall')}: ${model.parentToolName ?? model.parentToolCallId}` : ''} · ${status}`}>
+    <summary className="task-tool-row" aria-label={`${accessibleHeading}${summaryDetail ? ` · ${summaryDetail}` : ''}${model.parentToolCallId ? ` · ${t('tool.parentCall')}: ${model.parentToolName ?? model.parentToolCallId}` : ''} · ${status}`}>
       <span className={`task-tool-kind task-tool-kind-${isSubagentTool ? 'subagent' : visualKind}`}>
         <ToolKindIcon kind={isSubagentTool ? 'subagent' : visualKind}/>
       </span>
