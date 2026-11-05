@@ -543,6 +543,7 @@ export const englishTaskMessages: LocaleMessagesDto = {
       resultMissing: 'No tool result recorded',
       resultDetails: 'Native result details',
       subagent: {
+        label: 'Subagent',
         mode: { single: 'Single', parallel: 'Parallel', chain: 'Chain' },
         count: '{{count}} subagent tasks',
         status: { pending: 'Pending', running: 'Running', completed: 'Completed',
