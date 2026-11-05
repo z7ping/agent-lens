@@ -15,6 +15,7 @@ import {
   projectLiveSnapshotEntries,
   projectLiveTaskRounds,
   liveTaskRoundEstimate,
+  liveLoadedToolRelations,
   reduceLiveTaskEvent,
   settleLiveTaskProjectionItems,
 } from './live-task-projection'
@@ -1144,4 +1145,37 @@ test('Pi persisted assistant length boundary survives history reload without cla
     },
   }])
   assert.equal(ordinary.filter(row => row.kind === 'event').length, 0)
+})
+
+test('Pi native parentToolCallId links loaded nested tools without assuming adjacency', () => {
+  const input = [
+    { id: 'outer', kind: 'tool' as const, callId: 'outer', name: 'orchestrate', status: 'running' as const },
+    { id: 'content', kind: 'message' as const, role: 'assistant' as const, text: 'other process', streaming: false },
+    { id: 'child-a', kind: 'tool' as const, callId: 'child-a', name: 'read', parentToolCallId: 'outer', status: 'success' as const },
+    { id: 'child-b', kind: 'tool' as const, callId: 'child-b', name: 'edit', parentToolCallId: 'outer', status: 'success' as const },
+    { id: 'grandchild', kind: 'tool' as const, callId: 'grandchild', name: 'search', parentToolCallId: 'child-a', status: 'success' as const },
+    { id: 'other', kind: 'tool' as const, callId: 'other', name: 'terminal', status: 'success' as const },
+  ]
+  const relations = liveLoadedToolRelations(input)
+  assert.deepEqual(relations.get('outer'), { loadedChildCallCount: 2 })
+  assert.deepEqual(relations.get('child-a'), {
+    parentToolCallId: 'outer', parentToolName: 'orchestrate', loadedChildCallCount: 1,
+  })
+  assert.deepEqual(relations.get('child-b'), { parentToolCallId: 'outer', parentToolName: 'orchestrate' })
+  assert.deepEqual(relations.get('grandchild'), { parentToolCallId: 'child-a', parentToolName: 'read' })
+  assert.equal(relations.has('other'), false)
+  assert.deepEqual(input.map(item => item.id), [
+    'outer', 'content', 'child-a', 'child-b', 'grandchild', 'other',
+  ])
+})
+
+test('Unknown parent outside current window is labeled by its native ID, never a guessed tool', () => {
+  const relations = liveLoadedToolRelations([
+    { id: 'child', kind: 'tool', callId: 'child', name: 'read',
+      parentToolCallId: 'not-in-loaded-window', status: 'running' },
+    { id: 'self', kind: 'tool', callId: 'self', name: 'edit',
+      parentToolCallId: 'self', status: 'running' },
+  ])
+  assert.deepEqual(relations.get('child'), { parentToolCallId: 'not-in-loaded-window' })
+  assert.equal(relations.has('self'), false)
 })
