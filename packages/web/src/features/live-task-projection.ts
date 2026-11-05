@@ -550,6 +550,34 @@ export function mergeLiveActiveProjectionItems(
       continue
     }
 
+    // Pi's durable compaction journal row supersedes the matching transient
+    // SSE finish event on reconnect. Match source-attested anchor facts, not
+    // proximity in time or a guessed compaction identifier.
+    if (item.kind === 'event' && item.id.startsWith('native-compaction:')) {
+      const anchor = item.process.firstKeptEntryId || item.process.summary
+      if (anchor) {
+        const lastUser = findLastProjectionIndex(merged, row =>
+          row.kind === 'message' && row.role === 'user')
+        const transientIndex = merged.findIndex((row, index) =>
+          index > lastUser && row.kind === 'event'
+          && row.id.startsWith('live-process:')
+          && row.process.operation === 'compaction'
+          && row.process.phase === 'end'
+          && (item.process.firstKeptEntryId
+            ? row.process.firstKeptEntryId === item.process.firstKeptEntryId
+            : row.process.summary === item.process.summary))
+        if (transientIndex >= 0) {
+          const prior = merged[transientIndex]
+          indexes.delete(prior!.id)
+          merged[transientIndex] = prior?.kind === 'event'
+            ? { ...item, process: { ...prior.process, ...item.process } }
+            : item
+          indexes.set(item.id, transientIndex)
+          continue
+        }
+      }
+    }
+
     // Replace the transient SSE failure with its persisted native counterpart.
     // Never deduplicate errors across different user turns.
     if (item.kind === 'message' && item.error) {
