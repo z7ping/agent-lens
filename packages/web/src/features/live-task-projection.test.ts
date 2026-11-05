@@ -8,6 +8,7 @@ import {
   liveEventChangesTaskTranscript,
   liveTaskStableRoundPrefixLength,
   liveTaskResponseActivity,
+  sourceNativeUsageDetail,
   mergeLiveActiveProjectionItems,
   preserveOptimisticImagePreviews,
   reconcileLiveSnapshotProjection,
@@ -1280,4 +1281,89 @@ test('Pi composer stage follows native retry/compaction start and end without ti
     id: 'native', kind: 'native', nativeType: 'branch_summary',
     preview: 'summary', source: { type: 'branch_summary' },
   }], true), 'processing')
+})
+
+test('Pi native model usage keeps only source-recorded values and catalog cost provenance', () => {
+  assert.deepEqual(sourceNativeUsageDetail({
+    input: 120, output: 40, reasoning: 10,
+    cacheRead: 25, cacheWrite: 5, totalTokens: 190,
+    cost: { total: 0.00123 },
+  }, 'assistant', { provider: 'anthropic', model: 'model-x' }), {
+    origin: 'assistant', provider: 'anthropic', model: 'model-x',
+    input: 120, output: 40, reasoning: 10,
+    cacheRead: 25, cacheWrite: 5, totalTokens: 190,
+    costTotal: 0.00123,
+  })
+  // Pi reasoning is already included in output; cache tokens must not be
+  // added to totalTokens again, and a catalog cost is not provider-billed.
+  assert.deepEqual(sourceNativeUsageDetail({
+    output: 0, totalTokens: 0,
+    cost: { total: 0.05, totalFromProvider: true },
+  }, 'assistant', { model: 'model-z' }), {
+    origin: 'assistant', model: 'model-z',
+    output: 0, totalTokens: 0, costTotal: 0.05, costTotalFromProvider: true,
+  })
+  assert.equal(sourceNativeUsageDetail({
+    input: -1, output: '5', cacheRead: null,
+    cost: { total: Number.NaN },
+  }, 'assistant', { model: 'name-only' }), undefined)
+  assert.equal(sourceNativeUsageDetail(null, 'assistant', { model: 'name-only' }), undefined)
+})
+
+test('Pi assistant and independent usage entries are distinct native invocation facts', () => {
+  const assistant = {
+    type: 'message', id: 'assistant-1', timestamp: '2026-11-05T12:00:01.000Z',
+    message: { role: 'assistant', provider: 'openai', model: 'gpt-x',
+      content: [{ type: 'text', text: 'Done' }], stopReason: 'stop',
+      usage: { input: 10, output: 6, cacheRead: 3, cacheWrite: 1,
+        totalTokens: 20, cost: { total: 0.002, totalFromProvider: true } } },
+  }
+  const extra = {
+    type: 'usage', id: 'extra-1', kind: 'cache_warm',
+    provider: 'openai', model: 'gpt-x',
+    usage: { input: 0, output: 0, cacheRead: 100, cacheWrite: 0,
+      totalTokens: 100, cost: { total: 0.01 } },
+  }
+  const rows = projectLiveSnapshotEntries([
+    { type: 'message', id: 'user-1', message: { role: 'user', content: 'test' } },
+    assistant, extra,
+  ])
+  const usage = rows.filter(item => item.kind === 'usage')
+  assert.equal(usage.length, 2)
+  assert.equal(usage[0]?.id, 'native-usage:assistant-1')
+  assert.equal(usage[1]?.id, 'native-usage:extra-1')
+  assert.deepEqual(usage.map(item => item.kind === 'usage' ? item.details.totalTokens : undefined), [20, 100])
+  assert.ok(usage[0]?.kind === 'usage')
+  assert.deepEqual(usage[0].details, {
+    origin: 'assistant', provider: 'openai', model: 'gpt-x',
+    input: 10, output: 6, cacheRead: 3, cacheWrite: 1,
+    totalTokens: 20, costTotal: 0.002, costTotalFromProvider: true,
+  })
+  assert.equal(usage[0].source, assistant)
+  assert.ok(usage[1]?.kind === 'usage')
+  assert.equal(usage[1].details.kind, 'cache_warm')
+  assert.equal(usage[1].details.costTotalFromProvider, undefined)
+  // Only two distinct calls are shown; no inferred aggregate for a partial window.
+  assert.equal(projectLiveTaskRounds(rows)[0]?.model.toolCount, 0)
+})
+
+test('Pi native compaction, branch summary and nested tool usage stay independent', () => {
+  const rows = projectLiveSnapshotEntries([
+    { type: 'compaction', id: 'compaction-usage', summary: 'trimmed',
+      firstKeptEntryId: 'a', tokensBefore: 5000,
+      usage: { input: 10, output: 2, totalTokens: 12, cost: { total: 0.003 } } },
+    { type: 'branch_summary', id: 'branch-usage', summary: 'other path',
+      usage: { input: 20, output: 3, totalTokens: 23 } },
+    { type: 'message', id: 'tool-usage', message: { role: 'toolResult',
+      toolCallId: 'tool-1', toolName: 'delegate', isError: false,
+      content: [{ type: 'text', text: 'ok' }],
+      usage: { input: 30, output: 4, totalTokens: 34 } } },
+  ])
+  assert.deepEqual(rows.filter(item => item.kind === 'usage')
+    .map(item => item.kind === 'usage' ? item.details.origin : ''), [
+      'compaction', 'branch_summary', 'toolResult',
+    ])
+  assert.equal(rows.find(item => item.kind === 'tool')?.kind, 'tool')
+  assert.equal(rows.find(item => item.kind === 'event')?.kind, 'event')
+  assert.equal(rows.find(item => item.kind === 'native')?.kind, 'native')
 })

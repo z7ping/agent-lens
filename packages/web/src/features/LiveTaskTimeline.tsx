@@ -86,6 +86,30 @@ function GenericLiveItem({
         : undefined}
     />
   }
+  if (item.kind === 'usage') {
+    const u = item.details
+    const modelLabel = [u.provider, u.model].filter(Boolean).join(' / ')
+    const parts = [
+      ...(modelLabel ? [modelLabel] : []),
+      ...(u.kind ? [u.kind] : []),
+      ...(u.totalTokens !== undefined ? [t('live.nativeUsage.tokens', { count: u.totalTokens })] : []),
+      ...(u.input !== undefined ? [t('live.nativeUsage.input', { count: u.input })] : []),
+      ...(u.output !== undefined ? [t('live.nativeUsage.output', { count: u.output })] : []),
+      ...(u.cacheRead !== undefined ? [t('live.nativeUsage.cacheRead', { count: u.cacheRead })] : []),
+      ...(u.cacheWrite !== undefined ? [t('live.nativeUsage.cacheWrite', { count: u.cacheWrite })] : []),
+      ...(u.costTotal !== undefined ? [t(u.costTotalFromProvider === true
+        ? 'live.nativeUsage.reportedCost' : 'live.nativeUsage.catalogCost', { value: u.costTotal })] : []),
+    ]
+    return <TaskEvent model={{
+      id: item.id,
+      category: 'model',
+      label: t(`live.nativeUsage.${u.origin}`),
+      ...(parts.length ? { summary: parts.join(' · ') } : {}),
+      ...(item.at ? { time: taskSessionMessageTime(item.at) } : {}),
+      nativeType: u.origin === 'assistant' ? 'message.usage'
+        : u.origin === 'toolResult' ? 'toolResult.usage' : `${u.origin}.usage`,
+    }} raw={item.source}/>
+  }
   if (item.kind === 'native') {
     const type = item.nativeType
     const label = type === 'branch_summary' ? t('live.nativeEntries.branchSummary')
@@ -223,7 +247,8 @@ export const GenericLiveRound = memo(function GenericLiveRound({
   const reading = projectTaskReading(projection.items
     .filter(item => item.kind !== 'thinking' || item.streaming || Boolean(item.text.trim()))
     .map(item => {
-      const kind: TaskReadingFact<LiveTaskProjectionItem>['kind'] = item.kind === 'event' || item.kind === 'native' ? 'process-block'
+      const kind: TaskReadingFact<LiveTaskProjectionItem>['kind'] =
+        item.kind === 'event' || item.kind === 'native' || item.kind === 'usage' ? 'process-block'
         : item.kind === 'thinking'
         ? 'reasoning'
         : item.kind === 'tool' ? 'tool'
