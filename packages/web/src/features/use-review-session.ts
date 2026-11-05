@@ -763,7 +763,7 @@ export function useReviewSession(model: AgentLensClientModel, embedded: boolean)
         ...(round.ordinal ? { ordinal: round.ordinal, loaded: true } : {}),
         label: round.label,
         preview: taskTurnRailAnswerPreview(round.preview, answer, {
-          question: t('surface.questionPreview'), answer: t('surface.answerPreview'),
+          question: t('task:surface.questionPreview'), answer: t('task:surface.answerPreview'),
         }),
         error: round.errorCount > 0,
         state: round.state,
