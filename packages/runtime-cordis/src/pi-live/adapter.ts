@@ -311,6 +311,11 @@ export function normalizePiLiveEvent(event: Readonly<Record<string, unknown>>): 
     const level = nativeLevel === 'success' || nativeLevel === 'warning' || nativeLevel === 'error' ? nativeLevel : 'info'
     return { type: 'notification', id: liveText(event.id) || undefined, level, message }
   }
+  // Resolution/timeout/abort only removes the matching pending UI request.
+  if (type === 'extension_ui_dismissed') {
+    const requestId = liveText(event.requestId)
+    return requestId ? { type: 'ui.dismiss', requestId } : undefined
+  }
   // setStatus/setWidget are transient extension UI state, not individual notifications.
   if (type === 'extension_ui_request') {
     const requestId = liveText(event.id)
