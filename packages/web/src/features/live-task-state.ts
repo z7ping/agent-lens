@@ -29,8 +29,11 @@ export function useLiveTaskState() {
   const [commands, setCommands] = useState<LiveCommandDto[]>([])
   const [modelControl, setModelControl] = useState<LiveModelControlDto | null>(null)
   const [thinking, setThinking] = useState<LiveThinkingControlDto | null>(null)
-  const [extension, setExtension] = useState<LiveUiRequest | null>(null)
-  const [extensionPending, setExtensionPending] = useState(false)
+  // Preserve native request order. A second approval must not overwrite the first.
+  const [extensions, setExtensions] = useState<LiveUiRequest[]>([])
+  const extension = extensions[0] ?? null
+  const [extensionPendingRequestId, setExtensionPendingRequestId] = useState<string | null>(null)
+  const extensionPending = extension !== null && extensionPendingRequestId === extension.requestId
   const [streamingBehavior, setStreamingBehavior] = useState<LiveQueueMode>('steer')
   const [queue, setQueue] = useState<LiveQueueStateDto>(() => emptyLiveQueue())
   const [pendingQueue, setPendingQueue] = useState<PendingQueueSubmission[]>([])
@@ -107,9 +110,9 @@ export function useLiveTaskState() {
     thinking,
     setThinking,
     extension,
-    setExtension,
+    setExtensions,
     extensionPending,
-    setExtensionPending,
+    setExtensionPendingRequestId,
     streamingBehavior,
     setStreamingBehavior,
     queue,
