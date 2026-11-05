@@ -921,6 +921,28 @@
 .agent-work-record-meta span + span::before { margin-right: 9px; color: var(--al-muted-2); content: "·"; }
 .agent-work-record-line > .ui-status-badge { flex: 0 0 auto; }
 .agent-work-record-details { min-width: 0; margin-top: 10px; padding: 12px 0 4px 20px; border-top: 1px solid var(--al-line); }
+
+.agent-work-record-details > .ui-disclosure + .ui-disclosure { margin-top: 8px; }
+.agent-work-execution-row {
+  display: grid;
+  grid-template-columns: minmax(150px, max-content) max-content minmax(0, 1fr);
+  min-height: 34px;
+  align-items: center;
+  column-gap: 12px;
+  row-gap: 4px;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--al-line);
+}
+.agent-work-execution-row:last-of-type { border-bottom: 0; }
+.agent-work-execution-time { min-width: 0; color: var(--al-muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+.agent-work-execution-delivery { min-width: 0; color: var(--al-muted); font-size: 12px; }
+.agent-work-execution-row > .agent-path-error { grid-column: 1 / -1; }
+.agent-work-history .ui-disclosure-body > .btn { margin-top: 8px; }
+@media (max-width: 575.98px) {
+  .agent-work-execution-row { grid-template-columns: minmax(0, 1fr) max-content; }
+  .agent-work-execution-delivery { grid-column: 1 / -1; }
+}
+
 @media (max-width: 767.98px) {
   .agent-work-record-details { padding-left: 0; }
 }
