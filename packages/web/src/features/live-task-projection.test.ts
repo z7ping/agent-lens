@@ -1255,3 +1255,29 @@ test('Hidden/unknown Pi extension display state never promotes its content to a 
   }
   assert.equal(items[2]?.id, 'native-context-edit:omitted')
 })
+
+test('Pi composer stage follows native retry/compaction start and end without timeout guesses', () => {
+  const user = { id: 'u', kind: 'message' as const, role: 'user' as const, text: 'repair', streaming: false }
+  let items = reduceLiveTaskEvent([user], event(1, { type: 'status', status: 'running',
+    process: { operation: 'retry', phase: 'start', attempt: 1, maxAttempts: 3 },
+  }))
+  assert.equal(liveTaskResponseActivity(items, true), 'retrying')
+  items = reduceLiveTaskEvent(items, event(2, { type: 'status', status: 'running',
+    process: { operation: 'retry', phase: 'end', outcome: 'success' },
+  }))
+  assert.equal(liveTaskResponseActivity(items, true), 'processing')
+  items = reduceLiveTaskEvent(items, event(3, { type: 'status', status: 'compacting',
+    process: { operation: 'compaction', phase: 'start', reason: 'overflow' },
+  }))
+  assert.equal(liveTaskResponseActivity(items, true), 'compacting')
+  items = reduceLiveTaskEvent(items, event(4, { type: 'status', status: 'ready',
+    process: { operation: 'compaction', phase: 'end', outcome: 'success' },
+  }))
+  assert.equal(liveTaskResponseActivity(items, true), 'processing')
+  assert.equal(liveTaskResponseActivity(items, false), null)
+  // A provider without process events keeps the generic previous contract.
+  assert.equal(liveTaskResponseActivity([user, {
+    id: 'native', kind: 'native', nativeType: 'branch_summary',
+    preview: 'summary', source: { type: 'branch_summary' },
+  }], true), 'processing')
+})
