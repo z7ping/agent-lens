@@ -334,3 +334,24 @@ test('Native Pi edit details.patch uses the existing unified diff renderer only 
   assert.equal(taskToolNativePatch({ patch: patch + '\n' + 'x'.repeat(512 * 1024) }), undefined)
   assert.equal(taskToolNativePatch({ patch: null }), undefined)
 })
+
+test('Shared Tool row exposes only explicit native parent-child evidence', () => {
+  const html = renderToStaticMarkup(createElement(TaskToolRow, {
+    model: { id: 'tool:child', callId: 'child', name: 'read', kind: 'read',
+      kindLabel: '读取', status: 'success',
+      parentToolCallId: 'parent-native-id', parentToolName: 'delegate',
+      loadedChildCallCount: 2 },
+  }))
+  assert.match(html, /data-tool-call-id="child"/)
+  assert.match(html, /data-parent-tool-call-id="parent-native-id"/)
+  assert.match(html, /data-loaded-child-call-count="2"/)
+  assert.match(html, /data-tool-section="ancestry"/)
+  assert.match(html, /parent-native-id/)
+  assert.match(html, /delegate/)
+  const plain = renderToStaticMarkup(createElement(TaskToolRow, {
+    model: { id: 'tool:plain', callId: 'plain', name: 'read',
+      kind: 'read', kindLabel: '读取', status: 'success' },
+  }))
+  assert.doesNotMatch(plain, /data-tool-section="ancestry"/)
+  assert.doesNotMatch(plain, /data-parent-tool-call-id=/)
+})
