@@ -327,6 +327,8 @@ export type LiveCompletionStatusDto = 'completed' | 'cancelled' | 'interrupted' 
 export interface LiveProcessEventDetailDto {
   operation: 'retry' | 'compaction' | 'output'
   phase: 'start' | 'end'
+  /** Source only when a native summary retry attempt identifies it. */
+  retrySource?: 'compaction' | 'branchSummary' | undefined
   outcome?: 'success' | 'failed' | 'aborted' | 'truncated' | undefined
   reason?: 'manual' | 'threshold' | 'overflow' | 'length' | undefined
   attempt?: number | undefined
@@ -702,6 +704,8 @@ function parseLiveProcessDetail(value: unknown): LiveProcessEventDetailDto | nul
   return {
     operation: data.operation,
     phase: data.phase,
+    ...(data.operation === 'retry' && (data.retrySource === 'compaction' || data.retrySource === 'branchSummary')
+      ? { retrySource: data.retrySource } : {}),
     ...(outcome ? { outcome } : {}),
     ...(reason ? { reason } : {}),
     ...(eventCount(data.attempt) !== undefined ? { attempt: eventCount(data.attempt) } : {}),

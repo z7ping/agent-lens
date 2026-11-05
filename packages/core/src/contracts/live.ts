@@ -336,6 +336,8 @@ export type LiveCompletionStatus = 'completed' | 'cancelled' | 'interrupted' | '
 export interface LiveProcessEventDetail {
   operation: 'retry' | 'compaction' | 'output'
   phase: 'start' | 'end'
+  /** Source only when a native summary retry attempt identifies it. */
+  retrySource?: 'compaction' | 'branchSummary' | undefined
   outcome?: 'success' | 'failed' | 'aborted' | 'truncated' | undefined
   reason?: 'manual' | 'threshold' | 'overflow' | 'length' | undefined
   attempt?: number | undefined
