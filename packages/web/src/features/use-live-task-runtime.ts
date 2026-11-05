@@ -4,6 +4,7 @@ import type { LiveTaskState } from './live-task-state'
 import { useCallback, useEffect, useLayoutEffect, useRef } from 'react'
 import { liveApi } from '../client/live'
 import { emptyLiveQueue, firstUserEntryCursor } from './live-task-queue'
+import { enqueueLiveUiRequest, dismissLiveUiRequest } from './live-extension-request-queue'
 import { LIVE_TASK_SNAPSHOT_PAGE_LIMIT, historyPageBlock, aggregateHistoryPage, splitLiveProjectionItems, loadBoundedRecoverySnapshot, captureLiveReaderAnchor, restoreLiveReaderAnchor, appendUniqueLiveProjectionItems } from './live-task-history-window'
 import { projectLiveInputHistory, projectLiveSnapshotEntries, liveEventChangesTaskTranscript, mergeLiveActiveProjectionItems, reconcileLiveSnapshotProjection, preserveOptimisticImagePreviews, reduceLiveTaskEvent } from './live-task-projection'
 import { LiveFollowController, liveFollowTextRevision } from './live-follow-controller'
@@ -521,12 +522,11 @@ export function useLiveTaskRuntime({
         })
         if (product.capabilities.includes('extension-ui') && envelope.normalizedEvent?.type === 'ui.request') {
           const request = envelope.normalizedEvent
-          setExtensions(previous => previous.some(item => item.requestId === request.requestId)
-            ? previous : [...previous, request])
+          setExtensions(previous => enqueueLiveUiRequest(previous, request))
         }
         if (envelope.normalizedEvent?.type === 'ui.dismiss') {
           const requestId = envelope.normalizedEvent.requestId
-          setExtensions(previous => previous.filter(item => item.requestId !== requestId))
+          setExtensions(previous => dismissLiveUiRequest(previous, requestId))
         }
         if (envelope.normalizedEvent?.type === 'runtime-disclosure.changed') {
           void liveApi.runtimeDisclosures(current.liveId, current.runtimeSessionId).then(
