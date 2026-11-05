@@ -1066,6 +1066,38 @@ function buildRoundModel(
   }
 }
 
+/** Explicit native nested-tool links for the currently loaded round.
+ * Never infer a parent from adjacency or assume paginated siblings are complete. */
+export interface LiveLoadedToolRelation {
+  parentToolCallId?: string
+  parentToolName?: string
+  loadedChildCallCount?: number
+}
+
+export function liveLoadedToolRelations(items: readonly LiveTaskProjectionItem[]): Map<string, LiveLoadedToolRelation> {
+  const tools = new Map(items.filter((item): item is Extract<LiveTaskProjectionItem, { kind: 'tool' }> =>
+    item.kind === 'tool').map(item => [item.callId, item] as const))
+  const children = new Map<string, number>()
+  for (const tool of tools.values()) {
+    const parentId = tool.parentToolCallId
+    if (!parentId || parentId === tool.callId || !tools.has(parentId)) continue
+    children.set(parentId, (children.get(parentId) ?? 0) + 1)
+  }
+  const relations = new Map<string, LiveLoadedToolRelation>()
+  for (const tool of tools.values()) {
+    const parentId = tool.parentToolCallId !== tool.callId ? tool.parentToolCallId : undefined
+    const parent = parentId ? tools.get(parentId) : undefined
+    const count = children.get(tool.callId)
+    if (!parentId && count === undefined) continue
+    relations.set(tool.callId, {
+      ...(parentId ? { parentToolCallId: parentId } : {}),
+      ...(parent?.name ? { parentToolName: parent.name } : {}),
+      ...(count !== undefined ? { loadedChildCallCount: count } : {}),
+    })
+  }
+  return relations
+}
+
 /**
  * Product-level round projection. A user message starts a new semantic round;
  * following assistant/thinking/tool items stay in that round until the next
