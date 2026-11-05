@@ -440,6 +440,12 @@ export interface LiveQueueUpdateEvent {
 
 export type LiveUiRequestMethod = 'select' | 'confirm' | 'input' | 'editor'
 
+/** An SDK UI request was answered, aborted, or expired. */
+export interface LiveUiDismissEvent {
+  type: 'ui.dismiss'
+  requestId: string
+}
+
 export interface LiveUiRequestEvent {
   type: 'ui.request'
   requestId: string
@@ -464,6 +470,7 @@ export type LiveEvent =
   | LiveToolEndEvent
   | LiveQueueUpdateEvent
   | LiveUiRequestEvent
+  | LiveUiDismissEvent
   | LiveNotificationEvent
   | LiveErrorEvent
   | LiveCompletedEvent
