@@ -6,6 +6,7 @@ import { UiIcon } from '../components/UiIcon'
 import { CopyableCodeBlock } from '../components/CopyableCodeBlock'
 import { codeLanguageFromContent } from '../components/code-language'
 import { ToolOutputContent } from './ToolOutputContent'
+import { ImagePreview } from '../components/ImagePreview'
 import { reviewToolCommand } from './review-tool-command'
 import type { TaskToolModel } from './task-detail-model'
 
@@ -228,10 +229,31 @@ export function TaskToolRow({ model, meta, details, onClick, className = '', com
       </section>
       <section className="task-tool-section" data-tool-section="output" aria-label={t('tool.output')}>
         <div className="task-tool-section-title">{t('tool.output')}</div>
+        {model.attachments?.length ? <div className="task-message-attachments">
+          {model.attachments.map((attachment, index) => attachment.type === 'image'
+            ? attachment.dataUrl
+              ? <ImagePreview key={index} src={attachment.dataUrl} alt={attachment.name ?? t('message.imageAttachment')}/>
+              : <span key={index} className="task-message-attachment-placeholder">
+                  {attachment.name ?? t('message.imageAttachment')}
+                </span>
+            : <span key={index} className="task-message-file-attachment">
+                {attachment.name ?? t('message.fileAttachment')}
+              </span>)}
+        </div> : null}
         {model.output !== undefined
           ? <ToolOutputContent text={model.output} streaming={model.status === 'running'} highlight={expanded}/>
-          : <span className="task-tool-section-empty">{model.resultMissing ? t('tool.resultMissing') : model.status === 'running' ? t('tool.outputPending') : t('tool.outputUnavailable')}</span>}
+          : !model.attachments?.length
+            ? <span className="task-tool-section-empty">{model.resultMissing ? t('tool.resultMissing') : model.status === 'running' ? t('tool.outputPending') : t('tool.outputUnavailable')}</span>
+            : null}
       </section>
+      {model.resultDetails !== undefined && <section className="task-tool-section" data-tool-section="details" aria-label={t('tool.resultDetails')}>
+        <div className="task-tool-section-title">{t('tool.resultDetails')}</div>
+        <ToolOutputContent
+          text={typeof model.resultDetails === 'string'
+            ? model.resultDetails : JSON.stringify(model.resultDetails, null, 2) ?? String(model.resultDetails)}
+          highlight={expanded}
+        />
+      </section>}
       {(meta || elapsedLabel || onClick || details) && <div className="task-tool-detail-footer">
         {elapsedLabel && <span>{status} · {elapsedLabel}</span>}
         {meta && <span className="task-tool-meta">{meta}</span>}

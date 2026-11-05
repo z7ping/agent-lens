@@ -1,4 +1,5 @@
 import { translateProduct } from '../i18n/runtime'
+import type { ReviewMessageAttachmentDto } from '@agent-lens/protocol'
 
 export type TaskRoundState = 'settled' | 'running' | 'stopped'
 export type TaskToolKind = 'shell' | 'read' | 'edit' | 'search' | 'test' | 'mcp' | 'web' | 'tool'
@@ -53,6 +54,10 @@ export interface TaskToolModel {
   durationMs?: number | undefined
   startedAtMs?: number | undefined
   output?: string | undefined
+  /** Source-backed tool output attachments. Only inline image data is rendered. */
+  attachments?: readonly ReviewMessageAttachmentDto[] | undefined
+  /** Raw native metadata, displayed on demand in the existing tool disclosure. */
+  resultDetails?: unknown
 }
 
 export interface TaskToolKindCountModel {

@@ -969,3 +969,128 @@ test('Native retry and compaction are shared process facts, not terminal failure
   // An event without native process facts must not mutate the transcript.
   assert.equal(liveEventChangesTaskTranscript({ type: 'status', status: 'compacting' }), false)
 })
+
+test('Pi native tool result retains full text, image content and structured details', () => {
+  const imageData = 'data:image/png;base64,aGVsbG8='
+  const fullOutput = 'native result '.repeat(450)
+  const items = projectLiveSnapshotEntries([
+    {
+      type: 'message', id: 'assistant-tool',
+      message: { role: 'assistant', content: [
+        { type: 'toolCall', id: 'call-image', name: 'screenshot', arguments: { path: 'output.png' } },
+      ] },
+    },
+    {
+      type: 'message', id: 'tool-result-image',
+      message: {
+        role: 'toolResult', toolCallId: 'call-image', toolName: 'screenshot',
+        isError: false,
+        content: [
+          { type: 'text', text: fullOutput },
+          { type: 'image', mimeType: 'image/png', data: 'aGVsbG8=' },
+        ],
+        details: { exitCode: 0, file: 'output.png', patches: [{ path: 'a.ts', lines: 2 }] },
+      },
+    },
+  ])
+  const tool = items.find(item => item.kind === 'tool')
+  assert.ok(tool?.kind === 'tool')
+  assert.equal(tool.output, fullOutput)
+  assert.equal(tool.nativeResult, true)
+  assert.deepEqual(tool.resultDetails, { exitCode: 0, file: 'output.png', patches: [{ path: 'a.ts', lines: 2 }] })
+  assert.equal(tool.attachments?.[0]?.type, 'image')
+  assert.equal(tool.attachments?.[0]?.dataUrl, imageData)
+  assert.deepEqual(items.map(item => item.kind), ['tool'])
+})
+
+test('Pi native image-only tool result is not discarded when textual output is absent', () => {
+  const [item] = projectLiveSnapshotEntries([{
+    type: 'message', id: 'result-only',
+    message: { role: 'toolResult', toolCallId: 'call-1', toolName: 'view',
+      content: [{ type: 'image', mimeType: 'image/png', data: 'aGVsbG8=' }],
+      details: { rendered: true } },
+  }])
+  assert.ok(item?.kind === 'tool')
+  assert.equal(item.output, undefined)
+  assert.equal(item.attachments?.length, 1)
+  assert.deepEqual(item.resultDetails, { rendered: true })
+})
+
+test('Pi persisted native tool result replaces settled truncated SSE output without losing call facts', () => {
+  const initial = reduceLiveTaskEvent([], event(1, {
+    type: 'tool.start', callId: 'call-1', name: 'view', inputPreview: '{"path":"a.png"}',
+    parentToolCallId: 'parent-1',
+  }))
+  const settled = reduceLiveTaskEvent(initial, event(2, {
+    type: 'tool.end', callId: 'call-1', name: 'view',
+    output: 'truncated…', status: 'success',
+  }))
+  const [native] = projectLiveSnapshotEntries([{
+    type: 'message', id: 'result-1',
+    message: { role: 'toolResult', toolCallId: 'call-1',
+      toolName: 'view', content: [{ type: 'text', text: 'complete native output' }],
+      details: { result: 'complete' } },
+  }])
+  assert.ok(native?.kind === 'tool')
+  const [merged] = mergeLiveActiveProjectionItems(settled, [native])
+  assert.ok(merged?.kind === 'tool')
+  assert.equal(merged.output, 'complete native output')
+  assert.equal(merged.inputPreview, '{"path":"a.png"}')
+  assert.equal(merged.parentToolCallId, 'parent-1')
+  assert.equal(merged.nativeResult, true)
+  assert.deepEqual(merged.resultDetails, { result: 'complete' })
+})
+
+test('Pi native compaction journal restores exact summary and tokens after refresh', () => {
+  const summary = 'Source-backed summary '.repeat(250)
+  const rows = projectLiveSnapshotEntries([{
+    type: 'compaction', id: 'compaction-1',
+    timestamp: '2026-11-05T08:00:00.000Z',
+    summary, firstKeptEntryId: 'message-7', tokensBefore: 140_000,
+  }])
+  assert.equal(rows.length, 1)
+  const item = rows[0]
+  assert.ok(item?.kind === 'event')
+  assert.equal(item.id, 'native-compaction:compaction-1')
+  assert.deepEqual(item.process, {
+    operation: 'compaction', phase: 'end', outcome: 'success',
+    summary, firstKeptEntryId: 'message-7', tokensBefore: 140_000,
+  })
+  assert.equal(item.at, '2026-11-05T08:00:00.000Z')
+  assert.equal(projectLiveSnapshotEntries([{ type: 'compaction', id: 'unknown', summary: '' }])
+    .at(0)?.kind, 'event')
+})
+
+test('Pi compaction recovery merges matching SSE finish with native journal rather than duplicating', () => {
+  const transcript = [
+    { id: 'user-1', kind: 'message' as const, role: 'user' as const,
+      text: 'fix long conversation', streaming: false },
+  ]
+  const transient = reduceLiveTaskEvent(transcript, event(1, {
+    type: 'status', status: 'ready', process: {
+      operation: 'compaction', phase: 'end', reason: 'overflow',
+      summary: 'real summary', firstKeptEntryId: 'message-7',
+      tokensBefore: 140_000, estimatedTokensAfter: 30_000, outcome: 'success',
+    },
+  }))
+  const durable = projectLiveSnapshotEntries([{
+    type: 'compaction', id: 'compaction-1',
+    summary: 'real summary', firstKeptEntryId: 'message-7', tokensBefore: 140_000,
+  }])
+  const merged = mergeLiveActiveProjectionItems(transient, durable)
+  const events = merged.filter(item => item.kind === 'event')
+  assert.equal(events.length, 1)
+  assert.equal(events[0]?.id, 'native-compaction:compaction-1')
+  assert.equal(events[0]?.kind === 'event' ? events[0].process.reason : '', 'overflow')
+  assert.equal(events[0]?.kind === 'event'
+    ? events[0].process.estimatedTokensAfter : -1, 30_000)
+  assert.equal(events[0]?.kind === 'event' ? events[0].process.tokensBefore : -1, 140_000)
+
+  // Different native compactions cannot be collapsed on mere sequence proximity.
+  const other = projectLiveSnapshotEntries([{
+    type: 'compaction', id: 'compaction-2',
+    summary: 'a different compaction', firstKeptEntryId: 'message-12',
+  }])
+  const distinct = mergeLiveActiveProjectionItems(merged, other)
+  assert.equal(distinct.filter(item => item.kind === 'event').length, 2)
+})

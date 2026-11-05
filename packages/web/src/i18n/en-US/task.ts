@@ -509,6 +509,7 @@ export const englishTaskMessages: LocaleMessagesDto = {
       outputUnavailable: 'Output not recorded',
       outputPending: 'Waiting for tool result',
       resultMissing: 'No tool result recorded',
+      resultDetails: 'Native result details',
       inspect: 'View source evidence',
       calls: '{{count}} tool calls',
       status: {

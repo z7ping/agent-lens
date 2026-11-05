@@ -54,6 +54,11 @@ export type LiveTaskProjectionItem =
       mcpServerId?: string | undefined
       inputPreview?: string | undefined
       output?: string | undefined
+      /** Persisted native tool result replaces any bounded SSE output preview. */
+      nativeResult?: true | undefined
+      attachments?: ReviewMessageAttachmentDto[] | undefined
+      /** Original Pi tool result details; rendered only when the shared row expands. */
+      resultDetails?: unknown
       status: 'running' | 'success' | 'error'
       durationMs?: number | undefined
       at?: string | undefined
@@ -181,6 +186,8 @@ export function projectLiveSnapshotEntries(entries: readonly unknown[]): LiveTas
       name: item.name === 'tool' ? current.name : item.name,
       inputPreview: item.inputPreview ?? current.inputPreview,
       output: item.output ?? current.output,
+      attachments: item.attachments ?? current.attachments,
+      resultDetails: item.resultDetails ?? current.resultDetails,
     }
   }
 
@@ -223,6 +230,29 @@ export function projectLiveSnapshotEntries(entries: readonly unknown[]): LiveTas
       })
     }
 
+    // Pi's persisted compaction journal row is the source of truth after
+    // reconnect. Only native fields become facts; no inferred reason or token
+    // count, and no copy of the native session journal is stored.
+    if (item.type === 'compaction') {
+      const summary = text(item.summary)
+      const firstKeptEntryId = text(item.firstKeptEntryId)
+      const tokensBefore = typeof item.tokensBefore === 'number'
+        && Number.isFinite(item.tokensBefore) && item.tokensBefore >= 0
+          ? item.tokensBefore : undefined
+      projected.push({
+        id: `native-compaction:${baseId}`,
+        kind: 'event',
+        process: {
+          operation: 'compaction', phase: 'end', outcome: 'success',
+          ...(summary ? { summary } : {}),
+          ...(firstKeptEntryId ? { firstKeptEntryId } : {}),
+          ...(tokensBefore !== undefined ? { tokensBefore } : {}),
+        },
+        ...(at ? { at } : {}),
+      })
+      return
+    }
+
     // Explicit non-message failures may also be present in native snapshot histories.
     // Restrict this branch to failure facts; ordinary status and metadata are not answers.
     const nativeFailure = item.type === 'error' || item.type === 'extension_error'
@@ -248,13 +278,18 @@ export function projectLiveSnapshotEntries(entries: readonly unknown[]): LiveTas
       const output = contentText(nested.content) || contentText(item.content)
         || text(nested.output) || text(item.output) || errorMessage
         || (failed ? agentLensI18n.t('task:message.requestFailed') : '')
+      const attachments = messageAttachments(item, nested)
+      const resultDetails = nested.details ?? item.details
       pushTool({
         id: `tool:${callId}`,
         kind: 'tool',
         callId,
         name: text(nested.toolName) || text(nested.tool_name) || text(item.toolName) || text(item.tool_name) || 'tool',
         status: failed ? 'error' : 'success',
+        nativeResult: true,
         ...(output ? { output } : {}),
+        ...(attachments.length ? { attachments } : {}),
+        ...(resultDetails !== undefined ? { resultDetails } : {}),
         ...(at ? { at } : {}),
       })
       return
@@ -500,10 +535,47 @@ export function mergeLiveActiveProjectionItems(
     if (existingIndex !== undefined) {
       const existing = merged[existingIndex]
       if (existing?.kind === 'tool' && item.kind === 'tool'
-        && existing.status === 'running' && item.status !== 'running') {
-        merged[existingIndex] = { ...existing, ...item }
+        && (item.nativeResult === true
+          || (existing.status === 'running' && item.status !== 'running'))) {
+        // A persisted native result is authoritative, even if SSE already
+        // marked the invocation successful with a truncated text preview.
+        merged[existingIndex] = { ...existing, ...item,
+          inputPreview: item.inputPreview ?? existing.inputPreview,
+          parentToolCallId: item.parentToolCallId ?? existing.parentToolCallId,
+          toolSourceType: item.toolSourceType ?? existing.toolSourceType,
+          mcpServerId: item.mcpServerId ?? existing.mcpServerId,
+          ...(item.nativeResult === true ? { output: item.output } : {}),
+        }
       }
       continue
+    }
+
+    // Pi's durable compaction journal row supersedes the matching transient
+    // SSE finish event on reconnect. Match source-attested anchor facts, not
+    // proximity in time or a guessed compaction identifier.
+    if (item.kind === 'event' && item.id.startsWith('native-compaction:')) {
+      const anchor = item.process.firstKeptEntryId || item.process.summary
+      if (anchor) {
+        const lastUser = findLastProjectionIndex(merged, row =>
+          row.kind === 'message' && row.role === 'user')
+        const transientIndex = merged.findIndex((row, index) =>
+          index > lastUser && row.kind === 'event'
+          && row.id.startsWith('live-process:')
+          && row.process.operation === 'compaction'
+          && row.process.phase === 'end'
+          && (item.process.firstKeptEntryId
+            ? row.process.firstKeptEntryId === item.process.firstKeptEntryId
+            : row.process.summary === item.process.summary))
+        if (transientIndex >= 0) {
+          const prior = merged[transientIndex]
+          indexes.delete(prior!.id)
+          merged[transientIndex] = prior?.kind === 'event'
+            ? { ...item, process: { ...prior.process, ...item.process } }
+            : item
+          indexes.set(item.id, transientIndex)
+          continue
+        }
+      }
     }
 
     // Replace the transient SSE failure with its persisted native counterpart.

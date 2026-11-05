@@ -127,6 +127,26 @@ function livePreview(value: unknown, max = 4_000): string {
   return text.length > max ? `${text.slice(0, max)}…` : text
 }
 
+/** Pi tool results own structured content and details. SSE carries only a
+ * bounded human-readable text preview; images/details stay in the native
+ * snapshot for the existing shared tool disclosure. Never serialize image
+ * base64 into a preview just to truncate it. */
+function liveToolResultPreview(value: unknown, max = 4_000): string {
+  const result = liveRecord(value)
+  if (!Array.isArray(result.content)) return livePreview(value, max)
+  let output = ''
+  for (const item of result.content) {
+    const part = liveRecord(item)
+    const text = typeof item === 'string' ? item
+      : part.type === 'text' ? liveText(part.text) : ''
+    if (!text) continue
+    const remaining = max + 1 - output.length
+    if (remaining <= 0) break
+    output += (output ? '\n' : '') + text.slice(0, remaining)
+  }
+  return output.length > max ? `${output.slice(0, max)}…` : output
+}
+
 function liveNonnegative(value: unknown): number | undefined {
   return typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : undefined
 }
@@ -252,7 +272,7 @@ export function normalizePiLiveEvent(event: Readonly<Record<string, unknown>>): 
   }
   if (type === 'tool_execution_update') {
     const callId = liveText(event.toolCallId)
-    const output = livePreview(event.partialResult)
+    const output = liveToolResultPreview(event.partialResult)
     if (!output) return undefined
     return {
       type: 'tool.output',
@@ -263,7 +283,7 @@ export function normalizePiLiveEvent(event: Readonly<Record<string, unknown>>): 
   }
   if (type === 'tool_execution_end') {
     const callId = liveText(event.toolCallId)
-    const output = livePreview(event.result)
+    const output = liveToolResultPreview(event.result)
     return {
       type: 'tool.end',
       ...(callId ? { callId } : {}),

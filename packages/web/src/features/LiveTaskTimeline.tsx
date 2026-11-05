@@ -144,6 +144,8 @@ function liveTaskToolModel(item: Extract<LiveTaskProjectionItem, { kind: 'tool' 
     status: item.status,
     primary: item.inputPreview,
     output: item.output,
+    attachments: item.attachments,
+    resultDetails: item.resultDetails,
     durationMs: item.durationMs,
   }
 }
