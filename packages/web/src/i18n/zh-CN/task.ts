@@ -133,6 +133,7 @@ export const chineseTaskMessages: LocaleMessagesDto = {
       preciseHoursMinutesSeconds: '{{hours}}小时{{minutes}}分{{seconds}}秒',
     },
     live: {
+      quoteToComposer: '引用到输入框',
       nativeUsage: {
         assistant: '模型调用用量',
         toolResult: '工具内模型用量',
