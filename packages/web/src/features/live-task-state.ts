@@ -7,7 +7,7 @@ import type { LiveHistoryPageBlock } from './live-task-history-window'
 import { type LiveMarkdownComposerDraft, type LiveMarkdownComposerHandle } from '../components/LiveMarkdownComposer'
 import { emptyLiveQueue, type PendingQueueSubmission, type RestoredQueueDraft, type LiveQueueMode } from './live-task-queue'
 
-type LiveUiRequest = Extract<LiveEventDto, { type: 'ui.request' }>
+import type { LiveUiRequest } from './live-extension-request-queue'
 
 /** Live 会话单一状态所有者；运行时、历史、操作 Hook 按领域消费同一引用。 */
 export function useLiveTaskState() {
