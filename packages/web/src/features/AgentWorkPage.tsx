@@ -425,6 +425,11 @@ export function AgentWorkPage({model,sourceId,installationId,installations}: {
                 {(response.boardsTotal>1 || response.boardsHasMore || boardOffset>0)
                   ? <SelectMenu ariaLabel={t('work.selectBoard')}
                       value={response.selectedBoard ?? ''} searchable
+                      selectedOption={response.selectedBoard ? {
+                        value:response.selectedBoard,
+                        label:board?.name ?? (response.selectedBoard==='default'
+                          ? t('work.defaultBoard') : response.selectedBoard),
+                      } : undefined}
                       options={response.boards.map(item => ({
                         value:item.id,
                         label:(item.id==='default' && item.name==='default' ? t('work.defaultBoard') : item.name)
@@ -457,7 +462,7 @@ export function AgentWorkPage({model,sourceId,installationId,installations}: {
               <UiIcon name="task" size={20}/>
               <strong>{board?.taskCount===0 && response.features.find(f=>f.id==='boards')?.availability==='available'
                 ? t('work.noTasks') : t('work.tasksUnavailable')}</strong>
-              {permitted('task.create') && board?.taskCount===0 &&
+              {permitted('task.create') &&
                 <Button size="small" onClick={() => askAction({
                   kind:'task.create',boardId:response.selectedBoard!,title:'',
                 })}>{t('work.actions.task_create')}</Button>}
@@ -490,7 +495,7 @@ export function AgentWorkPage({model,sourceId,installationId,installations}: {
         </>}
         {activePanel==='schedules' && schedulesAvailable && <section className="agent-work-section">
           <div className="agent-work-board-heading">
-            <h3>{t('work.schedules')}</h3>
+            {!(boardAvailable && schedulesAvailable) && <h3>{t('work.schedules')}</h3>}
             {response.schedulesTotal>0 && <span className="agent-work-meta">{t('work.scheduleCount',{count:response.schedulesTotal})}</span>}
             {response.schedules.length>0 && permitted('cron.create') && <Button size="small"
               onClick={()=>askAction({kind:'cron.create',profile:'default',schedule:'',prompt:''})}>
