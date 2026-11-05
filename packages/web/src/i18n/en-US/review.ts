@@ -309,6 +309,11 @@ export const englishReviewMessages: LocaleMessagesDto = {
         selectSession: 'Select a session to start reviewing',
       },
       fileChanges: {
+        viewFile: 'Preview file',
+        previewLoading: 'Reading current file…',
+        previewUnavailable: 'File unavailable, blocked, or no longer present',
+        previewRedacted: 'Sensitive content was handled by the host preview policy',
+        previewRetry: 'Retry',
         pathTransition: '{{oldPath}} → {{path}}',
         roundTitle: '{{count}} file changes observed in this turn',
         titleCount: '{{count}} changed files in this session',
