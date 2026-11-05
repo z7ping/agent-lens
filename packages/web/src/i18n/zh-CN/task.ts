@@ -148,6 +148,7 @@ export const chineseTaskMessages: LocaleMessagesDto = {
         catalogCost: '目录价格估算 ${{value}}',
       },
       nativeEntries: {
+        system: '原生系统上下文记录',
         branchSummary: '分支摘要',
         contextExcluded: '已从模型上下文排除内容',
         contextReplaced: '模型上下文内容已替换',
