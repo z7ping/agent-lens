@@ -23,6 +23,7 @@ import { loadNativeImagePreview } from '../client/native-media-preview'
 import type { AgentLensClientModel } from '../client/model'
 import type { NativeRecordTextFragmentsResponseDto, ReviewInteractionDto } from '@agent-lens/protocol'
 import { useReviewSession } from './use-review-session'
+import { verifiedSubagentReviewTarget } from './review-subagent-link'
 import { projectSelectOption } from './project-presentation'
 
 type VerifiedRecordTextFragment = Extract<NativeRecordTextFragmentsResponseDto,
@@ -848,7 +849,22 @@ export function ReviewPage({ model, embedded = false, latestRequest = 0 }: { mod
 
             {review.relationships?.items.length ? <details className="session-relationship-tree">
               <summary><UiIcon className="session-relationship-tree-chevron" name="chevron-right" size={14}/><span>{t('local.relationship.sessionTree', { count: review.relationships.items.length })}</span></summary>
-              <div>{review.relationships.items.map(item => <div key={item.id}>{item.fromNativeSessionId ?? item.fromSessionId} <span><UiIcon name="arrow-right" size={14}/></span> {item.toNativeSessionId ?? item.toSessionId}</div>)}</div>
+              <div>{review.relationships.items.map(item => {
+                const target = verifiedSubagentReviewTarget(item, detail.id)
+                return <div key={item.id}>
+                  <code title={item.fromSessionId}>{item.fromNativeSessionId ?? item.fromSessionId}</code>
+                  <span><UiIcon name="arrow-right" size={14}/></span>
+                  {target
+                    ? <Button size="small" variant="quiet"
+                        title={t('local.relationship.openVerifiedSubagent')}
+                        aria-label={t('local.relationship.openVerifiedSubagent')}
+                        onClick={() => select(target)}
+                      ><UiIcon name="link" size={14}/>
+                        <code title={target}>{item.toNativeSessionId ?? target}</code>
+                      </Button>
+                    : <code title={item.toSessionId}>{item.toNativeSessionId ?? item.toSessionId}</code>}
+                </div>
+              })}</div>
             </details> : null}
 
             {detail.statisticsCompleteness === 'window'
