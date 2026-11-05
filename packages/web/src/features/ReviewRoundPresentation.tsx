@@ -255,6 +255,7 @@ function reviewToolModel(node: ReviewToolNodeDto): TaskToolModel {
     secondary: info.secondary || undefined,
     ...(node.input === undefined ? {} : { rawInput: typeof node.input === 'string' ? node.input : JSON.stringify(node.input, null, 2) ?? '' }),
     ...(node.output === undefined ? {} : { output: toolOutputText(node.output) }),
+    ...(node.resultDetails === undefined ? {} : { resultDetails: node.resultDetails }),
     ...(node.durationMs !== undefined && Number.isFinite(node.durationMs) && node.durationMs >= 0
       ? { durationMs: node.durationMs } : {}),
   }

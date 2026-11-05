@@ -1431,3 +1431,25 @@ test('summary retries share the native process timeline and never imply successf
   assert.equal(liveTaskResponseActivity(finished, true), 'processing')
   assert.equal(finished[2]?.kind === 'event' ? finished[2].process.outcome : undefined, undefined)
 })
+
+test('Pi official subagent details survive native Live projection as one tool call', () => {
+  const details = { mode: 'parallel', results: [
+    { agent: 'scout', status: 'completed', messages: [{ role: 'assistant',
+      content: [{ type: 'text', text: 'found matching files' }] }] },
+    { agent: 'worker', status: 'failed', errorMessage: 'tool failed', messages: [] },
+  ] }
+  const projected = projectLiveSnapshotEntries([
+    { type: 'message', id: 'assistant-subagent', message: {
+      role: 'assistant', content: [{ type: 'toolCall',
+        id: 'dispatch-1', name: 'subagent', arguments: { tasks: ['scout', 'worker'] } }],
+    } },
+    { type: 'message', id: 'tool-result-subagent', message: {
+      role: 'toolResult', toolCallId: 'dispatch-1', toolName: 'subagent', isError: true,
+      content: [{ type: 'text', text: 'one task failed' }], details,
+    } },
+  ])
+  const tools = projected.filter(item => item.kind === 'tool')
+  assert.equal(tools.length, 1)
+  assert.deepEqual(tools[0]?.kind === 'tool' ? tools[0].resultDetails : undefined, details)
+  assert.equal(tools[0]?.kind === 'tool' ? tools[0].status : undefined, 'error')
+})

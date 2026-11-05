@@ -6,6 +6,8 @@ import { UiIcon } from '../components/UiIcon'
 import { CopyableCodeBlock } from '../components/CopyableCodeBlock'
 import { codeLanguageFromContent } from '../components/code-language'
 import { ToolOutputContent } from './ToolOutputContent'
+import { Button, Disclosure, StatusBadge } from '../components/ui'
+import { piSubagentResult, piSubagentToolDetails, piSubagentTranscriptMessage } from './task-tool-subagent'
 import { PatchDiff } from '@pierre/diffs/react'
 import { ImagePreview } from '../components/ImagePreview'
 import { reviewToolCommand } from './review-tool-command'
@@ -160,9 +162,13 @@ export function TaskToolRow({ model, meta, details, onClick, className = '', com
   // Avoid Prism tokenization across every collapsed tool in long Review/Live sessions.
   const [expanded, setExpanded] = useState(false)
   const [rawResultDetails, setRawResultDetails] = useState(false)
+  const [subagentVisibleCount, setSubagentVisibleCount] = useState(8)
+  const [openSubagents, setOpenSubagents] = useState<Record<number, boolean>>({})
+  const [subagentMessageLimits, setSubagentMessageLimits] = useState<Record<number, number>>({})
   const [diffTheme, setDiffTheme] = useState<'light' | 'dark'>(() =>
     typeof document !== 'undefined' && document.documentElement.dataset.theme === 'dark' ? 'dark' : 'light')
   const nativePatch = expanded ? taskToolNativePatch(model.resultDetails) : undefined
+  const nativeSubagents = expanded ? piSubagentToolDetails(model.name, model.resultDetails) : undefined
   const visualKind = model.kind === 'tool'
     ? toolVisualKind(model.name, { sourceType: model.toolSourceType, mcpServerId: model.mcpServerId })
     : model.kind
@@ -297,7 +303,7 @@ export function TaskToolRow({ model, meta, details, onClick, className = '', com
       </section>
       {expanded && model.resultDetails !== undefined && <section className="task-tool-section" data-tool-section="details" aria-label={t('tool.resultDetails')}>
         <div className="task-tool-section-title">{t('tool.resultDetails')}</div>
-        {nativePatch && <div className="task-tool-output-format-actions">
+        {(nativePatch || nativeSubagents) && <div className="task-tool-output-format-actions">
           <button type="button" aria-pressed={!rawResultDetails}
             onClick={() => setRawResultDetails(false)}>{t('toolOutput.formatted')}</button>
           <button type="button" aria-pressed={rawResultDetails}
@@ -311,11 +317,117 @@ export function TaskToolRow({ model, meta, details, onClick, className = '', com
                 hunkSeparators: 'line-info',
               }}/>
             </div>
-          : <ToolOutputContent
-              text={typeof model.resultDetails === 'string'
-                ? model.resultDetails : JSON.stringify(model.resultDetails, null, 2) ?? String(model.resultDetails)}
-              highlight={expanded}
-            />}
+          : nativeSubagents && !rawResultDetails
+            ? <div className="task-tool-subagent-list" data-subagent-mode={nativeSubagents.mode}>
+                <div className="task-tool-subagent-overview">
+                  <span>{t('tool.subagent.mode.' + nativeSubagents.mode)}</span>
+                  <span>{t('tool.subagent.count', { count: nativeSubagents.results.length })}</span>
+                </div>
+                {nativeSubagents.results.slice(0, subagentVisibleCount).map((rawResult, index) => {
+                  const child = piSubagentResult(rawResult)
+                  if (!child) return <div key={index} className="task-tool-section-empty">
+                    {t('tool.subagent.unrecognized')}
+                  </div>
+                  const opened = openSubagents[index] === true
+                  const messageLimit = subagentMessageLimits[index] ?? 15
+                  const usage = child.usage
+                  const usageParts = [
+                    ...(usage?.turns !== undefined ? [t('tool.subagent.turns', { count: usage.turns })] : []),
+                    ...(usage?.input !== undefined ? [t('tool.subagent.inputTokens', { count: usage.input })] : []),
+                    ...(usage?.output !== undefined ? [t('tool.subagent.outputTokens', { count: usage.output })] : []),
+                    ...(usage?.cacheRead !== undefined ? [t('tool.subagent.cacheRead', { count: usage.cacheRead })] : []),
+                    ...(usage?.cacheWrite !== undefined ? [t('tool.subagent.cacheWrite', { count: usage.cacheWrite })] : []),
+                    ...(usage?.cost !== undefined ? [t('tool.subagent.cost', { value: usage.cost })] : []),
+                  ]
+                  return <Disclosure
+                    key={index}
+                    open={opened}
+                    className="task-tool-subagent-entry"
+                    summary={<span className="task-tool-subagent-name">
+                      {child.step !== undefined ? t('tool.subagent.step', { step: child.step }) + ' · ' : ''}{child.agent}
+                    </span>}
+                    summaryMeta={<span className="task-tool-subagent-meta">
+                      {child.model && <span>{child.model}</span>}
+                      <StatusBadge tone={child.status === 'completed' ? 'success'
+                        : child.status === 'failed' ? 'danger'
+                          : child.status === 'aborted' ? 'warning'
+                            : child.status === 'running' ? 'accent' : 'neutral'}>
+                        {t('tool.subagent.status.' + child.status)}
+                      </StatusBadge>
+                    </span>}
+                    onToggle={event => {
+                      const open = event.currentTarget.open
+                      event.stopPropagation()
+                      setOpenSubagents(previous => ({ ...previous, [index]: open }))
+                    }}
+                  >
+                    {opened && <div className="task-tool-subagent-body">
+                      {child.task && <div className="task-tool-subagent-fact">
+                        <strong>{t('tool.subagent.task')}</strong>
+                        <span className="task-tool-subagent-text">{child.task}</span>
+                      </div>}
+                      {usageParts.length > 0 && <div className="task-tool-subagent-usage">
+                        {usageParts.join(' · ')}
+                      </div>}
+                      {child.errorMessage && <div className="task-tool-subagent-error" role="alert">
+                        {child.errorMessage}
+                      </div>}
+                      <div className="task-tool-subagent-messages">
+                        <div className="task-tool-section-title">
+                          {t('tool.subagent.messages', { count: child.messages.length })}
+                        </div>
+                        {child.messages.length === 0 && <span className="task-tool-section-empty">
+                          {t('tool.subagent.noMessages')}
+                        </span>}
+                        {child.messages.slice(0, messageLimit).map((rawMessage, messageIndex) => {
+                          const message = piSubagentTranscriptMessage(rawMessage)
+                          if (!message) return <div key={messageIndex} className="task-tool-section-empty">
+                            {t('tool.subagent.unrecognizedMessage')}
+                          </div>
+                          return <div key={messageIndex} className="task-tool-subagent-message">
+                            <div className="task-tool-subagent-message-role">
+                              {t('tool.subagent.role.' + message.role)}
+                            </div>
+                            {message.parts.map((part, partIndex) => <div
+                              key={partIndex} className="task-tool-subagent-message-part"
+                            >
+                              {part.kind !== 'text' && <span className="task-tool-subagent-message-kind">
+                                {t('tool.subagent.part.' + part.kind)}
+                              </span>}
+                              <ToolOutputContent text={part.text} highlight={false}/>
+                              {part.truncated && <span className="task-tool-section-empty">
+                                {t('tool.subagent.truncated')}
+                              </span>}
+                            </div>)}
+                            {message.parts.length === 0 && <span className="task-tool-section-empty">
+                              {t('tool.subagent.nonText')}
+                            </span>}
+                            {message.omittedParts > 0 && <span className="task-tool-section-empty">
+                              {t('tool.subagent.omittedParts', { count: message.omittedParts })}
+                            </span>}
+                          </div>
+                        })}
+                        {child.messages.length > messageLimit && <Button size="small" variant="quiet"
+                          onClick={() => setSubagentMessageLimits(previous => ({
+                            ...previous, [index]: messageLimit + 15,
+                          }))}>
+                          {t('tool.subagent.moreMessages', { count: child.messages.length - messageLimit })}
+                        </Button>}
+                      </div>
+                    </div>}
+                  </Disclosure>
+                })}
+                {nativeSubagents.results.length > subagentVisibleCount && <Button
+                  size="small" variant="quiet"
+                  onClick={() => setSubagentVisibleCount(value => value + 8)}>
+                  {t('tool.subagent.moreResults', { count: nativeSubagents.results.length - subagentVisibleCount })}
+                </Button>}
+              </div>
+            : <ToolOutputContent
+                text={typeof model.resultDetails === 'string'
+                  ? model.resultDetails : JSON.stringify(model.resultDetails, null, 2) ?? String(model.resultDetails)}
+                highlight={expanded}
+              />}
       </section>}
       {(meta || elapsedLabel || onClick || details) && <div className="task-tool-detail-footer">
         {elapsedLabel && <span>{status} · {elapsedLabel}</span>}

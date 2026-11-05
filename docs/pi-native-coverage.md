@@ -24,7 +24,8 @@
 | 子智能体只读会话跳转 | `SessionRelationshipDto` 中 `subagent/exact` | Review 现有会话选择/只读详情 | 已编码 #1034；缺 **toolCallId↔childSessionId** 原生关系，工具级跳转未支持 |
 | 长轮次导轨 | 原生索引、已加载用户/助手正文 | 共享 TaskSurface 的 Q/A 预览与原有分页跳转 | 已编码 #1035；未加载正文不可推断回答 |
 | 正文搜索命中精准定位 | Source 搜索 `NativeBodySearchHitDto.observationId`；Review 索引 `NativeReviewTurnLocatorDto.cursor/nativeEventId` | 现有搜索只定位会话，原生导轨能定位已校验轮次 | **待开发**：两者没有可靠、可直接使用的 observation→turn 映射；不可猜 ordinal |
-| 工具级子会话跳转 | Pi `parentSession` 可用于 fork/clone/newSession；不证明子智能体 | 仅已校验的 session-level `subagent/exact` 可点击 | **待事实来源**：工具调用 ID 与子会话原生关联，不使用相邻记录猜测 |
+| 官方 Subagent 执行详情 | Pi 示例扩展 `toolResult.details.mode/results[]`（single/parallel/chain）经 Live/Review 已关联原生结果 | 复用共享 `TaskToolRow` 展示子任务状态、模型、原生用量和消息/工具调用；按需展开、分批显示，保留原始详情 | 本次已编码；官方扩展默认 `--no-session`，这是工具内部执行记录，**不是可恢复子会话**；超大原生结果沿用分页读，不复制子会话正文 |
+| 工具级子会话跳转 | Pi `parentSession` 可用于 fork/clone/newSession；不证明子智能体 | 仅已校验的 session-level `subagent/exact` 可点击 | **仍待事实来源**：工具调用 ID 与可持久子会话的原生关联，不使用相邻记录猜测 |
 | 精确单次模型耗时 | Pi 消息记录 timestamp / usage；本轮未发现可证明的完整 provider start/end 测量对 | 当前轮次间隔和推理区间不等于精确模型耗时 | **待核实**：缺可靠采样时显示不可用 |
 | Shell / 工具权限预设 | SDK 支持相关功能，但是否能安全通过 AgentLens Runtime capability 暴露需逐项验证 | 已有 Runtime action、Slash、通用 Composer | **待开发**：不得创建无后端动作的开关，也不得绕过权限确认 |
 
