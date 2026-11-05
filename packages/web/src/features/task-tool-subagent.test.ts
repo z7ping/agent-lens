@@ -49,7 +49,7 @@ test('subagent messages keep text, thinking, tool call and raw-only unknown cont
   assert.equal(parsed?.role, 'assistant')
   assert.deepEqual(parsed?.parts.map(part => part.kind), ['text', 'thinking', 'toolCall'])
   assert.match(parsed?.parts[2]?.text ?? '', /src\/main\.ts/)
-  assert.equal(parsed?.omittedParts, 0)
+  assert.equal(parsed?.omittedParts, 1, 'unrecognized image content must not silently disappear')
   assert.deepEqual(piSubagentTranscriptMessage({ role: 'user', content: 'Task: inspect' })?.parts,
     [{ kind: 'text', text: 'Task: inspect', truncated: false }])
   assert.equal(piSubagentTranscriptMessage({ role: 'system', content: [] }), undefined)

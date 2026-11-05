@@ -92,9 +92,10 @@ export function piSubagentTranscriptMessage(value: unknown): PiSubagentTranscrip
   const original = Array.isArray(message.content) ? message.content
     : typeof message.content === 'string' ? [{ type: 'text', text: message.content }] : []
   const parts: PiSubagentTranscriptPart[] = []
+  let skipped = 0
   for (const value of original.slice(0, 40)) {
     const block = record(value)
-    if (!block) continue
+    if (!block) { skipped++; continue }
     let kind: PiSubagentTranscriptPart['kind']
     let full: string
     if (block.type === 'text' && typeof block.text === 'string') {
@@ -107,8 +108,8 @@ export function piSubagentTranscriptMessage(value: unknown): PiSubagentTranscrip
       try { args = block.arguments === undefined ? '' : JSON.stringify(block.arguments, null, 2) ?? '' }
       catch { args = '' }
       full = text(block.name)! + (args ? '\n' + args : '')
-    } else continue
+    } else { skipped++; continue }
     parts.push({ kind, text: full.slice(0, 16_384), truncated: full.length > 16_384 })
   }
-  return { role: message.role, parts, omittedParts: Math.max(0, original.length - 40) }
+  return { role: message.role, parts, omittedParts: skipped + Math.max(0, original.length - 40) }
 }
