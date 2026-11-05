@@ -636,7 +636,8 @@ export function AgentWorkPage({model,sourceId,installationId,installations}: {
                     onClick={()=>goExecutionPage(job,executionOffset+MAX_EXECUTION_PAGE)}>{t('work.next')}</Button>}
                 </div>}
               </Disclosure>
-              <Disclosure className="agent-work-output" summary={t('work.output')}>
+              {(cronOutputLoading || Boolean(cronOutputError) || Boolean(cronOutput?.files.length) || Boolean(cronOutput?.preview)) &&
+                <Disclosure className="agent-work-output" summary={t('work.output')}>
                 {cronOutputLoading && <div className="muted-empty compact" role="status">{t('work.loading')}</div>}
                 {cronOutputError && <div className="agent-path-error" role="alert">{cronOutputError}</div>}
                 {(cronOutput?.state === 'unavailable' || (cronOutput?.state === 'available' && !cronOutput.files.length)) &&
@@ -656,7 +657,7 @@ export function AgentWorkPage({model,sourceId,installationId,installations}: {
                   <div className="section-heading-row"><h3>{cronOutput.preview.name}</h3></div>
                   <MarkdownContent text={cronOutput.preview.text}/>
                 </div>}
-              </Disclosure>
+              </Disclosure>}
               </div>}
           </div>)}
         </section>}
