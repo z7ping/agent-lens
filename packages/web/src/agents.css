@@ -853,14 +853,22 @@
   .disclosure-chevron { transition: none; }
 }
 
-/* Hermes workbench layout: page-owned composition of existing shared controls. */
+/* Hermes workbench: same 1320px reading axis as other workspace pages.
+ * Only page-level composition lives here; shared controls remain unchanged. */
+.agents-responsive-shell .agent-work-page .agent-work-content {
+  width: 100%;
+  max-width: var(--al-workspace-content-max, 1320px);
+  min-width: 0;
+  margin-inline: auto;
+  padding: 18px var(--al-workspace-content-inset, 28px) 56px;
+}
 .agent-work-toolbar {
   display: flex;
   min-height: 52px;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  padding: 10px 18px;
+  padding: 10px 0;
   border-bottom: 1px solid var(--al-line);
 }
 .agent-work-heading,
@@ -879,7 +887,7 @@
 .agent-work-toolbar-actions { flex: 0 0 auto; gap: 5px; }
 .agent-work-menu { display: grid; min-width: 186px; gap: 2px; padding: 5px; }
 .agent-work-menu .btn { width: 100%; justify-content: flex-start; text-align: left; }
-.agent-work-section { min-width: 0; padding: 15px 18px 18px; }
+.agent-work-section { min-width: 0; padding: 15px 0 18px; }
 .agent-work-section + .agent-work-section { border-top: 1px solid var(--al-line); }
 .agent-work-board-heading { margin-bottom: 12px; justify-content: space-between; }
 .agent-work-board-heading h3 { margin: 0; font-size: 13px; font-weight: 670; }
@@ -903,7 +911,20 @@
 .agent-work-empty strong { color: var(--al-ink-2); font-size: 13px; font-weight: 610; }
 .agent-work-empty .btn { margin-top: 4px; }
 .agent-work-pagination { justify-content: flex-end; margin-top: 10px; color: var(--al-muted); font-size: 12px; }
-.agent-work-section > .asset-item + .asset-item { margin-top: 6px; }
+.agent-work-record { min-width: 0; padding: 11px 0; border-bottom: 1px solid var(--al-line); }
+.agent-work-record:first-of-type { border-top: 1px solid var(--al-line); }
+.agent-work-record-line { display: flex; min-width: 0; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.agent-work-record-main { display: flex; min-width: 0; flex: 1; flex-direction: column; gap: 4px; align-items: flex-start; }
+.agent-work-record-title.btn { display: inline-flex; width: auto; max-width: 100%; min-width: 0; padding: 0; gap: 6px; border: 0; justify-content: flex-start; text-align: left; color: var(--al-ink); font-size: 13px; font-weight: 640; white-space: normal; }
+.agent-work-record-title .ui-icon { flex: 0 0 auto; }
+.agent-work-record-meta { display: flex; min-width: 0; flex-wrap: wrap; gap: 5px 9px; padding-left: 20px; color: var(--al-muted); font-size: 12px; line-height: 1.5; }
+.agent-work-record-meta span + span::before { margin-right: 9px; color: var(--al-muted-2); content: "·"; }
+.agent-work-record-line > .ui-status-badge { flex: 0 0 auto; }
+.agent-work-record-details { min-width: 0; margin-top: 10px; padding: 12px 0 4px 20px; border-top: 1px solid var(--al-line); }
+@media (max-width: 767.98px) {
+  .agent-work-record-details { padding-left: 0; }
+}
+
 @media (max-width: 767.98px) {
   .agent-work-toolbar { flex-wrap: wrap; }
   .agent-work-heading { gap: 12px; }

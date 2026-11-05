@@ -3,6 +3,17 @@ import type { LocaleMessagesDto } from '@agent-lens/protocol'
 export const englishAgentsMessages: LocaleMessagesDto = {
   agents: {
     work: {
+      taskStateDone: 'Done',
+      taskStateRunning: 'Running',
+      taskStateBlocked: 'Blocked',
+      scheduleStateScheduled: 'Scheduled',
+      scheduleStatePaused: 'Paused',
+      scheduleStateDisabled: 'Disabled',
+      scheduleStateError: 'Error',
+      scheduleSeconds: 'Every {{count}} seconds',
+      scheduleMinutes: 'Every {{count}} minutes',
+      scheduleHours: 'Every {{count}} hours',
+      scheduleDays: 'Every {{count}} days',
       workspaceTitle: 'Workspace',
       moreActions: 'Workspace actions',
       defaultBoard: 'Default board',
