@@ -8,7 +8,7 @@ import {
   liveEventChangesTaskTranscript,
   liveTaskStableRoundPrefixLength,
   liveTaskResponseActivity,
-  piNativeUsageDetail,
+  sourceNativeUsageDetail,
   mergeLiveActiveProjectionItems,
   preserveOptimisticImagePreviews,
   reconcileLiveSnapshotProjection,
@@ -1284,7 +1284,7 @@ test('Pi composer stage follows native retry/compaction start and end without ti
 })
 
 test('Pi native model usage keeps only source-recorded values and catalog cost provenance', () => {
-  assert.deepEqual(piNativeUsageDetail({
+  assert.deepEqual(sourceNativeUsageDetail({
     input: 120, output: 40, reasoning: 10,
     cacheRead: 25, cacheWrite: 5, totalTokens: 190,
     cost: { total: 0.00123 },
@@ -1296,18 +1296,18 @@ test('Pi native model usage keeps only source-recorded values and catalog cost p
   })
   // Pi reasoning is already included in output; cache tokens must not be
   // added to totalTokens again, and a catalog cost is not provider-billed.
-  assert.deepEqual(piNativeUsageDetail({
+  assert.deepEqual(sourceNativeUsageDetail({
     output: 0, totalTokens: 0,
     cost: { total: 0.05, totalFromProvider: true },
   }, 'assistant', { model: 'model-z' }), {
     origin: 'assistant', model: 'model-z',
     output: 0, totalTokens: 0, costTotal: 0.05, costTotalFromProvider: true,
   })
-  assert.equal(piNativeUsageDetail({
+  assert.equal(sourceNativeUsageDetail({
     input: -1, output: '5', cacheRead: null,
     cost: { total: Number.NaN },
   }, 'assistant', { model: 'name-only' }), undefined)
-  assert.equal(piNativeUsageDetail(null, 'assistant', { model: 'name-only' }), undefined)
+  assert.equal(sourceNativeUsageDetail(null, 'assistant', { model: 'name-only' }), undefined)
 })
 
 test('Pi assistant and independent usage entries are distinct native invocation facts', () => {
