@@ -852,3 +852,61 @@
 @media (prefers-reduced-motion: reduce) {
   .disclosure-chevron { transition: none; }
 }
+
+/* Hermes workbench layout: page-owned composition of existing shared controls. */
+.agent-work-toolbar {
+  display: flex;
+  min-height: 52px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 18px;
+  border-bottom: 1px solid var(--al-line);
+}
+.agent-work-heading,
+.agent-work-toolbar-actions,
+.agent-work-board-heading,
+.agent-work-board-identity,
+.agent-work-pagination {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.agent-work-heading { gap: 22px; }
+.agent-work-heading h2 { margin: 0; font-size: 14px; font-weight: 680; }
+.agent-work-toolbar-actions { flex: 0 0 auto; gap: 5px; }
+.agent-work-menu { display: grid; min-width: 186px; gap: 2px; padding: 5px; }
+.agent-work-menu .btn { width: 100%; justify-content: flex-start; text-align: left; }
+.agent-work-section { min-width: 0; padding: 15px 18px 18px; }
+.agent-work-section + .agent-work-section { border-top: 1px solid var(--al-line); }
+.agent-work-board-heading { margin-bottom: 12px; justify-content: space-between; }
+.agent-work-board-heading h3 { margin: 0; font-size: 13px; font-weight: 670; }
+.agent-work-board-identity { flex: 1 1 240px; }
+.agent-work-board-identity .select-menu-trigger { max-width: min(320px, 100%); }
+.agent-work-meta { color: var(--al-muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+.agent-work-empty {
+  display: flex;
+  min-height: 142px;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  padding: 22px 12px;
+  border: 1px dashed var(--al-line-strong);
+  border-radius: var(--radius-md);
+  background: var(--al-soft-2);
+  color: var(--al-muted);
+  text-align: center;
+}
+.agent-work-empty strong { color: var(--al-ink-2); font-size: 13px; font-weight: 610; }
+.agent-work-empty .btn { margin-top: 4px; }
+.agent-work-pagination { justify-content: flex-end; margin-top: 10px; color: var(--al-muted); font-size: 12px; }
+.agent-work-section > .asset-item + .asset-item { margin-top: 6px; }
+@media (max-width: 767.98px) {
+  .agent-work-toolbar { flex-wrap: wrap; }
+  .agent-work-heading { gap: 12px; }
+  .agent-work-board-identity { flex-basis: 100%; }
+  .agent-work-board-heading { align-items: flex-start; }
+}
