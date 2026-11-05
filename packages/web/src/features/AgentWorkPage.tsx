@@ -598,17 +598,44 @@ export function AgentWorkPage({model,sourceId,installationId,installations}: {
                   kind:'cron.remove',profile:job.profile,jobId:job.id,
                 })}>{t('work.actions.cron_remove')}</Button>}
               </div>
-              <div className="section-heading-row"><h3>{t('work.runs')}</h3></div>
-              {response.executions.filter(run=>run.jobId===job.id && run.profile===job.profile).map(run=><div key={run.id} className="runtime-config-row">
-                <StatusBadge tone={run.status==='failed'?'danger':run.status==='completed'?'success':'neutral'}>{run.status}</StatusBadge>
-                <span>{formatDate(run.startedAt ?? run.claimedAt)}</span>
-                {run.deliveryOutcome && <span>{t('work.delivery')} {run.deliveryOutcome}</span>}
-                {run.error && <div className="agent-path-error">{run.error}</div>}
-              </div>)}
-              <div className="runtime-config-row">
-                {executionOffset>0 && <Button size="small" disabled={snapshot.loading} onClick={()=>goExecutionPage(job,Math.max(0,executionOffset-MAX_EXECUTION_PAGE))}>{t('work.previous')}</Button>}
-                {response.executionsHasMore && <Button size="small" disabled={snapshot.loading} onClick={()=>goExecutionPage(job,executionOffset+MAX_EXECUTION_PAGE)}>{t('work.next')}</Button>}
-              </div>
+              <Disclosure className="agent-work-history" summary={t('work.runs')}
+                summaryMeta={snapshot.loading ? t('work.loading')
+                  : selectedExecutions.length
+                    ? t('work.loadedRuns',{count:selectedExecutions.length}) + (response.executionsHasMore?'+':'')
+                      + (sharedSuppressedDelivery ? ' · '+t('work.deliverySuppressedPage') : '')
+                    : t('work.noRuns')}>
+                {selectedExecutions.length===0 && !snapshot.loading &&
+                  <p className="muted-empty compact">{t('work.noRuns')}</p>}
+                {visibleAgentWorkExecutions(selectedExecutions,showAllExecutions,PREVIEW_EXECUTION_COUNT).map(run=>{
+                  const statusKey=agentWorkExecutionStatusKey(run.status)
+                  const deliveryKey=run.deliveryOutcome?agentWorkDeliveryKey(run.deliveryOutcome):undefined
+                  return <div key={run.id} className="agent-work-execution-row">
+                    <time dateTime={run.startedAt ?? run.claimedAt} className="agent-work-execution-time">
+                      {formatDate(run.startedAt ?? run.claimedAt)}
+                    </time>
+                    <StatusBadge tone={['failed','error','timed_out'].includes(run.status)?'danger'
+                      :run.status==='completed'?'success':'neutral'}>
+                      {statusKey?t(statusKey):run.status}
+                    </StatusBadge>
+                    {run.deliveryOutcome && !sharedSuppressedDelivery &&
+                      <span className="agent-work-execution-delivery">
+                        {deliveryKey?t(deliveryKey):t('work.delivery')+' '+run.deliveryOutcome}
+                      </span>}
+                    {run.error && <div className="agent-path-error" role="alert">{run.error}</div>}
+                  </div>
+                })}
+                {selectedExecutions.length>PREVIEW_EXECUTION_COUNT &&
+                  <Button size="small" variant="quiet" onClick={()=>setShowAllExecutions(value=>!value)}>
+                    {t(showAllExecutions?'work.showFewerExecutions':'work.showAllExecutions',
+                      {count:selectedExecutions.length})}
+                  </Button>}
+                {(executionOffset>0 || response.executionsHasMore) && <div className="agent-work-pagination">
+                  {executionOffset>0 && <Button size="small" disabled={snapshot.loading}
+                    onClick={()=>goExecutionPage(job,Math.max(0,executionOffset-MAX_EXECUTION_PAGE))}>{t('work.previous')}</Button>}
+                  {response.executionsHasMore && <Button size="small" disabled={snapshot.loading}
+                    onClick={()=>goExecutionPage(job,executionOffset+MAX_EXECUTION_PAGE)}>{t('work.next')}</Button>}
+                </div>}
+              </Disclosure>
               <section className="agent-secondary">
                 <div className="section-heading-row"><h3>{t('work.output')}</h3></div>
                 {cronOutputLoading && <div className="muted-empty compact" role="status">{t('work.loading')}</div>}
