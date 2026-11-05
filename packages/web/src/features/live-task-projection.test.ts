@@ -1412,3 +1412,22 @@ test('Pi native system records without sections retain exact source without a fa
   assert.equal(system.preview, '')
   assert.equal(system.source, record)
 })
+
+test('summary retries share the native process timeline and never imply successful completion', () => {
+  const scheduled = reduceLiveTaskEvent([], event(1, {
+    type: 'status', status: 'running',
+    process: { operation: 'retry', phase: 'start', attempt: 1, maxAttempts: 3 },
+  }))
+  assert.equal(liveTaskResponseActivity(scheduled, true), 'retrying')
+  const attempt = reduceLiveTaskEvent(scheduled, event(2, {
+    type: 'status', status: 'running',
+    process: { operation: 'retry', phase: 'start', retrySource: 'branchSummary' },
+  }))
+  assert.equal(attempt[1]?.kind === 'event' ? attempt[1].process.retrySource : undefined, 'branchSummary')
+  const finished = reduceLiveTaskEvent(attempt, event(3, {
+    type: 'status', status: 'running',
+    process: { operation: 'retry', phase: 'end' },
+  }))
+  assert.equal(liveTaskResponseActivity(finished, true), 'processing')
+  assert.equal(finished[2]?.kind === 'event' ? finished[2].process.outcome : undefined, undefined)
+})

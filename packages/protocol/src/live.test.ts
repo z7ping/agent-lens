@@ -391,3 +391,25 @@ test('Live protocol preserves source-keyed extension status/widget updates and c
     type: 'ui.state', kind: 'status', key: '', text: 'bad',
   }), null)
 })
+
+test('Live protocol preserves attested summarization retry origin but drops unknown values', () => {
+  assert.deepEqual(parseLiveEventDto({
+    type: 'status', status: 'running',
+    process: { operation: 'retry', phase: 'start', retrySource: 'branchSummary', attempt: 1 },
+  }), {
+    type: 'status', status: 'running',
+    process: { operation: 'retry', phase: 'start', retrySource: 'branchSummary', attempt: 1 },
+  })
+  assert.deepEqual(parseLiveEventDto({
+    type: 'status', status: 'running',
+    process: { operation: 'retry', phase: 'end', retrySource: 'untrusted' },
+  }), {
+    type: 'status', status: 'running', process: { operation: 'retry', phase: 'end' },
+  })
+  assert.deepEqual(parseLiveEventDto({
+    type: 'status', status: 'ready',
+    process: { operation: 'compaction', phase: 'end', retrySource: 'branchSummary' },
+  }), {
+    type: 'status', status: 'ready', process: { operation: 'compaction', phase: 'end' },
+  })
+})

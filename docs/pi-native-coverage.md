@@ -6,6 +6,9 @@
 | --- | --- | --- | --- |
 | 扩展 select/confirm/input/editor | Pi SDK → `pi-live/extension-ui-bridge` / Worker → `ui.request/ui.dismiss` | Live FIFO 弹窗请求，按 requestId 响应和清除 | 已编码 #1020；断线恢复仍需实机验证 |
 | 自动重试 | Pi `auto_retry_start/end` → `pi-live/adapter` → Live Protocol | Live `TaskEvent` 过程事实 | 已编码 #1021；不推断重试后整轮成败 |
+| 摘要重试 | Pi `summarization_retry_scheduled/attempt_start/finished` → Live Adapter → Live Protocol | 共享 TaskEvent 显示次数、等待、错误、真实摘要来源 | 本次已编码；finished 只说明重试循环结束，成功与否取决于 `compaction_end` 或持久摘要条目，不能从 finished 推断成功 |
+| 扩展追加条目 | `entry_appended.entry` → 原生 JSONL / Source | 原始 Live 事件仍可追查，正文通过 Source 快照呈现 | 有意不映射成第二条 Live 消息，避免重复；原生 Source 类型按现有 `pi-native` 解析 |
+| 直接 RPC Bash 输出 | `bash_execution_update.id/delta` | 保留原始事件；不创建无归属的工具行 | 本项目使用 Pi SDK Worker，尚无直接 RPC Bash 调用与响应能力；不能伪造工具 start/end |
 | 上下文压缩 | SDK `compaction_start/end` 和原生 JSONL `compaction` | Live 过程事件、历史快照重建；Review 继续按原生会话读取 | 已编码 #1021/#1022；跨恢复/分页一致性待验收 |
 | 工具执行与富结果 | SDK `tool_execution_*`、原生 `toolResult.content/details` | SSE 有界预览；Live 快照完整结果→共享 `TaskToolRow` / 图片 | 已编码 #1022；超大结果按需窗口仍属 #324 |
 | 修改补丁 | Pi 内置 edit 的 `details.patch` | 共享 `PatchDiff`，可切换原文 | 已编码 #1023；不将 `details.diff` 误认为统一补丁 |
