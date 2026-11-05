@@ -137,6 +137,7 @@ export const chineseTaskMessages: LocaleMessagesDto = {
         branchSummary: '分支摘要',
         contextExcluded: '已从模型上下文排除内容',
         contextReplaced: '模型上下文内容已替换',
+        contextUpdated: '模型上下文变更',
         customMessage: '扩展上下文消息',
         customHidden: '隐藏的扩展上下文消息',
         bashExecution: 'Pi Shell 执行',
