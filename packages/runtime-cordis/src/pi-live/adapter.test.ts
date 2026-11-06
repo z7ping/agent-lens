@@ -621,6 +621,23 @@ test('Pi Live Adapter exposes Runtime commands through generic command-discovery
 })
 
 
+test('Pi Web built-in actions win command name collisions with native extensions', async () => {
+  const service = {
+    commands: async () => [
+      { name: 'model', source: 'extension' as const },
+      { name: 'reload', source: 'extension' as const },
+      { name: 'mcp', source: 'extension' as const },
+    ],
+  } as unknown as PiLiveService
+  const adapter = new PiLiveAdapter(service, attachmentService())
+  const commands = await adapter.commands('runtime-1')
+  assert.equal(commands.filter(command => command.value === '/model').length, 1)
+  assert.equal(commands.find(command => command.value === '/model')?.action, 'open-model')
+  assert.equal(commands.filter(command => command.value === '/reload').length, 1)
+  assert.equal(commands.find(command => command.value === '/reload')?.runtimeActionId, 'pi.runtime.reload')
+  assert.equal(commands.find(command => command.value === '/mcp')?.group, 'extension')
+})
+
 test('Pi Live Adapter exposes full-session history index through bounded queries', async () => {
   const calls: Array<{ runtimeSessionId: string; query?: { fromOrdinal?: number; limit?: number } }> = []
   const service = {
