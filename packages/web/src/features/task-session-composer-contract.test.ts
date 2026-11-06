@@ -154,6 +154,8 @@ test('Slash and @ suggestions share a single keyboard interaction with compositi
   assert.match(composer, /!event\.isComposing && event\.keyCode !== 229/)
   assert.match(composer, /!event\.shiftKey && !event\.altKey && !event\.ctrlKey && !event\.metaKey/)
   assert.match(composer, /COMMAND_PRIORITY_CRITICAL/)
+  assert.match(composer, /if \(submitOnExact\?\.\(\)\) return false/)
+  assert.match(composer, /registerCommand\(KEY_TAB_COMMAND/)
 })
 
 test('共享 Composer 保留 Markdown、大文本、图片、Shift+Enter 与 Alt+Enter 语义', () => {
