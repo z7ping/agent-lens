@@ -23,6 +23,27 @@ export interface LiveNativeUsageDetail {
   costTotalFromProvider?: boolean
 }
 
+export type LiveNativeCommandDetail = {
+  command: string
+  outcome: 'handled' | 'failed'
+  /** Full native SDK notifications and errors, without preview truncation. */
+  output: string
+}
+
+/** Only our native Pi command journal entry is eligible for a human-readable result.
+ * The compact preview and raw evidence remain separately available. */
+export function liveNativeCommandDetail(item: Extract<LiveTaskProjectionItem, { kind: 'native' }>): LiveNativeCommandDetail | null {
+  if (item.nativeType !== 'command' || item.source.customType !== 'agent-lens.command') return null
+  const data = record(item.source.data)
+  const command = text(data.command)
+  if (!command || (data.outcome !== 'handled' && data.outcome !== 'failed')) return null
+  const messages = Array.isArray(data.messages)
+    ? data.messages.map(value => text(record(value).message)).filter(Boolean) : []
+  const error = text(data.error)
+  if (error && !messages.includes(error)) messages.push(error)
+  return { command, outcome: data.outcome, output: messages.join('\n\n') }
+}
+
 export type LiveTaskProjectionItem =
   | {
       id: string
