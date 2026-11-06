@@ -196,6 +196,7 @@ class InProcessHandle implements PiRuntimeHandle {
       extensionUi: typeof session.bindExtensions === 'function',
       treeNavigation: typeof session.navigateTree === 'function',
       manualCompaction: typeof session.compact === 'function',
+      nativeReload: typeof session.reload === 'function',
       messageFork: typeof session.sessionManager.createBranchedSession === 'function'
         && typeof session.sessionManager.newSession === 'function',
     }
@@ -413,6 +414,12 @@ class InProcessHandle implements PiRuntimeHandle {
       cancelled: result.cancelled,
       ...(typeof result.editorText === 'string' ? { editorText: result.editorText } : {}),
     }
+  }
+  async reload(): Promise<void> {
+    if (this.session.isStreaming || this.session.isCompacting) throw new Error('Pi resource reload requires an idle session')
+    if (typeof this.session.reload !== 'function') throw new Error('Installed Pi SDK does not support resource reload')
+    await this.session.reload()
+    this.roundIndexCache = undefined
   }
   async compact(): Promise<void> {
     if (this.session.isStreaming || this.session.isCompacting) throw new Error('Pi manual compaction requires an idle session')
