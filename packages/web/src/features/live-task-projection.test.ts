@@ -1592,3 +1592,13 @@ test('Pi initial snapshot reconciliation removes an SSE compaction repeated by a
   assert.equal(merged.stable[0]?.kind === 'event'
     ? merged.stable[0].process.reason : '', 'overflow')
 })
+
+test('Pi settled recovery does not repeat a native compaction already in the base page', () => {
+  const journal = projectLiveSnapshotEntries([{
+    type: 'compaction', id: 'record-preexisting',
+    summary: 'original context reduction', firstKeptEntryId: 'entry-7',
+  }])
+  const reused = reconcileLiveSettledRecoveryActive(journal, 1, journal)
+  assert.deepEqual(reused, journal)
+  assert.equal(reused.filter(item => item.kind === 'event').length, 1)
+})
