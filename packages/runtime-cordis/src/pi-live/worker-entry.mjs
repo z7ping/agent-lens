@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto'
+import { AsyncLocalStorage } from 'node:async_hooks'
 import { access, readFile } from 'node:fs/promises'
 import { basename, dirname, isAbsolute, join, relative, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
@@ -47,6 +48,7 @@ let currentStageStartedAt = 0
 let initializationTimings = []
 const seenRequestIds = new Set()
 const snapshotTransfers = new Map()
+const commandScope = new AsyncLocalStorage()
 const outboundQueue = []
 let outboundSending = false
 let exitAfterFlush = false
@@ -1273,11 +1275,18 @@ function createExtensionUi() {
       select: (title, choices, options) => dialog('select', { title, options: choices }, options, undefined, response => response.cancelled ? undefined : response.value),
       confirm: (title, message, options) => dialog('confirm', { title, message }, options, false, response => response.cancelled ? false : response.confirmed === true),
       input: (title, placeholder, options) => dialog('input', { title, placeholder }, options, undefined, response => response.cancelled ? undefined : response.value),
-      notify: (message, notifyType) => fire({ method: 'notify', message, notifyType }),
+      notify: (message, notifyType) => {
+        const active = commandScope.getStore()
+        if (active && typeof message === 'string') {
+          const level = ['success', 'warning', 'error'].includes(notifyType) ? notifyType : 'info'
+          active.messages.push({ level, message })
+        }
+        fire({ method: 'notify', message, notifyType, ...(active ? { commandRecordId: active.id } : {}) })
+      },
       onTerminalInput: () => () => {}, setStatus: (statusKey, statusText) => fire({ method: 'setStatus', statusKey, statusText }),
       setWorkingMessage: () => {}, setWorkingVisible: () => {}, setWorkingIndicator: () => {}, setHiddenThinkingLabel: () => {},
       setWidget: (widgetKey, widgetLines, options) => fire({ method: 'setWidget', widgetKey, widgetLines, widgetPlacement: options?.placement }),
-      setFooter: () => {}, setHeader: () => {}, setTitle: title => fire({ method: 'setTitle', title }), custom: async () => undefined,
+      setFooter: () => {}, setHeader: () => {}, setTitle: title => fire({ method: 'setTitle', title }), custom: async () => { throw new Error('Pi terminal custom UI is unavailable in AgentLens Web; use Pi CLI for this interactive command') },
       pasteToEditor: text => { editorText = text; fire({ method: 'set_editor_text', text }) },
       setEditorText: text => { editorText = text; fire({ method: 'set_editor_text', text }) }, getEditorText: () => editorText,
       editor: (title, prefill) => dialog('editor', { title, prefill }, undefined, undefined, response => response.cancelled ? undefined : response.value),
@@ -1470,10 +1479,15 @@ function beginExtensionBinding(input) {
     uiContext: extensionUi.context,
     mode: 'rpc',
     abortHandler: () => { void session.abort() },
-    onError: value => send('event', {
-      type: 'extension_error',
-      error: diagnostic(record(value).error ?? 'Unknown extension error'),
-    }),
+    onError: value => {
+      const error = diagnostic(record(value).error ?? 'Unknown extension error')
+      const active = commandScope.getStore()
+      if (active && record(value).extensionPath === `command:${active.name.slice(1)}`) {
+        active.outcome = 'failed'
+        active.error = error
+      }
+      send('event', { type: 'extension_error', error })
+    },
   })).then(() => {
     recordStartupMetric('extension_bind_ms', Date.now() - startedAt)
     extensionBindingStatus = 'ready'
