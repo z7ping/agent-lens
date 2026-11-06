@@ -327,6 +327,8 @@ export const chineseTaskMessages: LocaleMessagesDto = {
         reconnect: '重新连接',
         empty: '尚无状态记录，可点击刷新读取 Pi 原生状态。',
         lastStatus: '最近一次原生状态',
+        registeredTools: 'Pi SDK 已注册可达工具',
+        noRegisteredTools: '当前未读取到可达 MCP 工具（不代表没有配置服务器）',
         close: '关闭',
       },
       extension: {
