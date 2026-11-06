@@ -105,6 +105,28 @@ async function waitForStatus(
   throw new Error(`runtime did not reach ${status}`)
 }
 
+test('未注册 /mcp 等斜杠指令在 Runtime 层被拒绝，原生扩展仍可执行', async () => {
+  const host = new RuntimeContributionHost(true, true)
+  const service = new DefaultPiLiveService(host)
+  try {
+    const started = await service.start({ cwd: '/workspace' })
+    await waitForStatus(service, started.runtimeSessionId, 'ready')
+    const id = started.runtimeSessionId
+    await assert.rejects(() => service.prompt(id, '/mcp'), /Unrecognized Pi slash command: \/mcp/)
+    await assert.rejects(() => service.prompt(id, '/some-unknown-command args'), /Unrecognized Pi slash command/)
+    await assert.rejects(() => service.steer(id, '/mcp'), /Unrecognized Pi slash command/)
+    await assert.rejects(() => service.followUp(id, '/mcp'), /Unrecognized Pi slash command/)
+    assert.equal(host.prompts, 0, 'unknown slash must never be forwarded to the worker')
+    await assert.rejects(() => service.steer(id, '/title'), /cannot be queued/)
+    await service.prompt(id, '/title')
+    assert.equal(host.prompts, 1, 'registered native extension command remains available')
+    await service.prompt(id, 'ordinary message')
+    assert.equal(host.prompts, 2)
+  } finally {
+    await service.dispose()
+  }
+})
+
 test('Pi Live 优先采用 SDK 原生标题，扩展更名与清除能覆盖首条消息回退', async () => {
   const host = new RuntimeContributionHost(true)
   const service = new DefaultPiLiveService(host)

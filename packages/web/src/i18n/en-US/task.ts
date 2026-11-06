@@ -233,6 +233,7 @@ export const englishTaskMessages: LocaleMessagesDto = {
       },
       runtimeActionFeedback: {
         running: 'Executing command…',
+        handled: 'Handled by native command',
         done: 'Command completed',
         failed: 'Command failed; check error details',
       },
@@ -285,7 +286,7 @@ export const englishTaskMessages: LocaleMessagesDto = {
       defaultModelNotSaved: 'Pi did not confirm that the default model was saved',
       modelSelectorUnavailable: 'This Runtime has no available model selector',
       commandUnavailable: 'This command is unavailable in the current state',
-      slashCommandBlocked: '{{name}} cannot be sent as a message; this Runtime has no matching Web action',
+      slashCommandBlocked: 'Cannot execute {{name}}: unknown, unavailable, or unsupported arguments. Nothing was sent to the model.',
       thinking: 'Thinking level',
       thinkingNoAlternatives: 'This model offers no other reasoning levels',
       thinkingNotApplied: 'Reasoning level did not change: requested {{requested}}, runtime reports {{actual}}',

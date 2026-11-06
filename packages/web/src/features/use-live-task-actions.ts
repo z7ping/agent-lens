@@ -74,7 +74,7 @@ export function useLiveTaskActions({
   } = session
   const sendInFlightRef = useRef(false)
   const [sendFeedback, setSendFeedback] = useState<'idle' | 'sending' | 'accepted' | 'queued' | 'failed'>('idle')
-  const [runtimeActionFeedback, setRuntimeActionFeedback] = useState<'idle' | 'running' | 'done' | 'failed'>('idle')
+  const [runtimeActionFeedback, setRuntimeActionFeedback] = useState<'idle' | 'running' | 'handled' | 'done' | 'failed'>('idle')
   useEffect(() => { setRuntimeActionFeedback('idle') }, [current?.runtimeSessionId])
   useEffect(() => {
     if (runtimeActionFeedback === 'idle' || runtimeActionFeedback === 'running') return
@@ -124,8 +124,36 @@ export function useLiveTaskActions({
     && !queueMutationPending,
   )
 
-  const send = useCallback(async (message: LiveMessageDto, requestedBehavior?: LiveQueueMode) => {
+  const send = useCallback(async (message: LiveMessageDto, requestedBehavior?: LiveQueueMode, nativeCommand = false) => {
     if (!current || !product || !state || !canSubmit || sendInFlightRef.current) return
+    if (nativeCommand) {
+      // Pi registered extension commands are executed by the SDK, not a model turn.
+      // Never append an optimistic user bubble or claim that the model is streaming.
+      if (state.status !== 'ready' || state.isStreaming || messageHasAttachments(message)) {
+        setError(t('live.commandUnavailable'))
+        return
+      }
+      sendInFlightRef.current = true
+      setSendFeedback('idle')
+      setRuntimeActionFeedback('running')
+      setError('')
+      try {
+        await liveApi.send(current.liveId, current.runtimeSessionId, message, 'normal')
+        // Pi SDK acknowledges command dispatch, but extension handlers may report failures asynchronously.
+        setRuntimeActionFeedback('handled')
+        setInputHistory(previous => appendLiveInputHistory(previous, messageText(message)))
+        if (messageText(composerRef.current?.getMessage() ?? { parts: [] }) === messageText(message)) {
+          clearComposer()
+        }
+        composerRef.current?.focus({ preventScroll: true })
+      } catch (reason) {
+        setRuntimeActionFeedback('failed')
+        setError(reason instanceof Error ? reason.message : String(reason))
+      } finally {
+        sendInFlightRef.current = false
+      }
+      return
+    }
     setRuntimeActionFeedback('idle')
     const unsupported = unsupportedInput(message, product.inputCapabilities)
     if (unsupported) {

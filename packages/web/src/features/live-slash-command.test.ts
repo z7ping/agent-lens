@@ -8,6 +8,8 @@ const commands: LiveCommandDto[] = [
   { value: '/compact', group: 'builtin', action: 'runtime-action', runtimeActionId: 'pi.runtime.compact' },
   { value: '/reload', group: 'builtin', action: 'runtime-action', runtimeActionId: 'pi.runtime.reload' },
   { value: '/review', group: 'extension' },
+  { value: '/mcp', group: 'extension' },
+  { value: '/explain', group: 'prompt' },
   { value: '/skill:audit', group: 'skill' },
 ]
 
@@ -15,7 +17,7 @@ function textMessage(text: string): LiveMessageDto {
   return { parts: [{ type: 'text', text }] }
 }
 
-test('only Runtime-declared Web actions are intercepted; extension and Skill commands stay native', () => {
+test('UI actions and native extensions execute separately; prompt templates and Skills remain model prompts', () => {
   const model = resolveLiveSlash(textMessage('/model'), commands)
   assert.equal(model.kind, 'action')
   if (model.kind === 'action') assert.equal(model.command.action, 'open-model')
@@ -25,8 +27,11 @@ test('only Runtime-declared Web actions are intercepted; extension and Skill com
   const reload = resolveLiveSlash(textMessage('/reload'), commands)
   assert.equal(reload.kind, 'action')
   if (reload.kind === 'action') assert.equal(reload.command.runtimeActionId, 'pi.runtime.reload')
-  assert.equal(resolveLiveSlash(textMessage('/review changes'), commands).kind, 'prompt')
+  assert.equal(resolveLiveSlash(textMessage('/review changes'), commands).kind, 'native-command')
+  assert.equal(resolveLiveSlash(textMessage('/mcp'), commands).kind, 'native-command')
+  assert.equal(resolveLiveSlash(textMessage('/mcp list'), commands).kind, 'native-command')
   assert.equal(resolveLiveSlash(textMessage('/skill:audit'), commands).kind, 'prompt')
+  assert.equal(resolveLiveSlash(textMessage('/explain'), commands).kind, 'prompt')
   assert.equal(resolveLiveSlash(textMessage('please review /model'), commands).kind, 'prompt')
 })
 
@@ -35,6 +40,14 @@ test('unsupported TUI-only commands and action arguments cannot become LLM promp
   assert.deepEqual(resolveLiveSlash(textMessage('/compact custom instructions'), commands), { kind: 'blocked', name: '/compact' })
   assert.deepEqual(resolveLiveSlash(textMessage('/model'), []), { kind: 'blocked', name: '/model' })
   assert.deepEqual(resolveLiveSlash(textMessage('/reload'), []), { kind: 'blocked', name: '/reload' })
+  assert.deepEqual(resolveLiveSlash(textMessage('/mcp'), []), { kind: 'blocked', name: '/mcp' })
+  assert.deepEqual(resolveLiveSlash(textMessage('/mcp'), commands.filter(item => item.value !== '/mcp')), { kind: 'blocked', name: '/mcp' })
+  assert.deepEqual(resolveLiveSlash(textMessage('/future-extension'), commands), { kind: 'blocked', name: '/future-extension' })
+  assert.equal(resolveLiveSlash(textMessage('请查看 /mcp 的用法'), commands).kind, 'prompt')
+  assert.deepEqual(resolveLiveSlash({ parts: [
+    { type: 'text', text: '/mcp' },
+    { type: 'image', attachmentId: 'image-1' },
+  ] }, commands), { kind: 'blocked', name: '/mcp' })
   assert.deepEqual(resolveLiveSlash(textMessage('/reload now'), commands), { kind: 'blocked', name: '/reload' })
   assert.equal(resolveLiveSlash({ parts: [
     { type: 'text', text: '/model' },
@@ -46,4 +59,14 @@ test('Review must not resume a historical session to send slash commands as ordi
   assert.equal(isSlashCommandInput(textMessage('/reload')), true)
   assert.equal(isSlashCommandInput(textMessage('  /model')), true)
   assert.equal(isSlashCommandInput(textMessage('please /reload')), false)
+})
+
+test('a native name collision cannot replace a Web action or reach the model', () => {
+  const conflicting: LiveCommandDto[] = [
+    { value: '/model', group: 'extension' },
+    ...commands,
+  ]
+  const model = resolveLiveSlash(textMessage('/model'), conflicting)
+  assert.equal(model.kind, 'action')
+  if (model.kind === 'action') assert.equal(model.command.action, 'open-model')
 })

@@ -233,6 +233,7 @@ export const chineseTaskMessages: LocaleMessagesDto = {
       },
       runtimeActionFeedback: {
         running: '正在执行命令…',
+        handled: '已交给原生命令处理',
         done: '命令执行完成',
         failed: '命令执行失败，请检查错误信息',
       },
@@ -285,7 +286,7 @@ export const chineseTaskMessages: LocaleMessagesDto = {
       defaultModelNotSaved: 'Pi 没有确认默认模型已保存',
       modelSelectorUnavailable: '当前 Runtime 没有可用的模型选择器',
       commandUnavailable: '当前状态不支持执行此命令',
-      slashCommandBlocked: '{{name}} 不是可直接发送的消息；当前 Runtime 未提供相应 Web 操作',
+      slashCommandBlocked: '无法执行 {{name}}：命令不存在、当前不可用或参数不受支持。未发送给模型。',
       thinking: '思考强度',
       thinkingNoAlternatives: '当前模型只有这一个推理档位，无法切换',
       thinkingNotApplied: '推理档位未生效：请求 {{requested}}，运行时仍为 {{actual}}',

@@ -1563,23 +1563,40 @@ export class DefaultPiLiveService implements PiLiveService {
     this.persistPackageUpdatesBestEffort(runtime, runtime.generation)
     return this.decorateReadyState(runtime, state)
   }
+  /** Fail closed at the Pi Runtime boundary too: a missing /command is never an LLM prompt.
+   * Extension commands run through SDK prompt(); skills/templates intentionally expand there. */
+  private async verifySlashCommand(runtime: OwnedRuntime, message: string, queued: boolean): Promise<boolean> {
+    const name = message.trim().split(/\s+/)[0] ?? ''
+    if (!name.startsWith('/')) return false
+    const command = (await runtime.handle?.commands?.())?.find(item => `/${item.name}` === name)
+    if (!command) throw this.conflict(`Unrecognized Pi slash command: ${name}`)
+    if (queued && command.source === 'extension') {
+      throw this.conflict(`Pi extension command cannot be queued: ${name}`)
+    }
+    return command.source === 'extension'
+  }
+
   async prompt(id: string, message: string, behavior?: PiLiveStreamingBehavior, images?: readonly PiLiveImageInput[]): Promise<void> {
     if (!message.trim() && !images?.length) return
     const runtime = await this.readyRuntime(id)
+    const nativeExtension = await this.verifySlashCommand(runtime, message, false)
+    if (nativeExtension && images?.length) throw this.conflict('Pi native extension commands cannot include attachments')
     await runtime.handle!.prompt(message, behavior, images)
-    if (message.trim()) this.captureTaskSummary(runtime, message)
+    if (message.trim() && !message.trimStart().startsWith('/')) this.captureTaskSummary(runtime, message)
   }
   async steer(id: string, message: string, images?: readonly PiLiveImageInput[]): Promise<void> {
     if (!message.trim() && !images?.length) return
     const runtime = await this.readyRuntime(id)
+    await this.verifySlashCommand(runtime, message, true)
     await runtime.handle!.steer(message, images)
-    if (message.trim()) this.captureTaskSummary(runtime, message)
+    if (message.trim() && !message.trimStart().startsWith('/')) this.captureTaskSummary(runtime, message)
   }
   async followUp(id: string, message: string, images?: readonly PiLiveImageInput[]): Promise<void> {
     if (!message.trim() && !images?.length) return
     const runtime = await this.readyRuntime(id)
+    await this.verifySlashCommand(runtime, message, true)
     await runtime.handle!.followUp(message, images)
-    if (message.trim()) this.captureTaskSummary(runtime, message)
+    if (message.trim() && !message.trimStart().startsWith('/')) this.captureTaskSummary(runtime, message)
   }
   async queueState(id: string): Promise<PiLiveQueueState> {
     const runtime = await this.readyRuntime(id)
