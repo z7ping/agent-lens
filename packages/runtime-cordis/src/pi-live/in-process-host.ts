@@ -13,6 +13,7 @@ import {
 import { toPiLiveWireEvent } from './sdk-event'
 import type { PiSdkLoader, PiSdkModel, PiSdkSession, PiSdkThinkingLevel } from './sdk-loader'
 import type {
+  PiLiveCommandRecord,
   PiLiveControls,
   PiLiveImageInput,
   PiLivePackageUpdate,
@@ -456,7 +457,39 @@ class InProcessHandle implements PiRuntimeHandle {
     this.session.setThinkingLevel(level as PiSdkThinkingLevel)
     return this.state()
   }
-  async prompt(message: string, behavior?: PiLiveStreamingBehavior, images?: readonly PiLiveImageInput[]): Promise<void> { await new Promise<void>((resolve, reject) => { let accepted = false; const accept = () => { if (!accepted) { accepted = true; resolve() } }; void this.session.prompt(message, { ...(images?.length ? { images: [...images] } : {}), ...(behavior ? { streamingBehavior: behavior } : {}), source: 'rpc', preflightResult: success => { if (success) accept() } }).then(accept, error => { if (!accepted) reject(error) }) }) }
+  async prompt(message: string, behavior?: PiLiveStreamingBehavior, images?: readonly PiLiveImageInput[]): Promise<void> {
+    const runPrompt = () => new Promise<void>((resolve, reject) => {
+      let accepted = false
+      const accept = () => { if (!accepted) { accepted = true; resolve() } }
+      void this.session.prompt(message, { ...(images?.length ? { images: [...images] } : {}), ...(behavior ? { streamingBehavior: behavior } : {}), source: 'rpc', preflightResult: success => { if (success) accept() } }).then(accept, error => { if (!accepted) reject(error) })
+    })
+    const nativeName = message.trim().split(/\s+/)[0] ?? ''
+    const nativeCommand = nativeName.startsWith('/')
+      && piSdkCommands(this.session).some(item => `/${item.name}` === nativeName && item.source === 'extension')
+    if (!nativeCommand) return runPrompt()
+    const manager = this.session.sessionManager
+    if (!manager.appendCustomEntry || !manager.getEntry) {
+      throw new Error('Pi SDK does not support native command evidence records')
+    }
+    const record: PiLiveCommandRecord = {
+      command: message, startedAt: new Date().toISOString(), finishedAt: '', outcome: 'handled', messages: [],
+    }
+    return this.extensionUi.runCommand(nativeName, record, async () => {
+      try {
+        await runPrompt()
+      } catch (error) {
+        record.outcome = 'failed'
+        record.error = error instanceof Error ? error.message : String(error)
+        throw error
+      } finally {
+        record.finishedAt = new Date().toISOString()
+        const entryId = manager.appendCustomEntry!('agent-lens.command', record)
+        const entry = manager.getEntry!(entryId)
+        this.roundIndexCache = undefined
+        if (entry) this.extensionUi.publishCommandEntry(entry)
+      }
+    })
+  }
   async steer(message: string, images?: readonly PiLiveImageInput[]): Promise<void> { await this.session.steer(message, images?.length ? [...images] : undefined) }
   async followUp(message: string, images?: readonly PiLiveImageInput[]): Promise<void> { await this.session.followUp(message, images?.length ? [...images] : undefined) }
   async clearQueue(): Promise<PiLiveQueueState> { return this.session.clearQueue() }
@@ -517,7 +550,7 @@ export class InProcessPiRuntimeHost implements PiRuntimeHost {
     const extensionUi = new PiExtensionUiBridge({ publish: onEvent })
     const unsubscribe = session.subscribe(event => onEvent(toPiLiveWireEvent(record(event))))
     try {
-      await session.bindExtensions({ uiContext: extensionUi.context, mode: 'rpc', abortHandler: () => { void session.abort() }, onError: value => onEvent({ type: 'extension_error', error: String(record(value).error ?? 'Unknown extension error') }) })
+      await session.bindExtensions({ uiContext: extensionUi.context, mode: 'rpc', abortHandler: () => { void session.abort() }, onError: value => { extensionUi.captureCommandError(value); onEvent({ type: 'extension_error', error: String(record(value).error ?? 'Unknown extension error') }) } })
       const resources = runtimeResourceSnapshot(session)
       if (resources) onEvent({ type: 'runtime_resources', resources })
       if (input.name && (!input.sessionPath || input.historyAction === 'fork')) session.setSessionName(input.name)
