@@ -1732,10 +1732,46 @@ async function command(name, value = {}) {
     return state()
   }
   if (name === 'prompt') {
-    await new Promise((resolveAccepted, rejectAccepted) => {
+    const runPrompt = () => new Promise((resolveAccepted, rejectAccepted) => {
       let accepted = false
       const accept = () => { if (!accepted) { accepted = true; resolveAccepted() } }
       void session.prompt(value.message, { ...(Array.isArray(value.images) && value.images.length ? { images: value.images } : {}), ...(value.behavior ? { streamingBehavior: value.behavior } : {}), source: 'rpc', preflightResult: success => { if (success) accept() } }).then(accept, error => accepted ? undefined : rejectAccepted(error))
+    })
+    const nativeName = typeof value.message === 'string' ? value.message.trim().split(/\s+/)[0] : ''
+    const isNativeExtension = nativeName.startsWith('/')
+      && slashCommands().some(item => `/${item.name}` === nativeName && item.source === 'extension')
+    if (!isNativeExtension) {
+      await runPrompt()
+      return
+    }
+    if (typeof session.sessionManager?.appendCustomEntry !== 'function'
+      || typeof session.sessionManager?.getEntry !== 'function') {
+      throw new Error('Pi SDK does not support native command evidence records')
+    }
+    const commandRecord = {
+      id: randomUUID(), name: nativeName, command: value.message,
+      startedAt: new Date().toISOString(), finishedAt: '',
+      outcome: 'handled', messages: [],
+    }
+    await commandScope.run(commandRecord, async () => {
+      try {
+        await runPrompt()
+      } catch (error) {
+        commandRecord.outcome = 'failed'
+        commandRecord.error = error instanceof Error ? error.message : String(error)
+        throw error
+      } finally {
+        commandRecord.finishedAt = new Date().toISOString()
+        const entryId = session.sessionManager.appendCustomEntry('agent-lens.command', {
+          command: commandRecord.command, outcome: commandRecord.outcome,
+          messages: commandRecord.messages,
+          ...(commandRecord.error ? { error: commandRecord.error } : {}),
+          startedAt: commandRecord.startedAt, finishedAt: commandRecord.finishedAt,
+        })
+        const entry = session.sessionManager.getEntry(entryId)
+        roundIndexCache = undefined
+        if (entry) send('event', { type: 'native_command_record', entry })
+      }
     })
     return
   }
