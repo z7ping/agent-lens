@@ -94,8 +94,10 @@ export function resolveLiveSlash(message: LiveMessageDto, commands: readonly Liv
   const command = commands.find(item => item.value === name && item.action)
     ?? commands.find(item => item.value === name)
   if (!command) return { kind: 'blocked', name }
-  if (command.action === 'open-mcp' && text !== name) {
-    // The official Pi /mcp RPC subcommands remain native SDK operations.
+  if (command.action === 'open-mcp') {
+    // /mcp itself returns real Pi RPC status. Never hijack typed commands
+    // into a dialog that can discard or obscure their native output.
+    // The separate session action menu remains the explicit Web manager entry.
     return command.group === 'extension' && message.parts.every(part => part.type === 'text')
       ? { kind: 'native-command', command } : { kind: 'blocked', name }
   }
