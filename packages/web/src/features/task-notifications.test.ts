@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import type { LiveRuntimeEventDto } from '@agent-lens/protocol'
+import { readFileSync } from 'node:fs'
 import { projectTaskNotification, taskNotificationBannerTimeoutMs, taskNotifications } from './task-notifications'
 
 function envelope(liveId: string, normalizedEvent: NonNullable<LiveRuntimeEventDto['normalizedEvent']>, sequence = 1) {
@@ -59,17 +60,29 @@ test('提示横幅按级别自动收起，待处理请求保留直到用户操�
   assert.equal(taskNotificationBannerTimeoutMs('info'), null)
 })
 
-test('长提醒仅视觉截断，不丢失通知中心正文', () => {
-  const message = 'pi-cache-optimizer: third-party proxy '.repeat(100)
+test('原生通知长正文与标题完整保留，关闭横幅不删除铃铛记录', () => {
+  const message = ('pi-cache-optimizer: third-party proxy\nhttps://example.org/device-login\n').repeat(100)
+  const title = '通知标题'.repeat(50)
   const notification = projectTaskNotification(envelope('pi', {
-    type: 'notification', id: 'long-warning-607', level: 'warning', message,
+    type: 'notification', id: 'long-warning-607', level: 'warning', title, message,
   }), '/review')!
   assert.equal(notification.level, 'warning')
-  assert.equal(notification.message, message.slice(0, 2_000))
+  assert.equal(notification.message, message)
+  assert.equal(notification.title, title)
   taskNotifications.push(notification)
   assert.equal(taskNotifications.getSnapshot().bannerId, notification.id)
   taskNotifications.dismissBanner(notification.id)
   assert.equal(taskNotifications.getSnapshot().bannerId, null)
   assert.equal(taskNotifications.getSnapshot().items[0]?.message, notification.message)
   assert.equal(taskNotifications.getSnapshot().items[0]?.read, false)
+})
+
+
+test('通知完整阅读与横幅已提示即标记已读的 UI 契约', () => {
+  const ui = readFileSync(new URL('./TaskNotificationCenter.tsx', import.meta.url), 'utf8')
+  const css = readFileSync(new URL('../task-notifications.css', import.meta.url), 'utf8')
+  assert.match(ui, /useLayoutEffect\(\(\) => \{[\s\S]*?taskNotifications\.markRead\(visibleBannerId\)/)
+  assert.match(css, /\.task-notification-message \{[^}]*overflow-y: auto;[^}]*white-space: pre-wrap;/)
+  assert.match(css, /\.task-notification-banner-copy span \{[^}]*overflow-y: auto;[^}]*white-space: pre-wrap;/)
+  assert.doesNotMatch(css, /-webkit-line-clamp|text-overflow:\s*ellipsis/)
 })
