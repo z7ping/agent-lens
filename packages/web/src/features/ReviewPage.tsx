@@ -985,7 +985,7 @@ export function ReviewPage({ model, embedded = false, latestRequest = 0 }: { mod
                         {t(review.error ? 'local.roundNav.loadFailedRetry' : 'local.roundNav.loadFollowing')}
                       </Button>
                     : isFiltered
-                      ? t('local.roundNav.allMatchesLoaded', { count: detail.interactions.length })
+                      ? t('local.roundNav.allMatchesLoaded', { count: displayedInteractions.length })
                       : t('local.roundNav.allLoaded', { count: detail.interactions.length })}
               </div>}
             </div>
