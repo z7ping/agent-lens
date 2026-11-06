@@ -16,11 +16,82 @@ const MAX_PAGE_BYTES = 2 * 1024 * 1024
 
 type Before = NonNullable<NativeSessionCatalogQuery['before']>
 type SearchCursor = {
-  version: 1
+  version: 2
   scopeHash: string
   before?: Before
   active?: { sourceId: string; installationId: string; nativeSessionId: string }
   sourceCursor?: SourceNativeSessionCursor
+  turn?: NativeSearchTurnTracker
+}
+
+/** This is a source-page scan counter, not a fabricated conversation turn.
+ * It is carried only for the active file and is invalidated if any page
+ * lacks verified record boundaries. */
+export interface NativeSearchTurnTracker {
+  ordinal: number
+  recordOffset: number
+  valid: boolean
+  nativeEventId?: string
+  recordFingerprint?: string
+}
+export interface NativeSearchTurnMatch {
+  ordinal: number
+  nativeEventId: string
+  recordOffset: number
+  recordFingerprint: string
+}
+
+/** Source record cursor, not observation array position, is the only safe
+ * unit for counting Pi's user-turn boundaries across search pages. */
+export function nativeSearchTurnPage(
+  observations: readonly { kind: string; nativeEventId?: string }[],
+  cursors: readonly SourceNativeSessionCursor[] | undefined,
+  prior: NativeSearchTurnTracker | undefined,
+  startOffset: number,
+  endCursor: SourceNativeSessionCursor,
+): { tracker: NativeSearchTurnTracker; turns: Array<NativeSearchTurnMatch | undefined> } {
+  let tracker: NativeSearchTurnTracker = prior ?? { ordinal: 0, recordOffset: -1, valid: true }
+  const validPage = tracker.valid && cursors?.length === observations.length
+    && cursors.every(cursor =>
+      cursor.fileIdentity === endCursor.fileIdentity
+      && Number.isSafeInteger(cursor.offset)
+      && cursor.offset >= startOffset && cursor.offset < endCursor.offset)
+  if (!validPage) {
+    return {
+      tracker: { ...tracker, valid: false },
+      turns: observations.map(() => undefined),
+    }
+  }
+  const turns: Array<NativeSearchTurnMatch | undefined> = []
+  for (let index = 0; index < observations.length; index++) {
+    const item = observations[index]!
+    const recordCursor = cursors![index]!
+    if (item.kind === 'message.user') {
+      if (recordCursor.offset !== tracker.recordOffset) {
+        tracker = {
+          ordinal: tracker.ordinal + 1,
+          recordOffset: recordCursor.offset,
+          valid: true,
+          ...(item.nativeEventId && item.nativeEventId.length <= 256
+            ? { nativeEventId: item.nativeEventId } : {}),
+          ...(recordCursor.recordFingerprint && /^[0-9a-f]{64}$/.test(recordCursor.recordFingerprint)
+            ? { recordFingerprint: recordCursor.recordFingerprint } : {}),
+        }
+      } else if (tracker.nativeEventId !== item.nativeEventId) {
+        tracker = { ...tracker, valid: false }
+      }
+    }
+    turns.push(tracker.valid && tracker.ordinal > 0
+      && tracker.nativeEventId && tracker.recordFingerprint
+      && recordCursor.offset >= tracker.recordOffset
+      ? {
+          ordinal: tracker.ordinal,
+          nativeEventId: tracker.nativeEventId,
+          recordOffset: tracker.recordOffset,
+          recordFingerprint: tracker.recordFingerprint,
+        } : undefined)
+  }
+  return { tracker, turns }
 }
 
 function beforeFor(entry: NativeSessionCatalogEntry): Before {
@@ -49,8 +120,8 @@ function decode(value: string | null, scopeHash: string): SearchCursor | undefin
     const data: unknown = JSON.parse(Buffer.from(value, 'base64url').toString('utf8'))
     if (!data || typeof data !== 'object' || Array.isArray(data)) throw new Error()
     const cursor = data as Record<string, unknown>
-    if (cursor.version !== 1 || cursor.scopeHash !== scopeHash
-      || Object.keys(cursor).some(key => !['version','scopeHash','before','active','sourceCursor'].includes(key))
+    if (cursor.version !== 2 || cursor.scopeHash !== scopeHash
+      || Object.keys(cursor).some(key => !['version','scopeHash','before','active','sourceCursor','turn'].includes(key))
       || (cursor.before !== undefined && !validBefore(cursor.before))) throw new Error()
     if (cursor.active !== undefined) {
       const active = cursor.active as Record<string, unknown>
@@ -72,6 +143,19 @@ function decode(value: string | null, scopeHash: string): SearchCursor | undefin
         || (sc.boundaryHash !== undefined
           && (typeof sc.boundaryHash !== 'string' || !/^[0-9a-f]{64}$/.test(sc.boundaryHash)))) throw new Error()
     } else if (cursor.active) throw new Error()
+    if (cursor.active) {
+      const turn = cursor.turn as Record<string, unknown> | undefined
+      if (!turn || typeof turn !== 'object' || Array.isArray(turn)
+        || Object.keys(turn).some(key => !['ordinal','recordOffset','valid','nativeEventId','recordFingerprint'].includes(key))
+        || !Number.isSafeInteger(turn.ordinal) || (turn.ordinal as number) < 0
+        || !Number.isSafeInteger(turn.recordOffset) || (turn.recordOffset as number) < -1
+        || typeof turn.valid !== 'boolean'
+        || (turn.nativeEventId !== undefined && (typeof turn.nativeEventId !== 'string'
+          || !turn.nativeEventId || turn.nativeEventId.length > 256))
+        || (turn.recordFingerprint !== undefined && (typeof turn.recordFingerprint !== 'string'
+          || !/^[0-9a-f]{64}$/.test(turn.recordFingerprint)))
+      ) throw new Error()
+    } else if (cursor.turn !== undefined) throw new Error()
     return cursor as SearchCursor
   } catch {
     throw badRequest('Invalid native body search cursor')
@@ -199,8 +283,16 @@ export async function handleNativeSessionBodySearchRequest(
     const items:Array<{
       sessionId:string;sourceId:string;installationId:string;nativeSessionId:string;
       lastActivityAt:string;title?:string;
-      observationId:string;kind:string;at:string;excerpt:string
+      observationId:string;kind:string;at:string;excerpt:string;
+      turn?:NativeSearchTurnMatch
     }>=[]
+    const located=scanned?nativeSearchTurnPage(
+      scanned.observations,
+      scanned.observationCursors,
+      cursor?.turn,
+      cursor?.sourceCursor?.offset ?? 0,
+      scanned.nextCursor,
+    ):undefined
     let inputBytes=0
     const occurrences=new Map<string,number>()
     for(let i=0;scanned && i<scanned.observations.length;i++){
@@ -234,17 +326,19 @@ export async function handleNativeSessionBodySearchRequest(
           entry.nativeSessionId,observation,id,ordinal),
         kind:observation.kind,at:observation.occurredAt??observation.capturedAt,
         excerpt:excerpt(text,match,query.length),
+        ...(located?.turns[i] ? {turn:located.turns[i]} : {}),
       })
     }
     const pendingTail=scanned?.pendingTail??false
     const continuing=Boolean(scanned?.hasMore||pendingTail)
     const hasMore=continuing||page.hasMore
     const nextCursor=hasMore ? encode({
-      version:1,scopeHash,
+      version:2,scopeHash,
       ...(continuing ? {
         ...(cursor?.before ? {before:cursor.before} : {}),
         active:{sourceId:entry.sourceId,installationId:entry.installationId,nativeSessionId:entry.nativeSessionId},
         sourceCursor:scanned!.nextCursor,
+        turn:located?.tracker ?? {ordinal:0,recordOffset:-1,valid:false},
       } : {before:beforeFor(entry)}),
     }) : undefined
     if(nextCursor && nextCursor.length>MAX_CURSOR) {

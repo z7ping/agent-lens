@@ -49,6 +49,14 @@ export interface NativeBodySearchHitDto {
   kind: string
   at: string
   excerpt: string
+  /** A Source-derived candidate, not navigation authority. Clients MUST
+   * verify all four values against the native sparse index before jumping. */
+  turn?: {
+    ordinal: number
+    nativeEventId: string
+    recordOffset: number
+    recordFingerprint: string
+  }
 }
 
 export type NativeBodySearchResponseDto =
