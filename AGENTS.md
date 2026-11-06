@@ -175,7 +175,7 @@ Task Center / Review / Pi Live 的任务内容继续复用现有：
 
 如果当前会话可以访问 `z7ping/product-internal`，修改表现层前应阅读：
 
-- `agent-lens/docs/design/UI-UX-PROPOSAL.md`
+- `agent-lens/docs/design/UI-UX-CONTRACT.md`（现行设计决策以 `product-internal` 中最新有效契约和正式代码为准）
 - `agent-lens/docs/design/README.md`
 - 当前 UI 修改再读 `UI-UX-CONTRACT.md`、`UI-UX-CHANGE-PLAN.md` 与相关 Phase 验收文档；`ALPHA3-*` 文件仅在追溯历史决策或验收依据时读取
 
