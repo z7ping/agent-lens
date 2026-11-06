@@ -1580,6 +1580,9 @@ export class DefaultPiLiveService implements PiLiveService {
     if (!message.trim() && !images?.length) return
     const runtime = await this.readyRuntime(id)
     const nativeExtension = await this.verifySlashCommand(runtime, message, false)
+    if (nativeExtension && (runtime.isStreaming || runtime.isCompacting)) {
+      throw this.conflict('Pi native extension commands require an idle session')
+    }
     if (nativeExtension && images?.length) throw this.conflict('Pi native extension commands cannot include attachments')
     await runtime.handle!.prompt(message, behavior, images)
     if (message.trim() && !message.trimStart().startsWith('/')) this.captureTaskSummary(runtime, message)
