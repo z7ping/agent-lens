@@ -905,6 +905,7 @@ export function parseLiveEventDto(value: unknown): LiveEventDto | null {
       ...(options !== undefined ? { options: [...options] } : {}),
       ...(placeholder !== undefined ? { placeholder } : {}),
       ...(prefill !== undefined ? { prefill } : {}),
+      ...(safeUrl ? { externalUrl: safeUrl } : {}),
     }
   }
   if (type === 'error') {
