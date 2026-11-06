@@ -7,6 +7,9 @@ const worker = readFileSync(new URL('./worker-entry.mjs', import.meta.url), 'utf
 const originSource = worker.match(/function registeredPiToolOrigin\(toolName\) \{[\s\S]*?\n\}/)?.[0]
 if (!originSource) throw new Error('Pi Worker registration source missing')
 
+const inventorySource = worker.match(/function mcpRegisteredTools\(\) \{[\s\S]*?\n\}/)?.[0]
+if (!inventorySource) throw new Error('Pi Worker MCP inventory source missing')
+
 type ToolDefinition = { name: string; sourceInfo?: object; namespace?: object }
 
 function resolveOrigin(tools: ToolDefinition[], name: string, throws = false): Record<string, unknown> {
@@ -48,4 +51,30 @@ test('Pi Live source attribution is unknown for same-name collisions, removal, o
   assert.equal(resolveOrigin([first, second], 'same').toolSourceType, undefined)
   assert.equal(resolveOrigin([], 'same').toolSourceType, undefined)
   assert.equal(resolveOrigin([first], 'same', true).toolSourceType, undefined)
+})
+
+test('Pi Worker MCP tool inventory excludes third-party, hidden and unverified registrations', () => {
+  const tools = [
+    { name: 'mcp__docs__search', description: 'Search', exposure: 'codemode',
+      sourceInfo: { path: 'builtin:mcp' }, namespace: { name: 'mcp__docs' } },
+    { name: 'mcp__docs__withdrawn', exposure: 'hidden',
+      sourceInfo: { path: 'builtin:mcp' }, namespace: { name: 'mcp__docs' } },
+    { name: 'mcp__docs__fake', exposure: 'direct',
+      sourceInfo: { path: '/user/mcp-adapter' }, namespace: { name: 'mcp__docs' } },
+    { name: 'mcp__tools__strange', exposure: 'direct',
+      sourceInfo: { path: 'builtin:mcp' }, namespace: { name: 'other' } },
+  ]
+  const context = {
+    session: { getAllTools: () => tools },
+    slashCommands: () => [{ name: 'mcp', mcpManager: true }],
+    record: (value: unknown) => value && typeof value === 'object' && !Array.isArray(value) ? value : {},
+  }
+  const read = runInNewContext(`${inventorySource}\nmcpRegisteredTools`, context) as () => Array<{ serverId: string; name: string; exposure: string }>
+  assert.deepEqual(JSON.parse(JSON.stringify(read())), [
+    { serverId: 'docs', name: 'mcp__docs__search', description: 'Search', exposure: 'codemode' },
+  ])
+  const untrusted = runInNewContext(`${inventorySource}\nmcpRegisteredTools`, {
+    ...context, slashCommands: () => [{ name: 'mcp', mcpManager: false }],
+  }) as () => unknown[]
+  assert.equal(untrusted().length, 0)
 })
