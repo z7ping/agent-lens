@@ -764,7 +764,9 @@ export class PiLiveAdapter implements LiveAdapter {
     // AgentSession.prompt expands extension/skill/template commands; direct
     // steer()/followUp() would instead queue their literal text for the LLM.
     if (isNativeSlash || behavior === 'normal') {
-      await this.service.prompt(runtimeSessionId, resolved.text,
+      // AgentSession dispatches extension commands only when text starts with '/'.
+      // Preserve user whitespace for ordinary messages but normalize command input.
+      await this.service.prompt(runtimeSessionId, isNativeSlash ? resolved.text.trimStart() : resolved.text,
         behavior === 'steer' ? 'steer' : behavior === 'follow-up' ? 'followUp' : undefined,
         resolved.images)
     } else if (behavior === 'steer') {
