@@ -12,6 +12,7 @@ import { ErrorStateBanner, OperationProgress } from '../components/StateViews'
 import { Button, IconButton, Popover } from '../components/ui'
 import { LiveExtensionPrompt } from './LiveExtensionPrompt'
 import { TaskEvent } from './TaskEvent'
+import { TaskThinking } from './TaskThinking'
 import { useLiveTaskState } from './live-task-state'
 import { useLiveTaskRuntime } from './use-live-task-runtime'
 import { useLiveTaskHistory } from './use-live-task-history'
@@ -137,6 +138,10 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
     roundProjectorRef,
     lastProgressAtRef,
   } = session
+  // ui.state is transient extension-owned UI, not session transcript evidence.
+  // Only status lines are low-priority; extension widgets retain their placement.
+  const extensionStatusItems = extensionUiState.filter(item => item.kind === 'status')
+  const extensionWidgetItems = extensionUiState.filter(item => item.kind === 'widget')
 
   const setComposerValue = useCallback((value: string) => {
     setDraft(currentDraft => ({ revision: currentDraft.revision + 1, value }))
@@ -673,6 +678,19 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
             pendingAction={runtimeActionPending}
             onAction={action => { void runRuntimeAction(action) }}
           />
+          {extensionStatusItems.length > 0 && <TaskThinking
+            model={{ id: 'extension-runtime-status', label: t('live.extensionStatus'), text: '', state: 'settled' }}
+            kind="process"
+            defaultExpanded={false}
+            expansionStore={processExpansionStore}
+            meta={<span className="task-process-summary"><span>{t('process.runtimeRecordCount', { count: extensionStatusItems.length })}</span></span>}
+          >
+            {extensionStatusItems.map(item => <TaskEvent
+              key={item.key}
+              model={{ id: `extension:status:${item.key}`, category: 'lifecycle', label: item.key, summary: item.text ?? '' }}
+              raw={item}
+            />)}
+          </TaskThinking>}
           {runtimeDisclosures.every(item => !item.lifecycle) && (!state || state.status === 'initializing') && !error && <div className="live-task-startup-spotlight">
             <OperationProgress
               statusLabel={runtimeStatus}
@@ -744,15 +762,14 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
           </div>}
           {extension && <LiveExtensionPrompt request={extension} pending={extensionPending} onAnswer={value => { void answerExtension(value) }}/>}
         </div>
-        {extensionUiState.length > 0 && <div role="status" aria-label={t('live.extensionStatus')}>
-          {extensionUiState.map(item => <TaskEvent
+        {extensionWidgetItems.length > 0 && <div role="status" aria-label={t('live.extensionStatus')}>
+          {extensionWidgetItems.map(item => <TaskEvent
             key={`${item.kind}:${item.key}`}
             model={{
               id: `extension:${item.kind}:${item.key}`,
               category: 'lifecycle',
               label: item.key,
-              summary: item.kind === 'status' ? item.text ?? ''
-                : (item.lines ?? []).join(' · ').slice(0, 220),
+              summary: (item.lines ?? []).join(' · ').slice(0, 220),
             }}
             raw={item}
           />)}

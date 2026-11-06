@@ -1,5 +1,6 @@
 import type { ReviewEventNodeDto, ReviewInteractionDto, ReviewMessageNodeDto, ReviewNodeDto, ReviewToolNodeDto } from '@agent-lens/protocol'
 import { isFailedLifecycleEvent, isSessionTitleUpdate } from './review-event-presentation'
+import { isRoutineReviewRuntimeNotice } from './task-runtime-notice'
 
 export type ReviewProcessPresentationItem =
   | { type: 'message'; node: ReviewMessageNodeDto }
@@ -111,6 +112,7 @@ function eventAction(node: ReviewEventNodeDto): string {
 
 /** Only known benign lifecycle metadata joins the compact runtime group. */
 function isCompactRuntimeEvent(node: ReviewEventNodeDto): boolean {
+  if (isRoutineReviewRuntimeNotice(node)) return true
   if (node.kind !== 'session.lifecycle' || isFailedLifecycleEvent(node)) return false
   const action = eventAction(node)
   return ['thread.settings.applied', 'turn.context', 'turn.started', 'session.discovered'].includes(action)

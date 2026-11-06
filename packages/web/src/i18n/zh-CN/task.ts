@@ -121,6 +121,8 @@ export const chineseTaskMessages: LocaleMessagesDto = {
       duration: '耗时 {{value}}',
       errors: '{{count}} 次失败',
       running: '处理中',
+      runtimeRecords: '运行记录',
+      runtimeRecordCount: '{{count}} 条记录',
     },
     round: {
       filesMentioned: '用户提及文件',

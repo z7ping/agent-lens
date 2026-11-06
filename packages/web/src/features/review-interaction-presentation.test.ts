@@ -570,3 +570,35 @@ test('旧轮次完成时间早于新轮次开始时不再被强制后移；合�
   ])
   assert.deepEqual(late.map(entry => entry.type), ['runtime-event-group', 'event'])
 })
+
+test('原生 Pi 隐藏扩展上下文进入运行记录，不穿透相邻工具边界', () => {
+  const extension: ReviewEventNodeDto = {
+    type: 'event', id: 'ext-status', at: '2026-09-01T00:00:01.000Z',
+    sourceId: 'pi', kind: 'context.injected', category: 'context', label: '扩展上下文',
+    payload: {
+      event: 'pi.custom_message',
+      rawPayload: { type: 'custom_message', customType: 'mcp', display: false, content: 'MCP: 2 servers enabled' },
+      provenance: { sourceSignal: 'pi custom message', originType: 'application-injection' },
+    },
+    evidence: [], observationIds: ['obs:ext-status'], capturedAt: '2026-09-01T00:00:01.000Z',
+  }
+  const entries = projectReviewInteractionPresentation([tool('before'), extension, tool('after')])
+  const runtime = entries.find(entry => entry.type === 'runtime-event-group')
+  assert.ok(runtime?.type === 'runtime-event-group')
+  assert.deepEqual(runtime.items.map(item => item.id), ['ext-status'])
+  const process = entries.find(entry => entry.type === 'process')
+  assert.ok(process?.type === 'process')
+  assert.deepEqual(process.items.map(item => item.type), ['tool-group', 'tool-group'])
+
+  for (const rawPayload of [
+    { type: 'custom_message', display: true, content: 'important extension message' },
+    { type: 'custom_message', display: false, details: { severity: 'error' } },
+  ]) {
+    const important: ReviewEventNodeDto = { ...extension, payload: {
+      event: 'pi.custom_message', rawPayload,
+      provenance: { sourceSignal: 'pi custom message', originType: 'application-injection' },
+    } }
+    const shown = projectReviewInteractionPresentation([important])
+    assert.equal(shown[0]?.type, 'event', 'visible/failed extension messages must not be hidden')
+  }
+})

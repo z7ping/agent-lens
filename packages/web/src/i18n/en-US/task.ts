@@ -121,6 +121,8 @@ export const englishTaskMessages: LocaleMessagesDto = {
       duration: '{{value}} elapsed',
       errors: '{{count}} failures',
       running: 'Processing',
+      runtimeRecords: 'Runtime records',
+      runtimeRecordCount: '{{count}} records',
     },
     round: {
       filesMentioned: 'Files mentioned',
