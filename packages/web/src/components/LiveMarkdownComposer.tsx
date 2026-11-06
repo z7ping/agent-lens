@@ -39,6 +39,7 @@ import {
   KEY_ARROW_DOWN_COMMAND,
   KEY_ARROW_UP_COMMAND,
   KEY_ENTER_COMMAND,
+  KEY_TAB_COMMAND,
   KEY_ESCAPE_COMMAND,
   PASTE_COMMAND,
   type EditorState,
@@ -58,7 +59,7 @@ import {
   type ForwardedRef,
 } from 'react'
 import { removeLiveAttachment, uploadLiveAttachment } from '../client/live-attachments'
-import { ComposerDraftPresenceGate } from './live-markdown-composer-state'
+import { ComposerDraftPresenceGate, commandMenuShouldSubmit } from './live-markdown-composer-state'
 import {
   ComposerInputHistoryNavigator,
   writeLiveComposerDraft,
@@ -623,7 +624,10 @@ function useComposerSuggestionKeyboard(
   choose: (index: number) => void,
   dismiss: () => void,
   move: (delta: 1 | -1) => void,
+  options: { submitOnExact?: () => boolean; tabCompletes?: boolean } = {},
 ) {
+  const submitOnExact = options.submitOnExact
+  const tabCompletes = options.tabCompletes === true
   useEffect(() => {
     if (!active || count === 0) return
     const allowed = (event: KeyboardEvent) => !event.isComposing && event.keyCode !== 229
@@ -642,6 +646,13 @@ function useComposerSuggestionKeyboard(
     }, COMMAND_PRIORITY_CRITICAL)
     const enter = editor.registerCommand(KEY_ENTER_COMMAND, event => {
       if (!event || !allowed(event)) return false
+      if (submitOnExact?.()) return false
+      event.preventDefault()
+      choose(activeIndex)
+      return true
+    }, COMMAND_PRIORITY_CRITICAL)
+    const tab = editor.registerCommand(KEY_TAB_COMMAND, event => {
+      if (!event || !tabCompletes || !allowed(event)) return false
       event.preventDefault()
       choose(activeIndex)
       return true
@@ -652,8 +663,8 @@ function useComposerSuggestionKeyboard(
       dismiss()
       return true
     }, COMMAND_PRIORITY_CRITICAL)
-    return () => { up(); down(); enter(); escape() }
-  }, [editor, active, count, activeIndex, choose, dismiss, move])
+    return () => { up(); down(); enter(); tab(); escape() }
+  }, [editor, active, count, activeIndex, choose, dismiss, move, submitOnExact, tabCompletes])
 }
 
 function WorkspaceReferenceMenuPlugin({
@@ -855,6 +866,7 @@ function CommandMenuPlugin({ commands = [] }: { commands?: readonly LiveCommandD
     editor, query !== null, matches.length, activeIndex, chooseCommand,
     () => setQuery(null),
     delta => setActiveIndex(index => (index + delta + matches.length) % matches.length),
+    { submitOnExact: () => commandMenuShouldSubmit(query, matches), tabCompletes: true },
   )
 
   if (query === null || !matches.length || !position) return null
