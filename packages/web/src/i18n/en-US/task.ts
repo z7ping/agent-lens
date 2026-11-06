@@ -166,6 +166,7 @@ export const englishTaskMessages: LocaleMessagesDto = {
         customMessage: 'Extension context message',
         customHidden: 'Hidden extension context message',
         bashExecution: 'Pi shell execution',
+        command: 'Pi native command',
       },
       processEvent: {
         outputTruncated: 'Model output reached the length limit; the response may be incomplete',
