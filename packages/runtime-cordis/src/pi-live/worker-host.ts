@@ -30,7 +30,7 @@ const WORKER_TERMINATE_GRACE_MS = 1_000
 type SnapshotTransferCommand = 'snapshotBegin' | 'snapshotChunk'
 
 type WorkerCommand =
-  | 'state' | SnapshotTransferCommand | 'entry' | 'historyIndex' | 'sessionTree' | 'commands' | 'controls' | 'setModel' | 'defaultModel' | 'setDefaultModel' | 'setThinkingLevel'
+  | 'state' | SnapshotTransferCommand | 'entry' | 'historyIndex' | 'sessionTree' | 'commands' | 'mcpTools' | 'controls' | 'setModel' | 'defaultModel' | 'setDefaultModel' | 'setThinkingLevel'
   | 'navigateTree' | 'compact' | 'reload' | 'regenerateTitle'
   | 'prompt' | 'steer' | 'followUp' | 'clearQueue' | 'mutateQueue' | 'abort'
   | 'extensionResponse' | 'terminate'
