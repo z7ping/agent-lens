@@ -52,10 +52,11 @@ export function nativeSearchTurnPage(
 ): { tracker: NativeSearchTurnTracker; turns: Array<NativeSearchTurnMatch | undefined> } {
   let tracker: NativeSearchTurnTracker = prior ?? { ordinal: 0, recordOffset: -1, valid: true }
   const validPage = tracker.valid && cursors?.length === observations.length
-    && cursors.every(cursor =>
+    && cursors.every((cursor, index) =>
       cursor.fileIdentity === endCursor.fileIdentity
       && Number.isSafeInteger(cursor.offset)
-      && cursor.offset >= startOffset && cursor.offset < endCursor.offset)
+      && cursor.offset >= startOffset && cursor.offset < endCursor.offset
+      && (index === 0 || cursor.offset >= cursors[index - 1]!.offset))
   if (!validPage) {
     return {
       tracker: { ...tracker, valid: false },
