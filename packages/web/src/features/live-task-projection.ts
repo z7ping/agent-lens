@@ -915,8 +915,12 @@ export function reconcileLiveSnapshotProjection(
     [...incoming.stable, ...incoming.active],
   )
   const reconciled = reconcilePersistedCompactionEvents(previous.active, carried)
-  const superseded = new Set(reconciled.matchedTransientByNativeId.values())
-  const stable = reuseLiveSnapshotRows(previous.stable, reconciled.items.slice(0, incoming.stable.length))
+  const stableRows = reconciled.items.slice(0, incoming.stable.length)
+  const stableNativeIds = new Set(stableRows.map(item => item.id))
+  const superseded = new Set([...reconciled.matchedTransientByNativeId]
+    .filter(([nativeId]) => stableNativeIds.has(nativeId))
+    .map(([, transientId]) => transientId))
+  const stable = reuseLiveSnapshotRows(previous.stable, stableRows)
   const nextActive = reconciled.items.slice(incoming.stable.length)
   const incomingActive = streaming
     ? mergeLiveActiveProjectionItems(previous.active.filter(item => !superseded.has(item.id)), nextActive)
