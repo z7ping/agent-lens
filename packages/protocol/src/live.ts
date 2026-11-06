@@ -888,6 +888,14 @@ export function parseLiveEventDto(value: unknown): LiveEventDto | null {
     const message = eventText(event.message)
     const placeholder = eventText(event.placeholder)
     const prefill = eventText(event.prefill)
+    const externalUrl = eventText(event.externalUrl)
+    let safeUrl: string | undefined
+    if (externalUrl && externalUrl.length <= 4096) {
+      try {
+        const url = new URL(externalUrl)
+        if (url.protocol === 'https:' || url.protocol === 'http:') safeUrl = url.href
+      } catch { /* Ignore invalid external links. */ }
+    }
     return {
       type,
       requestId: event.requestId,
