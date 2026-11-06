@@ -38,6 +38,10 @@ export function useModalFocusScope({
 
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
+        // A SelectMenu opened inside this dialog owns Escape first. Its listbox
+        // is portaled to the shared floating layer, outside the modal panel.
+        if (panelRef.current?.querySelector('.select-menu-trigger[aria-expanded="true"]')
+          && document.querySelector('.select-menu-popover')) return
         event.preventDefault()
         if (!closeDisabledRef.current) closeRef.current()
         return
