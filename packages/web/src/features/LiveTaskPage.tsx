@@ -869,6 +869,7 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
                 <CopyableCodeBlock copyValue={mcpStatus}>{mcpStatus}</CopyableCodeBlock>
               </section>
             : <p>{t('live.mcp.empty')}</p>}
+          {!mcpPending && mcpStatus && !mcpInventory && <p role="status">{t('live.mcp.toolsUnavailable')}</p>}
           {mcpInventory && <section aria-label={t('live.mcp.registeredTools')}>
             <strong>{t('live.mcp.registeredTools')}</strong>
             {mcpInventoryText
