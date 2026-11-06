@@ -8,6 +8,7 @@ class RuntimeContributionHost implements PiRuntimeHost {
   starts = 0
   compactions = 0
   reloads = 0
+  prompts = 0
   generatedTitles = 0
   sessionName: string | undefined
   onEvent?: (event: Record<string, unknown>) => void
@@ -80,7 +81,7 @@ class RuntimeContributionHost implements PiRuntimeHost {
       controls: async () => ({ models: [] }),
       setModel: async () => state(),
       setThinkingLevel: async () => state(),
-      prompt: async () => {},
+      prompt: async () => { this.prompts += 1 },
       steer: async () => {},
       followUp: async () => {},
       clearQueue: async () => ({ steering: [], followUp: [] }),
@@ -174,6 +175,7 @@ test('Pi 原生 /reload 不进入模型消息，使用运行时动作并返回�
     assert.ok(actions?.some(action => action.actionId === 'pi.runtime.reload'))
     const result = await service.executeRuntimeAction(started.runtimeSessionId, 'pi.runtime.reload')
     assert.equal(host.reloads, 1)
+    assert.equal(host.prompts, 0)
     assert.equal(result.runtime.status, 'ready')
   } finally {
     await service.dispose()
