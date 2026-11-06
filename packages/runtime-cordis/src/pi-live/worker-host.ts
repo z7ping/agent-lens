@@ -380,6 +380,7 @@ class WorkerPiRuntimeHandle implements PiRuntimeHandle {
   sessionTree(): Promise<LiveSessionTree> { return this.request('sessionTree') }
   entry(entryId: string): Promise<unknown | null> { return this.request('entry', { entryId }) }
   commands(): Promise<PiLiveCommand[]> { return this.request('commands') }
+  mcpTools(): Promise<PiMcpToolRegistration[]> { return this.request('mcpTools') }
   navigateTree(entryId: string): Promise<{ cancelled: boolean; editorText?: string | undefined }> {
     return this.request('navigateTree', { entryId })
   }
