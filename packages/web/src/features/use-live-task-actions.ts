@@ -124,8 +124,35 @@ export function useLiveTaskActions({
     && !queueMutationPending,
   )
 
-  const send = useCallback(async (message: LiveMessageDto, requestedBehavior?: LiveQueueMode) => {
+  const send = useCallback(async (message: LiveMessageDto, requestedBehavior?: LiveQueueMode, nativeCommand = false) => {
     if (!current || !product || !state || !canSubmit || sendInFlightRef.current) return
+    if (nativeCommand) {
+      // Pi registered extension commands are executed by the SDK, not a model turn.
+      // Never append an optimistic user bubble or claim that the model is streaming.
+      if (state.status !== 'ready' || state.isStreaming || messageHasAttachments(message)) {
+        setError(t('live.commandUnavailable'))
+        return
+      }
+      sendInFlightRef.current = true
+      setSendFeedback('idle')
+      setRuntimeActionFeedback('running')
+      setError('')
+      try {
+        await liveApi.send(current.liveId, current.runtimeSessionId, message, 'normal')
+        setRuntimeActionFeedback('done')
+        setInputHistory(previous => appendLiveInputHistory(previous, messageText(message)))
+        if (messageText(composerRef.current?.getMessage() ?? { parts: [] }) === messageText(message)) {
+          clearComposer()
+        }
+        composerRef.current?.focus({ preventScroll: true })
+      } catch (reason) {
+        setRuntimeActionFeedback('failed')
+        setError(reason instanceof Error ? reason.message : String(reason))
+      } finally {
+        sendInFlightRef.current = false
+      }
+      return
+    }
     setRuntimeActionFeedback('idle')
     const unsupported = unsupportedInput(message, product.inputCapabilities)
     if (unsupported) {
