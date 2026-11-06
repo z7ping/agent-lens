@@ -8,6 +8,7 @@ import {
   liveEventChangesTaskTranscript,
   liveTaskStableRoundPrefixLength,
   liveTaskResponseActivity,
+  liveNativeCommandDetail,
   sourceNativeUsageDetail,
   mergeLiveActiveProjectionItems,
   preserveOptimisticImagePreviews,
@@ -1657,4 +1658,49 @@ test('Pi native command results are non-chat evidence, replayed with the same na
   assert.equal(live[0]?.kind, 'native')
   assert.deepEqual(reduceLiveTaskEvent(live, changed), live)
   assert.equal(live.some(item => item.kind === 'message'), false)
+})
+
+test('Pi /mcp returns full native status in Live and after snapshot recovery, not just a short preview', () => {
+  const status = ['Connected MCP servers:', ...Array.from({ length: 35 },
+    (_, index) => `  server-${index}: connected · codemode · tools: 8`)].join('\n')
+  const data = {
+    command: '/mcp', outcome: 'handled' as const,
+    messages: [{ level: 'info', message: status }],
+  }
+  const persisted = projectLiveSnapshotEntries([{
+    type: 'custom', id: 'mcp-native-1', customType: 'agent-lens.command', data,
+  }])
+  const live = reduceLiveTaskEvent([], event(2, {
+    type: 'command.record', entryId: 'mcp-native-1', ...data,
+  }))
+  for (const items of [persisted, live]) {
+    const item = items[0]
+    assert.ok(item?.kind === 'native')
+    assert.equal(item.nativeType, 'command')
+    const detail = liveNativeCommandDetail(item)
+    assert.equal(detail?.command, '/mcp')
+    assert.equal(detail?.outcome, 'handled')
+    assert.equal(detail?.output, status)
+    assert.ok(detail.output.length > 240)
+    assert.equal(items.some(row => row.kind === 'message'), false)
+  }
+})
+
+test('Pi command failures are displayed as native errors without duplicated output', () => {
+  const items = projectLiveSnapshotEntries([{
+    type: 'custom', id: 'mcp-native-failed', customType: 'agent-lens.command',
+    data: {
+      command: '/mcp login docs', outcome: 'failed', error: 'Network rejected request',
+      messages: [
+        { level: 'error', message: 'Network rejected request' },
+        { level: 'warning', message: 'Retry later' },
+      ],
+    },
+  }])
+  assert.ok(items[0]?.kind === 'native')
+  assert.deepEqual(liveNativeCommandDetail(items[0]), {
+    command: '/mcp login docs',
+    outcome: 'failed',
+    output: 'Network rejected request\n\nRetry later',
+  })
 })
