@@ -853,6 +853,25 @@ export function reconcilePersistedCompactionEvents(
   return { items, matchedTransientByNativeId }
 }
 
+/** The settled Recovery branch is not an active merge: it must keep the
+ * existing bounded snapshot prefix, then append the newly persisted records.
+ * Supersede a transient compaction only when a unique native journal anchor
+ * proves the identity; never discard unrelated retry or failed events. */
+export function reconcileLiveSettledRecoveryActive(
+  previousActive: readonly LiveTaskProjectionItem[],
+  snapshotBaseActiveCount: number,
+  recovered: readonly LiveTaskProjectionItem[],
+): LiveTaskProjectionItem[] {
+  const persisted = preserveOptimisticImagePreviews(previousActive, recovered)
+  const reconciled = reconcilePersistedCompactionEvents(previousActive, persisted)
+  const superseded = new Set(reconciled.matchedTransientByNativeId.values())
+  const preservedBaseCount = Math.min(previousActive.length, Math.max(0, snapshotBaseActiveCount))
+  return [
+    ...previousActive.slice(0, preservedBaseCount).filter(item => !superseded.has(item.id)),
+    ...reconciled.items,
+  ]
+}
+
 /** Keep unchanged snapshot rows mounted; refreshing identical history must not flash. */
 function sameLiveProjectionFact(left: LiveTaskProjectionItem, right: LiveTaskProjectionItem): boolean {
   if (left === right) return true
