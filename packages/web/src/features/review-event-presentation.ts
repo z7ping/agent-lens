@@ -89,6 +89,9 @@ export function isFailedLifecycleEvent(node: ReviewEventNodeDto): boolean {
   const payload = record(node.payload)
   const action = stringValue(payload, 'action', 'event', 'type').toLowerCase()
   const status = stringValue(payload, 'status', 'result').toLowerCase()
+  if (action === 'pi.custom' && payload.customType === 'agent-lens.command') {
+    return record(payload.data).outcome === 'failed'
+  }
   return ['turn.error', 'turn.aborted', 'task.failed', 'assistant.error'].includes(action)
     || ['error', 'failed', 'failure', 'rejected'].includes(status)
 }
