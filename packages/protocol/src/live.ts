@@ -417,6 +417,7 @@ export type LiveEventDto =
       options?: string[] | undefined
       placeholder?: string | undefined
       prefill?: string | undefined
+      externalUrl?: string | undefined
     }
   | {
       type: 'error'
