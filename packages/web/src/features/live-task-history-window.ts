@@ -148,8 +148,9 @@ export async function loadBoundedRecoverySnapshot(
   liveId: string,
   runtimeSessionId: string,
   since: string | undefined,
+  readSnapshot: typeof liveApi.snapshot = liveApi.snapshot,
 ): Promise<LiveSnapshotDto> {
-  let snapshot = await liveApi.snapshot(
+  let snapshot = await readSnapshot(
     liveId,
     runtimeSessionId,
     since,
@@ -158,18 +159,23 @@ export async function loadBoundedRecoverySnapshot(
   if (!since) return snapshot
 
   const entries = [...snapshot.entries]
-  let pages = 1
-  while (snapshot.page?.hasLater && snapshot.page.after) {
-    if (pages >= 1_000) throw new Error('Live snapshot recovery exceeded the bounded page safety limit')
-    snapshot = await liveApi.snapshot(
+  const pages: LiveHistoryPageBlock[] = [historyPageBlock(snapshot, [])]
+  const visited = new Set<string>()
+  while (snapshot.page?.hasLater) {
+    if (pages.length >= 1_000) throw new Error('Live snapshot recovery exceeded the bounded page safety limit')
+    const nextCursor = snapshot.page.after?.trim()
+    if (!nextCursor || visited.has(nextCursor)) {
+      throw new Error('Live snapshot recovery has missing or repeated native page cursor')
+    }
+    visited.add(nextCursor)
+    snapshot = await readSnapshot(
       liveId,
       runtimeSessionId,
-      snapshot.page.after,
+      nextCursor,
       { limit: LIVE_TASK_SNAPSHOT_PAGE_LIMIT },
     )
     entries.push(...snapshot.entries)
-    pages += 1
+    pages.push(historyPageBlock(snapshot, []))
   }
-  return { ...snapshot, entries }
+  return { ...snapshot, entries, page: aggregateHistoryPage(pages) }
 }
-
