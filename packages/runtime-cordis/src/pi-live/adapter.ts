@@ -665,8 +665,10 @@ export class PiLiveAdapter implements LiveAdapter {
       { value: '/compact', label: '/compact', description: '原生压缩上下文', group: 'builtin', action: 'runtime-action', runtimeActionId: 'pi.runtime.compact' },
       { value: '/reload', label: '/reload', description: '重新加载 Pi 扩展、技能和提示词', group: 'builtin', action: 'runtime-action', runtimeActionId: 'pi.runtime.reload' },
     ]
-    const taken = new Set(native.map(command => command.value))
-    return [...builtins.filter(command => !taken.has(command.value)), ...native]
+    // Web UI actions own these command names even if an extension registers an alias.
+    // An extension collision must not silently turn /model or /reload into an LLM prompt.
+    const taken = new Set(builtins.map(command => command.value))
+    return [...builtins, ...native.filter(command => !taken.has(command.value))]
   }
   messageActions(runtimeSessionId: string) {
     return this.service.messageActions(runtimeSessionId)
