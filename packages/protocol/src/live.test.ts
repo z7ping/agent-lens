@@ -201,6 +201,17 @@ test('Live protocol validates normalized extension UI requests', () => {
 })
 
 
+test('OAuth UI request preserves only HTTP(S) authorization URLs', () => {
+  const request = { type: 'ui.request', requestId: 'oauth-1', method: 'input',
+    title: 'Sign in', externalUrl: 'https://accounts.example.test/authorize?client_id=pi' }
+  assert.deepEqual(parseLiveEventDto(request), request)
+  const unsafe = parseLiveEventDto({ ...request, externalUrl: 'javascript:alert(1)' })
+  assert.deepEqual(unsafe, { type: 'ui.request', requestId: 'oauth-1', method: 'input', title: 'Sign in' })
+  const invalid = parseLiveEventDto({ ...request, externalUrl: 'not a url' })
+  assert.deepEqual(invalid, unsafe)
+  assert.deepEqual(parseLiveEventDto({ ...request, externalUrl: 'file:///etc/passwd' }), unsafe)
+})
+
 test('Live session tree DTO stays agent-neutral and flat', () => {
   const tree = {
     activeLeafId: 'entry-2',

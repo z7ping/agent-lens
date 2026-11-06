@@ -500,6 +500,7 @@ export function normalizePiLiveEvent(event: Readonly<Record<string, unknown>>): 
       ...(options ? { options } : {}),
       ...(liveText(event.placeholder) ? { placeholder: liveText(event.placeholder) } : {}),
       ...(liveText(event.prefill) ? { prefill: liveText(event.prefill) } : {}),
+      ...(liveText(event.externalUrl) ? { externalUrl: liveText(event.externalUrl) } : {}),
     }
   }
   if (type === 'runtime_exit') {
@@ -681,6 +682,8 @@ export class PiLiveAdapter implements LiveAdapter {
       label: `/${command.name}`,
       ...(command.description ? { description: command.description } : {}),
       group: command.source,
+      ...(command.mcpManager === true
+        ? { action: 'open-mcp' as const } : {}),
     }))
     const builtins: LiveCommand[] = [
       { value: '/new', label: '/new', description: '新建任务', group: 'builtin', action: 'new-task' },

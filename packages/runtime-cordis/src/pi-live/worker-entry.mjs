@@ -1255,6 +1255,10 @@ function createExtensionUi() {
     if (options?.signal?.aborted) return Promise.resolve(fallback)
     const id = randomUUID()
     return new Promise(resolveDialog => {
+      const active = commandScope.getStore()
+      const externalUrl = method === 'input' && typeof active?.oauthUrl === 'string'
+        ? active.oauthUrl : undefined
+      if (externalUrl) delete active.oauthUrl
       const finish = value => {
         if (!pending.has(id)) return
         pending.delete(id)
@@ -1267,7 +1271,8 @@ function createExtensionUi() {
       options?.signal?.addEventListener('abort', onAbort, { once: true })
       const timer = options?.timeout > 0 ? setTimeout(onAbort, options.timeout) : undefined
       pending.set(id, { finish: response => finish(parse(record(response))), cancel: onAbort })
-      send('event', { type: 'extension_ui_request', id, method, ...payload })
+      send('event', { type: 'extension_ui_request', id, method, ...payload,
+        ...(externalUrl ? { externalUrl } : {}) })
     })
   }
   return {
@@ -1279,7 +1284,13 @@ function createExtensionUi() {
         const active = commandScope.getStore()
         if (active && typeof message === 'string') {
           const level = ['success', 'warning', 'error'].includes(notifyType) ? notifyType : 'info'
-          active.messages.push({ level, message })
+          // OAuth URLs can carry PKCE state or other short-lived secrets.
+          // The URL is transiently offered to the Web prompt and never copied to Pi's session journal.
+          const journalMessage = active.command.startsWith('/mcp login')
+            && /https?:\/\/\S+/.test(message)
+            ? 'MCP OAuth authorization link provided in the Web prompt'
+            : message
+          active.messages.push({ level, message: journalMessage })
         }
         fire({ method: 'notify', message, notifyType, ...(active ? { commandRecordId: active.id } : {}) })
       },
@@ -1315,7 +1326,19 @@ function piBuiltinToolExtensionFactories(sdkModule) {
   return [
     { name: 'codemode', factory: sdkModule.createCodemodeExtension({ mode: 'on' }), replaceable: true, builtin: true },
     { name: 'tool-search', factory: sdkModule.createToolSearchExtension(), replaceable: true, builtin: true },
-    { name: 'mcp', factory: sdkModule.createMcpExtension(), replaceable: true, builtin: true },
+    { name: 'mcp', factory: sdkModule.createMcpExtension({
+      // The OAuth browser belongs to the connected Web client, never the daemon host.
+      openUrl(url) {
+        const active = commandScope.getStore()
+        if (!active || typeof url !== 'string') return
+        try {
+          const parsed = new URL(url)
+          if ((parsed.protocol === 'https:' || parsed.protocol === 'http:') && url.length <= 4096) {
+            active.oauthUrl = url
+          }
+        } catch { /* Invalid URLs are not offered to the Web client. */ }
+      },
+    }), replaceable: true, builtin: true },
   ]
 }
 
@@ -1597,6 +1620,8 @@ function slashCommands() {
           ? { description: command.description.trim() }
           : {}),
         source: 'extension',
+        ...(name === 'mcp' && command.name === 'mcp'
+          && record(command.sourceInfo).path === 'builtin:mcp' ? { mcpManager: true } : {}),
         ...(item.invocationName === titleCommand?.invocationName && item === titleCommand ? { titleRegeneration: true } : {}),
       })
     }

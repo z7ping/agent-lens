@@ -71,6 +71,18 @@ test('Pi command records are normalized separately from assistant failures and d
   assert.equal(normalizePiLiveEvent({ type: 'extension_ui_request', method: 'notify', message: 'command output', notifyType: 'info', commandRecordId: 'command-1' }), undefined)
 })
 
+test('Pi OAuth input retains runtime-provided authorization URL without parsing human notifications', () => {
+  assert.deepEqual(normalizePiLiveEvent({
+    type: 'extension_ui_request', id: 'oauth-1', method: 'input',
+    title: 'Sign in', placeholder: 'Paste callback URL',
+    externalUrl: 'https://accounts.example.test/oauth?client_id=pi',
+  }), {
+    type: 'ui.request', requestId: 'oauth-1', method: 'input',
+    title: 'Sign in', placeholder: 'Paste callback URL',
+    externalUrl: 'https://accounts.example.test/oauth?client_id=pi',
+  })
+})
+
 test('Pi Live propagates persisted assistant errors immediately without replacing other message events', () => {
   const failed = normalizePiLiveEvent({
     type: 'message_end',
@@ -655,6 +667,19 @@ test('Pi Web built-in actions win command name collisions with native extensions
   assert.equal(commands.filter(command => command.value === '/reload').length, 1)
   assert.equal(commands.find(command => command.value === '/reload')?.runtimeActionId, 'pi.runtime.reload')
   assert.equal(commands.find(command => command.value === '/mcp')?.group, 'extension')
+  assert.equal(commands.find(command => command.value === '/mcp')?.action, undefined, 'third-party command is not an official MCP manager')
+})
+
+test('only SDK-attested official MCP commands expose the Web manager action', async () => {
+  const service = {
+    commands: async () => [
+      { name: 'mcp', source: 'extension' as const, mcpManager: true },
+      { name: 'mcp:2', source: 'extension' as const },
+    ],
+  } as unknown as PiLiveService
+  const commands = await new PiLiveAdapter(service, attachmentService()).commands('runtime-1')
+  assert.equal(commands.find(command => command.value === '/mcp')?.action, 'open-mcp')
+  assert.equal(commands.find(command => command.value === '/mcp:2')?.action, undefined)
 })
 
 test('Pi Live Adapter exposes full-session history index through bounded queries', async () => {

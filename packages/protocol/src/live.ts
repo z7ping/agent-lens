@@ -417,6 +417,7 @@ export type LiveEventDto =
       options?: string[] | undefined
       placeholder?: string | undefined
       prefill?: string | undefined
+      externalUrl?: string | undefined
     }
   | {
       type: 'error'
@@ -449,7 +450,7 @@ export interface LiveControlOptionDto extends LiveControlDisplayInfoDto {
 export interface LiveCommandDto extends LiveControlDisplayInfoDto {
   value: string
   group?: string | undefined
-  action?: 'new-task' | 'resume-task' | 'open-model' | 'runtime-action' | undefined
+  action?: 'new-task' | 'resume-task' | 'open-model' | 'open-mcp' | 'runtime-action' | undefined
   runtimeActionId?: string | undefined
 }
 
@@ -887,6 +888,14 @@ export function parseLiveEventDto(value: unknown): LiveEventDto | null {
     const message = eventText(event.message)
     const placeholder = eventText(event.placeholder)
     const prefill = eventText(event.prefill)
+    const externalUrl = eventText(event.externalUrl)
+    let safeUrl: string | undefined
+    if (externalUrl && externalUrl.length <= 4096) {
+      try {
+        const url = new URL(externalUrl)
+        if (url.protocol === 'https:' || url.protocol === 'http:') safeUrl = url.href
+      } catch { /* Ignore invalid external links. */ }
+    }
     return {
       type,
       requestId: event.requestId,
@@ -896,6 +905,7 @@ export function parseLiveEventDto(value: unknown): LiveEventDto | null {
       ...(options !== undefined ? { options: [...options] } : {}),
       ...(placeholder !== undefined ? { placeholder } : {}),
       ...(prefill !== undefined ? { prefill } : {}),
+      ...(safeUrl ? { externalUrl: safeUrl } : {}),
     }
   }
   if (type === 'error') {

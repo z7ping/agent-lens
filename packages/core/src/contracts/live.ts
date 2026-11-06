@@ -496,6 +496,8 @@ export interface LiveUiRequestEvent {
   options?: readonly string[] | undefined
   placeholder?: string | undefined
   prefill?: string | undefined
+  /** SDK-provided OAuth authorization link for a pending input dialog; never inferred from prose. */
+  externalUrl?: string | undefined
 }
 
 export type LiveEvent =
@@ -569,7 +571,7 @@ export interface LiveCommand extends LiveControlDisplayInfo {
   /** Optional runtime-owned grouping key such as extension / prompt / skill. */
   group?: string | undefined
   /** Explicit Product action declared by the Adapter; never submit as model input. */
-  action?: 'new-task' | 'resume-task' | 'open-model' | 'runtime-action' | undefined
+  action?: 'new-task' | 'resume-task' | 'open-model' | 'open-mcp' | 'runtime-action' | undefined
   runtimeActionId?: string | undefined
 }
 
