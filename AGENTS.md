@@ -177,7 +177,7 @@ Task Center / Review / Pi Live 的任务内容继续复用现有：
 
 - `agent-lens/docs/design/UI-UX-CONTRACT.md`（现行设计决策以 `product-internal` 中最新有效契约和正式代码为准）
 - `agent-lens/docs/design/README.md`
-- 当前 UI 修改再读 `UI-UX-CONTRACT.md`、`UI-UX-CHANGE-PLAN.md` 与相关 Phase 验收文档；`ALPHA3-*` 文件仅在追溯历史决策或验收依据时读取
+- 当前 UI 修改再读 `UI-UX-CHANGE-PLAN.md`、`RUNTIME-HIFI-RESYNC-20261103.md` 与 `mockups/runtime-baseline/README.md`；已退役的 Alpha.3 清单和旧原型仅通过 Git 历史追溯，不作为当前约束来源
 
 真实功能 / 字段 / 数据语义以本仓库正式实现为依据；视觉、信息层级、公共控件和响应式以有效设计规范为依据。
 

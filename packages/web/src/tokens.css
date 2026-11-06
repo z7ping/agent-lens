@@ -2,10 +2,10 @@
  * AgentLens 正式运行时设计令牌。
  *
  * 约束：
- * - 基础色值与 docs/design/mockups/v2/assets/tokens.css 保持一致；
- * - 本文件在所有历史/页面样式之后、color-system.css 之前加载；
+ * - 本文件是正式基础色值真值源，私有 runtime-baseline 原型按现行设计契约映射；
+ * - 加载顺序由 styles.css 持有：基础与 Token → 共享 Primitive → Workspace → 领域/页面；
  * - 页面样式只消费语义令牌，不应依赖旧色板的加载顺序；
- * - check-web-presentation.mjs 会逐项核对原型令牌与关键前景/背景对比度。
+ * - check-web-presentation.mjs 校验正式 Web 样式所有权、加载顺序与对比度，不读取私有原型。
  */
 
 :root {

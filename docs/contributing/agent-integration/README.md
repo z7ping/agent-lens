@@ -26,11 +26,12 @@ npm run test --workspace @agent-lens/daemon
 
 上述命令运行 Daemon 工作区的测试（不仅是适配器样例）。重点阅读并运行的用例在：
 
-- [第三方 Source + Live + Cordis + Canonical 端到端测试](../../../apps/daemon/src/third-party-adapter.integration.test.ts) —— 本仓库目前最小的**已落地可运行参考**。
+- [Slim Source 协调器测试](../../../apps/daemon/src/slim-source-coordinator.test.ts)：原生目录索引、采集授权与销毁。
+- [Slim Live 注册测试](../../../apps/daemon/src/slim-live.test.ts)：启用与显式授权边界。
 - [Source 最小契约测试](../../../packages/core/src/contracts/mock-source-adapter.test.ts)。
 - [Live 最小契约测试](../../../packages/core/src/contracts/mock-live-adapter.test.ts)。
 
-这几个测试使用模拟 Agent，不证明任何真实 Agent 已接入。完成练习后，必须替换成目标 Agent 的真实证据并做联调。
+这些测试分别覆盖契约和 Slim 组件边界，不是 Source→Live→Review 的完整端到端证明；旧事件 SQL 集成样例已经退役。完成练习后，必须替换成目标 Agent 的真实证据并做联调。
 
 ## 只需要理解三层
 
