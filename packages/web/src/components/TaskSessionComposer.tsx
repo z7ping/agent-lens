@@ -147,7 +147,7 @@ export function TaskSessionComposer({
         {runtimeActionFeedback === 'running' || (runtimeActionFeedback === 'idle' && (sendFeedback === 'sending' || (sendFeedback === 'idle' && responseActivity))) ? <UiIcon name="loading" size={12}/> : null}
         <span>{runtimeActionFeedback !== 'idle' ? t(`live.runtimeActionFeedback.${runtimeActionFeedback}`) : sendFeedback !== 'idle' ? t(`live.sendFeedback.${sendFeedback}`) : t(`live.responseActivity.${responseActivity}`)}</span>
         {runtimeActionFeedback === 'idle' && sendFeedback === 'idle' && interruptAvailable && <span className="task-composer-escape-hint">{t('live.escapeToInterrupt')}</span>}
-      </div>
+      </div>}
     </div>
     <div className="task-composer-bar">
       <span ref={connectionAnchorRef} className="task-composer-connection-anchor">
