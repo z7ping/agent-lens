@@ -188,6 +188,17 @@ export function sourceEventSummary(node: ReviewEventNodeDto): string {
     return role ? agentLensI18n.t('review:local.event.roleMissingBody', { role }) : agentLensI18n.t('review:local.event.missingBody')
   }
   if (node.kind === 'session.lifecycle') {
+    if (action === 'pi.custom' && payload.customType === 'agent-lens.command') {
+      const data = payloadRecord(payload.data)
+      const command = stringValue(data, 'command')
+      const outcome = stringValue(data, 'outcome') === 'failed'
+        ? agentLensI18n.t('review:local.event.commandFailed')
+        : agentLensI18n.t('review:local.event.commandHandled')
+      const error = stringValue(data, 'error')
+      const messages = Array.isArray(data.messages) ? data.messages : []
+      const notice = messages.map(item => stringValue(payloadRecord(item), 'message')).find(Boolean)
+      return [command, outcome, brief(error || notice, 180)].filter(Boolean).join(' · ')
+    }
     if (action === 'turn.context') {
       const model = stringValue(payload, 'model')
       const cwd = stringValue(payload, 'cwd')
