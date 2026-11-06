@@ -560,9 +560,6 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
       } else if (command.action === 'resume-task') {
         clearComposer()
         navigate('/review')
-      } else if (command.action === 'open-mcp') {
-        clearComposer()
-        openMcpManager()
       } else if (command.action === 'open-model') {
         if (!modelControl) { setError(t('live.modelSelectorUnavailable')); return }
         clearComposer()
