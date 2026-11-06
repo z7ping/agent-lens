@@ -8,7 +8,7 @@ import { codeLanguageFromContent } from '../components/code-language'
 import { ToolOutputContent } from './ToolOutputContent'
 import { isLargeTaskText, TaskTextWindow } from './TaskTextWindow'
 import { Button, Disclosure, StatusBadge } from '../components/ui'
-import { isPiSubagentTool, piSubagentResult, piSubagentToolDetails, piSubagentTranscriptMessage } from './task-tool-subagent'
+import { isPiSubagentTool, piSubagentResult, piSubagentSummary, piSubagentToolDetails, piSubagentTranscriptMessage, type PiWorkflowChildState } from './task-tool-subagent'
 import { PatchDiff } from '@pierre/diffs/react'
 import { ImagePreview } from '../components/ImagePreview'
 import { reviewToolCommand } from './review-tool-command'
@@ -49,6 +49,14 @@ function durationLabel(ms: number): string {
   }
   const minutes = value / 60_000
   return `${minutes < 10 ? minutes.toFixed(1) : Math.round(minutes)}m`
+}
+
+function workflowChildTone(state: PiWorkflowChildState): 'success' | 'danger' | 'warning' | 'accent' | 'neutral' {
+  if (state === 'completed') return 'success'
+  if (state === 'running') return 'accent'
+  if (state === 'failed' || state === 'rejected') return 'danger'
+  if (state === 'paused' || state === 'stopped') return 'warning'
+  return 'neutral'
 }
 
 /** Only known native input fields become a compact target; never invent one
@@ -177,8 +185,18 @@ export function TaskToolRow({ model, meta, details, onClick, className = '', com
   const isSubagentTool = isPiSubagentTool(model.name, model.toolSourceType, model.mcpServerId)
   const verifiedSubagents = isSubagentTool ? piSubagentToolDetails(model.name, model.resultDetails) : undefined
   const nativeSubagents = expanded ? verifiedSubagents : undefined
-  const subagentSummary = verifiedSubagents
-    ? `${t('tool.subagent.mode.' + verifiedSubagents.mode)} · ${t('tool.subagent.count', { count: verifiedSubagents.results.length })}`
+  // The versioned workflowChildren envelope proves this call ran inside a
+  // workflow even when the extension dispatches status/list as mode "single",
+  // so it also owns the collapsed mode label; empty inventories omit the count.
+  const subagentSummaryData = verifiedSubagents ? piSubagentSummary(verifiedSubagents) : undefined
+  const workflowChildren = nativeSubagents?.workflowChildren
+  const subagentCount = subagentSummaryData?.count
+  const subagentSummary = subagentSummaryData
+    ? [t('tool.subagent.mode.' + subagentSummaryData.mode),
+      ...(subagentCount !== undefined ? [t('tool.subagent.count', { count: subagentCount })] : []),
+      ...(subagentSummaryData.workflowState
+        ? [t('tool.subagent.workflowState.' + subagentSummaryData.workflowState)] : [])]
+      .join(' · ')
     : undefined
   const visualKind = model.kind === 'tool'
     ? toolVisualKind(model.name, { sourceType: model.toolSourceType, mcpServerId: model.mcpServerId })
@@ -335,11 +353,32 @@ export function TaskToolRow({ model, meta, details, onClick, className = '', com
               }}/>
             </div>
           : nativeSubagents && !rawResultDetails
-            ? <div className="task-tool-subagent-list" data-subagent-mode={nativeSubagents.mode}>
+            ? <div className="task-tool-subagent-list" data-subagent-mode={subagentSummaryData?.mode ?? nativeSubagents.mode}>
                 <div className="task-tool-subagent-overview">
-                  <span>{t('tool.subagent.mode.' + nativeSubagents.mode)}</span>
-                  <span>{t('tool.subagent.count', { count: nativeSubagents.results.length })}</span>
+                  <span>{t('tool.subagent.mode.' + (subagentSummaryData?.mode ?? nativeSubagents.mode))}</span>
+                  {subagentCount !== undefined && <span>{t('tool.subagent.count', { count: subagentCount })}</span>}
+                  {workflowChildren && <span>
+                    {t('tool.subagent.workflowState.' + workflowChildren.workflowState)}
+                  </span>}
                 </div>
+                {workflowChildren && workflowChildren.children.length > 0
+                  && <div className="task-tool-subagent-children">
+                    <div className="task-tool-section-title">{t('tool.subagent.children')}</div>
+                    {workflowChildren.children.map(child => <div
+                      key={child.childId} className="task-tool-subagent-child"
+                    >
+                      <span className="task-tool-subagent-name">
+                        {child.childId}{child.agent ? ` · ${child.agent}` : ''}
+                      </span>
+                      <span className="task-tool-subagent-meta">
+                        {child.model && <span>{child.model}</span>}
+                        {child.thinking && <span>{child.thinking}</span>}
+                        <StatusBadge tone={workflowChildTone(child.state)}>
+                          {t('tool.subagent.status.' + child.state)}
+                        </StatusBadge>
+                      </span>
+                    </div>)}
+                  </div>}
                 {nativeSubagents.results.slice(0, subagentVisibleCount).map((rawResult, index) => {
                   const child = piSubagentResult(rawResult)
                   if (!child) return <div key={index} className="task-tool-section-empty">

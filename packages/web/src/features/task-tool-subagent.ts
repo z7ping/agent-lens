@@ -1,13 +1,45 @@
 /** Source-backed view of the official Pi subagent extension's toolResult.details.
- * One tool may contain multiple results (single / parallel / chain).
- * These are tool-local results, NOT native sessions or navigable children.
+ * One tool may contain multiple results (single / parallel / chain), plus the
+ * extension's workflow / management envelopes. These are tool-local results,
+ * NOT native sessions or navigable children.
  */
-export type PiSubagentMode = 'single' | 'parallel' | 'chain'
+export type PiSubagentMode = 'single' | 'parallel' | 'chain' | 'workflow' | 'management'
 export type PiSubagentStatus = 'pending' | 'running' | 'completed' | 'failed' | 'aborted' | 'unknown'
+
+/** Snapshot child inventory from the extension's WorkflowChildSummaryV1. */
+export type PiWorkflowChildState = 'pending' | 'running' | 'completed' | 'failed'
+  | 'paused' | 'stopped' | 'rejected' | 'detached'
+export type PiWorkflowState = 'queued' | 'running' | 'completed' | 'failed' | 'paused' | 'stopped'
+
+export interface PiWorkflowChild {
+  childId: string
+  state: PiWorkflowChildState
+  runId?: string
+  agent?: string
+  sessionName?: string
+  model?: string
+  thinking?: string
+}
+
+export interface PiWorkflowChildren {
+  inventoryComplete: boolean
+  workflowState: PiWorkflowState
+  children: readonly PiWorkflowChild[]
+}
 
 export interface PiSubagentToolDetails {
   mode: PiSubagentMode
   results: readonly unknown[]
+  /** Present only when the official versioned envelope validates. */
+  workflowChildren?: PiWorkflowChildren
+}
+
+export interface PiSubagentSummary {
+  /** workflowChildren proves workflow context even when dispatch mode is single. */
+  mode: PiSubagentMode
+  /** Absent while an inventory is still assembling; never invented from a broken envelope. */
+  count?: number
+  workflowState?: PiWorkflowState
 }
 
 export interface PiSubagentResult {
@@ -57,12 +89,83 @@ export function isPiSubagentTool(
   return toolName === 'subagent' && toolSourceType !== 'mcp' && !mcpServerId?.trim()
 }
 
+const SUBAGENT_MODES: readonly PiSubagentMode[] = ['single', 'parallel', 'chain', 'workflow', 'management']
+const WORKFLOW_CHILD_STATES: readonly PiWorkflowChildState[] =
+  ['pending', 'running', 'completed', 'failed', 'paused', 'stopped', 'rejected', 'detached']
+const WORKFLOW_STATES: readonly PiWorkflowState[] =
+  ['queued', 'running', 'completed', 'failed', 'paused', 'stopped']
+
+function optionalText(value: unknown, key: string): { [key: string]: string } | undefined {
+  const parsed = text(value)
+  return parsed ? { [key]: parsed } : undefined
+}
+
+/** Only the official versioned WorkflowChildSummaryV1 envelope is accepted;
+ * an unknown version or a malformed child drops the whole snapshot instead of
+ * inventing child states, while mode/results stay independently valid. */
+function piWorkflowChildren(value: unknown): PiWorkflowChildren | undefined {
+  const source = record(value)
+  if (!source || source.version !== 1) return undefined
+  if (typeof source.inventoryComplete !== 'boolean') return undefined
+  if (typeof source.workflowState !== 'string'
+    || !WORKFLOW_STATES.includes(source.workflowState as PiWorkflowState)) return undefined
+  if (!Array.isArray(source.children)) return undefined
+  const children: PiWorkflowChild[] = []
+  for (const entry of source.children) {
+    const child = record(entry)
+    if (!child) return undefined
+    const childId = text(child.childId)
+    if (!childId || typeof child.state !== 'string'
+      || !WORKFLOW_CHILD_STATES.includes(child.state as PiWorkflowChildState)) return undefined
+    children.push({
+      childId,
+      state: child.state as PiWorkflowChildState,
+      ...optionalText(child.runId, 'runId'),
+      ...optionalText(child.agent, 'agent'),
+      ...optionalText(child.sessionName, 'sessionName'),
+      ...optionalText(child.model, 'model'),
+      ...optionalText(child.thinking, 'thinking'),
+    })
+  }
+  return {
+    inventoryComplete: source.inventoryComplete,
+    workflowState: source.workflowState as PiWorkflowState,
+    children,
+  }
+}
+
 export function piSubagentToolDetails(toolName: string, value: unknown): PiSubagentToolDetails | undefined {
   if (toolName !== 'subagent') return undefined
   const details = record(value)
   if (!details || !Array.isArray(details.results)) return undefined
-  if (details.mode !== 'single' && details.mode !== 'parallel' && details.mode !== 'chain') return undefined
-  return { mode: details.mode, results: details.results }
+  if (!SUBAGENT_MODES.includes(details.mode as PiSubagentMode)) return undefined
+  const workflowChildren = piWorkflowChildren(details.workflowChildren)
+  return {
+    mode: details.mode as PiSubagentMode,
+    results: details.results,
+    ...(workflowChildren ? { workflowChildren } : {}),
+  }
+}
+
+/** Collapsed-row label data. An inventory that is still assembling (empty +
+ * incomplete) omits the count instead of reporting 0, and management calls
+ * never claim child tasks. */
+export function piSubagentSummary(details: PiSubagentToolDetails): PiSubagentSummary {
+  const workflowChildren = details.workflowChildren
+  if (workflowChildren) {
+    const count = workflowChildren.children.length > 0 || workflowChildren.inventoryComplete
+      ? workflowChildren.children.length
+      : undefined
+    return {
+      mode: 'workflow',
+      ...(count !== undefined ? { count } : {}),
+      workflowState: workflowChildren.workflowState,
+    }
+  }
+  const count = details.mode !== 'management' && details.results.length > 0
+    ? details.results.length
+    : undefined
+  return { mode: details.mode, ...(count !== undefined ? { count } : {}) }
 }
 
 export function piSubagentResult(value: unknown): PiSubagentResult | undefined {

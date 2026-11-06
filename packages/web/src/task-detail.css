@@ -1101,6 +1101,15 @@
   font-size: var(--text-task-meta);
 }
 .task-surface .task-tool-subagent-name { overflow-wrap: anywhere; }
+.task-surface .task-tool-subagent-children { display: grid; gap: 6px; min-width: 0; }
+.task-surface .task-tool-subagent-child {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  font-size: var(--text-task-meta);
+}
 .task-surface .task-tool-subagent-fact { display: grid; gap: 3px; min-width: 0; }
 .task-surface .task-tool-subagent-fact strong,
 .task-surface .task-tool-subagent-message-role,
