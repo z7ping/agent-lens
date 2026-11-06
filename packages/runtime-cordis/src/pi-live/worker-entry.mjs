@@ -1284,7 +1284,13 @@ function createExtensionUi() {
         const active = commandScope.getStore()
         if (active && typeof message === 'string') {
           const level = ['success', 'warning', 'error'].includes(notifyType) ? notifyType : 'info'
-          active.messages.push({ level, message })
+          // OAuth URLs can carry PKCE state or other short-lived secrets.
+          // The URL is transiently offered to the Web prompt and never copied to Pi's session journal.
+          const journalMessage = active.command.startsWith('/mcp login')
+            && /https?:\/\/\S+/.test(message)
+            ? 'MCP OAuth authorization link provided in the Web prompt'
+            : message
+          active.messages.push({ level, message: journalMessage })
         }
         fire({ method: 'notify', message, notifyType, ...(active ? { commandRecordId: active.id } : {}) })
       },
