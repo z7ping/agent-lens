@@ -6,6 +6,7 @@ import type { HubReviewSessionSummaryDto, LiveMessageDto, NativeSessionSummaryDt
 import { fetchHubReviewSessions } from '../client/hub-review'
 import { liveApi, LiveRequestError, type LiveProductMetadata } from '../client/live'
 import { settleReaderAtLatest } from './session-reader-positioning'
+import { isSlashCommandInput } from './live-task-input'
 import { clearLiveComposerDraft, liveComposerDraftKey } from '../components/live-composer-session-state'
 import { useClientSnapshot } from '../client/use-client-snapshot'
 import { agentLabel } from '../components/AgentScope'
@@ -878,6 +879,10 @@ export function useReviewSession(model: AgentLensClientModel, embedded: boolean)
 
   const sendReviewMessage = async (message: LiveMessageDto) => {
     if (!detail || !detailLiveInteraction?.canResume || !detailLiveInteraction.canSend || historyInteractionPending || historyInteractionBlocked) return
+    if (isSlashCommandInput(message)) {
+      setHistoryInteractionError(t('local.header.commandsRequireLive'))
+      return
+    }
     const liveId = detailLiveInteraction.liveId
     const historicalId = detail.id
     setHistoryInteractionPending('resume')
