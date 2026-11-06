@@ -28,11 +28,12 @@ function explicitAlert(value: unknown): boolean {
   return false
 }
 
-/** A Pi native custom_message is extension context, not a user turn or tool call.
- * It stays in the session record even when its normal-status row is collapsed. */
+/** Pi's display=false is explicit intent to hide an extension context entry.
+ * An extension's display=true (or absent) remains visible, even if benign. */
 export function isRoutineLiveRuntimeNotice(item: LiveTaskProjectionItem): boolean {
   return item.kind === 'native' && item.nativeType === 'custom_message'
-    && item.source.type === 'custom_message' && !explicitAlert(item.source)
+    && item.source.type === 'custom_message' && item.source.display === false
+    && !explicitAlert(item.source)
 }
 
 /** The canonical Review equivalent is verified by native action AND provenance.
@@ -44,5 +45,6 @@ export function isRoutineReviewRuntimeNotice(node: ReviewEventNodeDto): boolean 
   const provenance = record(payload.provenance)
   return provenance.sourceSignal === 'pi custom message'
     && provenance.originType === 'application-injection'
+    && record(payload.rawPayload).display === false
     && !explicitAlert(payload.rawPayload)
 }
