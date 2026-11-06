@@ -1678,9 +1678,10 @@ test('Pi /mcp returns full native status in Live and after snapshot recovery, no
     assert.ok(item?.kind === 'native')
     assert.equal(item.nativeType, 'command')
     const detail = liveNativeCommandDetail(item)
-    assert.equal(detail?.command, '/mcp')
-    assert.equal(detail?.outcome, 'handled')
-    assert.equal(detail?.output, status)
+    assert.ok(detail)
+    assert.equal(detail.command, '/mcp')
+    assert.equal(detail.outcome, 'handled')
+    assert.equal(detail.output, status)
     assert.ok(detail.output.length > 240)
     assert.equal(items.some(row => row.kind === 'message'), false)
   }
