@@ -729,6 +729,7 @@ function runtimeCapabilities(value: unknown): PiLiveRuntimeCapabilities | undefi
     extensionUi: capabilities.extensionUi,
     ...(typeof capabilities.treeNavigation === 'boolean' ? { treeNavigation: capabilities.treeNavigation } : {}),
     ...(typeof capabilities.manualCompaction === 'boolean' ? { manualCompaction: capabilities.manualCompaction } : {}),
+    ...(typeof capabilities.nativeReload === 'boolean' ? { nativeReload: capabilities.nativeReload } : {}),
     ...(typeof capabilities.messageFork === 'boolean' ? { messageFork: capabilities.messageFork } : {}),
   }
 }
