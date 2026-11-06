@@ -62,6 +62,7 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
   const [mcpManagerOpen, setMcpManagerOpen] = useState(false)
   const [mcpPending, setMcpPending] = useState(false)
   const [mcpStatus, setMcpStatus] = useState('')
+  const mcpEpochRef = useRef(0)
   const [queueExpanded, setQueueExpanded] = useState(false)
   const [queueMenuOpen, setQueueMenuOpen] = useState(false)
   const queueMenuAnchorRef = useRef<HTMLSpanElement>(null)
@@ -69,6 +70,7 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
   useEffect(() => {
     setQueueExpanded(false)
     setQueueMenuOpen(false)
+    mcpEpochRef.current += 1
     setMcpManagerOpen(false)
     setMcpPending(false)
     setMcpStatus('')
@@ -464,6 +466,7 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
     }
     if (action !== 'status') setMcpManagerOpen(false)
     setMcpPending(true)
+    const epoch = ++mcpEpochRef.current
     try {
       const command = action === 'status' ? '/mcp' : `/mcp ${action}`
       const accepted = await send({ parts: [{ type: 'text', text: command }] }, undefined, true)
@@ -487,12 +490,14 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
           const message = (value as Record<string, unknown>).message
           return typeof message === 'string' ? message : ''
         }).filter(Boolean).join('\n\n')
-        setMcpStatus(output || (typeof data?.error === 'string' ? data.error : ''))
+        if (epoch === mcpEpochRef.current) {
+          setMcpStatus(output || (typeof data?.error === 'string' ? data.error : ''))
+        }
       }
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : String(reason))
+      if (epoch === mcpEpochRef.current) setError(reason instanceof Error ? reason.message : String(reason))
     } finally {
-      setMcpPending(false)
+      if (epoch === mcpEpochRef.current) setMcpPending(false)
     }
   }
   const openMcpManager = () => {
@@ -838,8 +843,7 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
           title={t('live.mcp.title')}
           description={t('live.mcp.description')}
           onClose={() => setMcpManagerOpen(false)}
-          closeDisabled={mcpPending}
-          footer={<Button size="small" disabled={mcpPending} onClick={() => setMcpManagerOpen(false)}>{t('live.mcp.close')}</Button>}
+          footer={<Button size="small" onClick={() => setMcpManagerOpen(false)}>{t('live.mcp.close')}</Button>}
         >
           <div className="live-extension-options" role="group" aria-label={t('live.mcp.title')}>
             <Button size="small" loading={mcpPending} disabled={mcpPending} onClick={() => { void runMcpCommand('status') }}>{t('live.mcp.refresh')}</Button>
