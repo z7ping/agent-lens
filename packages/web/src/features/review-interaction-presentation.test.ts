@@ -594,7 +594,10 @@ test('原生 Pi 隐藏扩展上下文进入运行记录，不穿透相邻工具�
     { type: 'custom_message', display: true, content: 'important extension message' },
     { type: 'custom_message', display: false, details: { severity: 'error' } },
   ]) {
-    const important = { ...extension, payload: { ...extension.payload, rawPayload } }
+    const important: ReviewEventNodeDto = { ...extension, payload: {
+      event: 'pi.custom_message', rawPayload,
+      provenance: { sourceSignal: 'pi custom message', originType: 'application-injection' },
+    } }
     const shown = projectReviewInteractionPresentation([important])
     assert.equal(shown[0]?.type, 'event', 'visible/failed extension messages must not be hidden')
   }
