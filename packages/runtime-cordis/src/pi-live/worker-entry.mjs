@@ -1614,6 +1614,8 @@ function slashCommands() {
           ? { description: command.description.trim() }
           : {}),
         source: 'extension',
+        ...(name === 'mcp' && command.name === 'mcp'
+          && record(command.sourceInfo).path === 'builtin:mcp' ? { mcpManager: true } : {}),
         ...(item.invocationName === titleCommand?.invocationName && item === titleCommand ? { titleRegeneration: true } : {}),
       })
     }
