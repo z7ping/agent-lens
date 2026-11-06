@@ -7,7 +7,7 @@ import { emptyLiveQueue, firstUserEntryCursor } from './live-task-queue'
 import { enqueueLiveUiRequest, dismissLiveUiRequest } from './live-extension-request-queue'
 import { reduceLiveExtensionState } from './live-extension-state'
 import { LIVE_TASK_SNAPSHOT_PAGE_LIMIT, historyPageBlock, aggregateHistoryPage, splitLiveProjectionItems, loadBoundedRecoverySnapshot, captureLiveReaderAnchor, restoreLiveReaderAnchor, appendUniqueLiveProjectionItems } from './live-task-history-window'
-import { projectLiveInputHistory, projectLiveSnapshotEntries, liveEventChangesTaskTranscript, mergeLiveActiveProjectionItems, reconcileLiveSnapshotProjection, preserveOptimisticImagePreviews, reduceLiveTaskEvent } from './live-task-projection'
+import { projectLiveInputHistory, projectLiveSnapshotEntries, liveEventChangesTaskTranscript, mergeLiveActiveProjectionItems, reconcileLiveSnapshotProjection, reconcilePersistedCompactionEvents, preserveOptimisticImagePreviews, reduceLiveTaskEvent } from './live-task-projection'
 import { LiveFollowController, liveFollowTextRevision } from './live-follow-controller'
 import { settleReaderAtLatest } from './session-reader-positioning'
 import { shouldRecoverLiveOnVisible, sameLiveRuntimeState, runtimeStateFromEvent } from './task-live-runtime'
@@ -368,15 +368,23 @@ export function useLiveTaskRuntime({
           // 完成态仍从旧 leaf 对账，替换活动轮中的乐观/流式临时节点。
           retainReaderAnchor()
           setProjection(previous => {
-            const active = mergeLiveActiveProjectionItems(previous.active, recovered)
+            const reconciled = reconcilePersistedCompactionEvents(previous.active, recovered)
+            const superseded = new Set(reconciled.matchedTransientByNativeId.values())
+            const active = mergeLiveActiveProjectionItems(
+              previous.active.filter(item => !superseded.has(item.id)), reconciled.items,
+            )
             return active === previous.active ? previous : { ...previous, active }
           })
         } else if (recovered.length > 0) {
           retainReaderAnchor()
           setProjection(previous => {
+            const persisted = preserveOptimisticImagePreviews(previous.active, recovered)
+            const reconciled = reconcilePersistedCompactionEvents(previous.active, persisted)
+            const superseded = new Set(reconciled.matchedTransientByNativeId.values())
             const reconciledActive = [
-              ...previous.active.slice(0, snapshotBaseActiveCount),
-              ...preserveOptimisticImagePreviews(previous.active, recovered),
+              ...previous.active.slice(0, snapshotBaseActiveCount)
+                .filter(item => !superseded.has(item.id)),
+              ...reconciled.items,
             ]
             return {
               stable: appendUniqueLiveProjectionItems(previous.stable, reconciledActive),
