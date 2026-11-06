@@ -18,7 +18,7 @@ export type PiSdkModel = Pick<OfficialPiModel, 'provider' | 'id' | 'name' | 'rea
 export type PiSdkImage = NonNullable<PromptOptions['images']>[number]
 export type PiSdkPromptOptions = Pick<PromptOptions, 'images' | 'streamingBehavior' | 'source' | 'preflightResult'>
 export type PiSdkThinkingLevel = Parameters<AgentSession['setThinkingLevel']>[0]
-export type PiSdkSlashCommandInfo = Pick<SlashCommandInfo, 'name' | 'description' | 'source'> & { titleRegeneration?: boolean }
+export type PiSdkSlashCommandInfo = Pick<SlashCommandInfo, 'name' | 'description' | 'source'> & { titleRegeneration?: boolean; mcpManager?: boolean }
 export type PiSdkExtensionBindings = OfficialExtensionBindings
 export type PiSdkExtensionUiContext = NonNullable<OfficialExtensionBindings['uiContext']>
 
