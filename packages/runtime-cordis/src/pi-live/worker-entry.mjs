@@ -1482,11 +1482,13 @@ function beginExtensionBinding(input) {
     onError: value => {
       const error = diagnostic(record(value).error ?? 'Unknown extension error')
       const active = commandScope.getStore()
-      if (active && record(value).extensionPath === `command:${active.name.slice(1)}`) {
+      const commandRecordId = active && record(value).extensionPath === `command:${active.name.slice(1)}`
+        ? active.id : undefined
+      if (commandRecordId) {
         active.outcome = 'failed'
         active.error = error
       }
-      send('event', { type: 'extension_error', error })
+      send('event', { type: 'extension_error', error, ...(commandRecordId ? { commandRecordId } : {}) })
     },
   })).then(() => {
     recordStartupMetric('extension_bind_ms', Date.now() - startedAt)
