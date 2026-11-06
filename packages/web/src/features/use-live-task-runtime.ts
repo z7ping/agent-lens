@@ -535,6 +535,10 @@ export function useLiveTaskRuntime({
           setExtensions(previous => dismissLiveUiRequest(previous, requestId))
         }
         if (envelope.normalizedEvent?.type === 'runtime-disclosure.changed') {
+          if (envelope.event.type === 'runtime_extension_binding' && envelope.event.status === 'ready'
+            && product.capabilities.includes('command-discovery')) {
+            void liveApi.commands(current.liveId, current.runtimeSessionId).then(setCommands, () => undefined)
+          }
           void liveApi.runtimeDisclosures(current.liveId, current.runtimeSessionId).then(
             setRuntimeDisclosures,
             () => undefined,
