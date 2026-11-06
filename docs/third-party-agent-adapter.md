@@ -32,13 +32,15 @@
 
 此外 `packages/core/src/contracts/mock-source-adapter.test.ts` 覆盖 Source 能力声明、未知原生记录投影与 Evidence 保留。
 
-## 最小集成样例（正式组件链路）
+## 当前 Slim 组件参考与验证边界
 
-`apps/daemon/src/third-party-adapter.integration.test.ts` 在同一 `AgentLensApplication` 中注册 Source 和 Live 插件，依次走：
-- `Cordis → DefaultSourceService → prepareRegisteredSources → SourceHistoryRunner → SQLite Canonical Observation / Evidence`；
-- `Cordis → DefaultLiveService → LiveAdapter → normalizedEvent`，保留原生事件；
-- `resolveIntegrationStatus(productId)` 从实际注册的 Live Adapter 回读可用性，允许 `integrationId/productId/liveId` 三者不同。
+旧事件 SQL 的第三方端到端样例已随 Legacy Runtime 退役，不再作为当前接入证明。可复用的现行参考：
 
-无需新建插件运行时、Task UI 或 CSS。Source 的 `unknown` 类型必须作为可追溯事实保留，不能静默丢弃；Live 的通用事件进入现有 `LiveTaskTimeline` 与共享 Task 投影。
+- [Slim Source 协调器测试](../apps/daemon/src/slim-source-coordinator.test.ts)：按 Profile 建立原生目录、授权采集和销毁；不写事件正文副本。
+- [Slim Live 注册测试](../apps/daemon/src/slim-live.test.ts)：只有启用且显式授权的 Agent 才注册 Live。
+- [Slim Integration 管理测试](../apps/daemon/src/slim-integrations.test.ts)：偏好、来源策略与 Live 授权的边界。
+- 真实注册可参考 [OpenCode Source](../packages/source-opencode/src/index.ts) 和 [Hermes Integration](../packages/integration-hermes/src/index.ts)。
 
-上述为**自动化代码集成测试**，不是完整桌面端可视化、真实 Agent、Windows/浏览器或交互验收。用户自行进行后者；代码 PR 合并后可关闭对应代码 Issue。
+这些是契约/组件用例，不是 Source→Review→Live 的完整端到端验收。Canonical / Evidence 运行时语义保留，正文仍由 Source 原生存储或经验证的归档持有，Slim 只保存受控元数据与可重算索引。不得恢复旧 SQL Observation / Evidence 写入以补齐演示。
+
+新增 Agent 继续复用 Cordis、共享 Task UI 与投影；unknown 事实不得静默丢弃。真实 Agent、桌面、Windows/浏览器与交互验收独立记录，不能以 PR 合并或组件测试代替。

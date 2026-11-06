@@ -18,7 +18,7 @@
 
 ## 2. 最小 LiveAdapter 契约
 
-完整接口：[packages/core/src/contracts/live.ts](../../../packages/core/src/contracts/live.ts)；能运行的演示：[third-party-adapter.integration.test.ts](../../../apps/daemon/src/third-party-adapter.integration.test.ts)。
+完整接口：[packages/core/src/contracts/live.ts](../../../packages/core/src/contracts/live.ts)；最小契约示例：[mock-live-adapter.test.ts](../../../packages/core/src/contracts/mock-live-adapter.test.ts)。
 
 ```ts
 import type { LiveAdapter } from '@agent-lens/core'
@@ -56,7 +56,7 @@ const live: LiveAdapter = {
 }
 ```
 
-此代码只说明**接口形状**，是明确未实现的骨架；不能作为可用适配器注册。**可实际运行的 Mock** 请直接使用前述端到端测试，其中含完整的状态、订阅、发送与断言。
+此代码只说明**接口形状**，是明确未实现的骨架；不能作为可用适配器注册。**可实际运行的 Mock** 请阅读前述契约测试中的状态、订阅、发送与断言；它不证明正式 Daemon 的端到端接入。
 
 必需方法：`availability/list/start/state/snapshot/send/subscribe/terminate/dispose`。基础能力外的 `resume`、`interrupt`、`fork`、`queue`、`history-index`、`model-switching`、`thinking-control`、`extension-ui` 等必须同时实现对应方法并验证，才能声明。
 
@@ -119,7 +119,7 @@ export const exampleIntegration = defineAgentLensIntegration({
 ])
 ```
 
-这一片段展示**Source + Live 组合关系**；需要导入第 01 篇定义的 `sourcePlugin`（或换成实际代码），并按仓库 Composition Root 注册 Integration。建议直接看：[Hermes 完整 Integration](../../../packages/integration-hermes/src/index.ts)、[第三方正式注册测试](../../../apps/daemon/src/third-party-adapter.integration.test.ts)。`integrationId`、`productId` 与 `liveId` 可以不同，不能靠字符串相等推断它们的关系。
+这一片段展示**Source + Live 组合关系**；需要导入第 01 篇定义的 `sourcePlugin`（或换成实际代码），并按仓库 Composition Root 注册 Integration。建议直接看：[Hermes 完整 Integration](../../../packages/integration-hermes/src/index.ts)、[Slim Live 注册与授权测试](../../../apps/daemon/src/slim-live.test.ts)。`integrationId`、`productId` 与 `liveId` 可以不同，不能靠字符串相等推断它们的关系。
 
 目前第三方 npm 包自动安装未开放为可靠的公开路径；在 PR 中新增/完善仓库 Integration，而非在文档里宣称 `npm install` 后自动发现新 Agent。
 

@@ -64,7 +64,7 @@ const source: SourceDefinition = {
 }
 ```
 
-**注意：这是分层解释用的骨架，不是一个完成检测/读取的插件。** 请从[真实可运行的端到端测试](../../../apps/daemon/src/third-party-adapter.integration.test.ts)复制完整的模拟 `SourceRecord` 和 Cordis 注册，再替换为上游实现。不要把骨架中的 `detect() => []` 当作已发现安装。
+**注意：这是分层解释用的骨架，不是一个完成检测/读取的插件。** 模拟记录与规范化参考 [Source 契约测试](../../../packages/core/src/contracts/mock-source-adapter.test.ts)，真实注册参考下文 OpenCode Source / Integration；契约测试不等于 Daemon 端到端联调。不要把骨架中的 `detect() => []` 当作已发现安装。
 
 ## 3. SourceRecord 必须提供可追踪身份
 
@@ -85,7 +85,7 @@ const source: SourceDefinition = {
 
 ## 4. 把 Source 注册成 Integration 组件
 
-已有真实实现：[OpenCode Source 注册](../../../packages/source-opencode/src/index.ts)、[OpenCode Integration](../../../packages/integration-opencode/src/index.ts)；更小的演示参见[端到端测试](../../../apps/daemon/src/third-party-adapter.integration.test.ts)。
+已有真实实现：[OpenCode Source 注册](../../../packages/source-opencode/src/index.ts)、[OpenCode Integration](../../../packages/integration-opencode/src/index.ts)；Slim 原生采集调度边界参见[协调器测试](../../../apps/daemon/src/slim-source-coordinator.test.ts)。
 
 ```ts
 import { defineAgentLensPlugin, type AgentLensContext } from '@agent-lens/runtime-cordis'

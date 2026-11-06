@@ -21,9 +21,13 @@ npm run build:dist
 参考测试：
 - [Source 最小 Mock](../../../packages/core/src/contracts/mock-source-adapter.test.ts)
 - [Live 最小 Mock](../../../packages/core/src/contracts/mock-live-adapter.test.ts)
-- [Cordis → Source → Canonical 与 Live 集成测试](../../../apps/daemon/src/third-party-adapter.integration.test.ts)
+- [Slim Source 协调器测试](../../../apps/daemon/src/slim-source-coordinator.test.ts)
+- [Slim Live 注册与授权测试](../../../apps/daemon/src/slim-live.test.ts)
+
 - [现有布局/样式契约检查](../../../scripts/check-task-style-ownership.mjs)
 - [现有 Agent 分支负例门禁](../../../scripts/agent-convergence-ownership.mjs)
+
+上述测试各自覆盖组件边界，不代表完整端到端、真实 Agent 或用户环境验收。
 
 ## 2. 功能与证据验证矩阵
 
