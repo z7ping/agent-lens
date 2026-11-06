@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { isConsolidatedFileChangeEvent, reviewArtifactLabel, reviewArtifactSummary, reviewEventLabel } from './review-event-presentation'
+import { isConsolidatedFileChangeEvent, isFailedLifecycleEvent, reviewArtifactLabel, reviewArtifactSummary, reviewEventLabel } from './review-event-presentation'
 import type { ReviewEventNodeDto, TaskFileChangesResponseDto } from '@agent-lens/protocol'
 
 test('仅将完整覆盖的成功文件事件收入集中卡片的原始记录组', () => {
@@ -119,4 +119,21 @@ test('新原生事件保留一致的人类可读标签，且不因跨 Agent 丢�
   assert.equal(reviewArtifactSummary({ action: 'file.patch', files: ['/workspace/src/a.ts', 'b.ts'] }), 'a.ts 等 2 个文件')
   assert.equal(reviewArtifactLabel({ action: 'file.attached', filename: 'image.png' }), '添加附件')
   assert.equal(reviewArtifactSummary({ action: 'file.attached', filename: 'image.png' }), 'image.png')
+})
+
+test('Review renders native command outcomes as evidence, without inferring an AI turn', () => {
+  const node: ReviewEventNodeDto = {
+    type: 'event', id: 'pi-command-1',
+    at: '2026-11-06T12:00:00Z', capturedAt: '2026-11-06T12:00:00Z',
+    sourceId: 'pi', kind: 'session.lifecycle', category: 'lifecycle',
+    label: 'Pi event', evidence: [], observationIds: [],
+    payload: { event: 'pi.custom', customType: 'agent-lens.command',
+      data: { command: '/mcp', outcome: 'failed', error: 'Custom TUI unavailable' } },
+  }
+  assert.equal(reviewEventLabel(node), 'Pi 原生命令')
+  assert.equal(isFailedLifecycleEvent(node), true)
+  assert.equal(isFailedLifecycleEvent({ ...node, payload: {
+    event: 'pi.custom', customType: 'agent-lens.command',
+    data: { command: '/reload', outcome: 'handled' },
+  } }), false)
 })
