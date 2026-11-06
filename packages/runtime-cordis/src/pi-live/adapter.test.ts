@@ -655,6 +655,19 @@ test('Pi Web built-in actions win command name collisions with native extensions
   assert.equal(commands.filter(command => command.value === '/reload').length, 1)
   assert.equal(commands.find(command => command.value === '/reload')?.runtimeActionId, 'pi.runtime.reload')
   assert.equal(commands.find(command => command.value === '/mcp')?.group, 'extension')
+  assert.equal(commands.find(command => command.value === '/mcp')?.action, undefined, 'third-party command is not an official MCP manager')
+})
+
+test('only SDK-attested official MCP commands expose the Web manager action', async () => {
+  const service = {
+    commands: async () => [
+      { name: 'mcp', source: 'extension' as const, mcpManager: true },
+      { name: 'mcp:2', source: 'extension' as const },
+    ],
+  } as unknown as PiLiveService
+  const commands = await new PiLiveAdapter(service, attachmentService()).commands('runtime-1')
+  assert.equal(commands.find(command => command.value === '/mcp')?.action, 'open-mcp')
+  assert.equal(commands.find(command => command.value === '/mcp:2')?.action, undefined)
 })
 
 test('Pi Live Adapter exposes full-session history index through bounded queries', async () => {
