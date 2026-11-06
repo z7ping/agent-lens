@@ -136,13 +136,17 @@ function decode(value: string | null, scopeHash: string): SearchCursor | undefin
       if (!cursor.active) throw new Error()
       const sc = cursor.sourceCursor as Record<string,unknown>
       if (!sc || typeof sc !== 'object' || Array.isArray(sc)
-        || ![3,4].includes(Object.keys(sc).length)
+        || Object.keys(sc).length < 3 || Object.keys(sc).length > 5
+        || Object.keys(sc).some(key =>
+          !['offset','sequence','fileIdentity','boundaryHash','recordFingerprint'].includes(key))
         || !Number.isSafeInteger(sc.offset) || (sc.offset as number) < 0
         || !Number.isSafeInteger(sc.sequence) || (sc.sequence as number) < 0
         || typeof sc.fileIdentity !== 'string' || !sc.fileIdentity
         || sc.fileIdentity.length > 128
         || (sc.boundaryHash !== undefined
-          && (typeof sc.boundaryHash !== 'string' || !/^[0-9a-f]{64}$/.test(sc.boundaryHash)))) throw new Error()
+          && (typeof sc.boundaryHash !== 'string' || !/^[0-9a-f]{64}$/.test(sc.boundaryHash)))
+        || (sc.recordFingerprint !== undefined
+          && (typeof sc.recordFingerprint !== 'string' || !/^[0-9a-f]{64}$/.test(sc.recordFingerprint)))) throw new Error()
     } else if (cursor.active) throw new Error()
     if (cursor.active) {
       const turn = cursor.turn as Record<string, unknown> | undefined
