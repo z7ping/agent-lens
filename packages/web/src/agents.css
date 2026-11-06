@@ -686,7 +686,7 @@
   font-size: 12px;
   font-weight: 620;
 }
-.managed-file-theme-select { min-width: 126px; }
+.managed-file-theme-select { flex: 0 0 160px; width: 160px; min-width: 0; }
 .managed-file-document-scroll {
   min-height: 0;
   flex: 1 1 auto;
