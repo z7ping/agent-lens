@@ -618,6 +618,7 @@ export function TaskCenterPage({ model, mode, sidebarHost }: { model: AgentLensC
   const historyCount = localSessions.length + visibleHub.length + nativeBodyHits.length
   const openSearchHitTurn = useCallback(async (hit: NativeBodySearchHitDto) => {
     if (!hit.turn || searchHitPending) return
+    const requestKey = nativeRequestKeyRef.current
     setSearchHitPending(hit.observationId)
     setSearchHitError('')
     try {
@@ -629,6 +630,7 @@ export function TaskCenterPage({ model, mode, sidebarHost }: { model: AgentLensC
         expectedRecordFingerprint: hit.turn.recordFingerprint,
         scan: true,
       })
+      if (nativeRequestKeyRef.current !== requestKey) return
       const ordinal = verifiedNativeSearchHitTurn(hit, index)
       if (!ordinal) {
         setSearchHitError(hit.observationId)
@@ -636,9 +638,9 @@ export function TaskCenterPage({ model, mode, sidebarHost }: { model: AgentLensC
       }
       navigate(`/review/${encodeURIComponent(hit.sessionId)}?focusTurn=${ordinal}`)
     } catch {
-      setSearchHitError(hit.observationId)
+      if (nativeRequestKeyRef.current === requestKey) setSearchHitError(hit.observationId)
     } finally {
-      setSearchHitPending('')
+      if (nativeRequestKeyRef.current === requestKey) setSearchHitPending('')
     }
   }, [model, navigate, searchHitPending])
   const projectFilterOptions = useMemo(() => [

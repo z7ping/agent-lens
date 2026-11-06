@@ -16,7 +16,7 @@ const MAX_PAGE_BYTES = 2 * 1024 * 1024
 
 type Before = NonNullable<NativeSessionCatalogQuery['before']>
 type SearchCursor = {
-  version: 2
+  version: 1 | 2
   scopeHash: string
   before?: Before
   active?: { sourceId: string; installationId: string; nativeSessionId: string }
@@ -121,7 +121,7 @@ function decode(value: string | null, scopeHash: string): SearchCursor | undefin
     const data: unknown = JSON.parse(Buffer.from(value, 'base64url').toString('utf8'))
     if (!data || typeof data !== 'object' || Array.isArray(data)) throw new Error()
     const cursor = data as Record<string, unknown>
-    if (cursor.version !== 2 || cursor.scopeHash !== scopeHash
+    if ((cursor.version !== 1 && cursor.version !== 2) || cursor.scopeHash !== scopeHash
       || Object.keys(cursor).some(key => !['version','scopeHash','before','active','sourceCursor','turn'].includes(key))
       || (cursor.before !== undefined && !validBefore(cursor.before))) throw new Error()
     if (cursor.active !== undefined) {
@@ -146,7 +146,9 @@ function decode(value: string | null, scopeHash: string): SearchCursor | undefin
     } else if (cursor.active) throw new Error()
     if (cursor.active) {
       const turn = cursor.turn as Record<string, unknown> | undefined
-      if (!turn || typeof turn !== 'object' || Array.isArray(turn)
+      if (cursor.version === 1 && turn !== undefined) throw new Error()
+      if (cursor.version === 2 && !turn) throw new Error()
+      if (turn && (typeof turn !== 'object' || Array.isArray(turn)
         || Object.keys(turn).some(key => !['ordinal','recordOffset','valid','nativeEventId','recordFingerprint'].includes(key))
         || !Number.isSafeInteger(turn.ordinal) || (turn.ordinal as number) < 0
         || !Number.isSafeInteger(turn.recordOffset) || (turn.recordOffset as number) < -1
@@ -155,7 +157,7 @@ function decode(value: string | null, scopeHash: string): SearchCursor | undefin
           || !turn.nativeEventId || turn.nativeEventId.length > 256))
         || (turn.recordFingerprint !== undefined && (typeof turn.recordFingerprint !== 'string'
           || !/^[0-9a-f]{64}$/.test(turn.recordFingerprint)))
-      ) throw new Error()
+      )) throw new Error()
     } else if (cursor.turn !== undefined) throw new Error()
     return cursor as SearchCursor
   } catch {
@@ -290,7 +292,9 @@ export async function handleNativeSessionBodySearchRequest(
     const located=scanned?nativeSearchTurnPage(
       scanned.observations,
       scanned.observationCursors,
-      cursor?.turn,
+      cursor?.sourceCursor && !cursor.turn
+        ? {ordinal:0,recordOffset:-1,valid:false}
+        : cursor?.turn,
       cursor?.sourceCursor?.offset ?? 0,
       scanned.nextCursor,
     ):undefined
