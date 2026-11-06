@@ -423,6 +423,27 @@ export function normalizePiLiveEvent(event: Readonly<Record<string, unknown>>): 
       : []
     return { type: 'queue.update', steering, followUp }
   }
+  if (type === 'native_command_record') {
+    const entry = liveRecord(event.entry)
+    const data = liveRecord(entry.data)
+    const entryId = liveText(entry.id)
+    const command = liveText(data.command)
+    if (entry.type !== 'custom' || entry.customType !== 'agent-lens.command'
+      || !entryId || !command || (data.outcome !== 'handled' && data.outcome !== 'failed')) return undefined
+    const messages = Array.isArray(data.messages) ? data.messages.flatMap(value => {
+      const item = liveRecord(value)
+      const message = liveText(item.message)
+      return message && ['info', 'success', 'warning', 'error'].includes(liveText(item.level))
+        ? [{ level: item.level as 'info' | 'success' | 'warning' | 'error', message }] : []
+    }) : []
+    return {
+      type: 'command.record', entryId, command, outcome: data.outcome,
+      messages,
+      ...(liveText(data.error) ? { error: liveText(data.error) } : {}),
+      ...(liveText(data.startedAt) ? { startedAt: liveText(data.startedAt) } : {}),
+      ...(liveText(data.finishedAt) ? { finishedAt: liveText(data.finishedAt) } : {}),
+    }
+  }
   if (type === 'extension_ui_request' && event.method === 'setStatus') {
     const cache = parsePiCacheOptimizerStatus(event)
     if (cache !== undefined) return { type: 'runtime.metrics.changed', cacheMetrics: cache }
@@ -448,6 +469,7 @@ export function normalizePiLiveEvent(event: Readonly<Record<string, unknown>>): 
     }
   }
   if (type === 'extension_ui_request' && liveText(event.method) === 'notify') {
+    if (liveText(event.commandRecordId)) return undefined
     const message = liveText(event.message).trim()
     if (!message) return undefined
     const nativeLevel = liveText(event.notifyType)
