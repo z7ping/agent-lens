@@ -126,6 +126,7 @@ export function useLiveTaskActions({
 
   const send = useCallback(async (message: LiveMessageDto, requestedBehavior?: LiveQueueMode) => {
     if (!current || !product || !state || !canSubmit || sendInFlightRef.current) return
+    setRuntimeActionFeedback('idle')
     const unsupported = unsupportedInput(message, product.inputCapabilities)
     if (unsupported) {
       setError(t('live.unsupportedInput', { type: t(`live.input.${unsupported}`) }))
@@ -486,7 +487,8 @@ export function useLiveTaskActions({
         current.runtimeSessionId,
       ).catch(() => [])
       setRuntimeDisclosures(disclosures)
-      setRuntimeActionFeedback('done')
+      // Compact/retry can be accepted before native work finishes; only reload is awaited to completion.
+      setRuntimeActionFeedback(action.actionId === 'pi.runtime.reload' ? 'done' : 'idle')
       return true
     } catch (reason) {
       setRuntimeActionFeedback('failed')
