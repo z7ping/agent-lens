@@ -1,9 +1,11 @@
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import test from 'node:test'
+import type { LiveSnapshotDto } from '@agent-lens/protocol'
 import type { LiveTaskProjectionItem } from './live-task-projection'
 import {
   LIVE_TASK_SNAPSHOT_PAGE_LIMIT,
+  loadBoundedRecoverySnapshot,
   aggregateHistoryPage,
   captureLiveReaderAnchor,
   restoreLiveReaderAnchor,
@@ -93,4 +95,63 @@ test('background tab never unmounts virtualized content or resets Live input and
   assert.match(runtime, /shouldRecoverLiveOnVisible\(hiddenForMs, streamDisconnected\)/)
   assert.match(page, /readLiveComposerDraft\(composerDraftKey\)/)
   assert.match(page, /processExpansionStore=\{processExpansionStore\}/)
+})
+
+
+test('Pi paged recovery retains earliest and latest native cursors and exact journal entries', async () => {
+  const state = {} as LiveSnapshotDto['state']
+  const snapshots = new Map<string, LiveSnapshotDto>([
+    ['old-leaf', { state, entries: [{ type: 'compaction', id: 'compaction-a' }],
+      leafId: 'new-leaf', page: { hasEarlier: true, before: 'record-a',
+        first: 'record-a', last: 'record-b', hasLater: true, after: 'record-b',
+        rounds: { total: 9, firstOrdinal: 4, lastOrdinal: 5 } } }],
+    ['record-b', { state, entries: [{ type: 'compaction', id: 'compaction-c' }],
+      leafId: 'new-leaf', page: { hasEarlier: true, before: 'record-c',
+        first: 'record-c', last: 'record-d', hasLater: true, after: 'record-d',
+        rounds: { total: 9, firstOrdinal: 6, lastOrdinal: 7 } } }],
+    ['record-d', { state, entries: [{ type: 'compaction', id: 'compaction-e' }],
+      leafId: 'new-leaf', page: { hasEarlier: true, before: 'record-e',
+        first: 'record-e', last: 'record-f', hasLater: false,
+        rounds: { total: 9, firstOrdinal: 8, lastOrdinal: 9 } } }],
+  ])
+  const requests: Array<{ cursor: string | undefined; limit: number | undefined }> = []
+  const fetch = async (_live: string, _runtime: string, cursor?: string, window?: { limit?: number }): Promise<LiveSnapshotDto> => {
+    requests.push({ cursor, limit: window?.limit })
+    const snapshot = snapshots.get(cursor ?? '')
+    if (!snapshot) throw new Error('Unexpected page cursor')
+    return snapshot
+  }
+  const result = await loadBoundedRecoverySnapshot('pi', 'runtime', 'old-leaf', fetch)
+  assert.deepEqual(result.entries.map(entry => (entry as { id: string }).id),
+    ['compaction-a', 'compaction-c', 'compaction-e'])
+  assert.deepEqual(requests, [
+    { cursor: 'old-leaf', limit: LIVE_TASK_SNAPSHOT_PAGE_LIMIT },
+    { cursor: 'record-b', limit: LIVE_TASK_SNAPSHOT_PAGE_LIMIT },
+    { cursor: 'record-d', limit: LIVE_TASK_SNAPSHOT_PAGE_LIMIT },
+  ])
+  assert.equal(result.page?.before, 'record-a')
+  assert.equal(result.page?.first, 'record-a')
+  assert.equal(result.page?.last, 'record-f')
+  assert.equal(result.page?.hasEarlier, true)
+  assert.equal(result.page?.hasLater, undefined)
+  assert.deepEqual(result.page?.rounds, { total: 9, firstOrdinal: 4, lastOrdinal: 9 })
+  assert.equal(result.leafId, 'new-leaf')
+})
+
+test('Pi paged recovery fails closed on incomplete or repeated next-page cursors', async () => {
+  const state = {} as LiveSnapshotDto['state']
+  const invalid: LiveSnapshotDto = {
+    state, entries: [{ id: 'first' }], page: { hasEarlier: true, hasLater: true },
+  }
+  await assert.rejects(loadBoundedRecoverySnapshot('pi', 'runtime', 'old-leaf',
+    async () => invalid), /missing or repeated native page cursor/)
+
+  let calls = 0
+  await assert.rejects(loadBoundedRecoverySnapshot('pi', 'runtime', 'old-leaf',
+    async () => {
+      calls++
+      return { state, entries: [{ id: `first-${calls}` }],
+        page: { hasEarlier: true, hasLater: true, after: 'stalled-cursor' } }
+    }), /missing or repeated native page cursor/)
+  assert.equal(calls, 2, 'must stop immediately without issuing 1000 redundant page requests')
 })
