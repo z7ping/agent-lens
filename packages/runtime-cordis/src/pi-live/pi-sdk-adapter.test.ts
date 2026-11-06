@@ -147,6 +147,19 @@ test('1.2.0 Runtime 命令按官方 get_commands 语义组合 Extension / Prompt
   ])
 })
 
+test('only the official builtin:mcp source enables Web management, never an extension with the same name', () => {
+  const runner = {
+    getRegisteredCommands: () => [
+      { name: 'mcp', invocationName: 'mcp', sourceInfo: { path: 'builtin:mcp' } },
+      { name: 'mcp', invocationName: 'mcp:2', sourceInfo: { path: '/plugins/fake-mcp.ts' } },
+      { name: 'mcp', invocationName: 'mcp:3', sourceInfo: { path: 'builtin:unknown' } },
+    ],
+  }
+  const session = { extensionRunner: runner } as unknown as import('./pi-sdk-adapter').PiSdkSession
+  const commands = piSdkCommands(session)
+  assert.deepEqual(commands.map(value => Boolean(value.mcpManager)), [true, false, false])
+})
+
 test('仅识别 pi-title 的非交互式 AI 标题命令，不混淆 pi-sessions /title', async () => {
   const calls: string[] = []
   const session = {
