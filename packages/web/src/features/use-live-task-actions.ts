@@ -74,7 +74,7 @@ export function useLiveTaskActions({
   } = session
   const sendInFlightRef = useRef(false)
   const [sendFeedback, setSendFeedback] = useState<'idle' | 'sending' | 'accepted' | 'queued' | 'failed'>('idle')
-  const [runtimeActionFeedback, setRuntimeActionFeedback] = useState<'idle' | 'running' | 'done' | 'failed'>('idle')
+  const [runtimeActionFeedback, setRuntimeActionFeedback] = useState<'idle' | 'running' | 'handled' | 'done' | 'failed'>('idle')
   useEffect(() => { setRuntimeActionFeedback('idle') }, [current?.runtimeSessionId])
   useEffect(() => {
     if (runtimeActionFeedback === 'idle' || runtimeActionFeedback === 'running') return
@@ -139,7 +139,8 @@ export function useLiveTaskActions({
       setError('')
       try {
         await liveApi.send(current.liveId, current.runtimeSessionId, message, 'normal')
-        setRuntimeActionFeedback('done')
+        // Pi SDK acknowledges command dispatch, but extension handlers may report failures asynchronously.
+        setRuntimeActionFeedback('handled')
         setInputHistory(previous => appendLiveInputHistory(previous, messageText(message)))
         if (messageText(composerRef.current?.getMessage() ?? { parts: [] }) === messageText(message)) {
           clearComposer()
