@@ -484,7 +484,8 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
             && (data as Record<string, unknown>).command === '/mcp'
         }) as Record<string, unknown> | undefined
         const data = statusEntry?.data as Record<string, unknown> | undefined
-        const messages = Array.isArray(data?.messages) ? data.messages : []
+        const rawMessages = data?.messages
+        const messages = Array.isArray(rawMessages) ? rawMessages : []
         const output = messages.map(value => {
           if (!value || typeof value !== 'object' || Array.isArray(value)) return ''
           const message = (value as Record<string, unknown>).message
