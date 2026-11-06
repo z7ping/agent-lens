@@ -159,6 +159,16 @@ export interface PiLiveSnapshot extends LiveSnapshot {
 
 export type PiLiveCommandSource = 'extension' | 'prompt' | 'skill'
 
+/** Non-LLM Pi SessionManager custom entry for a native extension command. */
+export interface PiLiveCommandRecord {
+  command: string
+  outcome: 'handled' | 'failed'
+  messages: Array<{ level: 'info' | 'success' | 'warning' | 'error'; message: string }>
+  error?: string | undefined
+  startedAt: string
+  finishedAt: string
+}
+
 export interface PiLiveCommand {
   titleRegeneration?: boolean | undefined
   name: string
