@@ -2,6 +2,8 @@
 
 AgentLens 1.0 是一次 Clean Rebuild。当前代码仓库只维护 1.0 实现；0.x 代码需要参考时请通过 Git 历史 / Tag 查阅，不要把旧 Runtime 直接恢复回来。
 
+社区语言包贡献者参阅 [Locale Pack 格式与安装说明](docs/contributing/community-locale-packs.md)。
+
 新增或完善 Agent（例如 OpenCode / Claude Code CLI 的 Live）的贡献者，从 [Agent 接入教程](docs/contributing/agent-integration/README.md) 开始。Source、Live、Integration 均已有最小集成测试；当前采用仓库内 PR 路径，不要假设第三方 npm 包可直接自动加载。
 
 ## 开始之前

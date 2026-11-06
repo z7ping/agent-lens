@@ -88,4 +88,4 @@ npm run build:dist
 
 每个 PR 尽量只接入一个 Agent 或完善其一个明确能力；代码层面通过后可交由维护者合并，真实平台验收另外记录。对于变更 Core Contract、Canonical Identity 或跨 Agent UI 的需求，请先开 Issue 讨论，不要让新的 Adapter 迫使共享组件变成特例。
 
-更多规则：[CONTRIBUTING.md](../../../CONTRIBUTING.md)、[AGENTS.md](../../../AGENTS.md)、[底层 API 契约](../../third-party-agent-adapter.md)。
+更多规则：[CONTRIBUTING.md](../../../CONTRIBUTING.md)、[AGENTS.md](../../../AGENTS.md)、[底层 API 契约](contract.md)。
