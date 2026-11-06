@@ -6,7 +6,7 @@ import { translateProduct } from '../i18n/runtime'
 export type TaskNotificationLevel = 'info' | 'success' | 'warning' | 'error' | 'action'
 
 /** Transient banners dismiss themselves, while action requests remain visible.
- * Notification records are retained in the bell until the user explicitly reads them. */
+ * Notification records remain in the bell. A banner marks its corresponding record read once actually displayed. */
 export function taskNotificationBannerTimeoutMs(level: TaskNotificationLevel): number | null {
   switch (level) {
     case 'success': return 5_000
@@ -133,8 +133,8 @@ export function projectTaskNotification(
   if (!message.trim()) return null
   return {
     id: `${liveId}:${runtimeSessionId}:${nativeId}`,
-    liveId, runtimeSessionId, level, title: title.slice(0, 120),
-    message: message.slice(0, 2000),
+    liveId, runtimeSessionId, level, title,
+    message,
     receivedAt: envelope.receivedAt, read: false,
   }
 }
