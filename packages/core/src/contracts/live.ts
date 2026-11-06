@@ -569,7 +569,7 @@ export interface LiveCommand extends LiveControlDisplayInfo {
   /** Optional runtime-owned grouping key such as extension / prompt / skill. */
   group?: string | undefined
   /** Explicit Product action declared by the Adapter; never submit as model input. */
-  action?: 'new-task' | 'resume-task' | 'open-model' | 'runtime-action' | undefined
+  action?: 'new-task' | 'resume-task' | 'open-model' | 'open-mcp' | 'runtime-action' | undefined
   runtimeActionId?: string | undefined
 }
 
