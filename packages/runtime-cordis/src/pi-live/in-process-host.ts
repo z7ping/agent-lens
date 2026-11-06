@@ -6,6 +6,7 @@ import { PiExtensionUiBridge } from './extension-ui-bridge'
 import {
   assertPiSdkSession,
   piSdkCommands,
+  piSdkMcpTools,
   piSdkRegenerateNativeTitle,
   resolvePiSdkPackageUpdateApi,
   type PiSdkSessionManager,
@@ -405,6 +406,7 @@ class InProcessHandle implements PiRuntimeHandle {
     return isLiveThinkingControl(candidate) ? candidate : undefined
   }
   async commands() { return piSdkCommands(this.session) }
+  async mcpTools() { return piSdkMcpTools(this.session) }
   async regenerateTitle(): Promise<void> { await piSdkRegenerateNativeTitle(this.session) }
   async navigateTree(entryId: string): Promise<{ cancelled: boolean; editorText?: string | undefined }> {
     if (this.session.isStreaming) throw new Error('Pi tree navigation requires an idle session')
