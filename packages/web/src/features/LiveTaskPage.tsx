@@ -469,6 +469,10 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
       setError(t('live.slashCommandBlocked', { name: result.name }))
       return
     }
+    if (result.kind === 'native-command') {
+      void send(message, undefined, true)
+      return
+    }
     if (result.kind === 'action') {
       const command = result.command
       if (command.action === 'new-task') {
