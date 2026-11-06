@@ -61,6 +61,7 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
   const [connectionBusy, setConnectionBusy] = useState(false)
   const [mcpManagerOpen, setMcpManagerOpen] = useState(false)
   const [mcpPending, setMcpPending] = useState(false)
+  const [mcpStatus, setMcpStatus] = useState('')
   const [queueExpanded, setQueueExpanded] = useState(false)
   const [queueMenuOpen, setQueueMenuOpen] = useState(false)
   const queueMenuAnchorRef = useRef<HTMLSpanElement>(null)
@@ -70,6 +71,7 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
     setQueueMenuOpen(false)
     setMcpManagerOpen(false)
     setMcpPending(false)
+    setMcpStatus('')
   }, [current?.liveId, current?.runtimeSessionId])
   // Keep the reader's disclosure intent through live snapshot reconciliation.
   const processExpansionStore = useMemo(() => new Map<string, boolean>(), [current?.liveId, current?.runtimeSessionId])
@@ -147,27 +149,6 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
   // Only status lines are low-priority; extension widgets retain their placement.
   const extensionStatusItems = extensionUiState.filter(item => item.kind === 'status')
   const extensionWidgetItems = extensionUiState.filter(item => item.kind === 'widget')
-  const mcpStatus = useMemo(() => {
-    // Show the actual Pi /mcp RPC output, never infer server state from display text.
-    const entries = [...projection.stable, ...projection.active]
-    for (let index = entries.length - 1; index >= 0; index -= 1) {
-      const entry = entries[index]
-      if (entry?.kind !== 'native' || entry.nativeType !== 'command') continue
-      const source = entry.source
-      if (source.customType !== 'agent-lens.command'
-        || !source.data || typeof source.data !== 'object' || Array.isArray(source.data)) continue
-      const data = source.data as Record<string, unknown>
-      if (data.command !== '/mcp') continue
-      const messages = Array.isArray(data.messages) ? data.messages : []
-      const output = messages.map(value => {
-        if (!value || typeof value !== 'object' || Array.isArray(value)) return ''
-        const message = (value as Record<string, unknown>).message
-        return typeof message === 'string' ? message : ''
-      }).filter(Boolean).join('\n\n')
-      return output || (typeof data.error === 'string' ? data.error : '')
-    }
-    return ''
-  }, [projection.active, projection.stable])
 
   const setComposerValue = useCallback((value: string) => {
     setDraft(currentDraft => ({ revision: currentDraft.revision + 1, value }))
@@ -485,7 +466,31 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
     setMcpPending(true)
     try {
       const command = action === 'status' ? '/mcp' : `/mcp ${action}`
-      await send({ parts: [{ type: 'text', text: command }] }, undefined, true)
+      const accepted = await send({ parts: [{ type: 'text', text: command }] }, undefined, true)
+      if (accepted && action === 'status' && current) {
+        // A bounded, read-only native snapshot works even while the user reads older rounds.
+        const latest = await liveApi.snapshot(current.liveId, current.runtimeSessionId, undefined,
+          { edge: 'latest', limit: 24 })
+        const records = latest.entries
+        const statusEntry = [...records].reverse().find(value => {
+          if (!value || typeof value !== 'object' || Array.isArray(value)) return false
+          const entry = value as Record<string, unknown>
+          if (entry.type !== 'custom' || entry.customType !== 'agent-lens.command') return false
+          const data = entry.data
+          return data && typeof data === 'object' && !Array.isArray(data)
+            && (data as Record<string, unknown>).command === '/mcp'
+        }) as Record<string, unknown> | undefined
+        const data = statusEntry?.data as Record<string, unknown> | undefined
+        const messages = Array.isArray(data?.messages) ? data.messages : []
+        const output = messages.map(value => {
+          if (!value || typeof value !== 'object' || Array.isArray(value)) return ''
+          const message = (value as Record<string, unknown>).message
+          return typeof message === 'string' ? message : ''
+        }).filter(Boolean).join('\n\n')
+        setMcpStatus(output || (typeof data?.error === 'string' ? data.error : ''))
+      }
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : String(reason))
     } finally {
       setMcpPending(false)
     }
