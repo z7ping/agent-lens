@@ -1602,3 +1602,26 @@ test('Pi settled recovery does not repeat a native compaction already in the bas
   assert.deepEqual(reused, journal)
   assert.equal(reused.filter(item => item.kind === 'event').length, 1)
 })
+
+test('Pi active snapshot reconciliation replaces compaction in place before later SSE output', () => {
+  const prior = reduceLiveTaskEvent([], event(1, {
+    type: 'status', status: 'ready', process: {
+      operation: 'compaction', phase: 'end', outcome: 'success',
+      firstKeptEntryId: 'entry-17', summary: 'compact now',
+    },
+  }))
+  const tail = { id: 'later-tool', kind: 'tool' as const, callId: 'tool-1',
+    name: 'read', status: 'running' as const }
+  const native = projectLiveSnapshotEntries([{
+    id: 'journal-17', type: 'compaction',
+    firstKeptEntryId: 'entry-17', summary: 'compact now',
+  }])
+  const merged = reconcileLiveSnapshotProjection(
+    { stable: [], active: [...prior, tail] },
+    { stable: [], active: native },
+    true,
+  )
+  assert.deepEqual(merged.active.map(item => item.id), [
+    'native-compaction:journal-17', 'later-tool',
+  ])
+})
