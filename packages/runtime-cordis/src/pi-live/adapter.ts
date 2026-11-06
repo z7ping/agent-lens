@@ -682,7 +682,7 @@ export class PiLiveAdapter implements LiveAdapter {
       label: `/${command.name}`,
       ...(command.description ? { description: command.description } : {}),
       group: command.source,
-      ...(command.source === 'extension' && command.name === 'mcp'
+      ...(command.mcpManager === true
         ? { action: 'open-mcp' as const } : {}),
     }))
     const builtins: LiveCommand[] = [
