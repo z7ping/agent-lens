@@ -36,10 +36,10 @@
 
 旧事件 SQL 的第三方端到端样例已随 Legacy Runtime 退役，不再作为当前接入证明。可复用的现行参考：
 
-- [Slim Source 协调器测试](../apps/daemon/src/slim-source-coordinator.test.ts)：按 Profile 建立原生目录、授权采集和销毁；不写事件正文副本。
-- [Slim Live 注册测试](../apps/daemon/src/slim-live.test.ts)：只有启用且显式授权的 Agent 才注册 Live。
-- [Slim Integration 管理测试](../apps/daemon/src/slim-integrations.test.ts)：偏好、来源策略与 Live 授权的边界。
-- 真实注册可参考 [OpenCode Source](../packages/source-opencode/src/index.ts) 和 [Hermes Integration](../packages/integration-hermes/src/index.ts)。
+- [Slim Source 协调器测试](../../../apps/daemon/src/slim-source-coordinator.test.ts)：按 Profile 建立原生目录、授权采集和销毁；不写事件正文副本。
+- [Slim Live 注册测试](../../../apps/daemon/src/slim-live.test.ts)：只有启用且显式授权的 Agent 才注册 Live。
+- [Slim Integration 管理测试](../../../apps/daemon/src/slim-integrations.test.ts)：偏好、来源策略与 Live 授权的边界。
+- 真实注册可参考 [OpenCode Source](../../../packages/source-opencode/src/index.ts) 和 [Hermes Integration](../../../packages/integration-hermes/src/index.ts)。
 
 这些是契约/组件用例，不是 Source→Review→Live 的完整端到端验收。Canonical / Evidence 运行时语义保留，正文仍由 Source 原生存储或经验证的归档持有，Slim 只保存受控元数据与可重算索引。不得恢复旧 SQL Observation / Evidence 写入以补齐演示。
 
