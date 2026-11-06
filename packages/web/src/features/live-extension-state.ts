@@ -18,3 +18,21 @@ export function reduceLiveExtensionState(
   updated[index] = next
   return updated
 }
+
+/** Unknown widget payloads stay readable without interpreting their meaning:
+ * a `PREFIX:{json}` line collapses to the JSON's own `kind` (or just the
+ * prefix), and the untouched payload remains in the raw inspector drawer. */
+export function extensionWidgetSummary(lines: readonly string[] | null | undefined): string {
+  const joined = (lines ?? []).join(' · ').trim()
+  if (!joined) return ''
+  const match = /^([A-Za-z0-9_.-]+):\s*(\{[\s\S]*)$/.exec(joined)
+  if (!match) return joined.slice(0, 220)
+  const prefix = match[1]!
+  let payload: unknown
+  try { payload = JSON.parse(match[2]!) } catch { return prefix }
+  if (payload && typeof payload === 'object' && 'kind' in payload) {
+    const kind = (payload as { kind: unknown }).kind
+    if (typeof kind === 'string' && kind.trim()) return kind.trim()
+  }
+  return prefix
+}

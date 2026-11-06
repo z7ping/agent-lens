@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { readFileSync } from 'node:fs'
-import { reduceLiveExtensionState, type LiveExtensionState } from './live-extension-state'
+import { extensionWidgetSummary, reduceLiveExtensionState, type LiveExtensionState } from './live-extension-state'
 
 test('Pi extension keyed statuses update and clear without duplicating old content', () => {
   const initial: LiveExtensionState = { type: 'ui.state', kind: 'status', key: 'sync', text: '1/3' }
@@ -51,4 +51,22 @@ test('Pi ui.state stays transient: status is collapsed in Reader, widgets retain
   assert.ok(widget > collapsed && widget < composer, 'extension widgets remain immediately above the composer')
   assert.match(page, /kind="process"\s*defaultExpanded=\{false\}\s*expansionStore=\{processExpansionStore\}/)
   assert.doesNotMatch(page.slice(composer), /extensionStatusItems\.map/)
+})
+
+test('unknown widget payloads collapse to their data-declared kind, never raw JSON', () => {
+  // Real pi-subagents async snapshot line: prefix + JSON envelope.
+  assert.equal(
+    extensionWidgetSummary(['PI_SUBAGENT_ASYNC_JSON:{"kind":"pi-subagents.async-status-snapshot","version":1,"caps":{"maxRuns":20}}']),
+    'pi-subagents.async-status-snapshot',
+  )
+  // JSON without a kind falls back to the readable prefix.
+  assert.equal(extensionWidgetSummary(['SOME_WIDGET:{"version":1}']), 'SOME_WIDGET')
+  // Malformed JSON keeps the prefix instead of leaking the broken payload.
+  assert.equal(extensionWidgetSummary(['SOME_WIDGET:{"broken"']), 'SOME_WIDGET')
+  // Plain text widgets stay as they were (bounded), and empty widgets stay empty.
+  assert.equal(extensionWidgetSummary(['Step 2 · running']), 'Step 2 · running')
+  assert.equal(extensionWidgetSummary(['x'.repeat(300)]), 'x'.repeat(220))
+  assert.equal(extensionWidgetSummary([]), '')
+  assert.equal(extensionWidgetSummary(null), '')
+  assert.equal(extensionWidgetSummary(undefined), '')
 })

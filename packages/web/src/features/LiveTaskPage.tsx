@@ -14,6 +14,7 @@ import { LiveExtensionPrompt } from './LiveExtensionPrompt'
 import { TaskEvent } from './TaskEvent'
 import { TaskThinking } from './TaskThinking'
 import { useLiveTaskState } from './live-task-state'
+import { extensionWidgetSummary } from './live-extension-state'
 import { useLiveTaskRuntime } from './use-live-task-runtime'
 import { useLiveTaskHistory } from './use-live-task-history'
 import { useLiveTaskActions } from './use-live-task-actions'
@@ -776,7 +777,7 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
               id: `extension:${item.kind}:${item.key}`,
               category: 'lifecycle',
               label: item.key,
-              summary: (item.lines ?? []).join(' · ').slice(0, 220),
+              summary: extensionWidgetSummary(item.lines),
             }}
             raw={item}
           />)}
