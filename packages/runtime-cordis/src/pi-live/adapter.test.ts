@@ -71,6 +71,18 @@ test('Pi command records are normalized separately from assistant failures and d
   assert.equal(normalizePiLiveEvent({ type: 'extension_ui_request', method: 'notify', message: 'command output', notifyType: 'info', commandRecordId: 'command-1' }), undefined)
 })
 
+test('Pi OAuth input retains runtime-provided authorization URL without parsing human notifications', () => {
+  assert.deepEqual(normalizePiLiveEvent({
+    type: 'extension_ui_request', id: 'oauth-1', method: 'input',
+    title: 'Sign in', placeholder: 'Paste callback URL',
+    externalUrl: 'https://accounts.example.test/oauth?client_id=pi',
+  }), {
+    type: 'ui.request', requestId: 'oauth-1', method: 'input',
+    title: 'Sign in', placeholder: 'Paste callback URL',
+    externalUrl: 'https://accounts.example.test/oauth?client_id=pi',
+  })
+})
+
 test('Pi Live propagates persisted assistant errors immediately without replacing other message events', () => {
   const failed = normalizePiLiveEvent({
     type: 'message_end',
