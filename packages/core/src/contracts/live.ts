@@ -496,6 +496,8 @@ export interface LiveUiRequestEvent {
   options?: readonly string[] | undefined
   placeholder?: string | undefined
   prefill?: string | undefined
+  /** SDK-provided OAuth authorization link for a pending input dialog; never inferred from prose. */
+  externalUrl?: string | undefined
 }
 
 export type LiveEvent =
