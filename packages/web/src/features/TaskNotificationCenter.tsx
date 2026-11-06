@@ -87,11 +87,12 @@ export function TaskNotificationBanner() {
   const { items, bannerId } = useTaskNotifications()
   const navigate = useNavigate()
   const item = items.find(item => item.id === bannerId)
+  const visibleBannerId = item?.id
   // Banner delivery is the alert: keep its bell history without a second unread badge.
   // Mark as read only after this banner is actually mounted, not when queued.
   useLayoutEffect(() => {
-    if (item) taskNotifications.markRead(item.id)
-  }, [item?.id])
+    if (visibleBannerId) taskNotifications.markRead(visibleBannerId)
+  }, [visibleBannerId])
   useEffect(() => {
     if (!item) return
     const timeoutMs = taskNotificationBannerTimeoutMs(item.level)
