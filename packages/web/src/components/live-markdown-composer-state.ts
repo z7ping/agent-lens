@@ -21,3 +21,8 @@ export class ComposerDraftPresenceGate {
     return this.current
   }
 }
+
+/** Exact slash commands execute with Enter; Tab completes a selected suggestion. */
+export function commandMenuShouldSubmit(query: string | null, commands: readonly { value: string }[]): boolean {
+  return query !== null && commands.some(command => command.value === `/${query}`)
+}

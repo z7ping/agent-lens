@@ -30,7 +30,7 @@ type SnapshotTransferCommand = 'snapshotBegin' | 'snapshotChunk'
 
 type WorkerCommand =
   | 'state' | SnapshotTransferCommand | 'entry' | 'historyIndex' | 'sessionTree' | 'commands' | 'controls' | 'setModel' | 'defaultModel' | 'setDefaultModel' | 'setThinkingLevel'
-  | 'navigateTree' | 'compact' | 'regenerateTitle'
+  | 'navigateTree' | 'compact' | 'reload' | 'regenerateTitle'
   | 'prompt' | 'steer' | 'followUp' | 'clearQueue' | 'mutateQueue' | 'abort'
   | 'extensionResponse' | 'terminate'
 
@@ -73,6 +73,7 @@ export interface PiRuntimeHandle {
   commands?(): Promise<PiLiveCommand[]>
   navigateTree?(entryId: string): Promise<{ cancelled: boolean; editorText?: string | undefined }>
   compact?(): Promise<void>
+  reload?(): Promise<void>
   regenerateTitle?(): Promise<void>
   controls(): Promise<PiLiveControls>
   setModel(provider: string, modelId: string): Promise<PiLiveRuntimeState>
@@ -381,6 +382,7 @@ class WorkerPiRuntimeHandle implements PiRuntimeHandle {
     return this.request('navigateTree', { entryId })
   }
   compact(): Promise<void> { return this.request('compact') }
+  reload(): Promise<void> { return this.request('reload') }
   regenerateTitle(): Promise<void> { return this.request('regenerateTitle') }
   controls(): Promise<PiLiveControls> { return this.request('controls') }
   setModel(provider: string, modelId: string): Promise<PiLiveRuntimeState> { return this.request('setModel', { provider, modelId }) }

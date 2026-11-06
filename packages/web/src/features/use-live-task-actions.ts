@@ -35,6 +35,7 @@ export function useLiveTaskActions({
     setMessageActionPending,
     runtimeDisclosures,
     setRuntimeDisclosures,
+    setCommands,
     runtimeActionPending,
     setRuntimeActionPending,
     modelControl,
@@ -73,6 +74,13 @@ export function useLiveTaskActions({
   } = session
   const sendInFlightRef = useRef(false)
   const [sendFeedback, setSendFeedback] = useState<'idle' | 'sending' | 'accepted' | 'queued' | 'failed'>('idle')
+  const [runtimeActionFeedback, setRuntimeActionFeedback] = useState<'idle' | 'running' | 'done' | 'failed'>('idle')
+  useEffect(() => { setRuntimeActionFeedback('idle') }, [current?.runtimeSessionId])
+  useEffect(() => {
+    if (runtimeActionFeedback === 'idle' || runtimeActionFeedback === 'running') return
+    const timer = window.setTimeout(() => setRuntimeActionFeedback('idle'), runtimeActionFeedback === 'failed' ? 4000 : 2200)
+    return () => window.clearTimeout(timer)
+  }, [runtimeActionFeedback])
   // Acknowledgement is not task completion. Keep this small status ephemeral;
   // the Runtime/SSE and actual queue remain the authoritative ongoing state.
   useEffect(() => {
@@ -118,6 +126,7 @@ export function useLiveTaskActions({
 
   const send = useCallback(async (message: LiveMessageDto, requestedBehavior?: LiveQueueMode) => {
     if (!current || !product || !state || !canSubmit || sendInFlightRef.current) return
+    setRuntimeActionFeedback('idle')
     const unsupported = unsupportedInput(message, product.inputCapabilities)
     if (unsupported) {
       setError(t('live.unsupportedInput', { type: t(`live.input.${unsupported}`) }))
@@ -457,9 +466,10 @@ export function useLiveTaskActions({
     }
   }, [current, messageActionPending, navigate, setComposerValue, state?.isStreaming])
 
-  const runRuntimeAction = useCallback(async (action: LiveRuntimeActionContributionDto) => {
-    if (!current || runtimeActionPending) return
+  const runRuntimeAction = useCallback(async (action: LiveRuntimeActionContributionDto): Promise<boolean> => {
+    if (!current || runtimeActionPending) return false
     setRuntimeActionPending(action.actionId)
+    setRuntimeActionFeedback('running')
     setError('')
     try {
       const result = await liveApi.executeRuntimeAction(
@@ -468,13 +478,22 @@ export function useLiveTaskActions({
         action.actionId,
       )
       setState(result.runtime)
+      // Reload mutates the native Pi command registry; refresh suggestions after SDK confirmation.
+      if (action.actionId === 'pi.runtime.reload') {
+        setCommands(await liveApi.commands(current.liveId, current.runtimeSessionId))
+      }
       const disclosures = await liveApi.runtimeDisclosures(
         current.liveId,
         current.runtimeSessionId,
       ).catch(() => [])
       setRuntimeDisclosures(disclosures)
+      // Compact/retry can be accepted before native work finishes; only reload is awaited to completion.
+      setRuntimeActionFeedback(action.actionId === 'pi.runtime.reload' ? 'done' : 'idle')
+      return true
     } catch (reason) {
+      setRuntimeActionFeedback('failed')
       setError(reason instanceof Error ? reason.message : String(reason))
+      return false
     } finally {
       setRuntimeActionPending(null)
     }
@@ -501,5 +520,5 @@ export function useLiveTaskActions({
   }, [busy, current, thinking, t])
 
 
-  return { canSubmit, canInterrupt, sendFeedback, send, editStartupQueued, interrupt, removeQueued, editQueued, clearQueued, editRestoredQueue, removeRestoredQueue, terminate, changeModel, answerExtension, searchWorkspaceReferences, runMessageAction, runRuntimeAction, changeThinking }
+  return { canSubmit, canInterrupt, sendFeedback, runtimeActionFeedback, send, editStartupQueued, interrupt, removeQueued, editQueued, clearQueued, editRestoredQueue, removeRestoredQueue, terminate, changeModel, answerExtension, searchWorkspaceReferences, runMessageAction, runRuntimeAction, changeThinking }
 }

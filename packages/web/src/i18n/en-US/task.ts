@@ -231,6 +231,11 @@ export const englishTaskMessages: LocaleMessagesDto = {
         integrityWarning: 'Cache statistics integrity warning',
         compatNativeSource: 'Compatibility diagnosed by pi-cache-optimizer; not the Pi SDK runtime mode.',
       },
+      runtimeActionFeedback: {
+        running: 'Executing command…',
+        done: 'Command completed',
+        failed: 'Command failed; check error details',
+      },
       sendFeedback: {
         sending: 'Sending…',
         accepted: 'Accepted',

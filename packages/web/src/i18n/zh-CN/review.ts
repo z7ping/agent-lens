@@ -295,6 +295,7 @@ export const chineseReviewMessages: LocaleMessagesDto = {
         forkFromRound: '从此轮分叉',
         continuePlaceholder: '输入消息，继续当前会话…',
         resumeOnSend: '发送前验证会话兼容性',
+        commandsRequireLive: '斜杠命令需要实时运行时，请先进入 Live 会话执行；历史记录中的输入不会作为聊天消息发送。',
         sendContinue: '发送并继续',
         preparingHistory: '正在准备历史会话',
         readOnlyObservation: '只读 · 其他客户端占用',

@@ -60,6 +60,7 @@ export interface PiSdkSession {
   readonly isStreaming: AgentSession['isStreaming']
   readonly isCompacting: AgentSession['isCompacting']
   compact?: AgentSession['compact']
+  reload?: () => Promise<void>
   readonly pendingMessageCount: AgentSession['pendingMessageCount']
   readonly modelRuntime: PiSdkModelRuntime
   readonly settingsManager?: AgentSession['settingsManager']

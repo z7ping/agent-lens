@@ -16,14 +16,14 @@ const taskComposer = readFileSync(new URL('./task-session-composer.css', import.
 const liveComposer = readFileSync(new URL('./components/live-markdown-composer.css', import.meta.url), 'utf8')
 const taskCenter = readFileSync(new URL('./task-center.css', import.meta.url), 'utf8')
 
-test('Live/Review 桌面正文 13px、移动端 14px，辅助文字不低于 12px', () => {
+test('Live/Review 桌面和移动端正文 14px、过程/代码 13px、辅助不低于 12px', () => {
   const taskTypography = typography.split('/*\n * Compact Task reading')[1]?.split('\nhtml body')[0] ?? ''
   assert.match(taskTypography, /--text-task-body:var\(--font-size-md\);/)
-  assert.match(taskTypography, /@media \(min-width: 768px\)[\s\S]*?--text-task-body:var\(--font-size-sm\);/)
-  assert.doesNotMatch(taskTypography, /min-width: 1400px/)
+  assert.doesNotMatch(taskTypography, /--text-task-body:var\(--font-size-sm\);/)
   for (const role of ['process', 'thinking-markdown', 'tool', 'tool-code', 'code']) {
-    assert.ok(taskTypography.includes('--text-task-' + role + ':var(--font-size-xs);'), role)
+    assert.ok(taskTypography.includes('--text-task-' + role + ':var(--font-size-sm);'), role)
   }
+  assert.match(typography, /--text-task-meta:var\(--text-caption\)/)
 })
 
 test('Task Surface 紧凑密度由现有 Owner 管理，不缩共享命中区', () => {

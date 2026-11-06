@@ -53,26 +53,20 @@
 }
 
 /*
- * Compact Task reading (Live + Review only). Use a 14px body on mobile, 13px
- * from the shared 768px desktop breakpoint onward; no large-screen enlargement.
+ * Compact Task reading (Live + Review only). Body remains readable at 14px
+ * on desktop and mobile; process/code details use 13px and metadata uses 12px.
  * Supporting details never drop below the product's 12px accessibility floor.
  * Sidebar, other workspaces and shared control hit areas keep their own scale.
  */
 .task-surface.task-session-view {
   --text-task-body:var(--font-size-md);
-  --text-task-process:var(--font-size-xs);
-  --text-task-thinking-markdown:var(--font-size-xs);
-  --text-task-tool:var(--font-size-xs);
-  --text-task-tool-code:var(--font-size-xs);
-  --text-task-code:var(--font-size-xs);
-  --text-task-heading:var(--font-size-md);
-  --text-task-emphasis:var(--font-size-md);
-}
-
-@media (min-width: 768px) {
-  .task-surface.task-session-view {
-    --text-task-body:var(--font-size-sm);
-  }
+  --text-task-process:var(--font-size-sm);
+  --text-task-thinking-markdown:var(--font-size-sm);
+  --text-task-tool:var(--font-size-sm);
+  --text-task-tool-code:var(--font-size-sm);
+  --text-task-code:var(--font-size-sm);
+  --text-task-heading:var(--font-size-lg);
+  --text-task-emphasis:15px;
 }
 
 html body{

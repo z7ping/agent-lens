@@ -663,6 +663,7 @@ export class PiLiveAdapter implements LiveAdapter {
       { value: '/resume', label: '/resume', description: '查找历史会话', group: 'builtin', action: 'resume-task' },
       { value: '/model', label: '/model', description: '切换模型', group: 'builtin', action: 'open-model' },
       { value: '/compact', label: '/compact', description: '原生压缩上下文', group: 'builtin', action: 'runtime-action', runtimeActionId: 'pi.runtime.compact' },
+      { value: '/reload', label: '/reload', description: '重新加载 Pi 扩展、技能和提示词', group: 'builtin', action: 'runtime-action', runtimeActionId: 'pi.runtime.reload' },
     ]
     const taken = new Set(native.map(command => command.value))
     return [...builtins.filter(command => !taken.has(command.value)), ...native]

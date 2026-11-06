@@ -232,7 +232,7 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
     }
   }, [followControllerRef, historyAtLatestRef, jumpLatest, readerRef, state?.isStreaming])
 
-  const { canSubmit, canInterrupt, sendFeedback, send, editStartupQueued, interrupt, removeQueued, editQueued, clearQueued, editRestoredQueue, removeRestoredQueue, terminate, changeModel, answerExtension, searchWorkspaceReferences, runMessageAction, runRuntimeAction, changeThinking } = useLiveTaskActions({ current, t, navigate, setComposerValue, clearComposer, session, onSendAccepted, onSendDelivered })
+  const { canSubmit, canInterrupt, sendFeedback, runtimeActionFeedback, send, editStartupQueued, interrupt, removeQueued, editQueued, clearQueued, editRestoredQueue, removeRestoredQueue, terminate, changeModel, answerExtension, searchWorkspaceReferences, runMessageAction, runRuntimeAction, changeThinking } = useLiveTaskActions({ current, t, navigate, setComposerValue, clearComposer, session, onSendAccepted, onSendDelivered })
 
   useEffect(() => {
     if (!canInterrupt) return
@@ -488,8 +488,11 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
           setError(t('live.commandUnavailable'))
           return
         }
-        clearComposer()
-        void runRuntimeAction(action)
+        void runRuntimeAction(action).then(succeeded => {
+          if (succeeded && messageText(composerRef.current?.getMessage() ?? { parts: [] }) === messageText(message)) {
+            clearComposer()
+          }
+        })
       }
       return
     }
@@ -793,6 +796,7 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
           onInterrupt={() => { void interrupt() }}
           responseActivity={responseActivity}
           sendFeedback={sendFeedback}
+          runtimeActionFeedback={runtimeActionFeedback}
           runtimeMetrics={{ contextUsage: state?.contextUsage, cacheMetrics: state?.cacheMetrics }}
           onSubmit={(message, mode) => submitLiveMessage(message, mode === 'followUp' ? 'follow-up' : undefined)}
           onEscape={canInterrupt ? () => { void interrupt() } : undefined}
@@ -800,7 +804,7 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
           ariaLabel={t('live.composerAria')}
           onAttachmentPendingChange={setComposerAttachmentPending}
           onAttachmentError={reason => setError(reason instanceof Error ? reason.message : String(reason))}
-          disabled={state?.status === 'terminating' || state?.status === 'terminated'}
+          disabled={state?.status === 'terminating' || state?.status === 'terminated' || runtimeActionPending !== null}
           connectionLabel={connectionLabel}
           disconnected={streamSupported && !connected}
           {...(streamSupported && product?.capabilities.includes('recovery') ? { onSyncSession: synchronizeSession } : {})}

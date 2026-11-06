@@ -1320,6 +1320,7 @@ function runtimeCapabilities(hasSessionRuntime) {
     extensionUi: typeof session?.bindExtensions === 'function',
     treeNavigation: typeof session?.navigateTree === 'function',
     manualCompaction: typeof session?.compact === 'function',
+    nativeReload: typeof session?.reload === 'function',
     messageFork: typeof session?.sessionManager?.createBranchedSession === 'function'
       && typeof session?.sessionManager?.newSession === 'function',
   }
@@ -1633,6 +1634,7 @@ async function command(name, value = {}) {
   const needsExtensions = name === 'commands'
     || name === 'navigateTree'
     || name === 'compact'
+    || name === 'reload'
     || name === 'regenerateTitle'
     || name === 'setModel'
     || name === 'setThinkingLevel'
@@ -1663,6 +1665,13 @@ async function command(name, value = {}) {
       cancelled: result?.cancelled === true,
       ...(typeof result?.editorText === 'string' ? { editorText: result.editorText } : {}),
     }
+  }
+  if (name === 'reload') {
+    if (session.isStreaming || session.isCompacting) throw new Error('Pi resource reload requires an idle session')
+    if (typeof session.reload !== 'function') throw new Error('Installed Pi SDK does not support resource reload')
+    await session.reload()
+    roundIndexCache = undefined
+    return
   }
   if (name === 'compact') {
     if (session.isStreaming || session.isCompacting) throw new Error('Pi manual compaction requires an idle session')
