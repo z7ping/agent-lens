@@ -7,9 +7,10 @@ import { liveApi } from '../client/live'
 import { LocalPathActions } from '../components/LocalPathActions'
 import { contributionText, LiveRuntimeActions, LiveRuntimeDisclosures } from '../components/LiveRuntimeDisclosures'
 import { TaskSessionComposer } from '../components/TaskSessionComposer'
+import { CopyableCodeBlock } from '../components/CopyableCodeBlock'
 import { liveComposerDraftKey, readLiveComposerDraft } from '../components/live-composer-session-state'
 import { ErrorStateBanner, OperationProgress } from '../components/StateViews'
-import { Button, IconButton, Popover } from '../components/ui'
+import { Button, Dialog, IconButton, Popover } from '../components/ui'
 import { LiveExtensionPrompt } from './LiveExtensionPrompt'
 import { TaskEvent } from './TaskEvent'
 import { TaskThinking } from './TaskThinking'
@@ -58,6 +59,8 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
   const [modelMenuOpenRequest, setModelMenuOpenRequest] = useState(0)
   const [defaultModelSaving, setDefaultModelSaving] = useState(false)
   const [connectionBusy, setConnectionBusy] = useState(false)
+  const [mcpManagerOpen, setMcpManagerOpen] = useState(false)
+  const [mcpPending, setMcpPending] = useState(false)
   const [queueExpanded, setQueueExpanded] = useState(false)
   const [queueMenuOpen, setQueueMenuOpen] = useState(false)
   const queueMenuAnchorRef = useRef<HTMLSpanElement>(null)
@@ -65,6 +68,8 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
   useEffect(() => {
     setQueueExpanded(false)
     setQueueMenuOpen(false)
+    setMcpManagerOpen(false)
+    setMcpPending(false)
   }, [current?.liveId, current?.runtimeSessionId])
   // Keep the reader's disclosure intent through live snapshot reconciliation.
   const processExpansionStore = useMemo(() => new Map<string, boolean>(), [current?.liveId, current?.runtimeSessionId])
@@ -142,6 +147,27 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
   // Only status lines are low-priority; extension widgets retain their placement.
   const extensionStatusItems = extensionUiState.filter(item => item.kind === 'status')
   const extensionWidgetItems = extensionUiState.filter(item => item.kind === 'widget')
+  const mcpStatus = useMemo(() => {
+    // Show the actual Pi /mcp RPC output, never infer server state from display text.
+    const entries = [...projection.stable, ...projection.active]
+    for (let index = entries.length - 1; index >= 0; index -= 1) {
+      const entry = entries[index]
+      if (entry?.kind !== 'native' || entry.nativeType !== 'command') continue
+      const source = entry.source
+      if (source.customType !== 'agent-lens.command'
+        || !source.data || typeof source.data !== 'object' || Array.isArray(source.data)) continue
+      const data = source.data as Record<string, unknown>
+      if (data.command !== '/mcp') continue
+      const messages = Array.isArray(data.messages) ? data.messages : []
+      const output = messages.map(value => {
+        if (!value || typeof value !== 'object' || Array.isArray(value)) return ''
+        const message = (value as Record<string, unknown>).message
+        return typeof message === 'string' ? message : ''
+      }).filter(Boolean).join('\n\n')
+      return output || (typeof data.error === 'string' ? data.error : '')
+    }
+    return ''
+  }, [projection.active, projection.stable])
 
   const setComposerValue = useCallback((value: string) => {
     setDraft(currentDraft => ({ revision: currentDraft.revision + 1, value }))
@@ -449,7 +475,37 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
   const connectionLabel = streamSupported
     ? connected ? t('live.connected') : t('live.connecting')
     : runtimeStatus
-  const composerSessionActions = runtimeDisclosures.flatMap(disclosure =>
+  const canManageMcp = commands.some(command => command.action === 'open-mcp')
+  const runMcpCommand = async (action: 'status' | 'login' | 'logout' | 'reconnect') => {
+    if (!canManageMcp || !state || state.status !== 'ready' || state.isStreaming || mcpPending) {
+      setError(t('live.commandUnavailable'))
+      return
+    }
+    if (action !== 'status') setMcpManagerOpen(false)
+    setMcpPending(true)
+    try {
+      const command = action === 'status' ? '/mcp' : `/mcp ${action}`
+      await send({ parts: [{ type: 'text', text: command }] }, undefined, true)
+    } finally {
+      setMcpPending(false)
+    }
+  }
+  const openMcpManager = () => {
+    if (!canManageMcp || !state || state.status !== 'ready' || state.isStreaming) {
+      setError(t('live.commandUnavailable'))
+      return
+    }
+    setMcpManagerOpen(true)
+    void runMcpCommand('status')
+  }
+  const composerSessionActions = [
+    ...(canManageMcp ? [{
+      id: 'mcp',
+      label: t('live.mcp.title'),
+      disabled: runtimeActionPending !== null || state?.status !== 'ready' || state.isStreaming,
+      onClick: openMcpManager,
+    }] : []),
+    ...runtimeDisclosures.flatMap(disclosure =>
     (disclosure.actions ?? [])
       .filter(action => action.placement === 'composer')
       .map(action => ({
@@ -460,7 +516,7 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
         disabled: runtimeActionPending !== null || state?.status !== 'ready' || state.isStreaming,
         onClick: () => { void runRuntimeAction(action) },
       })),
-  )
+  ]
   // Runtime-advertised actions are never delivered to the language model as text.
   // Pi extension/template/skill commands without an action remain native SDK prompts.
   const submitLiveMessage = (message: LiveMessageDto, behavior?: 'follow-up') => {
@@ -481,6 +537,9 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
       } else if (command.action === 'resume-task') {
         clearComposer()
         navigate('/review')
+      } else if (command.action === 'open-mcp') {
+        clearComposer()
+        openMcpManager()
       } else if (command.action === 'open-model') {
         if (!modelControl) { setError(t('live.modelSelectorUnavailable')); return }
         clearComposer()
@@ -769,6 +828,26 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
           </div>}
           {extension && <LiveExtensionPrompt request={extension} pending={extensionPending} onAnswer={value => { void answerExtension(value) }}/>}
         </div>
+        {mcpManagerOpen && <Dialog
+          open
+          title={t('live.mcp.title')}
+          description={t('live.mcp.description')}
+          onClose={() => setMcpManagerOpen(false)}
+          closeDisabled={mcpPending}
+          footer={<Button size="small" disabled={mcpPending} onClick={() => setMcpManagerOpen(false)}>{t('live.mcp.close')}</Button>}
+        >
+          <div className="live-extension-options" role="group" aria-label={t('live.mcp.title')}>
+            <Button size="small" loading={mcpPending} disabled={mcpPending} onClick={() => { void runMcpCommand('status') }}>{t('live.mcp.refresh')}</Button>
+            <Button size="small" disabled={mcpPending} onClick={() => { void runMcpCommand('login') }}>{t('live.mcp.login')}</Button>
+            <Button size="small" disabled={mcpPending} onClick={() => { void runMcpCommand('logout') }}>{t('live.mcp.logout')}</Button>
+            <Button size="small" disabled={mcpPending} onClick={() => { void runMcpCommand('reconnect') }}>{t('live.mcp.reconnect')}</Button>
+          </div>
+          {mcpStatus
+            ? <section aria-label={t('live.mcp.lastStatus')}>
+                <CopyableCodeBlock copyValue={mcpStatus}>{mcpStatus}</CopyableCodeBlock>
+              </section>
+            : <p>{t('live.mcp.empty')}</p>}
+        </Dialog>
         {extensionWidgetItems.length > 0 && <div role="status" aria-label={t('live.extensionStatus')}>
           {extensionWidgetItems.map(item => <TaskEvent
             key={`${item.kind}:${item.key}`}
