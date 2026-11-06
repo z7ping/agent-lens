@@ -148,6 +148,14 @@ test('Live Enter and send share slash routing, acknowledgement, and reader inten
   assert.match(taskComposer, /live\.sendFeedback/)
 })
 
+test('registered Pi extension commands bypass the optimistic chat/message pipeline', () => {
+  assert.match(liveTask, /if \(result\.kind === 'native-command'\) \{\s*void send\(message, undefined, true\)/)
+  assert.match(liveActions, /if \(nativeCommand\) \{/)
+  assert.match(liveActions, /Never append an optimistic user bubble or claim that the model is streaming/)
+  assert.match(liveActions, /setRuntimeActionFeedback\('handled'\)/)
+  assert.match(liveTask, /if \(result\.kind === 'blocked'\)/)
+})
+
 test('Slash and @ suggestions share a single keyboard interaction with composition and modifier guards', () => {
   assert.match(composer, /function useComposerSuggestionKeyboard\(/)
   assert.equal((composer.match(/useComposerSuggestionKeyboard\(/g) ?? []).length, 3)
