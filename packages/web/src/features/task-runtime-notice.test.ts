@@ -13,10 +13,10 @@ const injected = (rawPayload: Record<string, unknown>): ReviewEventNodeDto => ({
   }, evidence: [], observationIds: ['obs:injection'], capturedAt: at,
 })
 
-test('Pi native extension notice folds by source type, never by MCP text', () => {
+test('Pi native hidden extension context folds by source intent, never by MCP text', () => {
   const items = projectLiveSnapshotEntries([
-    { type: 'custom_message', id: 'mcp-1', customType: 'mcp', display: true, content: 'MCP: 2 servers enabled' },
-    { type: 'custom_message', id: 'ext-2', customType: 'other', display: true, content: 'ready' },
+    { type: 'custom_message', id: 'mcp-1', customType: 'mcp', display: false, content: 'MCP: 2 servers enabled' },
+    { type: 'custom_message', id: 'ext-2', customType: 'other', display: false, content: 'ready' },
   ])
   assert.equal(items.length, 2)
   assert.ok(items.every(isRoutineLiveRuntimeNotice))
@@ -25,11 +25,11 @@ test('Pi native extension notice folds by source type, never by MCP text', () =>
 
 test('Structured failure/warning stays visible, even for an extension notice', () => {
   const items = projectLiveSnapshotEntries([
-    { type: 'custom_message', id: 'error', customType: 'mcp', details: { severity: 'error' }, content: 'not available' },
-    { type: 'custom_message', id: 'warning', customType: 'mcp', details: { status: 'warning' } },
+    { type: 'custom_message', id: 'error', customType: 'mcp', display: false, details: { severity: 'error' }, content: 'not available' },
+    { type: 'custom_message', id: 'warning', customType: 'mcp', display: false, details: { status: 'warning' } },
   ])
   assert.ok(items.every(item => !isRoutineLiveRuntimeNotice(item)))
-  assert.equal(isRoutineReviewRuntimeNotice(injected({ customType: 'mcp', details: { status: 'failed' } })), false)
+  assert.equal(isRoutineReviewRuntimeNotice(injected({ customType: 'mcp', display: false, details: { status: 'failed' } })), false)
 })
 
 test('Real tools, user messages, permission and unproven injected events do not fold', () => {
