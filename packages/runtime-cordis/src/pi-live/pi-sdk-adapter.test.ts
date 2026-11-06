@@ -7,6 +7,7 @@ import {
   assertPiSdkSession,
   inspectPiSdkCompatibility,
   piSdkCommands,
+  piSdkMcpTools,
   piSdkRegenerateNativeTitle,
   resolvePiSdkPackageUpdateApi,
   resolvePiSdkResourceApi,
@@ -158,6 +159,35 @@ test('only the official builtin:mcp source enables Web management, never an exte
   const session = { extensionRunner: runner } as unknown as import('./pi-sdk-adapter').PiSdkSession
   const commands = piSdkCommands(session)
   assert.deepEqual(commands.map(value => Boolean(value.mcpManager)), [true, false, false])
+})
+
+test('MCP inventory uses only Pi ToolInfo with verified built-in provenance and reachable exposure', () => {
+  const tools = [
+    { name: 'mcp__docs__search', namespace: { name: 'mcp__docs' }, exposure: 'codemode', description: 'Search',
+      sourceInfo: { path: 'builtin:mcp' } },
+    { name: 'mcp__docs__read', namespace: { name: 'mcp__docs' }, exposure: 'direct', description: 'Read',
+      sourceInfo: { path: 'builtin:mcp' } },
+    { name: 'mcp__docs__old', namespace: { name: 'mcp__docs' }, exposure: 'hidden',
+      sourceInfo: { path: 'builtin:mcp' } },
+    { name: 'mcp__fake__tool', namespace: { name: 'mcp__fake' }, exposure: 'direct',
+      sourceInfo: { path: '/user/extensions/fake.ts' } },
+    { name: 'mcp__bad__tool', namespace: { name: 'other' }, exposure: 'direct',
+      sourceInfo: { path: 'builtin:mcp' } },
+  ]
+  const session = {
+    extensionRunner: { getRegisteredCommands: () => [{ invocationName: 'mcp', name: 'mcp',
+      sourceInfo: { path: 'builtin:mcp' } }] },
+    getAllTools: () => tools,
+  } as unknown as import('./pi-sdk-adapter').PiSdkSession
+  assert.deepEqual(piSdkMcpTools(session), [
+    { serverId: 'docs', name: 'mcp__docs__read', description: 'Read', exposure: 'direct' },
+    { serverId: 'docs', name: 'mcp__docs__search', description: 'Search', exposure: 'codemode' },
+  ])
+  const thirdParty = { ...session, extensionRunner: {
+    getRegisteredCommands: () => [{ invocationName: 'mcp', name: 'mcp',
+      sourceInfo: { path: '/user/extensions/mcp.ts' } }],
+  } } as unknown as import('./pi-sdk-adapter').PiSdkSession
+  assert.deepEqual(piSdkMcpTools(thirdParty), [])
 })
 
 test('仅识别 pi-title 的非交互式 AI 标题命令，不混淆 pi-sessions /title', async () => {
