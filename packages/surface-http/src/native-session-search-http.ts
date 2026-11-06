@@ -51,7 +51,7 @@ export function nativeSearchTurnPage(
   endCursor: SourceNativeSessionCursor,
 ): { tracker: NativeSearchTurnTracker; turns: Array<NativeSearchTurnMatch | undefined> } {
   let tracker: NativeSearchTurnTracker = prior ?? { ordinal: 0, recordOffset: -1, valid: true }
-  const validPage = tracker.valid && cursors?.length === observations.length
+  const validPage = tracker.valid && cursors !== undefined && cursors.length === observations.length
     && cursors.every((cursor, index) =>
       cursor.fileIdentity === endCursor.fileIdentity
       && Number.isSafeInteger(cursor.offset)
