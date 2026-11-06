@@ -156,6 +156,8 @@ test('Slash and @ suggestions share a single keyboard interaction with compositi
   assert.match(composer, /COMMAND_PRIORITY_CRITICAL/)
   assert.match(composer, /if \(submitOnExact\?\.\(\)\) return false/)
   assert.match(composer, /registerCommand\(KEY_TAB_COMMAND/)
+  assert.match(composer, /if \(!executeSelected\?\.\(\)\) choose\(activeIndex\)/)
+  assert.match(composer, /onSubmit\(\{ parts: \[\{ type: 'text', text: command\.value \}\] \}, 'default'\)/)
 })
 
 test('共享 Composer 保留 Markdown、大文本、图片、Shift+Enter 与 Alt+Enter 语义', () => {
