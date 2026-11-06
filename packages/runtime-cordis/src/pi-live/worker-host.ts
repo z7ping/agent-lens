@@ -72,6 +72,7 @@ export interface PiRuntimeHandle {
   sessionTree?(): Promise<LiveSessionTree>
   entry?(entryId: string): Promise<unknown | null>
   commands?(): Promise<PiLiveCommand[]>
+  mcpTools?(): Promise<PiMcpToolRegistration[]>
   navigateTree?(entryId: string): Promise<{ cancelled: boolean; editorText?: string | undefined }>
   compact?(): Promise<void>
   reload?(): Promise<void>
