@@ -74,13 +74,6 @@ export function unsupportedInput(
 }
 
 
-/** A TUI-only command must never silently become an LLM prompt in Web Live. */
-const TUI_ONLY_COMMANDS = new Set([
-  '/new', '/resume', '/model', '/compact', '/settings', '/tree', '/fork',
-  '/session', '/export', '/copy', '/reload', '/name', '/login', '/logout',
-  '/scoped-models', '/share', '/quit', '/hotkeys',
-])
-
 /** Review has no active Runtime to dispatch commands; never resume and send them as chat. */
 export function isSlashCommandInput(message: LiveMessageDto): boolean {
   return messageText(message).trimStart().startsWith('/')
@@ -88,22 +81,29 @@ export function isSlashCommandInput(message: LiveMessageDto): boolean {
 
 export type LiveSlashResolution =
   | { kind: 'action'; command: LiveCommandDto }
+  | { kind: 'native-command'; command: LiveCommandDto }
   | { kind: 'blocked'; name: string }
   | { kind: 'prompt' }
 
-/** Commands are matched against runtime-discovered actions, never against Agent ids. */
+/** Slash commands must be runtime-declared; unknown commands never fall through to the model.
+ * Extension handlers execute natively, while Skill/prompt templates intentionally expand into prompts. */
 export function resolveLiveSlash(message: LiveMessageDto, commands: readonly LiveCommandDto[]): LiveSlashResolution {
   const text = messageText(message)
   const name = text.split(/\s+/)[0] ?? ''
   if (!name.startsWith('/')) return { kind: 'prompt' }
-  const nativePrompt = commands.find(item => item.value === name && !item.action)
-  if (nativePrompt) return { kind: 'prompt' }
   const command = commands.find(item => item.value === name && item.action)
-  if (command) {
+    ?? commands.find(item => item.value === name)
+  if (!command) return { kind: 'blocked', name }
+  if (command.action) {
     return text === name && message.parts.every(part => part.type === 'text')
       ? { kind: 'action', command }
       : { kind: 'blocked', name }
   }
-  if (TUI_ONLY_COMMANDS.has(name)) return { kind: 'blocked', name }
-  return { kind: 'prompt' }
+  if (command.group === 'extension') {
+    return message.parts.every(part => part.type === 'text')
+      ? { kind: 'native-command', command }
+      : { kind: 'blocked', name }
+  }
+  if (command.group === 'prompt' || command.group === 'skill') return { kind: 'prompt' }
+  return { kind: 'blocked', name }
 }
