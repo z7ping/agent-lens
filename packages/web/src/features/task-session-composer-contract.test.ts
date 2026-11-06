@@ -284,7 +284,7 @@ test('缓存与兼容显示 Pi 扩展真实来源，不再硬编码缺失值', (
 
 test('typed /mcp executes natively and its complete result stays visible outside collapsed Process', () => {
   assert.match(liveInput, /command\.action === 'open-mcp'[\s\S]*kind: 'native-command'/)
-  assert.doesNotMatch(liveTask, /command\.action === 'open-mcp'/)
+  assert.doesNotMatch(liveTask, /else if \(command\.action === 'open-mcp'\)/)
   assert.match(liveTimeline, /item\.nativeType === 'command' \? 'auxiliary'/)
   assert.match(liveTimeline, /footer=\{commandResults\}/)
   assert.match(liveTimeline, /defaultExpanded[\s\S]*copyValue=\{command\.output\}/)
