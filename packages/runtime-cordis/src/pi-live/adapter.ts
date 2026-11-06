@@ -681,6 +681,8 @@ export class PiLiveAdapter implements LiveAdapter {
       label: `/${command.name}`,
       ...(command.description ? { description: command.description } : {}),
       group: command.source,
+      ...(command.source === 'extension' && command.name === 'mcp'
+        ? { action: 'open-mcp' as const } : {}),
     }))
     const builtins: LiveCommand[] = [
       { value: '/new', label: '/new', description: '新建任务', group: 'builtin', action: 'new-task' },
