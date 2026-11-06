@@ -19,8 +19,8 @@
 .task-notification-item.is-error > svg { color: var(--al-danger); }
 .task-notification-item.is-warning > svg, .task-notification-item.is-action > svg { color: var(--al-warning); }
 .task-notification-copy { display: grid; min-width: 0; flex: 1; gap: 3px; }
-.task-notification-title { overflow: hidden; font-size: var(--text-secondary); font-weight: 640; text-overflow: ellipsis; white-space: nowrap; }
-.task-notification-message { display: -webkit-box; overflow: hidden; color: var(--al-ink-2); font-size: var(--text-secondary); line-height: 1.45; overflow-wrap: anywhere; -webkit-line-clamp: 3; -webkit-box-orient: vertical; }
+.task-notification-title { font-size: var(--text-secondary); font-weight: 640; overflow-wrap: anywhere; white-space: normal; }
+.task-notification-message { display: block; max-height: min(260px, 35dvh); overflow-y: auto; color: var(--al-ink-2); font-size: var(--text-secondary); line-height: 1.45; overflow-wrap: anywhere; white-space: pre-wrap; }
 .task-notification-copy time { color: var(--al-muted-2); font-size: var(--text-caption); }
 .task-notification-unread-dot { flex: 0 0 7px; height: 7px; margin-top: 7px; border-radius: 50%; background: var(--al-accent); }
 .task-notification-empty { margin: 0; padding: 28px 14px; color: var(--al-muted); font-size: var(--text-secondary); text-align: center; }
@@ -35,17 +35,17 @@
 .task-notification-banner.is-error > svg { color: var(--al-danger); }
 .task-notification-banner.is-warning > svg, .task-notification-banner.is-action > svg { color: var(--al-warning); }
 .task-notification-banner-copy { display: grid; min-width: 0; flex: 1; gap: 3px; }
-.task-notification-banner-copy strong { font-size: var(--text-secondary); }
+.task-notification-banner-copy strong { font-size: var(--text-secondary); overflow-wrap: anywhere; }
 .task-notification-banner-copy span {
-  display: -webkit-box;
+  display: block;
   max-width: 100%;
-  overflow: hidden;
+  max-height: min(320px, 45dvh);
+  overflow-y: auto;
   color: var(--al-ink-2);
   font-size: var(--text-secondary);
   line-height: 1.45;
   overflow-wrap: anywhere;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 3;
+  white-space: pre-wrap;
 }
 .task-notification-banner > .btn, .task-notification-banner > .ui-icon-button { flex: 0 0 auto; }
 @media (max-width: 767.98px) {
