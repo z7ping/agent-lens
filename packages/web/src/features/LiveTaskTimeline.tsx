@@ -135,7 +135,8 @@ function GenericLiveItem({
   }
   if (item.kind === 'native') {
     const type = item.nativeType
-    const label = type === 'system' ? t('live.nativeEntries.system')
+    const label = type === 'command' ? t('live.nativeEntries.command')
+      : type === 'system' ? t('live.nativeEntries.system')
       : type === 'branch_summary' ? t('live.nativeEntries.branchSummary')
       : type === 'context_edit' ? t(item.source.replacement === null
         ? 'live.nativeEntries.contextExcluded'
@@ -146,12 +147,14 @@ function GenericLiveItem({
           : t('live.nativeEntries.bashExecution')
     return <TaskEvent model={{
       id: item.id,
-      category: type === 'bashExecution' ? 'lifecycle' : 'context',
+      category: type === 'bashExecution' || type === 'command' ? 'lifecycle' : 'context',
       label,
       ...(item.preview ? { summary: item.preview } : {}),
       ...(item.at ? { time: taskSessionMessageTime(item.at) } : {}),
       nativeType: type,
-    }} raw={item.source}/>
+    }} raw={item.source} error={type === 'command'
+      && typeof item.source.data === 'object' && item.source.data !== null
+      && 'outcome' in item.source.data && item.source.data.outcome === 'failed'}/>
   }
   if (item.kind === 'event') {
     const detail = item.process

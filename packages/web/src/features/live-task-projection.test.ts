@@ -1625,3 +1625,36 @@ test('Pi active snapshot reconciliation replaces compaction in place before late
     'native-compaction:journal-17', 'later-tool',
   ])
 })
+
+
+test('Pi native command results are non-chat evidence, replayed with the same native entry id', () => {
+  const record = {
+    type: 'custom', id: 'cmd-1', customType: 'agent-lens.command',
+    timestamp: '2026-11-06T12:00:00.000Z',
+    data: {
+      command: '/mcp', outcome: 'failed', error: 'Terminal-only UI unavailable',
+      startedAt: '2026-11-06T12:00:00.000Z', finishedAt: '2026-11-06T12:00:01.000Z',
+      messages: [{ level: 'warning', message: 'Need an interactive manager' }],
+    },
+  }
+  const snapshot = projectLiveSnapshotEntries([record])
+  assert.equal(snapshot.length, 1)
+  assert.equal(snapshot[0]?.kind, 'native')
+  assert.equal(snapshot[0]?.id, 'native-command:cmd-1')
+  if (snapshot[0]?.kind === 'native') {
+    assert.equal(snapshot[0].nativeType, 'command')
+    assert.deepEqual(snapshot[0].source, record)
+  }
+  const changed = event(1, {
+    type: 'command.record', entryId: 'cmd-1', command: '/mcp',
+    outcome: 'failed', error: 'Terminal-only UI unavailable',
+    messages: [{ level: 'warning', message: 'Need an interactive manager' }],
+  })
+  assert.equal(liveEventChangesTaskTranscript(changed.normalizedEvent), true)
+  const live = reduceLiveTaskEvent([], changed)
+  assert.equal(live.length, 1)
+  assert.equal(live[0]?.id, snapshot[0]?.id)
+  assert.equal(live[0]?.kind, 'native')
+  assert.deepEqual(reduceLiveTaskEvent(live, changed), live)
+  assert.equal(live.some(item => item.kind === 'message'), false)
+})

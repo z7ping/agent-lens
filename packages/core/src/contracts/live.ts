@@ -432,6 +432,17 @@ export interface LiveNotificationEvent {
   title?: string | undefined
 }
 
+export interface LiveCommandRecordEvent {
+  type: 'command.record'
+  entryId: string
+  command: string
+  outcome: 'handled' | 'failed'
+  messages: readonly { level: 'info' | 'success' | 'warning' | 'error'; message: string }[]
+  error?: string | undefined
+  startedAt?: string | undefined
+  finishedAt?: string | undefined
+}
+
 export interface LiveErrorEvent {
   type: 'error'
   message: string
@@ -503,6 +514,7 @@ export type LiveEvent =
   | LiveUiDismissEvent
   | LiveUiStateEvent
   | LiveNotificationEvent
+  | LiveCommandRecordEvent
   | LiveErrorEvent
   | LiveCompletedEvent
 

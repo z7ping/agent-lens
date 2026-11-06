@@ -89,6 +89,9 @@ export function isFailedLifecycleEvent(node: ReviewEventNodeDto): boolean {
   const payload = record(node.payload)
   const action = stringValue(payload, 'action', 'event', 'type').toLowerCase()
   const status = stringValue(payload, 'status', 'result').toLowerCase()
+  if (action === 'pi.custom' && payload.customType === 'agent-lens.command') {
+    return record(payload.data).outcome === 'failed'
+  }
   return ['turn.error', 'turn.aborted', 'task.failed', 'assistant.error'].includes(action)
     || ['error', 'failed', 'failure', 'rejected'].includes(status)
 }
@@ -105,6 +108,8 @@ export function reviewEventLabel(node: ReviewEventNodeDto): string {
   const payload = record(node.payload)
   const action = stringValue(payload, 'action', 'event', 'type', 'status').toLowerCase()
 
+  if (node.kind === 'session.lifecycle' && action === 'pi.custom'
+    && payload.customType === 'agent-lens.command') return agentLensI18n.t('review:local.event.piNativeCommand')
   if (node.kind === 'artifact.action') return reviewArtifactLabel(node.payload) ?? node.label
 
   // Presentation is keyed by canonical kind + verified native action, never Agent identity.

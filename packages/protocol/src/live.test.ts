@@ -413,3 +413,16 @@ test('Live protocol preserves attested summarization retry origin but drops unkn
     type: 'status', status: 'ready', process: { operation: 'compaction', phase: 'end' },
   })
 })
+
+test('native command record preserves full output and never masquerades as a message', () => {
+  const output = 'server connection details and errors\\n'.repeat(300)
+  const record = {
+    type: 'command.record', entryId: 'entry-1', command: '/mcp',
+    outcome: 'failed', error: 'Unsupported terminal custom UI',
+    messages: [{ level: 'error', message: output }],
+    startedAt: '2026-11-06T11:00:00Z', finishedAt: '2026-11-06T11:00:01Z',
+  }
+  assert.deepEqual(parseLiveEventDto(record), record)
+  assert.equal(parseLiveEventDto({ ...record, entryId: '' }), null)
+  assert.equal(parseLiveEventDto({ ...record, outcome: 'success' }), null)
+})

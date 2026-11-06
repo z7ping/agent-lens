@@ -29,6 +29,7 @@ export interface PiSdkSessionManager {
   getLeafId(): ReturnType<SessionManager['getLeafId']>
   getEntries(): unknown[]
   getEntry?: SessionManager['getEntry']
+  appendCustomEntry?: SessionManager['appendCustomEntry']
   branch?: SessionManager['branch']
   newSession?: SessionManager['newSession']
   /** Available on Pi versions that support native session branching. Required only for “分叉继续”. */

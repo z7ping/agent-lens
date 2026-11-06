@@ -1,4 +1,6 @@
 import { randomUUID } from 'node:crypto'
+import { AsyncLocalStorage } from 'node:async_hooks'
+import type { PiLiveCommandRecord } from './types'
 import { asPiSdkExtensionUiContext, type PiSdkExtensionUiContext } from './pi-sdk-adapter'
 
 interface PendingRequest {
@@ -40,6 +42,7 @@ function fallbackTheme(): Record<string, unknown> {
 export class PiExtensionUiBridge {
   private readonly pending = new Map<string, PendingRequest>()
   private editorText = ''
+  private readonly commandScope = new AsyncLocalStorage<{ id: string; name: string; value: PiLiveCommandRecord }>()
   private disposed = false
   readonly context: PiSdkExtensionUiContext
 
@@ -71,11 +74,17 @@ export class PiExtensionUiBridge {
           ? undefined
           : typeof response.value === 'string' ? response.value : undefined,
       ),
-      notify: (message: string, type?: string) => this.fire({
-        method: 'notify',
-        message,
-        ...(type ? { notifyType: type } : {}),
-      }),
+      notify: (message: string, type?: string) => {
+        const active = this.commandScope.getStore()
+        const level = type === 'success' || type === 'warning' || type === 'error' ? type : 'info'
+        if (active) active.value.messages.push({ level, message })
+        this.fire({
+          method: 'notify',
+          message,
+          ...(type ? { notifyType: type } : {}),
+          ...(active ? { commandRecordId: active.id } : {}),
+        })
+      },
       onTerminalInput: () => () => {},
       setStatus: (key: string, text?: string) => this.fire({
         method: 'setStatus',
@@ -99,7 +108,7 @@ export class PiExtensionUiBridge {
       setFooter: () => {},
       setHeader: () => {},
       setTitle: (title: string) => this.fire({ method: 'setTitle', title }),
-      custom: async () => undefined,
+      custom: async () => { throw new Error('Pi terminal custom UI is unavailable in AgentLens Web; use Pi CLI for this interactive command') },
       pasteToEditor: (text: string) => this.setEditorText(text),
       setEditorText: (text: string) => this.setEditorText(text),
       getEditorText: () => this.editorText,
@@ -123,6 +132,23 @@ export class PiExtensionUiBridge {
       setToolsExpanded: () => {},
     }
     this.context = asPiSdkExtensionUiContext(context)
+  }
+
+  runCommand<T>(name: string, value: PiLiveCommandRecord, execute: () => Promise<T>): Promise<T> {
+    return this.commandScope.run({ id: randomUUID(), name, value }, execute)
+  }
+
+  captureCommandError(error: unknown): string | undefined {
+    const active = this.commandScope.getStore()
+    const info = record(error)
+    if (!active || info.extensionPath !== `command:${active.name.slice(1)}`) return undefined
+    active.value.outcome = 'failed'
+    active.value.error = String(info.error ?? 'Unknown extension command error')
+    return active.id
+  }
+
+  publishCommandEntry(entry: unknown): void {
+    if (!this.disposed) this.options.publish({ type: 'native_command_record', entry: record(entry) })
   }
 
   respond(requestId: string, response: unknown): boolean {

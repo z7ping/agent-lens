@@ -423,6 +423,27 @@ export function normalizePiLiveEvent(event: Readonly<Record<string, unknown>>): 
       : []
     return { type: 'queue.update', steering, followUp }
   }
+  if (type === 'native_command_record') {
+    const entry = liveRecord(event.entry)
+    const data = liveRecord(entry.data)
+    const entryId = liveText(entry.id)
+    const command = liveText(data.command)
+    if (entry.type !== 'custom' || entry.customType !== 'agent-lens.command'
+      || !entryId || !command || (data.outcome !== 'handled' && data.outcome !== 'failed')) return undefined
+    const messages = Array.isArray(data.messages) ? data.messages.flatMap(value => {
+      const item = liveRecord(value)
+      const message = liveText(item.message)
+      return message && ['info', 'success', 'warning', 'error'].includes(liveText(item.level))
+        ? [{ level: item.level as 'info' | 'success' | 'warning' | 'error', message }] : []
+    }) : []
+    return {
+      type: 'command.record', entryId, command, outcome: data.outcome,
+      messages,
+      ...(liveText(data.error) ? { error: liveText(data.error) } : {}),
+      ...(liveText(data.startedAt) ? { startedAt: liveText(data.startedAt) } : {}),
+      ...(liveText(data.finishedAt) ? { finishedAt: liveText(data.finishedAt) } : {}),
+    }
+  }
   if (type === 'extension_ui_request' && event.method === 'setStatus') {
     const cache = parsePiCacheOptimizerStatus(event)
     if (cache !== undefined) return { type: 'runtime.metrics.changed', cacheMetrics: cache }
@@ -448,6 +469,7 @@ export function normalizePiLiveEvent(event: Readonly<Record<string, unknown>>): 
     }
   }
   if (type === 'extension_ui_request' && liveText(event.method) === 'notify') {
+    if (liveText(event.commandRecordId)) return undefined
     const message = liveText(event.message).trim()
     if (!message) return undefined
     const nativeLevel = liveText(event.notifyType)
@@ -490,6 +512,8 @@ export function normalizePiLiveEvent(event: Readonly<Record<string, unknown>>): 
   }
   if (type === 'compaction_manual_error') return { type: 'error', message: liveText(event.message) || 'Pi manual compaction failed' }
   if (type === 'extension_error') {
+    // The native command record owns this failure; do not invent an assistant error bubble.
+    if (liveText(event.commandRecordId)) return undefined
     const message = piEventErrorText(event.errorMessage, event.error)
     return { type: 'error', message: message || 'Pi Live extension failed' }
   }
@@ -740,7 +764,9 @@ export class PiLiveAdapter implements LiveAdapter {
     // AgentSession.prompt expands extension/skill/template commands; direct
     // steer()/followUp() would instead queue their literal text for the LLM.
     if (isNativeSlash || behavior === 'normal') {
-      await this.service.prompt(runtimeSessionId, resolved.text,
+      // AgentSession dispatches extension commands only when text starts with '/'.
+      // Preserve user whitespace for ordinary messages but normalize command input.
+      await this.service.prompt(runtimeSessionId, isNativeSlash ? resolved.text.trimStart() : resolved.text,
         behavior === 'steer' ? 'steer' : behavior === 'follow-up' ? 'followUp' : undefined,
         resolved.images)
     } else if (behavior === 'steer') {

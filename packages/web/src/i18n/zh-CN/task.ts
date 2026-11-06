@@ -166,6 +166,7 @@ export const chineseTaskMessages: LocaleMessagesDto = {
         customMessage: '扩展上下文消息',
         customHidden: '隐藏的扩展上下文消息',
         bashExecution: 'Pi Shell 执行',
+        command: 'Pi 原生命令',
       },
       processEvent: {
         outputTruncated: '模型输出达到长度限制，内容可能不完整',

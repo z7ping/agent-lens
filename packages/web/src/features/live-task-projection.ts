@@ -35,7 +35,7 @@ export type LiveTaskProjectionItem =
   | {
       id: string
       kind: 'native'
-      nativeType: 'branch_summary' | 'custom_message' | 'context_edit' | 'bashExecution' | 'system'
+      nativeType: 'branch_summary' | 'custom_message' | 'command' | 'context_edit' | 'bashExecution' | 'system'
       /** Compact source-backed preview; never promote an extension context entry to a user turn. */
       preview: string
       /** Source journal entry, exposed through the existing TaskEvent evidence detail. */
@@ -361,6 +361,21 @@ export function projectLiveSnapshotEntries(entries: readonly unknown[]): LiveTas
         id: `native-branch-summary:${baseId}`,
         kind: 'native', nativeType: 'branch_summary',
         preview: text(item.summary).replace(/\s+/g, ' ').trim().slice(0, 180),
+        source: item,
+        ...(at ? { at } : {}),
+      })
+      return
+    }
+    if (item.type === 'custom' && item.customType === 'agent-lens.command') {
+      const data = record(item.data)
+      const command = text(data.command)
+      const outcome = data.outcome === 'failed' ? 'failed' : 'handled'
+      const messages = Array.isArray(data.messages) ? data.messages : []
+      const firstOutput = messages.map(row => text(record(row).message)).find(Boolean)
+      projected.push({
+        id: `native-command:${baseId}`,
+        kind: 'native', nativeType: 'command',
+        preview: [command, outcome, text(data.error) || firstOutput].filter(Boolean).join(' · ').slice(0, 240),
         source: item,
         ...(at ? { at } : {}),
       })
@@ -1034,6 +1049,7 @@ export function liveEventChangesTaskTranscript(event: LiveEventDto | undefined):
     || event.type === 'tool.output'
     || event.type === 'tool.end'
     || event.type === 'error'
+    || event.type === 'command.record'
     || (event.type === 'status' && (event.status === 'failed' || event.process !== undefined))
     || event.type === 'completed'
 }
@@ -1096,6 +1112,24 @@ export function reduceLiveTaskEvent(
             ...(event.retryable !== undefined ? { retryable: event.retryable } : {}),
           } } : {}),
       streaming: false,
+      at: envelope.receivedAt,
+    }]
+  }
+
+  if (event.type === 'command.record') {
+    const id = `native-command:${event.entryId}`
+    if (items.some(item => item.id === id)) return [...items]
+    return [...items, {
+      id, kind: 'native' as const, nativeType: 'command' as const,
+      preview: [event.command, event.outcome, event.error || event.messages[0]?.message]
+        .filter(Boolean).join(' · ').slice(0, 240),
+      source: {
+        type: 'custom', customType: 'agent-lens.command', id: event.entryId,
+        data: { command: event.command, outcome: event.outcome, messages: event.messages,
+          ...(event.error ? { error: event.error } : {}),
+          ...(event.startedAt ? { startedAt: event.startedAt } : {}),
+          ...(event.finishedAt ? { finishedAt: event.finishedAt } : {}) },
+      },
       at: envelope.receivedAt,
     }]
   }
