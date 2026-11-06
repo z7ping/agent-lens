@@ -59,6 +59,7 @@ export function useReviewSession(model: AgentLensClientModel, embedded: boolean)
   const pendingReaderAnchorRef = useRef<{ position: ReviewReaderPosition; userRevision: number } | null>(null)
   const readerUserRevisionRef = useRef(0)
   const nativeNavigationRevisionRef=useRef(0)
+  const pendingLatestNativeNavigationRef=useRef<string|null>(null)
   const handledFocusTurnRef=useRef('')
   const detailAutoLoadBaselineRef = useRef(0)
   const followingTailRef = useRef(false)
@@ -100,6 +101,21 @@ export function useReviewSession(model: AgentLensClientModel, embedded: boolean)
         }
         const view=model.getSnapshot().review
         const pane=readerPaneRef.current
+        // A deliberate jump-to-latest click made during an incomplete scan
+        // must not be discarded. Defer the indexed seek until verified EOF.
+        if(pendingLatestNativeNavigationRef.current===id){
+          pendingLatestNativeNavigationRef.current=null
+          if(view.selectedId===id && view.detail?.statisticsCompleteness==='window'){
+            if((view.detail.interactions.at(-1)?.ordinal??0)<(result.totalTurns??0))
+              await model.jumpToLatestReviewDetail()
+            if(model.getSnapshot().review.selectedId===id)
+              settleReaderAtLatest(
+                ()=>readerPaneRef.current,
+                ()=>model.getSnapshot().review.selectedId===id,
+              )
+          }
+          return
+        }
         // Fresh cold indexes may finish after the first visible native page.
         // Jump to the newest turn only if the user has not read, scrolled or
         // navigated elsewhere. Never steal an active reader's position.
@@ -568,6 +584,7 @@ export function useReviewSession(model: AgentLensClientModel, embedded: boolean)
   }, [detail?.id, detail?.page.hasMore, detail?.page.nextCursor, detail?.page.direction, review.detailLoadingMore, review.error, loadFollowing])
 
   const select = (id: string) => {
+    pendingLatestNativeNavigationRef.current=null
     nativeNavigationRevisionRef.current++
     const pane = readerPaneRef.current
     if (detail?.id && pane) readerPositionsRef.current.set(detail.id, captureReviewReaderPosition(pane))
@@ -606,11 +623,19 @@ export function useReviewSession(model: AgentLensClientModel, embedded: boolean)
   const scrollBottom = () => scrollToBoundary('bottom')
 
   const selectRoundFilter = async (filter: RoundFilter) => {
+    pendingLatestNativeNavigationRef.current=null
     nativeNavigationRevisionRef.current++
     if (!detail || roundFilterLoading) return
     const selectedId = detail.id
     pendingReaderAnchorRef.current = null
     detailAutoLoadBaselineRef.current = readerUserRevisionRef.current
+    // Native-only sessions lack full-history error/duration aggregates.
+    // Filter only the verified loaded window; never pretend it is a global query.
+    if(detail.statisticsCompleteness==='window'){
+      setRoundFilter(filter)
+      scrollTop()
+      return
+    }
     setRoundFilterLoading(true)
     try {
       if (filter === 'all') {
@@ -634,6 +659,15 @@ export function useReviewSession(model: AgentLensClientModel, embedded: boolean)
   const jumpToLatest = async () => {
     nativeNavigationRevisionRef.current++
     if (!detail || roundFilterLoading) return
+    if(detail.statisticsCompleteness==='window'
+      && !(nativeTurnIndex?.state==='available'&&nativeTurnIndex.coverage==='complete')){
+      // Indexing progresses independently of the visible content window.
+      // Keep the intent instead of exposing a permanently disabled arrow.
+      if(nativeTurnIndex?.state && nativeTurnIndex.state!=='available')return
+      pendingLatestNativeNavigationRef.current=detail.id
+      return
+    }
+    pendingLatestNativeNavigationRef.current=null
     const selectedId = detail.id
     pendingReaderAnchorRef.current = null
     detailAutoLoadBaselineRef.current = readerUserRevisionRef.current
@@ -651,6 +685,7 @@ export function useReviewSession(model: AgentLensClientModel, embedded: boolean)
 
   const onTurnRailSelect = async (item:{ordinal?:number | undefined}) => {
     if(!detail?.id || !item.ordinal || roundFilterLoading)return
+    pendingLatestNativeNavigationRef.current=null
     nativeNavigationRevisionRef.current++
     await model.jumpToReviewInteraction(item.ordinal)
     // TaskSurface retains the ordinal as a pending anchor and scrolls only
@@ -677,6 +712,7 @@ export function useReviewSession(model: AgentLensClientModel, embedded: boolean)
   },[location.search,detail?.id,sessionId,roundFilterLoading,model])
 
   const showFromStart = async () => {
+    pendingLatestNativeNavigationRef.current=null
     nativeNavigationRevisionRef.current++
     if (!detail || roundFilterLoading) return
     const selectedId = detail.id
@@ -697,6 +733,8 @@ export function useReviewSession(model: AgentLensClientModel, embedded: boolean)
   const threshold = useMemo(() => {
     if (!detail) return null
     if (detail.page.latencyThresholdMs !== undefined) return detail.page.latencyThresholdMs
+    // A native partial window can rank its own measured durations, not the session.
+    if (detail.statisticsCompleteness === 'window') return highLatencyThreshold(detail.interactions)
     if (detail.page.filter === 'all' && detail.page.direction === 'forward' && !detail.page.hasMore) {
       return highLatencyThreshold(detail.interactions)
     }

@@ -120,6 +120,15 @@ export function ReviewPage({ model, embedded = false, latestRequest = 0 }: { mod
     forkReviewAt
   } = useReviewSession(model, embedded)
 
+  // Native Review has a bounded, Source-verified window, not session-wide
+  // aggregates. Filters must operate on that window without claiming global coverage.
+  const displayedInteractions = useMemo(() => {
+    if (detail?.statisticsCompleteness !== 'window' || roundFilter === 'all') return annotatedInteractions
+    return annotatedInteractions.filter(({ round }) => roundFilter === 'errors'
+      ? round.errorCount > 0
+      : roundFilter === 'latency' ? round.highLatency === true : true)
+  }, [detail?.statisticsCompleteness, roundFilter, annotatedInteractions])
+
   useEffect(() => {
     if (latestRequest > 0) void jumpToLatest()
   }, [latestRequest])
@@ -606,8 +615,9 @@ export function ReviewPage({ model, embedded = false, latestRequest = 0 }: { mod
           startDisabled: roundFilterLoading || (detail.statisticsCompleteness==='window'
             ? detail.interactions[0]?.ordinal===1 : atStart),
           endDisabled: roundFilterLoading || (detail.statisticsCompleteness==='window'
-            ? !(nativeTurnIndex?.state==='available' && nativeTurnIndex.coverage==='complete'
-              && (detail.interactions.at(-1)?.ordinal??0) < (nativeTurnIndex.totalTurns??0))
+            ? nativeTurnIndex?.state === 'available' && nativeTurnIndex.coverage === 'complete'
+              ? (detail.interactions.at(-1)?.ordinal??0) >= (nativeTurnIndex.totalTurns??0)
+              : nativeTurnIndex !== null && nativeTurnIndex?.state !== 'available'
             : false),
           onStart: showFromStart,
           onEnd: jumpToLatest,
@@ -638,8 +648,8 @@ export function ReviewPage({ model, embedded = false, latestRequest = 0 }: { mod
           readingControls={<Toolbar className="round-nav" aria-label={t('local.roundNav.aria')}>
             <div className="round-nav-filters" aria-label={t('local.roundNav.filterAria')}>
               <Button className={roundFilter === 'all' && !isBackward ? 'active' : ''} aria-pressed={roundFilter === 'all' && !isBackward} disabled={roundFilterLoading} onClick={() => void selectRoundFilter('all')}>{t('local.roundNav.all')}{roundFilter === 'all' && !isBackward && <span>{annotatedInteractions.length}{pageIncomplete ? '+' : ''}</span>}</Button>
-              <Button className={roundFilter === 'errors' ? 'active' : ''} aria-pressed={roundFilter === 'errors'} disabled={roundFilterLoading || detail.statisticsCompleteness === 'window'} onClick={() => void selectRoundFilter('errors')}>{t('local.roundNav.errors')}{roundFilter === 'errors' && <span>{annotatedInteractions.length}{pageIncomplete ? '+' : ''}</span>}</Button>
-              <Button className={roundFilter === 'latency' ? 'active' : ''} aria-pressed={roundFilter === 'latency'} title={t('local.roundNav.latencyNote')} disabled={roundFilterLoading || detail.statisticsCompleteness === 'window'} onClick={() => void selectRoundFilter('latency')}>{t('local.roundNav.latency')}{roundFilter === 'latency' && <span>{annotatedInteractions.length}{pageIncomplete ? '+' : ''}</span>}</Button>
+              <Button className={roundFilter === 'errors' ? 'active' : ''} aria-pressed={roundFilter === 'errors'} disabled={roundFilterLoading} onClick={() => void selectRoundFilter('errors')}>{t('local.roundNav.errors')}{roundFilter === 'errors' && <span>{displayedInteractions.length}{pageIncomplete ? '+' : ''}</span>}</Button>
+              <Button className={roundFilter === 'latency' ? 'active' : ''} aria-pressed={roundFilter === 'latency'} title={t('local.roundNav.latencyNote')} disabled={roundFilterLoading} onClick={() => void selectRoundFilter('latency')}>{t('local.roundNav.latency')}{roundFilter === 'latency' && <span>{displayedInteractions.length}{pageIncomplete ? '+' : ''}</span>}</Button>
             </div>
             <div className="round-nav-actions" aria-label={t('local.roundNav.actionsAria')}>
               {review.detailHasNewData && <Button className="round-nav-live" onClick={() => void jumpToLatest()}>{t('local.roundNav.newRecords')}<UiIcon name="arrow-down" size={14}/></Button>}
@@ -941,9 +951,9 @@ export function ReviewPage({ model, embedded = false, latestRequest = 0 }: { mod
                     ? <Button size="small" variant="quiet" onClick={() => void loadOlder()}>{t('local.roundNav.loadFailedRetry')}</Button>
                     : null}
               </div>}
-              {annotatedInteractions.map((item, index) => <VirtualRoundMount
+              {displayedInteractions.map((item, index) => <VirtualRoundMount
                 key={item.round.id}
-                eager={index < 6 || item.round.id === annotatedInteractions.at(-1)?.round.id}
+                eager={index < 6 || item.round.id === displayedInteractions.at(-1)?.round.id}
                 estimate={item.round.toolCount > 12 ? 420 : item.round.toolCount > 4 ? 300 : 220}
               >
                 <ReviewRoundAdapter
@@ -966,7 +976,7 @@ export function ReviewPage({ model, embedded = false, latestRequest = 0 }: { mod
                   forkPending={Boolean(historyInteractionPending)}
                 />
               </VirtualRoundMount>)}
-              {!annotatedInteractions.length && <div className="round-filter-empty">{emptyLabel}</div>}
+              {!displayedInteractions.length && <div className="round-filter-empty">{emptyLabel}</div>}
               {!isBackward && roundFilter !== 'latest' && <div ref={detailLoadSentinelRef} className="detail-load-sentinel" aria-live="polite">
                 {review.detailLoadingMore
                   ? t('local.roundNav.loadingFollowing', { scope: isFiltered ? t('local.roundNav.followingMatches') : t('local.roundNav.following') })
@@ -975,7 +985,7 @@ export function ReviewPage({ model, embedded = false, latestRequest = 0 }: { mod
                         {t(review.error ? 'local.roundNav.loadFailedRetry' : 'local.roundNav.loadFollowing')}
                       </Button>
                     : isFiltered
-                      ? t('local.roundNav.allMatchesLoaded', { count: detail.interactions.length })
+                      ? t('local.roundNav.allMatchesLoaded', { count: displayedInteractions.length })
                       : t('local.roundNav.allLoaded', { count: detail.interactions.length })}
               </div>}
             </div>
