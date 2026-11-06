@@ -2,8 +2,9 @@ import { memo } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { LiveMessageActionContributionDto } from '@agent-lens/protocol'
 import { VirtualRoundMount } from '../components/VirtualRoundMount'
+import { CopyableCodeBlock } from '../components/CopyableCodeBlock'
 import { IconButton, UiIcon } from '../components/ui'
-import { liveTaskRoundEstimate, liveLoadedToolRelations, type LiveLoadedToolRelation, type LiveTaskProjectionItem, type LiveTaskRoundProjection } from './live-task-projection'
+import { liveNativeCommandDetail, liveTaskRoundEstimate, liveLoadedToolRelations, type LiveLoadedToolRelation, type LiveTaskProjectionItem, type LiveTaskRoundProjection } from './live-task-projection'
 import { sameStableLiveTaskRoundProps } from './live-task-render-boundary'
 import { TaskReadingRound } from './TaskReadingRound'
 import { TaskEvent } from './TaskEvent'
@@ -33,6 +34,7 @@ function GenericLiveItem({
   runtimeStreaming,
   showContentActions = false,
   relations,
+  processExpansionStore,
   onMessageAction,
   onQuoteMessage,
 }: {
@@ -43,6 +45,7 @@ function GenericLiveItem({
   runtimeStreaming: boolean
   showContentActions?: boolean
   relations?: ReadonlyMap<string, LiveLoadedToolRelation> | undefined
+  processExpansionStore?: Map<string, boolean> | undefined
   onMessageAction(action: LiveMessageActionContributionDto, item: Extract<LiveTaskProjectionItem, { kind: 'message' }>): void
   onQuoteMessage?: ((item: Extract<LiveTaskProjectionItem, { kind: 'message' }>, text: string) => void) | undefined
 }) {
@@ -134,6 +137,26 @@ function GenericLiveItem({
     }} raw={item.source}/>
   }
   if (item.kind === 'native') {
+    const command = liveNativeCommandDetail(item)
+    if (command) {
+      return <TaskThinking
+        model={{
+          id: item.id,
+          label: `${command.command} · ${t(command.outcome === 'failed'
+            ? 'live.nativeEntries.commandFailed' : 'live.nativeEntries.commandHandled')}`,
+          text: '',
+          state: 'settled',
+          ...(item.at ? { time: taskSessionMessageTime(item.at) } : {}),
+        }}
+        kind="process"
+        defaultExpanded
+        expansionStore={processExpansionStore}
+      >
+        {command.output
+          ? <CopyableCodeBlock copyValue={command.output}>{command.output}</CopyableCodeBlock>
+          : <span>{t('live.nativeEntries.commandNoOutput')}</span>}
+      </TaskThinking>
+    }
     const type = item.nativeType
     const label = type === 'command' ? t('live.nativeEntries.command')
       : type === 'system' ? t('live.nativeEntries.system')
@@ -278,7 +301,8 @@ export const GenericLiveRound = memo(function GenericLiveRound({
     .filter(item => item.kind !== 'thinking' || item.streaming || Boolean(item.text.trim()))
     .map(item => {
       const kind: TaskReadingFact<LiveTaskProjectionItem>['kind'] =
-        item.kind === 'event' || item.kind === 'native' || item.kind === 'usage' ? 'process-block'
+        item.kind === 'native' && item.nativeType === 'command' ? 'auxiliary'
+        : item.kind === 'event' || item.kind === 'native' || item.kind === 'usage' ? 'process-block'
         : item.kind === 'thinking'
         ? 'reasoning'
         : item.kind === 'tool' ? 'tool'
@@ -294,12 +318,13 @@ export const GenericLiveRound = memo(function GenericLiveRound({
   const processItems = reading.process.map(fact => fact.value)
   const runtimeNotices = processItems.filter(isRoutineLiveRuntimeNotice)
   const normalProcessItems = processItems.filter(item => !isRoutineLiveRuntimeNotice(item))
-  const visibleItems = [...reading.prompts, ...reading.answers, ...reading.auxiliary].map(fact => fact.value)
+  const visibleItems = [...reading.prompts, ...reading.answers].map(fact => fact.value)
   const lastAnswerId = reading.answers.at(-1)?.id
   const relations = liveLoadedToolRelations(projection.items)
   const renderItem = (item: LiveTaskProjectionItem) => <GenericLiveItem
     key={item.id} item={item} agentLabel={agentLabel} messageActions={messageActions}
     actionPending={actionPending} runtimeStreaming={runtimeStreaming} relations={relations}
+    processExpansionStore={processExpansionStore}
     showContentActions={item.kind === 'message' && item.role === 'assistant'
       && !item.error && item.id === lastAnswerId && projection.model.state !== 'running' && showAnswerActions}
     onMessageAction={onMessageAction}
@@ -358,6 +383,9 @@ export const GenericLiveRound = memo(function GenericLiveRound({
 
   const prompt = visibleItems.filter(item => item.kind === 'message' && item.role === 'user').map(renderItem)
   const answer = visibleItems.filter(item => item.kind === 'message' && item.role === 'assistant').map(renderItem)
+  // Native command output is not an assistant answer. Keep it visible after
+  // the turn, instead of burying it in a collapsed process or raw JSON drawer.
+  const commandResults = reading.auxiliary.map(fact => fact.value).map(renderItem)
   return <VirtualRoundMount
     rootSelector=".task-session-reader"
     flowRoot
@@ -372,6 +400,7 @@ export const GenericLiveRound = memo(function GenericLiveRound({
         {answer}
         {awaitingResponse && <TaskSessionMessage role="assistant" text="" presentation={{ author: agentLabel }} pending className="live-task-response-pending"/>}
       </>}
+      footer={commandResults}
     />
   </VirtualRoundMount>
 }, sameStableLiveTaskRoundProps)

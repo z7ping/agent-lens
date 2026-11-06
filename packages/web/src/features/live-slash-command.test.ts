@@ -29,8 +29,8 @@ test('UI actions and native extensions execute separately; prompt templates and 
   if (reload.kind === 'action') assert.equal(reload.command.runtimeActionId, 'pi.runtime.reload')
   assert.equal(resolveLiveSlash(textMessage('/review changes'), commands).kind, 'native-command')
   const mcp = resolveLiveSlash(textMessage('/mcp'), commands)
-  assert.equal(mcp.kind, 'action')
-  if (mcp.kind === 'action') assert.equal(mcp.command.action, 'open-mcp')
+  assert.equal(mcp.kind, 'native-command')
+  if (mcp.kind === 'native-command') assert.equal(mcp.command.action, 'open-mcp')
   for (const native of ['/mcp login', '/mcp logout', '/mcp reconnect', '/mcp reconnect docs']) {
     assert.equal(resolveLiveSlash(textMessage(native), commands).kind, 'native-command')
   }

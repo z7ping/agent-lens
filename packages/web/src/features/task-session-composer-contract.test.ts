@@ -17,6 +17,8 @@ const page = [
   readFileSync(new URL('./task-live-runtime.ts', import.meta.url), 'utf8')
 ].join('\n')
 const liveTask = readFileSync(new URL('./LiveTaskPage.tsx', import.meta.url), 'utf8')
+const liveTimeline = readFileSync(new URL('./LiveTaskTimeline.tsx', import.meta.url), 'utf8')
+const liveInput = readFileSync(new URL('./live-task-input.ts', import.meta.url), 'utf8')
 const liveActions = readFileSync(new URL('./use-live-task-actions.ts', import.meta.url), 'utf8')
 const taskMessage = readFileSync(new URL('./TaskMessage.tsx', import.meta.url), 'utf8')
 const css = readFileSync(new URL('../live-task.css', import.meta.url), 'utf8')
@@ -278,4 +280,13 @@ test('缓存与兼容显示 Pi 扩展真实来源，不再硬编码缺失值', (
   assert.match(taskComposer, /cacheMetrics\.hitRequests/)
   assert.match(taskComposer, /cacheMetrics\.cachedInput/)
   assert.doesNotMatch(taskComposer, /runtimeMode === 'compatibility'/)
+})
+
+test('typed /mcp executes natively and its complete result stays visible outside collapsed Process', () => {
+  assert.match(liveInput, /command\.action === 'open-mcp'[\s\S]*kind: 'native-command'/)
+  assert.doesNotMatch(liveTask, /else if \(command\.action === 'open-mcp'\)/)
+  assert.match(liveTimeline, /item\.nativeType === 'command' \? 'auxiliary'/)
+  assert.match(liveTimeline, /footer=\{commandResults\}/)
+  assert.match(liveTimeline, /defaultExpanded[\s\S]*copyValue=\{command\.output\}/)
+  assert.match(liveTimeline, /liveNativeCommandDetail\(item\)/)
 })
