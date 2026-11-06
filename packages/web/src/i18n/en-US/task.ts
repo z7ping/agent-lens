@@ -327,6 +327,8 @@ export const englishTaskMessages: LocaleMessagesDto = {
         reconnect: 'Reconnect',
         empty: 'No status read yet. Refresh to query Pi.',
         lastStatus: 'Last native status',
+        registeredTools: 'Reachable tools registered by Pi SDK',
+        noRegisteredTools: 'No reachable MCP tools currently registered (servers may still be configured)',
         close: 'Close',
       },
       extension: {
