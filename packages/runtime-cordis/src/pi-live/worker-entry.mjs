@@ -1659,6 +1659,25 @@ function slashCommands() {
   return commands
 }
 
+function mcpRegisteredTools() {
+  // Pi's own live ToolInfo is the only source. Never read or edit mcp.json here.
+  const official = slashCommands().some(command => command.name === 'mcp' && command.mcpManager === true)
+  if (!official || typeof session?.getAllTools !== 'function') return []
+  return session.getAllTools().flatMap(tool => {
+    const source = record(tool.sourceInfo)
+    const namespace = record(tool.namespace)
+    if (source.path !== 'builtin:mcp' || typeof namespace.name !== 'string'
+      || !namespace.name.startsWith('mcp__') || tool.exposure === 'hidden') return []
+    const serverId = namespace.name.slice('mcp__'.length)
+    if (!serverId || typeof tool.name !== 'string'
+      || !['direct', 'model-only', 'codemode', 'deferred'].includes(tool.exposure)) return []
+    return [{
+      serverId, name: tool.name, exposure: tool.exposure,
+      description: typeof tool.description === 'string' ? tool.description : '',
+    }]
+  }).sort((a, b) => a.serverId.localeCompare(b.serverId) || a.name.localeCompare(b.name))
+}
+
 function thinkingControl() {
   if (!capabilities?.thinkingLevelControl) return undefined
   const current = session?.thinkingLevel
@@ -1673,6 +1692,7 @@ function thinkingControl() {
 async function command(name, value = {}) {
   if (!session && name !== 'terminate') throw new Error('Pi Runtime is not ready')
   const needsExtensions = name === 'commands'
+    || name === 'mcpTools'
     || name === 'navigateTree'
     || name === 'compact'
     || name === 'reload'
@@ -1696,6 +1716,7 @@ async function command(name, value = {}) {
   if (name === 'historyIndex') return historyIndex(value)
   if (name === 'sessionTree') return sessionTree()
   if (name === 'commands') return slashCommands()
+  if (name === 'mcpTools') return mcpRegisteredTools()
   if (name === 'navigateTree') {
     if (typeof value.entryId !== 'string' || !value.entryId) throw new Error('Pi tree navigation entry id is required')
     if (session.isStreaming) throw new Error('Pi tree navigation requires an idle session')
