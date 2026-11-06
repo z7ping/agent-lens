@@ -182,10 +182,9 @@ Task Center / Review / Pi Live 的任务内容继续复用现有：
 
 如果当前会话可以访问 `z7ping/product-internal`，修改表现层前应阅读：
 
-- `agent-lens/design/UI-UX-CONTRACT.md`（现行设计决策以 `product-internal` 中最新有效契约和正式代码为准）
-- `agent-lens/design/README.md`
+- **`agent-lens/design/DESIGN.md`**（唯一设计规范：Token、统一组件、四工作区、会话/工作台/备份交互、原型与验收门禁）
 - `agent-lens/README.md`（项目知识总入口）、`agent-lens/product/prd/`（已确认需求）、`agent-lens/adr/`（架构决策）
-- 当前 UI 修改再读 `UI-UX-CHANGE-PLAN.md`、`RUNTIME-HIFI-RESYNC-20261103.md` 与 `mockups/runtime-baseline/README.md`；已退役的 Alpha.3 清单和旧原型仅通过 Git 历史追溯，不作为当前约束来源
+- 当前唯一高保真原型位于 `agent-lens/design/mockups/runtime-baseline/`；旧设计稿和阶段审计仅由 Git 历史追溯，不再维护平行文档。修改该原型须执行 `node agent-lens/design/mockups/runtime-baseline/check-static-gate.mjs` 才能声称静态验收通过。
 
 真实功能 / 字段 / 数据语义以本仓库正式实现为依据；视觉、信息层级、公共控件和响应式以有效设计规范为依据。
 
