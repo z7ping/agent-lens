@@ -138,12 +138,13 @@ export class PiExtensionUiBridge {
     return this.commandScope.run({ id: randomUUID(), name, value }, execute)
   }
 
-  captureCommandError(error: unknown): void {
+  captureCommandError(error: unknown): string | undefined {
     const active = this.commandScope.getStore()
     const info = record(error)
-    if (!active || info.extensionPath !== `command:${active.name.slice(1)}`) return
+    if (!active || info.extensionPath !== `command:${active.name.slice(1)}`) return undefined
     active.value.outcome = 'failed'
     active.value.error = String(info.error ?? 'Unknown extension command error')
+    return active.id
   }
 
   publishCommandEntry(entry: unknown): void {
