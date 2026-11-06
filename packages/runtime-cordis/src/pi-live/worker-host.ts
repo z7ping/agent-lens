@@ -6,6 +6,7 @@ import type { LiveHistoryIndex, LiveHistoryIndexQuery, LiveSessionTree, LiveSnap
 import { discoverInstalledPiSdk } from './sdk-loader'
 import type {
   PiLiveCommand,
+  PiMcpToolRegistration,
   PiLiveControls,
   PiLiveImageInput,
   PiLiveInitializationTiming,
