@@ -500,6 +500,7 @@ export function normalizePiLiveEvent(event: Readonly<Record<string, unknown>>): 
       ...(options ? { options } : {}),
       ...(liveText(event.placeholder) ? { placeholder: liveText(event.placeholder) } : {}),
       ...(liveText(event.prefill) ? { prefill: liveText(event.prefill) } : {}),
+      ...(liveText(event.externalUrl) ? { externalUrl: liveText(event.externalUrl) } : {}),
     }
   }
   if (type === 'runtime_exit') {
