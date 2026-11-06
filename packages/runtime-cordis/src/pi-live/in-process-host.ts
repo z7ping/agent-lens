@@ -550,7 +550,7 @@ export class InProcessPiRuntimeHost implements PiRuntimeHost {
     const extensionUi = new PiExtensionUiBridge({ publish: onEvent })
     const unsubscribe = session.subscribe(event => onEvent(toPiLiveWireEvent(record(event))))
     try {
-      await session.bindExtensions({ uiContext: extensionUi.context, mode: 'rpc', abortHandler: () => { void session.abort() }, onError: value => { extensionUi.captureCommandError(value); onEvent({ type: 'extension_error', error: String(record(value).error ?? 'Unknown extension error') }) } })
+      await session.bindExtensions({ uiContext: extensionUi.context, mode: 'rpc', abortHandler: () => { void session.abort() }, onError: value => { const commandRecordId = extensionUi.captureCommandError(value); onEvent({ type: 'extension_error', error: String(record(value).error ?? 'Unknown extension error'), ...(commandRecordId ? { commandRecordId } : {}) }) } })
       const resources = runtimeResourceSnapshot(session)
       if (resources) onEvent({ type: 'runtime_resources', resources })
       if (input.name && (!input.sessionPath || input.historyAction === 'fork')) session.setSessionName(input.name)
