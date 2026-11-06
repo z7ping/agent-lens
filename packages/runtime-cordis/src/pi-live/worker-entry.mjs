@@ -923,8 +923,10 @@ function beginSnapshotTransfer(since, window) {
   if (since || afterCursor) {
     const cursor = since || afterCursor
     const index = entryPosition(cursor)
-    if (index < 0 && afterCursor) throw new Error('Live snapshot after cursor was not found')
-    start = index >= 0 ? index + 1 : Math.max(0, all.length - limit)
+    if (index < 0) throw new Error(afterCursor
+      ? 'Live snapshot after cursor was not found'
+      : 'Live snapshot since cursor was not found')
+    start = index + 1
     end = Math.min(all.length, start + limit)
   } else if (edge === 'earliest') {
     start = 0
