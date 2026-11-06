@@ -122,6 +122,9 @@ export function piSdkCommands(session: PiSdkSession): PiSdkSlashCommandInfo[] {
         ? { description: command.description.trim() }
         : {}),
       source: 'extension',
+      ...(command.invocationName === 'mcp' && command.name === 'mcp'
+        && (command as { sourceInfo?: { path?: string } }).sourceInfo?.path === 'builtin:mcp'
+        ? { mcpManager: true } : {}),
       ...(command.invocationName === 'title' && command.name === 'title'
         && /(?:^|[\\/])pi-title(?:[\\/]|$)/i.test((command as { sourceInfo?: { path?: string } }).sourceInfo?.path ?? '')
         && typeof session.extensionRunner?.createCommandContext === 'function'
