@@ -712,10 +712,18 @@ export function mergeLiveActiveProjectionItems(
   previous: readonly LiveTaskProjectionItem[],
   incoming: readonly LiveTaskProjectionItem[],
 ): LiveTaskProjectionItem[] {
-  const merged = [...previous]
+  const reconciled = reconcilePersistedCompactionEvents(previous, incoming)
+  const replacements = new Map<string, LiveTaskProjectionItem>()
+  for (const item of reconciled.items) {
+    const transientId = reconciled.matchedTransientByNativeId.get(item.id)
+    if (transientId) replacements.set(transientId, item)
+  }
+  // Replace the matched transient in situ, preserving the current reading
+  // order even when a recovered journal page ends later in the timeline.
+  const merged = previous.map(item => replacements.get(item.id) ?? item)
   const indexes = new Map(merged.map((item, index) => [item.id, index] as const))
 
-  for (const item of incoming) {
+  for (const item of reconciled.items) {
     // Exact-ID SSE facts usually win during recovery. A persisted terminal
     // tool result is the exception: it may repair a missed tool.end event.
     const existingIndex = indexes.get(item.id)
@@ -735,34 +743,6 @@ export function mergeLiveActiveProjectionItems(
         }
       }
       continue
-    }
-
-    // Pi's durable compaction journal row supersedes the matching transient
-    // SSE finish event on reconnect. Match source-attested anchor facts, not
-    // proximity in time or a guessed compaction identifier.
-    if (item.kind === 'event' && item.id.startsWith('native-compaction:')) {
-      const anchor = item.process.firstKeptEntryId || item.process.summary
-      if (anchor) {
-        const lastUser = findLastProjectionIndex(merged, row =>
-          row.kind === 'message' && row.role === 'user')
-        const transientIndex = merged.findIndex((row, index) =>
-          index > lastUser && row.kind === 'event'
-          && row.id.startsWith('live-process:')
-          && row.process.operation === 'compaction'
-          && row.process.phase === 'end'
-          && (item.process.firstKeptEntryId
-            ? row.process.firstKeptEntryId === item.process.firstKeptEntryId
-            : row.process.summary === item.process.summary))
-        if (transientIndex >= 0) {
-          const prior = merged[transientIndex]
-          indexes.delete(prior!.id)
-          merged[transientIndex] = prior?.kind === 'event'
-            ? { ...item, process: { ...prior.process, ...item.process } }
-            : item
-          indexes.set(item.id, transientIndex)
-          continue
-        }
-      }
     }
 
     // Replace the transient SSE failure with its persisted native counterpart.
@@ -814,6 +794,86 @@ export function mergeLiveActiveProjectionItems(
     : normalized
 }
 
+/** Pair only uniquely attested Pi compaction finish events with their native
+ * journal rows. Matching by timeline proximity or first/last occurrence is
+ * unsafe across paged snapshots and repeated compaction attempts. */
+function nativeCompactionAnchor(item: LiveTaskProjectionItem): string | undefined {
+  if (item.kind !== 'event' || item.process.operation !== 'compaction'
+    || item.process.phase !== 'end' || item.process.outcome !== 'success') return undefined
+  const firstKept = item.process.firstKeptEntryId?.trim()
+  if (firstKept) return `first-kept:${firstKept}`
+  const summary = item.process.summary?.trim()
+  return summary ? `summary:${summary}` : undefined
+}
+
+export function reconcilePersistedCompactionEvents(
+  prior: readonly LiveTaskProjectionItem[],
+  incoming: readonly LiveTaskProjectionItem[],
+): {
+  items: LiveTaskProjectionItem[]
+  /** Native-id → superseded ephemeral-id, only for one-to-one matches. */
+  matchedTransientByNativeId: Map<string, string>
+} {
+  const transientByAnchor = new Map<string, Array<{ item: Extract<LiveTaskProjectionItem, { kind: 'event' }>; index: number }>>()
+  const latestUser = findLastProjectionIndex(prior, item =>
+    item.kind === 'message' && item.role === 'user')
+  for (let index = 0; index < prior.length; index += 1) {
+    const item = prior[index]!
+    if (item.kind !== 'event' || !item.id.startsWith('live-process:')) continue
+    const anchor = nativeCompactionAnchor(item)
+    if (!anchor || (anchor.startsWith('summary:') && index <= latestUser)) continue
+    const candidates = transientByAnchor.get(anchor) ?? []
+    candidates.push({ item, index })
+    transientByAnchor.set(anchor, candidates)
+  }
+
+  const nativeCounts = new Map<string, number>()
+  for (const item of incoming) {
+    if (item.kind !== 'event' || !item.id.startsWith('native-compaction:')) continue
+    const anchor = nativeCompactionAnchor(item)
+    if (anchor) nativeCounts.set(anchor, (nativeCounts.get(anchor) ?? 0) + 1)
+  }
+
+  const matchedTransientByNativeId = new Map<string, string>()
+  const items = incoming.map(item => {
+    if (item.kind !== 'event' || !item.id.startsWith('native-compaction:')) return item
+    const anchor = nativeCompactionAnchor(item)
+    if (!anchor || nativeCounts.get(anchor) !== 1) return item
+    const candidates = transientByAnchor.get(anchor)
+    if (candidates?.length !== 1) return item
+    const transient = candidates[0]!.item
+    matchedTransientByNativeId.set(item.id, transient.id)
+    return {
+      ...item,
+      // Journal facts supersede transient fields while retaining SDK-only
+      // source-backed reason, retry hint and estimated token count.
+      process: { ...transient.process, ...item.process },
+    }
+  })
+  return { items, matchedTransientByNativeId }
+}
+
+/** The settled Recovery branch is not an active merge: it must keep the
+ * existing bounded snapshot prefix, then append the newly persisted records.
+ * Supersede a transient compaction only when a unique native journal anchor
+ * proves the identity; never discard unrelated retry or failed events. */
+export function reconcileLiveSettledRecoveryActive(
+  previousActive: readonly LiveTaskProjectionItem[],
+  snapshotBaseActiveCount: number,
+  recovered: readonly LiveTaskProjectionItem[],
+): LiveTaskProjectionItem[] {
+  const persisted = preserveOptimisticImagePreviews(previousActive, recovered)
+  const reconciled = reconcilePersistedCompactionEvents(previousActive, persisted)
+  const superseded = new Set(reconciled.matchedTransientByNativeId.values())
+  const recoveredIds = new Set(reconciled.items.map(item => item.id))
+  const preservedBaseCount = Math.min(previousActive.length, Math.max(0, snapshotBaseActiveCount))
+  return [
+    ...previousActive.slice(0, preservedBaseCount).filter(item =>
+      !superseded.has(item.id) && !recoveredIds.has(item.id)),
+    ...reconciled.items,
+  ]
+}
+
 /** Keep unchanged snapshot rows mounted; refreshing identical history must not flash. */
 function sameLiveProjectionFact(left: LiveTaskProjectionItem, right: LiveTaskProjectionItem): boolean {
   if (left === right) return true
@@ -854,10 +914,16 @@ export function reconcileLiveSnapshotProjection(
     [...previous.stable, ...previous.active],
     [...incoming.stable, ...incoming.active],
   )
-  const stable = reuseLiveSnapshotRows(previous.stable, carried.slice(0, incoming.stable.length))
-  const nextActive = carried.slice(incoming.stable.length)
+  const reconciled = reconcilePersistedCompactionEvents(previous.active, carried)
+  const stableRows = reconciled.items.slice(0, incoming.stable.length)
+  const stableNativeIds = new Set(stableRows.map(item => item.id))
+  const superseded = new Set([...reconciled.matchedTransientByNativeId]
+    .filter(([nativeId]) => stableNativeIds.has(nativeId))
+    .map(([, transientId]) => transientId))
+  const stable = reuseLiveSnapshotRows(previous.stable, stableRows)
+  const nextActive = reconciled.items.slice(incoming.stable.length)
   const incomingActive = streaming
-    ? mergeLiveActiveProjectionItems(previous.active, nextActive)
+    ? mergeLiveActiveProjectionItems(previous.active.filter(item => !superseded.has(item.id)), nextActive)
     : nextActive
   const active = reuseLiveSnapshotRows(previous.active, incomingActive)
   return stable === previous.stable && active === previous.active ? previous : { stable, active }

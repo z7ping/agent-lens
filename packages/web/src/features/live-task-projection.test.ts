@@ -12,6 +12,8 @@ import {
   mergeLiveActiveProjectionItems,
   preserveOptimisticImagePreviews,
   reconcileLiveSnapshotProjection,
+  reconcilePersistedCompactionEvents,
+  reconcileLiveSettledRecoveryActive,
   projectLiveInputHistory,
   projectLiveSnapshotEntries,
   projectLiveTaskRounds,
@@ -1452,4 +1454,174 @@ test('Pi official subagent details survive native Live projection as one tool ca
   assert.equal(tools.length, 1)
   assert.deepEqual(tools[0]?.kind === 'tool' ? tools[0].resultDetails : undefined, details)
   assert.equal(tools[0]?.kind === 'tool' ? tools[0].status : undefined, 'error')
+})
+
+
+test('Pi settled recovery replaces unique SSE compaction with the exact journal row across pages', () => {
+  const prefix = [
+    { id: 'preexisting-message', kind: 'message' as const, role: 'user' as const,
+      text: 'old task', streaming: false },
+  ]
+  const source = reduceLiveTaskEvent(prefix, event(1, {
+    type: 'status', status: 'ready', process: {
+      operation: 'compaction', phase: 'end', outcome: 'success',
+      reason: 'threshold', summary: 'summary one',
+      firstKeptEntryId: 'entry-seven', estimatedTokensAfter: 900,
+    },
+  }))
+  const liveSseCompaction = source.find(item => item.kind === 'event')
+  assert.ok(liveSseCompaction?.kind === 'event')
+  const second = reduceLiveTaskEvent(source, event(2, {
+    type: 'status', status: 'ready', process: {
+      operation: 'compaction', phase: 'end', outcome: 'success',
+      reason: 'overflow', summary: 'summary two',
+      firstKeptEntryId: 'entry-nineteen', estimatedTokensAfter: 1000,
+    },
+  }))
+  const page1 = projectLiveSnapshotEntries([{
+    type: 'compaction', id: 'native-compaction-one', summary: 'summary one',
+    firstKeptEntryId: 'entry-seven', tokensBefore: 5000,
+  }])
+  const page2 = projectLiveSnapshotEntries([{
+    type: 'compaction', id: 'native-compaction-two', summary: 'summary two',
+    firstKeptEntryId: 'entry-nineteen', tokensBefore: 6000,
+  }])
+
+  const settled = reconcileLiveSettledRecoveryActive(second, 1, [...page1, ...page2])
+  const compactions = settled.filter(item => item.kind === 'event')
+  assert.equal(compactions.length, 2, 'two paged journal facts must not double render SSE')
+  assert.deepEqual(compactions.map(item => item.id), [
+    'native-compaction:native-compaction-one', 'native-compaction:native-compaction-two',
+  ])
+  assert.equal(compactions[0]?.kind === 'event' ? compactions[0].process.estimatedTokensAfter : null, 900)
+  assert.equal(compactions[0]?.kind === 'event' ? compactions[0].process.tokensBefore : null, 5000)
+  assert.equal(compactions[1]?.kind === 'event' ? compactions[1].process.reason : null, 'overflow')
+  assert.deepEqual(settled.slice(0, 1), prefix)
+  assert.equal(second.some(item => item.id === liveSseCompaction.id), true, 'input remains immutable')
+
+  const mergedStreaming = mergeLiveActiveProjectionItems(second, [...page1, ...page2])
+  assert.deepEqual(mergedStreaming.filter(item => item.kind === 'event').map(item => item.id),
+    ['native-compaction:native-compaction-one', 'native-compaction:native-compaction-two'])
+  assert.equal(mergedStreaming[1]?.id, 'native-compaction:native-compaction-one',
+    'streaming recovery must retain the original activity ordering')
+})
+
+test('Pi compaction recovery does not assume repeated identical summaries are the same attempt', () => {
+  const transient = [
+    { id: 'live-process:a', kind: 'event' as const, process: {
+      operation: 'compaction' as const, phase: 'end' as const, outcome: 'success' as const,
+      summary: 'same summary',
+    } },
+    { id: 'live-process:b', kind: 'event' as const, process: {
+      operation: 'compaction' as const, phase: 'end' as const, outcome: 'success' as const,
+      summary: 'same summary',
+    } },
+  ]
+  const native = projectLiveSnapshotEntries([{
+    id: 'native-1', type: 'compaction', summary: 'same summary',
+  }])
+  const result = reconcilePersistedCompactionEvents(transient, native)
+  assert.equal(result.matchedTransientByNativeId.size, 0)
+  assert.deepEqual(result.items, native, 'no inference from timing or first match')
+  const streaming = mergeLiveActiveProjectionItems(transient, native)
+  assert.equal(streaming.filter(item => item.kind === 'event').length, 3,
+    'ambiguous evidence cannot silently delete a real event')
+
+  const twoNative = projectLiveSnapshotEntries([{
+    id: 'native-2', type: 'compaction', summary: 'same summary',
+  }, {
+    id: 'native-3', type: 'compaction', summary: 'same summary',
+  }])
+  const uniqueSse = [transient[0]!]
+  const ambiguousNative = reconcilePersistedCompactionEvents(uniqueSse, twoNative)
+  assert.equal(ambiguousNative.matchedTransientByNativeId.size, 0)
+})
+
+test('Pi compaction recovery requires identical kept-entry anchors if either side has one', () => {
+  const old = [{
+    id: 'live-process:77', kind: 'event' as const,
+    process: { operation: 'compaction' as const, phase: 'end' as const,
+      outcome: 'success' as const, summary: 'repeated', firstKeptEntryId: 'entry-7' },
+  }]
+  const persisted = projectLiveSnapshotEntries([{
+    id: 'record-99', type: 'compaction', summary: 'repeated', firstKeptEntryId: 'entry-99',
+  }])
+  const merged = reconcilePersistedCompactionEvents(old, persisted)
+  assert.equal(merged.matchedTransientByNativeId.size, 0)
+  assert.deepEqual(merged.items, persisted)
+})
+
+test('Pi compaction recovery never merges failure, aborted or unanchored attempts', () => {
+  const first = [{
+    id: 'live-process:failed', kind: 'event' as const,
+    process: { operation: 'compaction' as const, phase: 'end' as const,
+      outcome: 'failed' as const, summary: 'try again', firstKeptEntryId: 'entry-7' },
+  }, {
+    id: 'live-process:unknown', kind: 'event' as const,
+    process: { operation: 'compaction' as const, phase: 'end' as const,
+      outcome: 'success' as const },
+  }]
+  const persisted = projectLiveSnapshotEntries([{
+    id: 'journal-7', type: 'compaction', summary: 'try again', firstKeptEntryId: 'entry-7',
+  }])
+  assert.equal(reconcilePersistedCompactionEvents(first, persisted).matchedTransientByNativeId.size, 0)
+  assert.equal(reconcileLiveSettledRecoveryActive(first, 1, persisted)[0]?.id, 'live-process:failed',
+    'unmatched earlier compaction failure must remain readable')
+})
+
+test('Pi initial snapshot reconciliation removes an SSE compaction repeated by a stable native page', () => {
+  const prior = reduceLiveTaskEvent([], event(1, {
+    type: 'status', status: 'ready', process: {
+      operation: 'compaction', phase: 'end', outcome: 'success',
+      summary: 'snapshot in progress', firstKeptEntryId: 'entry-13',
+      reason: 'overflow',
+    },
+  }))
+  const persisted = projectLiveSnapshotEntries([{
+    id: 'record-13', type: 'compaction', summary: 'snapshot in progress',
+    firstKeptEntryId: 'entry-13',
+  }])
+  const merged = reconcileLiveSnapshotProjection(
+    { stable: [], active: prior },
+    { stable: persisted, active: [] },
+    true,
+  )
+  assert.equal(merged.stable.length, 1)
+  assert.equal(merged.active.length, 0)
+  assert.equal(merged.stable[0]?.id, 'native-compaction:record-13')
+  assert.equal(merged.stable[0]?.kind === 'event'
+    ? merged.stable[0].process.reason : '', 'overflow')
+})
+
+test('Pi settled recovery does not repeat a native compaction already in the base page', () => {
+  const journal = projectLiveSnapshotEntries([{
+    type: 'compaction', id: 'record-preexisting',
+    summary: 'original context reduction', firstKeptEntryId: 'entry-7',
+  }])
+  const reused = reconcileLiveSettledRecoveryActive(journal, 1, journal)
+  assert.deepEqual(reused, journal)
+  assert.equal(reused.filter(item => item.kind === 'event').length, 1)
+})
+
+test('Pi active snapshot reconciliation replaces compaction in place before later SSE output', () => {
+  const prior = reduceLiveTaskEvent([], event(1, {
+    type: 'status', status: 'ready', process: {
+      operation: 'compaction', phase: 'end', outcome: 'success',
+      firstKeptEntryId: 'entry-17', summary: 'compact now',
+    },
+  }))
+  const tail = { id: 'later-tool', kind: 'tool' as const, callId: 'tool-1',
+    name: 'read', status: 'running' as const }
+  const native = projectLiveSnapshotEntries([{
+    id: 'journal-17', type: 'compaction',
+    firstKeptEntryId: 'entry-17', summary: 'compact now',
+  }])
+  const merged = reconcileLiveSnapshotProjection(
+    { stable: [], active: [...prior, tail] },
+    { stable: [], active: native },
+    true,
+  )
+  assert.deepEqual(merged.active.map(item => item.id), [
+    'native-compaction:journal-17', 'later-tool',
+  ])
 })

@@ -7,7 +7,7 @@ import { emptyLiveQueue, firstUserEntryCursor } from './live-task-queue'
 import { enqueueLiveUiRequest, dismissLiveUiRequest } from './live-extension-request-queue'
 import { reduceLiveExtensionState } from './live-extension-state'
 import { LIVE_TASK_SNAPSHOT_PAGE_LIMIT, historyPageBlock, aggregateHistoryPage, splitLiveProjectionItems, loadBoundedRecoverySnapshot, captureLiveReaderAnchor, restoreLiveReaderAnchor, appendUniqueLiveProjectionItems } from './live-task-history-window'
-import { projectLiveInputHistory, projectLiveSnapshotEntries, liveEventChangesTaskTranscript, mergeLiveActiveProjectionItems, reconcileLiveSnapshotProjection, preserveOptimisticImagePreviews, reduceLiveTaskEvent } from './live-task-projection'
+import { projectLiveInputHistory, projectLiveSnapshotEntries, liveEventChangesTaskTranscript, mergeLiveActiveProjectionItems, reconcileLiveSnapshotProjection, reconcileLiveSettledRecoveryActive, reduceLiveTaskEvent } from './live-task-projection'
 import { LiveFollowController, liveFollowTextRevision } from './live-follow-controller'
 import { settleReaderAtLatest } from './session-reader-positioning'
 import { shouldRecoverLiveOnVisible, sameLiveRuntimeState, runtimeStateFromEvent } from './task-live-runtime'
@@ -374,10 +374,9 @@ export function useLiveTaskRuntime({
         } else if (recovered.length > 0) {
           retainReaderAnchor()
           setProjection(previous => {
-            const reconciledActive = [
-              ...previous.active.slice(0, snapshotBaseActiveCount),
-              ...preserveOptimisticImagePreviews(previous.active, recovered),
-            ]
+            const reconciledActive = reconcileLiveSettledRecoveryActive(
+              previous.active, snapshotBaseActiveCount, recovered,
+            )
             return {
               stable: appendUniqueLiveProjectionItems(previous.stable, reconciledActive),
               active: [],

@@ -162,3 +162,33 @@ test('Pi SDK event invalidates the active summary without rebuilding the positio
   assert.match(invalidator, /delete tail\.summary/)
   assert.doesNotMatch(invalidator, /roundIndexCache = undefined/)
 })
+
+
+test('Pi snapshot recovery rejects a missing since cursor instead of returning only latest records', () => {
+  const beginSource = section('function beginSnapshotTransfer(', '\nfunction historyIndex(')
+  const context = {
+    roundIndexCache: null,
+    session: { sessionManager: { getEntries: () => [
+      { id: 'native-1', type: 'message' },
+      { id: 'native-2', type: 'compaction' },
+    ] } },
+    record: (value: unknown) => value && typeof value === 'object' && !Array.isArray(value)
+      ? value : {},
+    entryId: (entry: { id: string }) => entry.id,
+    snapshotLimit: () => 120,
+  }
+  const api = runInNewContext(beginSource + '\n({ beginSnapshotTransfer })', context) as {
+    beginSnapshotTransfer(since: string | undefined, window: Record<string, unknown>): unknown
+  }
+  assert.throws(() => api.beginSnapshotTransfer('missing-old-leaf', {}),
+    /Live snapshot since cursor was not found/,
+    'failed native anchor must not silently return an unrelated latest 120-entry page')
+  assert.throws(() => api.beginSnapshotTransfer(undefined, { after: 'missing-page' }),
+    /Live snapshot after cursor was not found/)
+  assert.match(inProcess, /Live snapshot since cursor was not found/,
+    'in-process Pi must reject the same invalid snapshot anchor')
+  assert.doesNotMatch(inProcess, /index >= 0 \? index \+ 1 : Math\.max\(0, all\.length - limit\)/,
+    'do not retain a silent fallback to a truncated latest page')
+  assert.doesNotMatch(worker, /index >= 0 \? index \+ 1 : Math\.max\(0, all\.length - limit\)/,
+    'the Worker must not silently truncate an invalid recovery cursor')
+})

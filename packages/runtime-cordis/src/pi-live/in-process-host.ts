@@ -319,8 +319,10 @@ class InProcessHandle implements PiRuntimeHandle {
     if (since || window?.after) {
       const cursor = since ?? window?.after
       const index = entryPosition(cursor)
-      if (index < 0 && window?.after) throw new Error('Live snapshot after cursor was not found')
-      start = index >= 0 ? index + 1 : Math.max(0, all.length - limit)
+      if (index < 0) throw new Error(window?.after
+        ? 'Live snapshot after cursor was not found'
+        : 'Live snapshot since cursor was not found')
+      start = index + 1
       end = Math.min(all.length, start + limit)
     } else if (window?.edge === 'earliest') {
       start = 0
