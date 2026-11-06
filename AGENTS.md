@@ -19,12 +19,13 @@ AgentLens 1.0 处于 Alpha 阶段。当前源码版本以根目录 `package.json
 - 架构、ADR、设计、项目知识、内部能力说明、研究/验收记录与技术计划统一存放在 **`z7ping/product-internal/agent-lens/`**，不要在公开代码仓库新增或复制这些文档。
 - 仓库根目录 `README.md` / `README.en.md`、`AGENTS.md`、`CONTRIBUTING.md`、`SECURITY.md`、`LICENSE` 等必要工程入口保留；代码测试与标准技术工件不属于待迁移 Markdown 文档。
 - 移动/删除文档时核对入口、相对链接与代码引用；旧一次性修复记录只在 Git 历史/PR 中追溯，不向内部仓库再制造一套过时真值源。
+- 内部工程契约统一从 `agent-lens/engineering/SOURCE.md` 开始，按需阅读同目录的 `LIVE.md`、`STORAGE.md`、`PERFORMANCE.md`、`RELEASE.md`、`SECURITY.md`；远程规划只在 `agent-lens/future/HUB.md`、`MOBILE.md`，不当成现行可用功能。
 
 ## 架构底线
 
 修改架构、Core Contract、Source / Storage / Surface、Daemon 生命周期前，先阅读相关实现、测试和当前任务提供的决策上下文。
 
-Core 保持框架无关；Cordis 是唯一 Plugin Runtime。Source 事实必须走 Canonical Pipeline，不得绕过 Observation / Evidence / Projection 自建第二套事实链路。Web 只消费 `@agent-lens/protocol` / `/api/v1/*`。
+Core 保持框架无关；Cordis 是唯一 Plugin Runtime。Source 的原生事实按需读取，在运行时以 Observation / Evidence 语义归一并经统一 Projection / Protocol 展示；持久化必须遵循私有知识库 ADR-0024 的 Slim-only 边界，禁止恢复旧 SourceRecord / Observation / Evidence 逐事件 SQL Writer 或自建第二事实链路。Web 只消费 `@agent-lens/protocol` / `/api/v1/*`。
 
 ## 成熟实现保护与技术替换门禁（强制）
 
