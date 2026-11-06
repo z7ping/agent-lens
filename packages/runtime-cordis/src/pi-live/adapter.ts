@@ -512,6 +512,8 @@ export function normalizePiLiveEvent(event: Readonly<Record<string, unknown>>): 
   }
   if (type === 'compaction_manual_error') return { type: 'error', message: liveText(event.message) || 'Pi manual compaction failed' }
   if (type === 'extension_error') {
+    // The native command record owns this failure; do not invent an assistant error bubble.
+    if (liveText(event.commandRecordId)) return undefined
     const message = piEventErrorText(event.errorMessage, event.error)
     return { type: 'error', message: message || 'Pi Live extension failed' }
   }
