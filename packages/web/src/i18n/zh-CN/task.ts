@@ -231,6 +231,11 @@ export const chineseTaskMessages: LocaleMessagesDto = {
         integrityWarning: '缓存统计完整性警告',
         compatNativeSource: '来自 pi-cache-optimizer 的兼容性诊断，而非 Pi SDK Runtime 运行模式。',
       },
+      runtimeActionFeedback: {
+        running: '正在执行命令…',
+        done: '命令执行完成',
+        failed: '命令执行失败，请检查错误信息',
+      },
       sendFeedback: {
         sending: '发送中…',
         accepted: '已接收',
