@@ -131,7 +131,7 @@ export function useLiveTaskActions({
       // Never append an optimistic user bubble or claim that the model is streaming.
       if (state.status !== 'ready' || state.isStreaming || messageHasAttachments(message)) {
         setError(t('live.commandUnavailable'))
-        return
+        return false
       }
       sendInFlightRef.current = true
       setSendFeedback('idle')
@@ -146,9 +146,11 @@ export function useLiveTaskActions({
           clearComposer()
         }
         composerRef.current?.focus({ preventScroll: true })
+        return true
       } catch (reason) {
         setRuntimeActionFeedback('failed')
         setError(reason instanceof Error ? reason.message : String(reason))
+        return false
       } finally {
         sendInFlightRef.current = false
       }
