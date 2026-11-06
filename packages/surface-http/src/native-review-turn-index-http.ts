@@ -403,6 +403,31 @@ export class NativeReviewTurnIndex {
         ordinal=(block+1)*BLOCK_SIZE+1
       }
     }
+    if (options.expectedRecordFingerprint !== undefined && items.length > 0) {
+      // Metadata-only checkpoint identity is insufficient after an in-place
+      // rewrite that restores mtime. Verify the single original JSONL record
+      // against the Source-issued fingerprint before enabling navigation.
+      if (!entry.filePath.toLowerCase().endsWith('.jsonl')) {
+        return { state:'unsupported', reason:'native-search-turn-record-verification-unavailable' }
+      }
+      const matched = items[0]!
+      const verified = await readVerifiedNativeJsonlObject({
+        path:entry.filePath,
+        offset:options.expectedRecordOffset!,
+        expectedFingerprint:options.expectedRecordFingerprint,
+      })
+      if (verified.state !== 'available') {
+        return { state:'drifted', reason:'native-search-turn-record-changed' }
+      }
+      const currentFile = await stat(entry.filePath).catch(() => null)
+      if (!currentFile || !currentFile.isFile()
+        || sourceFileIdentity(currentFile) !== entry.fileIdentity
+        || currentFile.size !== entry.fileSize
+        || currentFile.mtimeMs !== entry.fileMtimeMs
+        || matched.nativeEventId !== options.expectedNativeEventId) {
+        return { state:'drifted', reason:'native-search-turn-session-changed' }
+      }
+    }
     return {
       state:'available',
       coverage:state.complete?'complete':'partial',

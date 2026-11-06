@@ -566,8 +566,12 @@ export function TaskCenterPage({ model, mode, sidebarHost }: { model: AgentLensC
     for(const item of nativeBodySessions)if(!all.has(item.id))all.set(item.id,item)
     return nativeTaskCenterSummaries([...all.values()],review.filters,nowMs)
   },[nativeSessions,nativeBodySessions,review.filters,nowMs])
+  const visibleNativeBodyHits = useMemo(() => {
+    const visibleSessions = new Set(nativeHistory.map(item => item.id))
+    return nativeBodyHits.filter(hit => visibleSessions.has(hit.sessionId))
+  }, [nativeBodyHits, nativeHistory])
   const searchHitSessionIds = useMemo(
-    () => new Set(nativeBodyHits.map(hit => hit.sessionId)), [nativeBodyHits],
+    () => new Set(visibleNativeBodyHits.map(hit => hit.sessionId)), [visibleNativeBodyHits],
   )
   const localSessions = useMemo(() => mergeTaskCenterSessions(
     // SQL wins if a Catalog refresh races an existing Legacy ownership claim.
@@ -615,7 +619,7 @@ export function TaskCenterPage({ model, mode, sidebarHost }: { model: AgentLensC
     navigate(`/review/${encodeURIComponent(id)}`)
   }, [model, navigate, location.pathname])
 
-  const historyCount = localSessions.length + visibleHub.length + nativeBodyHits.length
+  const historyCount = localSessions.length + visibleHub.length + visibleNativeBodyHits.length
   const openSearchHitTurn = useCallback(async (hit: NativeBodySearchHitDto) => {
     if (!hit.turn || searchHitPending) return
     const requestKey = nativeRequestKeyRef.current
@@ -803,12 +807,12 @@ export function TaskCenterPage({ model, mode, sidebarHost }: { model: AgentLensC
     </div>}
 
     <div className="task-center-scroll">
-      {nativeBodyHits.length > 0 && <section className="task-center-group task-center-history-group" aria-label={t('center.history.nativeSearchHits')}>
+      {visibleNativeBodyHits.length > 0 && <section className="task-center-group task-center-history-group" aria-label={t('center.history.nativeSearchHits')}>
         <div className="task-center-group-title">
           <span>{t('center.history.nativeSearchHits')}</span>
-          <span>{nativeBodyHits.length}{nativeBodyCursor ? '+' : ''}</span>
+          <span>{visibleNativeBodyHits.length}{nativeBodyCursor ? '+' : ''}</span>
         </div>
-        {nativeBodyHits.map(hit => <div key={hit.observationId} className="session-item task-center-search-hit">
+        {visibleNativeBodyHits.map(hit => <div key={hit.observationId} className="session-item task-center-search-hit">
           <button type="button" className="task-center-search-hit-open" onClick={() => openHistoryTask(hit.sessionId)}
             title={hit.title || undefined}>
             <AgentLogo sourceId={hit.sourceId} size="compact"/>
@@ -825,7 +829,7 @@ export function TaskCenterPage({ model, mode, sidebarHost }: { model: AgentLensC
           </div>}
         </div>)}
       </section>}
-      {review.loading && !review.response && !localSessions.length && <SessionListSkeleton/>}
+      {review.loading && !review.response && !historyCount && <SessionListSkeleton/>}
 
       {historyGroups.map(group => <section className="task-center-group task-center-history-group" key={group.key}>
         <div className="task-center-group-title"><span>{group.label}</span><span>{group.items.length}{group.key === 'earlier' && (review.response?.meta.hasMore || nativeCursor || nativeBodyCursor) ? '+' : ''}</span></div>
