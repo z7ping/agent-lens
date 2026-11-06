@@ -81,6 +81,11 @@ const TUI_ONLY_COMMANDS = new Set([
   '/scoped-models', '/share', '/quit', '/hotkeys',
 ])
 
+/** Review has no active Runtime to dispatch commands; never resume and send them as chat. */
+export function isSlashCommandInput(message: LiveMessageDto): boolean {
+  return messageText(message).trimStart().startsWith('/')
+}
+
 export type LiveSlashResolution =
   | { kind: 'action'; command: LiveCommandDto }
   | { kind: 'blocked'; name: string }
