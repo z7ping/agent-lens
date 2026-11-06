@@ -865,9 +865,11 @@ export function reconcileLiveSettledRecoveryActive(
   const persisted = preserveOptimisticImagePreviews(previousActive, recovered)
   const reconciled = reconcilePersistedCompactionEvents(previousActive, persisted)
   const superseded = new Set(reconciled.matchedTransientByNativeId.values())
+  const recoveredIds = new Set(reconciled.items.map(item => item.id))
   const preservedBaseCount = Math.min(previousActive.length, Math.max(0, snapshotBaseActiveCount))
   return [
-    ...previousActive.slice(0, preservedBaseCount).filter(item => !superseded.has(item.id)),
+    ...previousActive.slice(0, preservedBaseCount).filter(item =>
+      !superseded.has(item.id) && !recoveredIds.has(item.id)),
     ...reconciled.items,
   ]
 }
