@@ -8,7 +8,7 @@ const commands: LiveCommandDto[] = [
   { value: '/compact', group: 'builtin', action: 'runtime-action', runtimeActionId: 'pi.runtime.compact' },
   { value: '/reload', group: 'builtin', action: 'runtime-action', runtimeActionId: 'pi.runtime.reload' },
   { value: '/review', group: 'extension' },
-  { value: '/mcp', group: 'extension' },
+  { value: '/mcp', group: 'extension', action: 'open-mcp' },
   { value: '/explain', group: 'prompt' },
   { value: '/skill:audit', group: 'skill' },
 ]
@@ -28,7 +28,12 @@ test('UI actions and native extensions execute separately; prompt templates and 
   assert.equal(reload.kind, 'action')
   if (reload.kind === 'action') assert.equal(reload.command.runtimeActionId, 'pi.runtime.reload')
   assert.equal(resolveLiveSlash(textMessage('/review changes'), commands).kind, 'native-command')
-  assert.equal(resolveLiveSlash(textMessage('/mcp'), commands).kind, 'native-command')
+  const mcp = resolveLiveSlash(textMessage('/mcp'), commands)
+  assert.equal(mcp.kind, 'action')
+  if (mcp.kind === 'action') assert.equal(mcp.command.action, 'open-mcp')
+  for (const native of ['/mcp login', '/mcp logout', '/mcp reconnect', '/mcp reconnect docs']) {
+    assert.equal(resolveLiveSlash(textMessage(native), commands).kind, 'native-command')
+  }
   assert.equal(resolveLiveSlash(textMessage('/mcp list'), commands).kind, 'native-command')
   assert.equal(resolveLiveSlash(textMessage('/skill:audit'), commands).kind, 'prompt')
   assert.equal(resolveLiveSlash(textMessage('/explain'), commands).kind, 'prompt')
