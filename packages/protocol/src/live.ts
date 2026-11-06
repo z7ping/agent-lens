@@ -449,7 +449,7 @@ export interface LiveControlOptionDto extends LiveControlDisplayInfoDto {
 export interface LiveCommandDto extends LiveControlDisplayInfoDto {
   value: string
   group?: string | undefined
-  action?: 'new-task' | 'resume-task' | 'open-model' | 'runtime-action' | undefined
+  action?: 'new-task' | 'resume-task' | 'open-model' | 'open-mcp' | 'runtime-action' | undefined
   runtimeActionId?: string | undefined
 }
 
