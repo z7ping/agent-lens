@@ -1251,9 +1251,21 @@ export class DefaultPiLiveService implements PiLiveService {
     const isIdle = state.status === 'ready' && !state.isStreaming && !state.isCompacting
     // Registry-backed capability detection: only a known non-interactive
     // extension command is offered. Other /title commands may open a UI.
-    const canRegenerate = isIdle && state.extensionBindingStatus === 'ready'
-      && !this.requireRuntime(id).titleRegenerationPending
-      && (await this.commands(id).catch(() => [])).some(command => command.titleRegeneration === true)
+    const commandRegistry = state.status === 'ready' && state.extensionBindingStatus === 'ready'
+      ? await this.commands(id).catch(() => []) : []
+    const canRegenerate = isIdle && !this.requireRuntime(id).titleRegenerationPending
+      && commandRegistry.some(command => command.titleRegeneration === true)
+    const mcpRegistered = commandRegistry.some(command => command.mcpManager === true)
+    // Query the current Pi SDK registry, not mcp.json. Missing query support is unknown, not zero.
+    const mcpTools = mcpRegistered
+      ? await this.requireRuntime(id).handle?.mcpTools?.().catch(() => undefined)
+      : undefined
+    const mcpServers = new Map<string, string[]>()
+    for (const tool of mcpTools ?? []) {
+      const values = mcpServers.get(tool.serverId) ?? []
+      values.push([tool.name, tool.exposure, tool.description].filter(Boolean).join(' · '))
+      mcpServers.set(tool.serverId, values)
+    }
     const actions: LiveRuntimeActionContribution[] = state.status === 'failed' ? [{
       actionId: 'pi.runtime.retry',
       label: contributionText('Retry', '重试'),
@@ -1302,7 +1314,21 @@ export class DefaultPiLiveService implements PiLiveService {
       ...(diagnostics.length ? { diagnostics } : {}),
       fields: runtimeDisclosureFields(state),
       ...(actions.length ? { actions } : {}),
-    }]
+    }, ...(mcpTools !== undefined ? [{
+      contributionId: 'pi.runtime.mcp-tools',
+      title: contributionText('Registered MCP tools', '已注册 MCP 工具'),
+      summary: contributionText(
+        `${mcpTools.length} reachable tool definitions in the current Pi SDK registry`,
+        `当前 Pi SDK 注册表中 ${mcpTools.length} 项可达工具定义`,
+      ),
+      fields: [...mcpServers.entries()].map(([serverId, values]) => ({
+        fieldId: `server:${serverId}`,
+        label: contributionText(serverId, serverId),
+        section: 'resources' as const,
+        kind: 'list' as const,
+        values,
+      })),
+    }] : [])]
   }
 
   async executeRuntimeAction(id: string, actionId: string) {
