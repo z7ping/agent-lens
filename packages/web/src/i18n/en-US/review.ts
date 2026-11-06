@@ -295,6 +295,7 @@ export const englishReviewMessages: LocaleMessagesDto = {
         forkFromRound: 'Fork from this round',
         continuePlaceholder: 'Message this session…',
         resumeOnSend: 'Verify session compatibility before sending',
+        commandsRequireLive: 'Slash commands require an active Live runtime. Open the Live session first; Review will not send them as chat messages.',
         sendContinue: 'Send and continue',
         preparingHistory: 'Preparing historical session',
         readOnlyObservation: 'Read-only · another writer',
