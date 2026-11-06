@@ -624,9 +624,10 @@ function useComposerSuggestionKeyboard(
   choose: (index: number) => void,
   dismiss: () => void,
   move: (delta: 1 | -1) => void,
-  options: { submitOnExact?: () => boolean; tabCompletes?: boolean } = {},
+  options: { submitOnExact?: () => boolean; executeSelected?: () => boolean; tabCompletes?: boolean } = {},
 ) {
   const submitOnExact = options.submitOnExact
+  const executeSelected = options.executeSelected
   const tabCompletes = options.tabCompletes === true
   useEffect(() => {
     if (!active || count === 0) return
@@ -648,7 +649,7 @@ function useComposerSuggestionKeyboard(
       if (!event || !allowed(event)) return false
       if (submitOnExact?.()) return false
       event.preventDefault()
-      choose(activeIndex)
+      if (!executeSelected?.()) choose(activeIndex)
       return true
     }, COMMAND_PRIORITY_CRITICAL)
     const tab = editor.registerCommand(KEY_TAB_COMMAND, event => {
@@ -664,7 +665,7 @@ function useComposerSuggestionKeyboard(
       return true
     }, COMMAND_PRIORITY_CRITICAL)
     return () => { up(); down(); enter(); tab(); escape() }
-  }, [editor, active, count, activeIndex, choose, dismiss, move, submitOnExact, tabCompletes])
+  }, [editor, active, count, activeIndex, choose, dismiss, move, submitOnExact, executeSelected, tabCompletes])
 }
 
 function WorkspaceReferenceMenuPlugin({
@@ -794,7 +795,7 @@ function WorkspaceReferenceMenuPlugin({
   )
 }
 
-function CommandMenuPlugin({ commands = [] }: { commands?: readonly LiveCommandDto[] | undefined }) {
+function CommandMenuPlugin({ commands = [], canSubmit, onSubmit }: Pick<LiveMarkdownComposerProps, 'commands' | 'canSubmit' | 'onSubmit'>) {
   const { t } = useTranslation('task')
   const [editor] = useLexicalComposerContext()
   const menuId = useId()
@@ -862,11 +863,19 @@ function CommandMenuPlugin({ commands = [] }: { commands?: readonly LiveCommandD
     setQuery(null)
     requestAnimationFrame(() => editor.getRootElement()?.focus({ preventScroll: true }))
   }
+  const executeSelected = () => {
+    const command = matches[activeIndex]
+    if (!command || !canSubmit) return false
+    replacePlainTextDocument(editor, command.value)
+    setQuery(null)
+    onSubmit({ parts: [{ type: 'text', text: command.value }] }, 'default')
+    return true
+  }
   useComposerSuggestionKeyboard(
     editor, query !== null, matches.length, activeIndex, chooseCommand,
     () => setQuery(null),
     delta => setActiveIndex(index => (index + delta + matches.length) % matches.length),
-    { submitOnExact: () => commandMenuShouldSubmit(query, matches), tabCompletes: true },
+    { submitOnExact: () => commandMenuShouldSubmit(query, matches), executeSelected, tabCompletes: true },
   )
 
   if (query === null || !matches.length || !position) return null
@@ -1097,7 +1106,7 @@ const LiveMarkdownComposerImpl = forwardRef<LiveMarkdownComposerHandle, LiveMark
       <ExternalDraftPlugin draft={draft}/>
       <EditablePlugin disabled={disabled}/>
       <WorkspaceReferenceMenuPlugin search={workspaceReferenceSearch}/>
-      <CommandMenuPlugin commands={commands}/>
+      <CommandMenuPlugin commands={commands} canSubmit={canSubmit} onSubmit={onSubmit}/>
       <KeyboardPlugin canSubmit={canSubmit} onSubmit={onSubmit} onEscape={onEscape} inputHistory={inputHistory}/>
       <ComposerRefPlugin forwardedRef={ref}/>
     </div>
