@@ -178,6 +178,14 @@ export interface PiLiveCommand {
   source: PiLiveCommandSource
 }
 
+/** Live SDK registry snapshot: reachable built-in MCP tool definitions, not server configuration. */
+export interface PiMcpToolRegistration {
+  serverId: string
+  name: string
+  description: string
+  exposure: 'direct' | 'model-only' | 'codemode' | 'deferred'
+}
+
 export interface PiLiveQueueState {
   steering: string[]
   followUp: string[]

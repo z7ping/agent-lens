@@ -16,7 +16,7 @@ class RuntimeContributionHost implements PiRuntimeHost {
     this.sessionName = name
     this.onEvent?.({ type: 'session_info_changed', name })
   }
-  constructor(private readonly supportsCompaction = false, private readonly supportsTitle = false, private readonly startupWarnings = false) {}
+  constructor(private readonly supportsCompaction = false, private readonly supportsTitle = false, private readonly startupWarnings = false, private readonly supportsMcp = false) {}
 
   async start(
     runtimeSessionId: string,
@@ -73,7 +73,16 @@ class RuntimeContributionHost implements PiRuntimeHost {
       ...(this.supportsCompaction ? { capabilities: { protocolVersion: 1, sessionRuntime: false, modelSwitching: true, thinkingLevelControl: true, extensionUi: true, manualCompaction: true, nativeReload: true } } : {}),
       ...(this.supportsCompaction ? { compact: async () => { this.compactions += 1 } } : {}),
       ...(this.supportsCompaction ? { reload: async () => { this.reloads += 1 } } : {}),
-      commands: async () => this.supportsTitle ? [{ name: 'title', source: 'extension' as const, titleRegeneration: true }] : [],
+      commands: async () => [
+        ...(this.supportsTitle ? [{ name: 'title', source: 'extension' as const, titleRegeneration: true }] : []),
+        ...(this.supportsMcp ? [{ name: 'mcp', source: 'extension' as const, mcpManager: true }] : []),
+      ],
+      mcpTools: async () => this.supportsMcp ? [
+        { serverId: 'docs', name: 'mcp__docs__read', exposure: 'codemode' as const,
+          description: 'Read docs from Pi native MCP' },
+        { serverId: 'docs', name: 'mcp__docs__search', exposure: 'direct' as const,
+          description: 'Search docs from Pi native MCP' },
+      ] : [],
       ...(this.supportsTitle ? { regenerateTitle: async () => { this.generatedTitles += 1; this.rename('AI 重新生成的标题') } } : {}),
       processId: 4321,
       state: async () => state(),
@@ -104,6 +113,36 @@ async function waitForStatus(
   }
   throw new Error(`runtime did not reach ${status}`)
 }
+
+test('MCP tools disclosure is source-backed, grouped by native server and absent when unsupported', async () => {
+  const host = new RuntimeContributionHost(true, false, false, true)
+  const service = new DefaultPiLiveService(host)
+  try {
+    const started = await service.start({ cwd: '/workspace' })
+    await waitForStatus(service, started.runtimeSessionId, 'ready')
+    const items = await service.runtimeDisclosures(started.runtimeSessionId)
+    const inventory = items.find(item => item.contributionId === 'pi.runtime.mcp-tools')
+    assert.ok(inventory)
+    assert.deepEqual(inventory.fields, [{
+      fieldId: 'server:docs', label: { default: 'docs', localizations: {
+        'zh-CN': 'docs', 'en-US': 'docs',
+      } }, section: 'resources', kind: 'list', values: [
+        'mcp__docs__read · codemode · Read docs from Pi native MCP',
+        'mcp__docs__search · direct · Search docs from Pi native MCP',
+      ],
+    }])
+    assert.equal(items.some(item => item.contributionId === 'pi.runtime.diagnostics'), true)
+  } finally { await service.dispose() }
+
+  const missing = new RuntimeContributionHost(true)
+  const unavailable = new DefaultPiLiveService(missing)
+  try {
+    const started = await unavailable.start({ cwd: '/workspace' })
+    await waitForStatus(unavailable, started.runtimeSessionId, 'ready')
+    const items = await unavailable.runtimeDisclosures(started.runtimeSessionId)
+    assert.equal(items.some(item => item.contributionId === 'pi.runtime.mcp-tools'), false)
+  } finally { await unavailable.dispose() }
+})
 
 test('未注册 /mcp 等斜杠指令在 Runtime 层被拒绝，原生扩展仍可执行', async () => {
   const host = new RuntimeContributionHost(true, true)

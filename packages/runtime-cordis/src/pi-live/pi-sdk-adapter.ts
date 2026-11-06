@@ -1,3 +1,4 @@
+import type { PiMcpToolRegistration } from './types'
 import type {
   AgentSession,
   PromptOptions,
@@ -68,6 +69,7 @@ export interface PiSdkSession {
   readonly resourceLoader?: PiSdkRuntimeResourceLoader
   readonly extensionRunner?: Pick<AgentSession['extensionRunner'], 'getRegisteredCommands' | 'createCommandContext'>
   readonly promptTemplates?: AgentSession['promptTemplates']
+  getAllTools?(): ReturnType<AgentSession['getAllTools']>
   bindExtensions(bindings: PiSdkExtensionBindings): ReturnType<AgentSession['bindExtensions']>
   subscribe(listener: Parameters<AgentSession['subscribe']>[0]): ReturnType<AgentSession['subscribe']>
   setSessionName(name: Parameters<AgentSession['setSessionName']>[0]): ReturnType<AgentSession['setSessionName']>
@@ -83,6 +85,32 @@ export interface PiSdkSession {
   abort(): ReturnType<AgentSession['abort']>
   waitForIdle(): ReturnType<AgentSession['waitForIdle']>
   dispose(): ReturnType<AgentSession['dispose']>
+}
+
+/**
+ * Read only the live Pi registry; no mcp.json parsing or second MCP connection.
+ * Hidden tools include withdrawn registrations and are not claimed as callable.
+ * The MCP origin comes from the official sourceInfo + namespace, never a tool-name prefix.
+ */
+export function piSdkMcpTools(session: PiSdkSession): PiMcpToolRegistration[] {
+  const official = session.extensionRunner?.getRegisteredCommands().some(command =>
+    command.name === 'mcp' && command.invocationName === 'mcp'
+    && command.sourceInfo?.path === 'builtin:mcp')
+  if (!official || typeof session.getAllTools !== 'function') return []
+  return session.getAllTools().flatMap(tool => {
+    if (tool.sourceInfo?.path !== 'builtin:mcp'
+      || typeof tool.namespace?.name !== 'string'
+      || !tool.namespace.name.startsWith('mcp__')
+      || tool.exposure === 'hidden') return []
+    const serverId = tool.namespace.name.slice('mcp__'.length)
+    if (!serverId || !tool.name
+      || !['direct', 'model-only', 'codemode', 'deferred'].includes(tool.exposure)) return []
+    return [{
+      serverId, name: tool.name,
+      description: tool.description || '',
+      exposure: tool.exposure as PiMcpToolRegistration['exposure'],
+    }]
+  }).sort((a, b) => a.serverId.localeCompare(b.serverId) || a.name.localeCompare(b.name))
 }
 
 /** Only the known non-interactive pi-title /title regenerate contract is safe

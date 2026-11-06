@@ -6,6 +6,7 @@ import type { LiveHistoryIndex, LiveHistoryIndexQuery, LiveSessionTree, LiveSnap
 import { discoverInstalledPiSdk } from './sdk-loader'
 import type {
   PiLiveCommand,
+  PiMcpToolRegistration,
   PiLiveControls,
   PiLiveImageInput,
   PiLiveInitializationTiming,
@@ -29,7 +30,7 @@ const WORKER_TERMINATE_GRACE_MS = 1_000
 type SnapshotTransferCommand = 'snapshotBegin' | 'snapshotChunk'
 
 type WorkerCommand =
-  | 'state' | SnapshotTransferCommand | 'entry' | 'historyIndex' | 'sessionTree' | 'commands' | 'controls' | 'setModel' | 'defaultModel' | 'setDefaultModel' | 'setThinkingLevel'
+  | 'state' | SnapshotTransferCommand | 'entry' | 'historyIndex' | 'sessionTree' | 'commands' | 'mcpTools' | 'controls' | 'setModel' | 'defaultModel' | 'setDefaultModel' | 'setThinkingLevel'
   | 'navigateTree' | 'compact' | 'reload' | 'regenerateTitle'
   | 'prompt' | 'steer' | 'followUp' | 'clearQueue' | 'mutateQueue' | 'abort'
   | 'extensionResponse' | 'terminate'
@@ -71,6 +72,7 @@ export interface PiRuntimeHandle {
   sessionTree?(): Promise<LiveSessionTree>
   entry?(entryId: string): Promise<unknown | null>
   commands?(): Promise<PiLiveCommand[]>
+  mcpTools?(): Promise<PiMcpToolRegistration[]>
   navigateTree?(entryId: string): Promise<{ cancelled: boolean; editorText?: string | undefined }>
   compact?(): Promise<void>
   reload?(): Promise<void>
@@ -378,6 +380,7 @@ class WorkerPiRuntimeHandle implements PiRuntimeHandle {
   sessionTree(): Promise<LiveSessionTree> { return this.request('sessionTree') }
   entry(entryId: string): Promise<unknown | null> { return this.request('entry', { entryId }) }
   commands(): Promise<PiLiveCommand[]> { return this.request('commands') }
+  mcpTools(): Promise<PiMcpToolRegistration[]> { return this.request('mcpTools') }
   navigateTree(entryId: string): Promise<{ cancelled: boolean; editorText?: string | undefined }> {
     return this.request('navigateTree', { entryId })
   }

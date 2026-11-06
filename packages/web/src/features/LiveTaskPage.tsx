@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import type { LiveMessageDto, LiveRuntimeStateDto, TaskFileChangesResponseDto } from '@agent-lens/protocol'
+import type { LiveMessageDto, LiveRuntimeDisclosureContributionDto, LiveRuntimeStateDto, TaskFileChangesResponseDto } from '@agent-lens/protocol'
 import { AgentLensApi } from '../client/api'
 import { liveApi } from '../client/live'
 import { LocalPathActions } from '../components/LocalPathActions'
@@ -63,6 +63,7 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
   const [mcpManagerOpen, setMcpManagerOpen] = useState(false)
   const [mcpPending, setMcpPending] = useState(false)
   const [mcpStatus, setMcpStatus] = useState('')
+  const [mcpInventory, setMcpInventory] = useState<LiveRuntimeDisclosureContributionDto | null>(null)
   const mcpEpochRef = useRef(0)
   const [queueExpanded, setQueueExpanded] = useState(false)
   const [queueMenuOpen, setQueueMenuOpen] = useState(false)
@@ -75,6 +76,7 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
     setMcpManagerOpen(false)
     setMcpPending(false)
     setMcpStatus('')
+    setMcpInventory(null)
   }, [current?.liveId, current?.runtimeSessionId])
   // Keep the reader's disclosure intent through live snapshot reconciliation.
   const processExpansionStore = useMemo(() => new Map<string, boolean>(), [current?.liveId, current?.runtimeSessionId])
@@ -460,6 +462,11 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
     ? connected ? t('live.connected') : t('live.connecting')
     : runtimeStatus
   const canManageMcp = commands.some(command => command.action === 'open-mcp')
+  const mcpInventoryText = mcpInventory?.fields.map(field => [
+    contributionText(field.label, i18n.resolvedLanguage ?? i18n.language),
+    ...(field.values ?? []).map(value => typeof value === 'string'
+      ? value : contributionText(value, i18n.resolvedLanguage ?? i18n.language)),
+  ].join('\n')).join('\n\n') ?? ''
   const runMcpCommand = async (action: 'status' | 'login' | 'logout' | 'reconnect') => {
     if (!canManageMcp || !state || state.status !== 'ready' || state.isStreaming || mcpPending) {
       setError(t('live.commandUnavailable'))
@@ -473,8 +480,10 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
       const accepted = await send({ parts: [{ type: 'text', text: command }] }, undefined, true)
       if (accepted && action === 'status' && current) {
         // A bounded, read-only native snapshot works even while the user reads older rounds.
-        const latest = await liveApi.snapshot(current.liveId, current.runtimeSessionId, undefined,
-          { edge: 'latest', limit: 24 })
+        const [latest, disclosures] = await Promise.all([
+          liveApi.snapshot(current.liveId, current.runtimeSessionId, undefined, { edge: 'latest', limit: 24 }),
+          liveApi.runtimeDisclosures(current.liveId, current.runtimeSessionId),
+        ])
         const records = latest.entries
         const statusEntry = [...records].reverse().find(value => {
           if (!value || typeof value !== 'object' || Array.isArray(value)) return false
@@ -494,6 +503,7 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
         }).filter(Boolean).join('\n\n')
         if (epoch === mcpEpochRef.current) {
           setMcpStatus(output || (typeof data?.error === 'string' ? data.error : ''))
+          setMcpInventory(disclosures.find(item => item.contributionId === 'pi.runtime.mcp-tools') ?? null)
         }
       }
     } catch (reason) {
@@ -507,6 +517,7 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
       setError(t('live.commandUnavailable'))
       return
     }
+    setMcpInventory(null)
     setMcpManagerOpen(true)
     void runMcpCommand('status')
   }
@@ -751,7 +762,7 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
             aria-hidden="true"
           />}
           <LiveRuntimeDisclosures
-            items={runtimeDisclosures}
+            items={runtimeDisclosures.filter(item => item.contributionId !== 'pi.runtime.mcp-tools')}
             language={i18n.resolvedLanguage ?? i18n.language}
             pendingAction={runtimeActionPending}
             onAction={action => { void runRuntimeAction(action) }}
@@ -858,6 +869,13 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
                 <CopyableCodeBlock copyValue={mcpStatus}>{mcpStatus}</CopyableCodeBlock>
               </section>
             : <p>{t('live.mcp.empty')}</p>}
+          {!mcpPending && mcpStatus && !mcpInventory && <p role="status">{t('live.mcp.toolsUnavailable')}</p>}
+          {mcpInventory && <section aria-label={t('live.mcp.registeredTools')}>
+            <strong>{t('live.mcp.registeredTools')}</strong>
+            {mcpInventoryText
+              ? <CopyableCodeBlock copyValue={mcpInventoryText}>{mcpInventoryText}</CopyableCodeBlock>
+              : <p>{t('live.mcp.noRegisteredTools')}</p>}
+          </section>}
         </Dialog>
         {extensionWidgetItems.length > 0 && <div role="status" aria-label={t('live.extensionStatus')}>
           {extensionWidgetItems.map(item => <TaskEvent
