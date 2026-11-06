@@ -233,6 +233,7 @@ export const chineseTaskMessages: LocaleMessagesDto = {
       },
       runtimeActionFeedback: {
         running: '正在执行命令…',
+        handled: '已交给原生命令处理',
         done: '命令执行完成',
         failed: '命令执行失败，请检查错误信息',
       },
