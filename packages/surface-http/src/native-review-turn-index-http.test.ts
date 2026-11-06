@@ -9,6 +9,7 @@ import type { NativeSessionWindowReader } from './native-session-http'
 
 test('native sparse turn index is bounded, restart-resumable and invalidates replacements',async()=>{
   const at='2026-10-29T01:00:00.000Z'
+  let sourcePath='/sample.native'
   let fileIdentity='test:inode-1'
   let fileSize=260
   let mtime=1
@@ -29,7 +30,7 @@ test('native sparse turn index is bounded, restart-resumable and invalidates rep
   }
   const entry=():NativeSessionCatalogEntry=>({
     sourceId:'pi',installationId:'inst',nativeSessionId:'s',locationKind:'native',
-    filePath:'/sample.jsonl',fileIdentity,fileSize,fileMtimeMs:mtime,
+    filePath:sourcePath,fileIdentity,fileSize,fileMtimeMs:mtime,
     lastActivityAt:at,updatedAt:at,
   })
   const catalog={async getByReviewSessionId(key:string){return key===id?entry():null}}
@@ -49,6 +50,7 @@ test('native sparse turn index is bounded, restart-resumable and invalidates rep
       const end=Math.min(records.length,start+(query.limit??16))
       const cursor=(index:number):SourceNativeSessionCursor=>({
         offset:index,sequence:index,fileIdentity,
+        recordFingerprint:index.toString(16).padStart(64,'0'),
       })
       return {
         state:'available',observations:records.slice(start,end),
@@ -105,6 +107,39 @@ test('native sparse turn index is bounded, restart-resumable and invalidates rep
     assert.deepEqual(verified.items.map(x=>x.nativeEventId),['user-153'])
     assert.equal(verified.items[0]?.ordinal,10)
   }
+  const exact=await index().query(id,{
+    ordinal:10,expectedNativeEventId:'user-153',
+    expectedRecordOffset:153,
+    expectedRecordFingerprint:(153).toString(16).padStart(64,'0'),
+  })
+  assert.equal(exact.state,'available')
+  if(exact.state==='available')assert.equal(exact.items.length,1)
+  const wrongOffset=await index().query(id,{
+    ordinal:10,expectedNativeEventId:'user-153',
+    expectedRecordOffset:154,
+    expectedRecordFingerprint:(153).toString(16).padStart(64,'0'),
+  })
+  assert.equal(wrongOffset.state,'available')
+  if(wrongOffset.state==='available')assert.equal(wrongOffset.items.length,0)
+  const wrongFingerprint=await index().query(id,{
+    ordinal:10,expectedNativeEventId:'user-153',
+    expectedRecordOffset:153,
+    expectedRecordFingerprint:'f'.repeat(64),
+  })
+  assert.equal(wrongFingerprint.state,'available')
+  if(wrongFingerprint.state==='available')assert.equal(wrongFingerprint.items.length,0)
+  // A JSONL link requires an actual verified original record, not just the
+  // persisted matching identity/offset/fingerprint tuple.
+  sourcePath='/missing-agentlens-source.jsonl'
+  const missingOriginal=await index().query(id,{
+    ordinal:10,expectedNativeEventId:'user-153',
+    expectedRecordOffset:153,
+    expectedRecordFingerprint:(153).toString(16).padStart(64,'0'),
+  })
+  assert.deepEqual(missingOriginal,{
+    state:'drifted',reason:'native-search-turn-record-changed',
+  })
+  sourcePath='/sample.native'
   const incompatible=await index().query(id,{ordinal:10,expectedNativeEventId:'inactive-branch'})
   assert.equal(incompatible.state,'available')
   if(incompatible.state==='available')assert.deepEqual(incompatible.items,[],

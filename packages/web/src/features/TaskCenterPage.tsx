@@ -22,6 +22,7 @@ import { mergeTaskCenterSessions, nativeTaskCenterSummaries, visibleTaskCenterSe
 import { useTaskCenterRuntimes } from './use-task-center-runtimes'
 import { TaskNotificationBell, TaskNotificationBanner } from './TaskNotificationCenter'
 import { projectDisplayLabel, projectSelectOption } from './project-presentation'
+import { verifiedNativeSearchHitTurn } from './native-search-turn-target'
 
 export type TaskCenterMode = 'history' | 'live' | 'new' | 'hub'
 
@@ -228,6 +229,9 @@ export function TaskCenterPage({ model, mode, sidebarHost }: { model: AgentLensC
   const [hubSessions, setHubSessions] = useState<HubReviewSessionSummaryDto[]>([])
   const [nativeSessions, setNativeSessions] = useState<NativeSessionSummaryDto[]>([])
   const [nativeBodySessions, setNativeBodySessions] = useState<NativeSessionSummaryDto[]>([])
+  const [nativeBodyHits, setNativeBodyHits] = useState<NativeBodySearchHitDto[]>([])
+  const [searchHitPending, setSearchHitPending] = useState('')
+  const [searchHitError, setSearchHitError] = useState('')
   const [nativeBodyCursor, setNativeBodyCursor] = useState<string | undefined>()
   const [nativeBodyPartial, setNativeBodyPartial] = useState(false)
   const [nativeBodyLoading, setNativeBodyLoading] = useState(false)
@@ -321,6 +325,9 @@ export function TaskCenterPage({ model, mode, sidebarHost }: { model: AgentLensC
       && (filters.sourceIds===null || filters.sourceIds.length>0)
       && search.length>=2
     setNativeBodySessions([])
+    setNativeBodyHits([])
+    setSearchHitPending('')
+    setSearchHitError('')
     setNativeBodyCursor(undefined)
     setNativeBodyPartial(false)
     setNativeBodyError(false)
@@ -342,6 +349,7 @@ export function TaskCenterPage({ model, mode, sidebarHost }: { model: AgentLensC
         const sessions=new Map<string,NativeSessionSummaryDto>()
         for(const hit of page.items)sessions.set(hit.sessionId,nativeSessionFromHit(hit))
         setNativeBodySessions([...sessions.values()])
+        setNativeBodyHits(page.items.slice(0, 100))
         setNativeBodyPartial(page.hasMore || page.pendingTail)
         setNativeBodyCursor(page.pendingTail?undefined:page.nextCursor)
       },()=>{
@@ -395,6 +403,11 @@ export function TaskCenterPage({ model, mode, sidebarHost }: { model: AgentLensC
               const rows=new Map(current.map(item=>[item.id,item]))
               for(const hit of page.items)rows.set(hit.sessionId,nativeSessionFromHit(hit))
               return [...rows.values()]
+            })
+            setNativeBodyHits(current=>{
+              const byId=new Map(current.map(item=>[item.observationId,item]))
+              for(const hit of page.items)byId.set(hit.observationId,hit)
+              return [...byId.values()].slice(-100)
             })
             setNativeBodyPartial(page.hasMore || page.pendingTail)
             setNativeBodyCursor(page.pendingTail?undefined:page.nextCursor)
@@ -553,11 +566,19 @@ export function TaskCenterPage({ model, mode, sidebarHost }: { model: AgentLensC
     for(const item of nativeBodySessions)if(!all.has(item.id))all.set(item.id,item)
     return nativeTaskCenterSummaries([...all.values()],review.filters,nowMs)
   },[nativeSessions,nativeBodySessions,review.filters,nowMs])
+  const visibleNativeBodyHits = useMemo(() => {
+    const visibleSessions = new Set(nativeHistory.map(item => item.id))
+    return nativeBodyHits.filter(hit => visibleSessions.has(hit.sessionId))
+  }, [nativeBodyHits, nativeHistory])
+  const searchHitSessionIds = useMemo(
+    () => new Set(visibleNativeBodyHits.map(hit => hit.sessionId)), [visibleNativeBodyHits],
+  )
   const localSessions = useMemo(() => mergeTaskCenterSessions(
     // SQL wins if a Catalog refresh races an existing Legacy ownership claim.
     [...nativeHistory,...(review.response?.items ?? [])],runtimes,location.pathname,
-  ).filter(row => visibleTaskCenterSession(row, review.filters, launchableProjects, nowMs)),
-  [nativeHistory,review.response?.items, runtimes, review.filters, launchableProjects, nowMs, location.pathname])
+  ).filter(row => visibleTaskCenterSession(row, review.filters, launchableProjects, nowMs)
+    && !searchHitSessionIds.has(row.item.id)),
+  [nativeHistory,review.response?.items, runtimes, review.filters, launchableProjects, nowMs, location.pathname, searchHitSessionIds])
   const projectOptions = useMemo(() => launchableTaskProjectOptions(launchableProjects), [launchableProjects, locale])
   const visibleHub = useMemo(() => hubSessions.filter(item => remoteVisible(item, review, t, nowMs)), [hubSessions, review, t, nowMs])
   const historyGroups = useMemo(() => {
@@ -598,7 +619,42 @@ export function TaskCenterPage({ model, mode, sidebarHost }: { model: AgentLensC
     navigate(`/review/${encodeURIComponent(id)}`)
   }, [model, navigate, location.pathname])
 
-  const historyCount = localSessions.length + visibleHub.length
+  const historyCount = localSessions.length + visibleHub.length + visibleNativeBodyHits.length
+  const openSearchHitTurn = useCallback(async (hit: NativeBodySearchHitDto) => {
+    if (!hit.turn || searchHitPending) return
+    const requestKey = nativeRequestKeyRef.current
+    setSearchHitPending(hit.observationId)
+    setSearchHitError('')
+    try {
+      // Explicit user action may advance the sparse index a few bounded
+      // batches. Never scan an entire long session in one navigation request.
+      let scannedOffset = -1
+      for (let attempt = 0; attempt < 4; attempt++) {
+        const index = await model.nativeReviewTurnIndex(hit.sessionId, {
+          ordinal: hit.turn.ordinal,
+          expectedNativeEventId: hit.turn.nativeEventId,
+          expectedRecordOffset: hit.turn.recordOffset,
+          expectedRecordFingerprint: hit.turn.recordFingerprint,
+          scan: true,
+        })
+        if (nativeRequestKeyRef.current !== requestKey) return
+        const ordinal = verifiedNativeSearchHitTurn(hit, index)
+        if (ordinal) {
+          navigate(`/review/${encodeURIComponent(hit.sessionId)}?focusTurn=${ordinal}`)
+          return
+        }
+        if (index.state !== 'available' || index.coverage === 'complete'
+          || index.knownTurns >= hit.turn.ordinal
+          || index.scannedOffset <= scannedOffset) break
+        scannedOffset = index.scannedOffset
+      }
+      setSearchHitError(hit.observationId)
+    } catch {
+      if (nativeRequestKeyRef.current === requestKey) setSearchHitError(hit.observationId)
+    } finally {
+      if (nativeRequestKeyRef.current === requestKey) setSearchHitPending('')
+    }
+  }, [model, navigate, searchHitPending])
   const projectFilterOptions = useMemo(() => [
     { value: '', label: t('center.history.allProjects') },
     ...sortProjectFacetsByActivity(projects).map(projectSelectOption),
@@ -759,7 +815,29 @@ export function TaskCenterPage({ model, mode, sidebarHost }: { model: AgentLensC
     </div>}
 
     <div className="task-center-scroll">
-      {review.loading && !review.response && !localSessions.length && <SessionListSkeleton/>}
+      {visibleNativeBodyHits.length > 0 && <section className="task-center-group task-center-history-group" aria-label={t('center.history.nativeSearchHits')}>
+        <div className="task-center-group-title">
+          <span>{t('center.history.nativeSearchHits')}</span>
+          <span>{visibleNativeBodyHits.length}{nativeBodyCursor ? '+' : ''}</span>
+        </div>
+        {visibleNativeBodyHits.map(hit => <div key={hit.observationId} className="session-item task-center-search-hit">
+          <button type="button" className="task-center-search-hit-open" onClick={() => openHistoryTask(hit.sessionId)}
+            title={hit.title || undefined}>
+            <AgentLogo sourceId={hit.sourceId} size="compact"/>
+            <span>{hit.title?.trim() || t('center.history.genericAgentTask', { agent: agentLabel(hit.sourceId) })}</span>
+          </button>
+          <div className="task-center-search-hit-excerpt" title={hit.excerpt}>{hit.excerpt}</div>
+          {hit.turn && <div className="task-center-search-hit-actions">
+            <Button size="small" variant="quiet" disabled={Boolean(searchHitPending)}
+              loading={searchHitPending === hit.observationId}
+              onClick={() => void openSearchHitTurn(hit)}>
+              {t('center.history.nativeSearchLocate', { count: hit.turn.ordinal })}
+            </Button>
+            {searchHitError === hit.observationId && <span role="status">{t('center.history.nativeSearchUnverified')}</span>}
+          </div>}
+        </div>)}
+      </section>}
+      {review.loading && !review.response && !historyCount && <SessionListSkeleton/>}
 
       {historyGroups.map(group => <section className="task-center-group task-center-history-group" key={group.key}>
         <div className="task-center-group-title"><span>{group.label}</span><span>{group.items.length}{group.key === 'earlier' && (review.response?.meta.hasMore || nativeCursor || nativeBodyCursor) ? '+' : ''}</span></div>
