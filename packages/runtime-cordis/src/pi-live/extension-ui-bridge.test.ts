@@ -63,3 +63,32 @@ test('disposing the bridge closes remaining native prompts', async () => {
   assert.deepEqual(events.filter(event => event.type === 'extension_ui_dismissed')
     .map(event => event.requestId), ids)
 })
+
+test('Pi custom terminal UI rejects unsupported Web interaction instead of reporting success', async () => {
+  const bridge = new PiExtensionUiBridge({ publish: () => {} })
+  await assert.rejects(
+    () => bridge.context.custom(() => { throw new Error('should never render a terminal widget') }),
+    /terminal custom UI is unavailable/,
+  )
+  bridge.dispose()
+})
+
+test('native command notifications and SDK failures are recorded without becoming chat messages', async () => {
+  const events: Record<string, unknown>[] = []
+  const bridge = new PiExtensionUiBridge({ publish: event => { events.push(event) } })
+  const value = { command: '/extension', outcome: 'handled' as 'handled' | 'failed',
+    startedAt: 'start', finishedAt: '', messages: [] as Array<{ level: 'info' | 'success' | 'warning' | 'error'; message: string }>,
+    error: undefined as string | undefined }
+  await bridge.runCommand('/extension', value, async () => {
+    bridge.context.notify('original output', 'info')
+    const id = bridge.captureCommandError({ extensionPath: 'command:extension', error: 'Failed safely' })
+    assert.equal(typeof id, 'string')
+  })
+  assert.deepEqual(value.messages, [{ level: 'info', message: 'original output' }])
+  assert.equal(value.outcome, 'failed')
+  assert.equal(value.error, 'Failed safely')
+  const notice = events.find(event => event.method === 'notify')
+  assert.equal(typeof notice?.commandRecordId, 'string')
+  assert.equal(notice?.message, 'original output')
+  bridge.dispose()
+})
