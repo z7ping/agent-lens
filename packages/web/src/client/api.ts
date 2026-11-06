@@ -644,6 +644,8 @@ export class AgentLensApi {
     ordinal?: number
     /** Require exact native identity before accepting an original-file cursor. */
     expectedNativeEventId?: string
+    expectedRecordOffset?: number
+    expectedRecordFingerprint?: string
     tail?: number
     from?: number
     around?: number
@@ -654,6 +656,8 @@ export class AgentLensApi {
     const params = new URLSearchParams()
     if (options.ordinal !== undefined) params.set('ordinal', String(options.ordinal))
     if (options.expectedNativeEventId !== undefined) params.set('expectedNativeEventId', options.expectedNativeEventId)
+    if (options.expectedRecordOffset !== undefined) params.set('expectedRecordOffset', String(options.expectedRecordOffset))
+    if (options.expectedRecordFingerprint !== undefined) params.set('expectedRecordFingerprint', options.expectedRecordFingerprint)
     if (options.tail !== undefined) params.set('tail', String(options.tail))
     if (options.from !== undefined) params.set('from', String(options.from))
     if (options.around !== undefined) params.set('around', String(options.around))

@@ -322,7 +322,7 @@ export class NativeReviewTurnIndex {
     }
   }
 
-  async query(id:string, options:{ordinal?:number;tail?:number;from?:number;around?:number;limit?:number;scan?:boolean;expectedNativeEventId?:string}):Promise<NativeReviewTurnIndexResponseDto> {
+  async query(id:string, options:{ordinal?:number;tail?:number;from?:number;around?:number;limit?:number;scan?:boolean;expectedNativeEventId?:string;expectedRecordOffset?:number;expectedRecordFingerprint?:string}):Promise<NativeReviewTurnIndexResponseDto> {
     if (!/^native:[a-f0-9]{32}$/.test(id)) return {state:'unavailable',reason:'native-session-invalid'}
     const entry = await this.catalog.getByReviewSessionId(id)
     if (!entry || entry.locationKind!=='native') return {state:'unavailable',reason:'native-session-not-indexed'}
@@ -380,6 +380,10 @@ export class NativeReviewTurnIndex {
           // history views (or branches) enumerate turns differently.
           if(options.expectedNativeEventId!==undefined
             && item.nativeEventId!==options.expectedNativeEventId)continue
+          if(options.expectedRecordOffset!==undefined
+            && item.cursor.offset!==options.expectedRecordOffset)continue
+          if(options.expectedRecordFingerprint!==undefined
+            && item.cursor.recordFingerprint!==options.expectedRecordFingerprint)continue
           // A bounded metadata-only range can locate the Source ordinal for
           // a stable Live native ID, even if other branches shifted ordinals.
           // Duplicate native IDs in this range must not select an arbitrary
@@ -423,7 +427,7 @@ export async function handleNativeReviewTurnIndexRequest(
     return true
   }
   if(!service){writeJson(response,503,{state:'unavailable',reason:'native-turn-index-unavailable'});return true}
-  if([...url.searchParams.keys()].some(key=>!['ordinal','tail','from','around','limit','scan','expectedNativeEventId'].includes(key))
+  if([...url.searchParams.keys()].some(key=>!['ordinal','tail','from','around','limit','scan','expectedNativeEventId','expectedRecordOffset','expectedRecordFingerprint'].includes(key))
     || [...url.searchParams.keys()].some(key=>url.searchParams.getAll(key).length!==1)) {
     throw badRequest('Invalid native turn index query')
   }
@@ -435,6 +439,8 @@ export async function handleNativeReviewTurnIndexRequest(
   const around=parse('around')
   const limit=parse('limit')
   const expectedNativeEventId=url.searchParams.get('expectedNativeEventId')??undefined
+  const expectedRecordOffset=parse('expectedRecordOffset')
+  const expectedRecordFingerprint=url.searchParams.get('expectedRecordFingerprint')??undefined
   const positions=[ordinal,tail,from,around].filter(value=>value!==undefined)
   if(positions.length>1
     || [ordinal,from,around].some(value=>value!==undefined
@@ -446,6 +452,13 @@ export async function handleNativeReviewTurnIndexRequest(
       && ((ordinal===undefined && from===undefined)
         || expectedNativeEventId.length<1
         || expectedNativeEventId.length>256))
+    || ((expectedRecordOffset!==undefined||expectedRecordFingerprint!==undefined)
+      && (ordinal===undefined||expectedNativeEventId===undefined
+        ||expectedRecordOffset===undefined||expectedRecordFingerprint===undefined))
+    || (expectedRecordOffset!==undefined
+      && (!Number.isSafeInteger(expectedRecordOffset)||expectedRecordOffset<0))
+    || (expectedRecordFingerprint!==undefined
+      && !/^[0-9a-f]{64}$/.test(expectedRecordFingerprint))
     || (url.searchParams.has('scan') && url.searchParams.get('scan')!=='1')) {
     throw badRequest('Invalid native turn index range')
   }
@@ -454,6 +467,8 @@ export async function handleNativeReviewTurnIndexRequest(
   writeJson(response,200,await service.query(id,{
     ...(ordinal!==undefined?{ordinal}:{}),
     ...(expectedNativeEventId!==undefined?{expectedNativeEventId}:{}),
+    ...(expectedRecordOffset!==undefined?{expectedRecordOffset}:{}),
+    ...(expectedRecordFingerprint!==undefined?{expectedRecordFingerprint}:{}),
     ...(tail!==undefined?{tail}:{}),
     ...(from!==undefined?{from}:{}),
     ...(around!==undefined?{around}:{}),
