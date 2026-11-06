@@ -45,6 +45,11 @@ export function LiveExtensionPrompt({
     onClose={dismiss}
     footer={footer}
   >
+    {request.method === 'input' && request.externalUrl && <p>
+      <a href={request.externalUrl} target="_blank" rel="noopener noreferrer">
+        {t('live.extension.openAuthorization')}
+      </a>
+    </p>}
     {request.method === 'select'
       ? <div className="live-extension-options" role="group" aria-label={title}>
           {(request.options ?? []).map(option =>
