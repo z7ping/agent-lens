@@ -81,7 +81,7 @@ test('原生通知长正文与标题完整保留，关闭横幅不删除铃铛�
 test('通知完整阅读与横幅已提示即标记已读的 UI 契约', () => {
   const ui = readFileSync(new URL('./TaskNotificationCenter.tsx', import.meta.url), 'utf8')
   const css = readFileSync(new URL('../task-notifications.css', import.meta.url), 'utf8')
-  assert.match(ui, /useLayoutEffect\(\(\) => \{[\s\S]*?taskNotifications\.markRead\(item\.id\)/)
+  assert.match(ui, /useLayoutEffect\(\(\) => \{[\s\S]*?taskNotifications\.markRead\(visibleBannerId\)/)
   assert.match(css, /\.task-notification-message \{[^}]*overflow-y: auto;[^}]*white-space: pre-wrap;/)
   assert.match(css, /\.task-notification-banner-copy span \{[^}]*overflow-y: auto;[^}]*white-space: pre-wrap;/)
   assert.doesNotMatch(css, /-webkit-line-clamp|text-overflow:\s*ellipsis/)
