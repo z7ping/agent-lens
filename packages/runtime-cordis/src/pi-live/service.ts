@@ -69,6 +69,7 @@ interface OwnedRuntime {
   isStreaming: boolean
   isCompacting: boolean
   manualCompactionPending?: boolean | undefined
+  reloadPending?: boolean | undefined
   titleRegenerationPending?: boolean | undefined
   queue: PiLiveQueueState
   recoverySessionPath?: string | undefined
@@ -1268,6 +1269,12 @@ export class DefaultPiLiveService implements PiLiveService {
         label: contributionText('AI generate title', 'AI 生成标题'),
         description: contributionText('Use installed pi-title to regenerate the native session name.', '使用已安装的 pi-title 扩展重新生成原生会话标题。'),
       }] : []),
+      ...(isIdle && state.capabilities?.nativeReload === true
+        && !this.requireRuntime(id).reloadPending ? [{
+          actionId: 'pi.runtime.reload',
+          label: contributionText('Reload resources', '重新加载资源'),
+          description: contributionText('Reload Pi extensions, skills, prompts and settings without messaging the model.', '重新加载 Pi 扩展、技能、提示词与设置，不发送模型消息。'),
+        }] : []),
       ...(isIdle && state.capabilities?.manualCompaction === true
         && !this.requireRuntime(id).manualCompactionPending ? [{
           actionId: 'pi.runtime.compact',
@@ -1314,6 +1321,22 @@ export class DefaultPiLiveService implements PiLiveService {
         return { runtime: await this.runtimeState(runtime) }
       } finally {
         runtime.titleRegenerationPending = false
+      }
+    }
+    if (actionId === 'pi.runtime.reload') {
+      const runtime = await this.readyRuntime(id)
+      if (runtime.capabilities?.nativeReload !== true || !runtime.handle?.reload) {
+        throw this.conflict('Installed Pi SDK does not support resource reload')
+      }
+      if (runtime.isStreaming || runtime.isCompacting || runtime.reloadPending) {
+        throw this.conflict('Pi resource reload requires an idle session')
+      }
+      runtime.reloadPending = true
+      try {
+        await runtime.handle.reload()
+        return { runtime: await this.runtimeState(runtime) }
+      } finally {
+        runtime.reloadPending = false
       }
     }
     if (actionId === 'pi.runtime.compact') {
