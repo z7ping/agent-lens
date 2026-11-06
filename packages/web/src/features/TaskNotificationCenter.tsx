@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { Button, IconButton, Popover, UiIcon } from '../components/ui'
@@ -87,6 +87,11 @@ export function TaskNotificationBanner() {
   const { items, bannerId } = useTaskNotifications()
   const navigate = useNavigate()
   const item = items.find(item => item.id === bannerId)
+  // Banner delivery is the alert: keep its bell history without a second unread badge.
+  // Mark as read only after this banner is actually mounted, not when queued.
+  useLayoutEffect(() => {
+    if (item) taskNotifications.markRead(item.id)
+  }, [item?.id])
   useEffect(() => {
     if (!item) return
     const timeoutMs = taskNotificationBannerTimeoutMs(item.level)
