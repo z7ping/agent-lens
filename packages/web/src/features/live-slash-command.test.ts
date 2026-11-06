@@ -17,7 +17,7 @@ function textMessage(text: string): LiveMessageDto {
   return { parts: [{ type: 'text', text }] }
 }
 
-test('only Runtime-declared Web actions are intercepted; extension and Skill commands stay native', () => {
+test('UI actions and native extensions execute separately; prompt templates and Skills remain model prompts', () => {
   const model = resolveLiveSlash(textMessage('/model'), commands)
   assert.equal(model.kind, 'action')
   if (model.kind === 'action') assert.equal(model.command.action, 'open-model')
