@@ -350,6 +350,16 @@ export type LiveEventDto =
   | { type: 'runtime-disclosure.changed' }
   | { type: 'notification'; id?: string | undefined; level: 'info' | 'success' | 'warning' | 'error'; message: string; title?: string | undefined }
   | {
+      type: 'command.record'
+      entryId: string
+      command: string
+      outcome: 'handled' | 'failed'
+      messages: { level: 'info' | 'success' | 'warning' | 'error'; message: string }[]
+      error?: string | undefined
+      startedAt?: string | undefined
+      finishedAt?: string | undefined
+    }
+  | {
       type: 'message.start' | 'message.end'
       phase?: 'commentary' | 'final' | undefined
       role?: 'user' | 'assistant' | 'tool' | 'system' | 'unknown' | undefined
@@ -749,6 +759,23 @@ export function parseLiveEventDto(value: unknown): LiveEventDto | null {
     const metrics = parseLiveCacheMetricsDto(event.cacheMetrics)
     return event.cacheMetrics === null ? { type, cacheMetrics: null }
       : metrics ? { type, cacheMetrics: metrics } : null
+  }
+  if (type === 'command.record') {
+    const entryId = eventText(event.entryId)
+    const command = eventText(event.command)
+    if (!entryId || !command || (event.outcome !== 'handled' && event.outcome !== 'failed')) return null
+    const messages = Array.isArray(event.messages) ? event.messages.flatMap(value => {
+      const item = record(value)
+      return item && typeof item.message === 'string'
+        && ['info', 'success', 'warning', 'error'].includes(String(item.level))
+        ? [{ level: item.level as 'info' | 'success' | 'warning' | 'error', message: item.message }] : []
+    }) : []
+    return {
+      type, entryId, command, outcome: event.outcome, messages,
+      ...(eventText(event.error) ? { error: eventText(event.error) } : {}),
+      ...(eventText(event.startedAt) ? { startedAt: eventText(event.startedAt) } : {}),
+      ...(eventText(event.finishedAt) ? { finishedAt: eventText(event.finishedAt) } : {}),
+    }
   }
   if (type === 'notification') {
     const message = eventText(event.message)?.trim()
