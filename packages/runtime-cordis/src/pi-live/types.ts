@@ -171,6 +171,8 @@ export interface PiLiveCommandRecord {
 
 export interface PiLiveCommand {
   titleRegeneration?: boolean | undefined
+  /** Verified official Pi built-in MCP command, not a third-party name collision. */
+  mcpManager?: boolean | undefined
   name: string
   description?: string | undefined
   source: PiLiveCommandSource
