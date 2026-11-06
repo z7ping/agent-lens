@@ -32,7 +32,8 @@
 
 .select-menu-popover {
   position: fixed;
-  z-index: 1200;
+  /* Same shared floating layer as ui-popover; must sit above modal overlays. */
+  z-index: 1450;
   display: flex;
   flex-direction: column;
   max-height: min(360px, calc(100vh - 16px));
