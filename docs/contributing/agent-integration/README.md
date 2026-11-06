@@ -54,7 +54,7 @@ npm run test --workspace @agent-lens/daemon
 - **Live**：`availability/list/start/state/snapshot/send/subscribe/terminate/dispose`。真实能力才声明 `resume`、`steer`、`queue`、模型控制等；Snapshot 必须有界。
 - **Integration**：使用现有 Cordis/AgentLens Plugin 机制组合能力，不另造容器、不创建 Agent 专属 React 组件或 CSS。
 
-完整接口真值源：[Source Contract](../../../packages/core/src/contracts/source.ts)、[Live Contract](../../../packages/core/src/contracts/live.ts)、[Plugin Contract](../../../packages/core/src/contracts/plugin.ts)。更详细的底层约束见[第三方 Agent 接入契约](../../third-party-agent-adapter.md)和根目录 [AGENTS.md](../../../AGENTS.md)。
+完整接口真值源：[Source Contract](../../../packages/core/src/contracts/source.ts)、[Live Contract](../../../packages/core/src/contracts/live.ts)、[Plugin Contract](../../../packages/core/src/contracts/plugin.ts)。更详细的底层约束见[第三方 Agent 接入契约](contract.md)和根目录 [AGENTS.md](../../../AGENTS.md)。
 
 ## 完成的最低标准
 

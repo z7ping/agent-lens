@@ -13,6 +13,13 @@ AgentLens 1.0 处于 Alpha 阶段。当前源码版本以根目录 `package.json
 - 不扩无关 P1 / P2；
 - 不重新设计已经确定的 1.0 架构。
 
+## 文档仓库边界（强制）
+
+- `docs/` **只允许 `brand/` 和 `contributing/`**；品牌运行资产与面向外部贡献者的实用教程可继续公开维护。
+- 架构、ADR、设计、项目知识、内部能力说明、研究/验收记录与技术计划统一存放在 **`z7ping/product-internal/agent-lens/`**，不要在公开代码仓库新增或复制这些文档。
+- 仓库根目录 `README.md` / `README.en.md`、`AGENTS.md`、`CONTRIBUTING.md`、`SECURITY.md`、`LICENSE` 等必要工程入口保留；代码测试与标准技术工件不属于待迁移 Markdown 文档。
+- 移动/删除文档时核对入口、相对链接与代码引用；旧一次性修复记录只在 Git 历史/PR 中追溯，不向内部仓库再制造一套过时真值源。
+
 ## 架构底线
 
 修改架构、Core Contract、Source / Storage / Surface、Daemon 生命周期前，先阅读相关实现、测试和当前任务提供的决策上下文。
