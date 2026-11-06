@@ -7,6 +7,8 @@ import { liveTaskRoundEstimate, liveLoadedToolRelations, type LiveLoadedToolRela
 import { sameStableLiveTaskRoundProps } from './live-task-render-boundary'
 import { TaskReadingRound } from './TaskReadingRound'
 import { TaskEvent } from './TaskEvent'
+import { TaskThinking } from './TaskThinking'
+import { isRoutineLiveRuntimeNotice } from './task-runtime-notice'
 import { TaskSessionMessage, TaskSessionThinking, TaskSessionTool, TaskSessionProcessText, TaskSessionProcess, taskSessionMessageTime } from './TaskSessionContent'
 import { projectTaskReading, type TaskReadingFact } from './task-reading-semantics'
 import { TaskProcessSequence, type TaskToolGroupSequenceEntry } from './TaskToolGroup'
@@ -287,6 +289,8 @@ export const GenericLiveRound = memo(function GenericLiveRound({
       }
     }))
   const processItems = reading.process.map(fact => fact.value)
+  const runtimeNotices = processItems.filter(isRoutineLiveRuntimeNotice)
+  const normalProcessItems = processItems.filter(item => !isRoutineLiveRuntimeNotice(item))
   const visibleItems = [...reading.prompts, ...reading.answers, ...reading.auxiliary].map(fact => fact.value)
   const lastAnswerId = reading.answers.at(-1)?.id
   const relations = liveLoadedToolRelations(projection.items)
@@ -311,13 +315,13 @@ export const GenericLiveRound = memo(function GenericLiveRound({
       ? { type: 'content', key: `boundary:${item.id}`, content: null }
       : item.kind === 'tool'
         ? { type: 'tool', key: item.id, tool: liveTaskToolModel(item, t('tool.kind.tool'), relations.get(item.callId)) }
-        : { type: 'content', key: item.id, content: renderProcessItem(item) })
+        : { type: 'content', key: item.id, content: isRoutineLiveRuntimeNotice(item) ? null : renderProcessItem(item) })
   const processContent = <TaskProcessSequence id={projection.model.id} sequence={processSequence} expansionStore={processExpansionStore}/>
 
   const processCount = reading.processCounts.commentary
   const thinkingCount = reading.processCounts.thinking
   const toolCount = reading.processCounts.tools
-  const processTimes = processItems.flatMap(item => {
+  const processTimes = normalProcessItems.flatMap(item => {
     const at = Date.parse(item.at ?? '')
     return Number.isFinite(at) ? [at] : []
   })
@@ -325,7 +329,14 @@ export const GenericLiveRound = memo(function GenericLiveRound({
   const processState = projection.model.state
   const endedAtMs = processTimes.length && processState !== 'running'
     ? Math.max(...processTimes) : undefined
-  const process = processItems.length > 0 && <TaskSessionProcess
+  const runtimeRecords = runtimeNotices.length > 0 && <TaskThinking
+    model={{ id: `runtime-records:${projection.model.id}`, label: t('process.runtimeRecords'), text: '', state: 'settled' }}
+    kind="process"
+    defaultExpanded={false}
+    expansionStore={processExpansionStore}
+    meta={<span className="task-process-summary"><span>{t('process.runtimeRecordCount', { count: runtimeNotices.length })}</span></span>}
+  >{runtimeNotices.map(renderItem)}</TaskThinking>
+  const process = normalProcessItems.length > 0 ? <TaskSessionProcess
     mode="live"
     key={`process:${projection.model.id}`}
     id={`process:${projection.model.id}`}
@@ -339,7 +350,8 @@ export const GenericLiveRound = memo(function GenericLiveRound({
       sum + (item.kind === 'thinking' ? item.durationMs ?? 0 : 0), 0) || undefined}
     state={processState}
     expansionStore={processExpansionStore}
-  ><div className="task-process-sequence">{processContent}</div></TaskSessionProcess>
+  ><div className="task-process-sequence">{processContent}{runtimeRecords}</div></TaskSessionProcess>
+    : runtimeRecords
 
   const prompt = visibleItems.filter(item => item.kind === 'message' && item.role === 'user').map(renderItem)
   const answer = visibleItems.filter(item => item.kind === 'message' && item.role === 'assistant').map(renderItem)
