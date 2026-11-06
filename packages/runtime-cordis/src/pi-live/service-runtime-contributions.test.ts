@@ -7,6 +7,7 @@ import type { PiLiveRuntimeState, PiLiveStartInput } from './types'
 class RuntimeContributionHost implements PiRuntimeHost {
   starts = 0
   compactions = 0
+  reloads = 0
   generatedTitles = 0
   sessionName: string | undefined
   onEvent?: (event: Record<string, unknown>) => void
@@ -31,7 +32,7 @@ class RuntimeContributionHost implements PiRuntimeHost {
       runtimeSessionId,
       status: 'ready',
       ...(this.sessionName ? { sessionName: this.sessionName } : {}),
-      ...(this.supportsCompaction ? { capabilities: { protocolVersion: 1, sessionRuntime: false, modelSwitching: true, thinkingLevelControl: true, extensionUi: true, manualCompaction: true } } : {}),
+      ...(this.supportsCompaction ? { capabilities: { protocolVersion: 1, sessionRuntime: false, modelSwitching: true, thinkingLevelControl: true, extensionUi: true, manualCompaction: true, nativeReload: true } } : {}),
       sdkVersion: '0.84.4',
       runtimeMode: 'compatibility',
       warmWorkerStatus: 'hit',
@@ -68,8 +69,9 @@ class RuntimeContributionHost implements PiRuntimeHost {
       leafId: null,
     })
     return {
-      ...(this.supportsCompaction ? { capabilities: { protocolVersion: 1, sessionRuntime: false, modelSwitching: true, thinkingLevelControl: true, extensionUi: true, manualCompaction: true } } : {}),
+      ...(this.supportsCompaction ? { capabilities: { protocolVersion: 1, sessionRuntime: false, modelSwitching: true, thinkingLevelControl: true, extensionUi: true, manualCompaction: true, nativeReload: true } } : {}),
       ...(this.supportsCompaction ? { compact: async () => { this.compactions += 1 } } : {}),
+      ...(this.supportsCompaction ? { reload: async () => { this.reloads += 1 } } : {}),
       commands: async () => this.supportsTitle ? [{ name: 'title', source: 'extension' as const, titleRegeneration: true }] : [],
       ...(this.supportsTitle ? { regenerateTitle: async () => { this.generatedTitles += 1; this.rename('AI 重新生成的标题') } } : {}),
       processId: 4321,
@@ -157,6 +159,22 @@ test('Pi 原生压缩仅在可信 Runtime capability 下开放，并经 Worker H
     assert.ok(action)
     await service.executeRuntimeAction(started.runtimeSessionId, 'pi.runtime.compact')
     assert.equal(host.compactions, 1)
+  } finally {
+    await service.dispose()
+  }
+})
+
+test('Pi 原生 /reload 不进入模型消息，使用运行时动作并返回刷新后的状态', async () => {
+  const host = new RuntimeContributionHost(true)
+  const service = new DefaultPiLiveService(host)
+  try {
+    const started = await service.start({ cwd: '/workspace' })
+    await waitForStatus(service, started.runtimeSessionId, 'ready')
+    const actions = (await service.runtimeDisclosures(started.runtimeSessionId))[0]?.actions
+    assert.ok(actions?.some(action => action.actionId === 'pi.runtime.reload'))
+    const result = await service.executeRuntimeAction(started.runtimeSessionId, 'pi.runtime.reload')
+    assert.equal(host.reloads, 1)
+    assert.equal(result.runtime.status, 'ready')
   } finally {
     await service.dispose()
   }
