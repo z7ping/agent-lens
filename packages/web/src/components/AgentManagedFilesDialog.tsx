@@ -298,7 +298,7 @@ export function AgentManagedFilesDialog({
     {!previewOnly && previewName && <span className="managed-file-current-name" title={previewName}>{previewName}</span>}
     {preview?.redacted && <span className="managed-file-redacted">{t('managedFiles.redacted')}</span>}
     {previewSize !== undefined && <small className="managed-file-header-size">{t('managedFiles.bytes', { count: previewSize })}</small>}
-    {previewMarkdown && previewView === 'rendered' && <SelectMenu
+    {previewMarkdown && previewView === 'rendered' && <div className="managed-file-theme-select"><SelectMenu
       value={markdownTheme}
       onChange={value => {
         if (!isMarkdownThemeId(value)) return
@@ -310,7 +310,7 @@ export function AgentManagedFilesDialog({
         { value: 'agent-lens', label: t('managedFiles.themeAgentLens'), description: t('managedFiles.themeAgentLensDescription') },
         ...customMarkdownThemes.map(theme => ({ value: theme.id, label: theme.name, description: t('managedFiles.themeCustomDescription') })),
       ]}
-    />}
+    /></div>}
     {previewMarkdown && preview?.content !== undefined && <div className="file-preview-view-toggle" role="group" aria-label={t('managedFiles.viewMode')}>
       <button type="button" aria-pressed={previewView === 'rendered'} onClick={() => setPreviewView('rendered')}>{t('managedFiles.rendered')}</button>
       <button type="button" aria-pressed={previewView === 'source'} onClick={() => setPreviewView('source')}>{t('managedFiles.source')}</button>
