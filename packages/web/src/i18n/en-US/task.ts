@@ -233,6 +233,7 @@ export const englishTaskMessages: LocaleMessagesDto = {
       },
       runtimeActionFeedback: {
         running: 'Executing command…',
+        handled: 'Handled by native command',
         done: 'Command completed',
         failed: 'Command failed; check error details',
       },
