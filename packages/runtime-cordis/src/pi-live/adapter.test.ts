@@ -52,6 +52,25 @@ test('Pi Live Adapter distinguishes terminal Runtime exit from recoverable exten
   })
 })
 
+test('Pi command records are normalized separately from assistant failures and duplicate notifications', () => {
+  const entry = {
+    id: 'cmd-1', type: 'custom', customType: 'agent-lens.command',
+    data: {
+      command: '/mcp', outcome: 'failed', error: 'Web custom UI unavailable',
+      messages: [{ level: 'error', message: 'Cannot open interactive TUI' }],
+      startedAt: '2026-11-06T11:00:00Z', finishedAt: '2026-11-06T11:00:01Z',
+    },
+  }
+  assert.deepEqual(normalizePiLiveEvent({ type: 'native_command_record', entry }), {
+    type: 'command.record', entryId: 'cmd-1', command: '/mcp', outcome: 'failed',
+    error: 'Web custom UI unavailable',
+    messages: [{ level: 'error', message: 'Cannot open interactive TUI' }],
+    startedAt: '2026-11-06T11:00:00Z', finishedAt: '2026-11-06T11:00:01Z',
+  })
+  assert.equal(normalizePiLiveEvent({ type: 'extension_error', error: 'Web custom UI unavailable', commandRecordId: 'command-1' }), undefined)
+  assert.equal(normalizePiLiveEvent({ type: 'extension_ui_request', method: 'notify', message: 'command output', notifyType: 'info', commandRecordId: 'command-1' }), undefined)
+})
+
 test('Pi Live propagates persisted assistant errors immediately without replacing other message events', () => {
   const failed = normalizePiLiveEvent({
     type: 'message_end',
