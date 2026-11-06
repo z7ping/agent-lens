@@ -626,21 +626,29 @@ export function TaskCenterPage({ model, mode, sidebarHost }: { model: AgentLensC
     setSearchHitPending(hit.observationId)
     setSearchHitError('')
     try {
-      // One bounded index scan; no guessed turn or untrusted client-side cursor.
-      const index = await model.nativeReviewTurnIndex(hit.sessionId, {
-        ordinal: hit.turn.ordinal,
-        expectedNativeEventId: hit.turn.nativeEventId,
-        expectedRecordOffset: hit.turn.recordOffset,
-        expectedRecordFingerprint: hit.turn.recordFingerprint,
-        scan: true,
-      })
-      if (nativeRequestKeyRef.current !== requestKey) return
-      const ordinal = verifiedNativeSearchHitTurn(hit, index)
-      if (!ordinal) {
-        setSearchHitError(hit.observationId)
-        return
+      // Explicit user action may advance the sparse index a few bounded
+      // batches. Never scan an entire long session in one navigation request.
+      let scannedOffset = -1
+      for (let attempt = 0; attempt < 4; attempt++) {
+        const index = await model.nativeReviewTurnIndex(hit.sessionId, {
+          ordinal: hit.turn.ordinal,
+          expectedNativeEventId: hit.turn.nativeEventId,
+          expectedRecordOffset: hit.turn.recordOffset,
+          expectedRecordFingerprint: hit.turn.recordFingerprint,
+          scan: true,
+        })
+        if (nativeRequestKeyRef.current !== requestKey) return
+        const ordinal = verifiedNativeSearchHitTurn(hit, index)
+        if (ordinal) {
+          navigate(`/review/${encodeURIComponent(hit.sessionId)}?focusTurn=${ordinal}`)
+          return
+        }
+        if (index.state !== 'available' || index.coverage === 'complete'
+          || index.knownTurns >= hit.turn.ordinal
+          || index.scannedOffset <= scannedOffset) break
+        scannedOffset = index.scannedOffset
       }
-      navigate(`/review/${encodeURIComponent(hit.sessionId)}?focusTurn=${ordinal}`)
+      setSearchHitError(hit.observationId)
     } catch {
       if (nativeRequestKeyRef.current === requestKey) setSearchHitError(hit.observationId)
     } finally {
