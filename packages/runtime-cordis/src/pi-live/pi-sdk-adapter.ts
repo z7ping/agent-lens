@@ -68,6 +68,7 @@ export interface PiSdkSession {
   readonly resourceLoader?: PiSdkRuntimeResourceLoader
   readonly extensionRunner?: Pick<AgentSession['extensionRunner'], 'getRegisteredCommands' | 'createCommandContext'>
   readonly promptTemplates?: AgentSession['promptTemplates']
+  getAllTools?(): ReturnType<AgentSession['getAllTools']>
   bindExtensions(bindings: PiSdkExtensionBindings): ReturnType<AgentSession['bindExtensions']>
   subscribe(listener: Parameters<AgentSession['subscribe']>[0]): ReturnType<AgentSession['subscribe']>
   setSessionName(name: Parameters<AgentSession['setSessionName']>[0]): ReturnType<AgentSession['setSessionName']>
