@@ -1291,6 +1291,10 @@ function createExtensionUi() {
             ? 'MCP OAuth authorization link provided in the Web prompt'
             : message
           active.messages.push({ level, message: journalMessage })
+          // Pi's command handler may report an operational failure through
+          // ctx.ui.notify('error') without throwing. Dispatch acceptance is
+          // not proof of success; preserve the native diagnostic outcome.
+          if (active.name === '/mcp' && level === 'error') active.outcome = 'failed'
         }
         fire({ method: 'notify', message, notifyType, ...(active ? { commandRecordId: active.id } : {}) })
       },
