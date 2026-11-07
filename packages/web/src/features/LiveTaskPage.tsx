@@ -64,6 +64,7 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
   const [mcpPending, setMcpPending] = useState(false)
   const [mcpStatus, setMcpStatus] = useState('')
   const [mcpOutcome, setMcpOutcome] = useState<'handled' | 'failed' | null>(null)
+  const [mcpUnconfirmed, setMcpUnconfirmed] = useState(false)
   const [mcpInventory, setMcpInventory] = useState<LiveRuntimeDisclosureContributionDto | null>(null)
   const mcpEpochRef = useRef(0)
   const mcpExpectedRef = useRef<{ command: string; epoch: number; runtimeSessionId: string } | null>(null)
@@ -80,10 +81,25 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
     setMcpPending(false)
     setMcpStatus('')
     setMcpOutcome(null)
+    setMcpUnconfirmed(false)
     setMcpInventory(null)
   }, [current?.liveId, current?.runtimeSessionId])
   // Keep the reader's disclosure intent through live snapshot reconciliation.
   const processExpansionStore = useMemo(() => new Map<string, boolean>(), [current?.liveId, current?.runtimeSessionId])
+  useEffect(() => {
+    if (!mcpPending) return
+    const expected = mcpExpectedRef.current
+    if (!expected) return
+    // Losing SSE must not leave the menu permanently locked. A timeout is
+    // unknown, never a fabricated failed or successful Pi command.
+    const timeout = window.setTimeout(() => {
+      if (mcpExpectedRef.current !== expected) return
+      mcpExpectedRef.current = null
+      setMcpPending(false)
+      setMcpUnconfirmed(true)
+    }, expected.command === '/mcp' ? 30_000 : 300_000)
+    return () => window.clearTimeout(timeout)
+  }, [mcpPending, current?.runtimeSessionId])
   const composerDraftKey = useMemo(
     () => current ? liveComposerDraftKey(current.liveId, current.runtimeSessionId) : '',
     [current?.liveId, current?.runtimeSessionId],
@@ -194,6 +210,7 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
     if (event.error && !messages.includes(event.error)) messages.push(event.error)
     setMcpStatus(messages.join('\n\n'))
     setMcpOutcome(event.outcome)
+    setMcpUnconfirmed(false)
     setMcpPending(false)
     if (event.command === '/mcp' && current) {
       // Read inventory after the native command actually completed.
@@ -505,6 +522,7 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
     if (!current) return
     setMcpStatus('')
     setMcpOutcome(null)
+    setMcpUnconfirmed(false)
     setMcpPending(true)
     const epoch = ++mcpEpochRef.current
     const command = action === 'status' ? '/mcp' : `/mcp ${action}`
@@ -876,6 +894,7 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
             <Button size="small" disabled={mcpPending} onClick={() => { void runMcpCommand('reconnect') }}>{t('live.mcp.reconnect')}</Button>
           </div>
           {mcpOutcome === 'failed' && <p role="alert">{t('live.mcp.commandFailed')}</p>}
+          {mcpUnconfirmed && <p role="status">{t('live.mcp.resultUnconfirmed')}</p>}
           {mcpStatus
             ? <section aria-label={t('live.mcp.lastStatus')}>
                 <CopyableCodeBlock copyValue={mcpStatus}>{mcpStatus}</CopyableCodeBlock>
