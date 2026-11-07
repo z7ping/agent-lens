@@ -1,4 +1,5 @@
 import type { useTranslation } from 'react-i18next'
+import type { LiveEventDto } from '@agent-lens/protocol'
 import type { TaskLiveRuntimeLocation } from './task-live-runtime'
 import type { LiveTaskState } from './live-task-state'
 import { useCallback, useEffect, useLayoutEffect, useRef } from 'react'
@@ -18,12 +19,18 @@ export function useLiveTaskRuntime({
   t,
   session,
   reconnectEpoch = 0,
+  onCommandRecord,
 }: {
   current: TaskLiveRuntimeLocation | null
   t: ReturnType<typeof useTranslation>['t']
   session: LiveTaskState
   reconnectEpoch?: number
+  onCommandRecord?: (event: Extract<LiveEventDto, { type: 'command.record' }>) => void
 }) {
+  // The event subscription is session-scoped; command-result consumers
+  // must not force a new SSE subscription on every dialog state change.
+  const commandRecordCallbackRef = useRef(onCommandRecord)
+  commandRecordCallbackRef.current = onCommandRecord
   const {
     product,
     setProduct,
@@ -506,6 +513,9 @@ export function useLiveTaskRuntime({
       current.runtimeSessionId,
       envelope => {
         setConnected(true)
+        if (envelope.normalizedEvent?.type === 'command.record') {
+          commandRecordCallbackRef.current?.(envelope.normalizedEvent)
+        }
         if (liveEventChangesTaskTranscript(envelope.normalizedEvent)) {
           liveTurnRevisionRef.current += 1
           lastProgressAtRef.current = Date.now()
