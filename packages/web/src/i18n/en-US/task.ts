@@ -332,6 +332,8 @@ export const englishTaskMessages: LocaleMessagesDto = {
         lastStatus: 'Last native status',
         registeredTools: 'Reachable tools registered by Pi SDK',
         noRegisteredTools: 'No reachable MCP tools currently registered (servers may still be configured)',
+        commandFailed: 'Pi MCP command failed',
+        waitingForResult: 'Waiting for Pi MCP result…',
         toolsUnavailable: 'The MCP tool inventory is unavailable from the current Pi SDK',
         close: 'Close',
       },
