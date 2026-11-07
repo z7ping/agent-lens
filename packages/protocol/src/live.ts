@@ -378,6 +378,8 @@ export type LiveEventDto =
       delta?: string | undefined
       messageId?: string | undefined
       contentIndex?: number | undefined
+      /** Source-attested cumulative output tokens reported on streaming deltas. */
+      usage?: { output?: number | undefined } | undefined
     }
   | {
       type: 'tool.start'
@@ -801,12 +803,14 @@ export function parseLiveEventDto(value: unknown): LiveEventDto | null {
   if (type === 'text.start' || type === 'text.delta' || type === 'text.end'
     || type === 'reasoning.start' || type === 'reasoning.delta' || type === 'reasoning.end') {
     const contentIndex = eventCount(event.contentIndex)
+    const usageOutput = eventCount(record(event.usage)?.output)
     return {
       type,
       ...(eventText(event.text) !== undefined ? { text: eventText(event.text) } : {}),
       ...(eventText(event.delta) !== undefined ? { delta: eventText(event.delta) } : {}),
       ...(eventText(event.messageId) !== undefined ? { messageId: eventText(event.messageId) } : {}),
       ...(contentIndex !== undefined ? { contentIndex } : {}),
+      ...(usageOutput !== undefined ? { usage: { output: usageOutput } } : {}),
     }
   }
   if (type === 'tool.start') {

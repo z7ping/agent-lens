@@ -85,6 +85,8 @@ export type LiveTaskProjectionItem =
       errorDiagnostic?: { code?: string; category?: string; retryable?: boolean } | undefined
       /** Stable native session entry id; present only for snapshot-backed messages. */
       entryId?: string | undefined
+      /** Output token rate captured while this message streamed (Pi Web parity). */
+      outputRate?: number | undefined
       attachments?: LiveTaskProjectionAttachment[] | undefined
       streaming: boolean
       at?: string | undefined
@@ -900,14 +902,43 @@ export function reconcileLiveSettledRecoveryActive(
 ): LiveTaskProjectionItem[] {
   const persisted = preserveOptimisticImagePreviews(previousActive, recovered)
   const reconciled = reconcilePersistedCompactionEvents(previousActive, persisted)
+  const carriedRates = carryOutputRates(previousActive, reconciled.items)
   const superseded = new Set(reconciled.matchedTransientByNativeId.values())
   const recoveredIds = new Set(reconciled.items.map(item => item.id))
   const preservedBaseCount = Math.min(previousActive.length, Math.max(0, snapshotBaseActiveCount))
   return [
     ...previousActive.slice(0, preservedBaseCount).filter(item =>
       !superseded.has(item.id) && !recoveredIds.has(item.id)),
-    ...reconciled.items,
+    ...carriedRates,
   ]
+}
+
+/** SSE-only output rates survive snapshot rebuilds by matching assistant text
+ * from the tail; identical older replies cannot steal a newer message's rate. */
+function carryOutputRates(
+  previous: readonly LiveTaskProjectionItem[],
+  incoming: readonly LiveTaskProjectionItem[],
+): LiveTaskProjectionItem[] {
+  const sources = previous.filter(item =>
+    item.kind === 'message' && item.role === 'assistant'
+    && item.outputRate !== undefined && item.text)
+  if (!sources.length) return incoming as LiveTaskProjectionItem[]
+  const used = new Set<number>()
+  const result = [...incoming]
+  for (let index = result.length - 1; index >= 0; index -= 1) {
+    const item = result[index]
+    if (!item || item.kind !== 'message' || item.role !== 'assistant'
+      || item.outputRate !== undefined || !item.text) continue
+    for (let sourceIndex = sources.length - 1; sourceIndex >= 0; sourceIndex -= 1) {
+      if (used.has(sourceIndex)) continue
+      const source = sources[sourceIndex]
+      if (source.kind !== 'message' || source.text !== item.text) continue
+      used.add(sourceIndex)
+      result[index] = { ...item, outputRate: source.outputRate }
+      break
+    }
+  }
+  return result
 }
 
 /** Keep unchanged snapshot rows mounted; refreshing identical history must not flash. */
@@ -951,13 +982,14 @@ export function reconcileLiveSnapshotProjection(
     [...incoming.stable, ...incoming.active],
   )
   const reconciled = reconcilePersistedCompactionEvents(previous.active, carried)
-  const stableRows = reconciled.items.slice(0, incoming.stable.length)
+  const withRates = carryOutputRates([...previous.stable, ...previous.active], reconciled.items)
+  const stableRows = withRates.slice(0, incoming.stable.length)
   const stableNativeIds = new Set(stableRows.map(item => item.id))
   const superseded = new Set([...reconciled.matchedTransientByNativeId]
     .filter(([nativeId]) => stableNativeIds.has(nativeId))
     .map(([, transientId]) => transientId))
   const stable = reuseLiveSnapshotRows(previous.stable, stableRows)
-  const nextActive = reconciled.items.slice(incoming.stable.length)
+  const nextActive = withRates.slice(incoming.stable.length)
   const incomingActive = streaming
     ? mergeLiveActiveProjectionItems(previous.active.filter(item => !superseded.has(item.id)), nextActive)
     : nextActive
@@ -1097,7 +1129,7 @@ export function reduceLiveTaskEvent(
       : -1
     const priorErrorOffset = priorAttemptOffset >= 0 ? priorAttemptOffset
       : findLastProjectionIndex(candidates, item =>
-        item.kind === 'message' && item.role === 'assistant' && item.error
+        item.kind === 'message' && item.role === 'assistant' && item.error === true
         && (detail ? item.text === detail : isTerminal))
     if (priorErrorOffset >= 0) {
       const priorIndex = lastUser + 1 + priorErrorOffset
@@ -1204,6 +1236,7 @@ export function reduceLiveTaskEvent(
         : event.text ?? current?.text ?? '',
       streaming: event.type !== 'text.end' && !stage.superseded,
       at: current?.at ?? envelope.receivedAt,
+      ...(current?.outputRate !== undefined ? { outputRate: current.outputRate } : {}),
     }))
   }
 

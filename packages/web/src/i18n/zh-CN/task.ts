@@ -230,6 +230,7 @@ export const chineseTaskMessages: LocaleMessagesDto = {
         cacheTokens: '缓存输入 Token / 总输入 Token',
         cacheNativeSource: '来源：pi-cache-optimizer · {{adapter}}；原生统计按扩展设置的会话/进程/总量范围计算。',
         compatWarning: '需修复',
+        rateAria: '估算输出速率 {{rate}} token 每秒（基于流式字符估算）',
         compatOk: '无警告',
         compatDisabled: '已停用',
         integrityWarning: '缓存统计完整性警告',

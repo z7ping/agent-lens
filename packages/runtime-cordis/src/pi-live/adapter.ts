@@ -167,9 +167,14 @@ function piMessageUpdateEvent(event: Record<string, unknown>): LiveEvent | undef
   const content = Array.isArray(partial.content) ? partial.content : []
   const block = contentIndex === undefined ? {} : liveRecord(content[contentIndex])
   const messageId = liveText(event.messageId)
+  // Pi reports cumulative usage on every streaming delta; keep only the
+  // source-attested output count so the client can derive a real token rate.
+  const usageOutput = liveNonnegative(liveRecord(event.usage).output)
+  const usage = usageOutput === undefined ? undefined : { output: usageOutput }
   const common = {
     ...(contentIndex === undefined ? {} : { contentIndex }),
     ...(messageId ? { messageId } : {}),
+    ...(usage ? { usage } : {}),
   }
 
   if (type === 'text_start') {

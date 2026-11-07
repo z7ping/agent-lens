@@ -40,6 +40,8 @@ export interface TaskMessageProps {
   errorScope?: 'attempt' | undefined
   errorDiagnostic?: TaskErrorDiagnostic | undefined
   pendingLabel?: string | undefined
+  /** Source-attested streaming output token rate; null keeps the badge hidden. */
+  outputRate?: number | null | undefined
   className?: string | undefined
 }
 
@@ -63,6 +65,7 @@ export function TaskMessage({
   errorScope,
   errorDiagnostic,
   pendingLabel,
+  outputRate,
   className = '',
 }: TaskMessageProps) {
   const { t } = useTranslation('task')
@@ -178,10 +181,15 @@ export function TaskMessage({
     aria-busy={streaming || awaitingFirstContent || undefined}
   >
     <div className={`task-message-bubble ${bubbleClass}`}>
-      {(modelLabel || time || meta || error) && <div className="task-message-model-meta">
+      {(modelLabel || time || meta || error || outputRate != null) && <div className="task-message-model-meta">
         {!user && <b>{resolvedAuthor}</b>}
         {error && !nonterminalFailure && <span className="task-message-error-status"><UiIcon name="alert" size={14}/>{t('message.requestFailed')}</span>}
         {modelLabel && <><span aria-hidden="true">·</span><span className="task-message-model-label">{modelLabel}</span></>}
+        {outputRate != null && <span
+          className={`task-message-output-rate${outputRate >= 50 ? ' is-max' : outputRate >= 30 ? ' is-high' : outputRate >= 15 ? ' is-mid' : ''}`}
+          title={t('live.metrics.rateAria', { rate: Math.round(outputRate) })}
+          aria-label={t('live.metrics.rateAria', { rate: Math.round(outputRate) })}
+        >{outputRate.toFixed(1)} t/s</span>}
         {meta && <span className="task-message-context-evidence">{meta}</span>}
         {time && <time>{time}</time>}
       </div>}

@@ -381,6 +381,11 @@ export interface LiveMessageBoundaryEvent {
   stopReason?: 'length' | undefined
 }
 
+export interface LiveContentUsage {
+  /** Source-attested cumulative output tokens while streaming, never estimated. */
+  output?: number | undefined
+}
+
 export interface LiveContentEvent {
   type:
     | 'text.start'
@@ -393,6 +398,8 @@ export interface LiveContentEvent {
   delta?: string | undefined
   messageId?: string | undefined
   contentIndex?: number | undefined
+  /** Cumulative usage the Agent already reports on streaming deltas, when available. */
+  usage?: LiveContentUsage | undefined
 }
 
 export interface LiveToolStartEvent {

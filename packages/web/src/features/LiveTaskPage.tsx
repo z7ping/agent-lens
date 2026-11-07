@@ -581,7 +581,7 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
         ...(action.description ? { description: contributionText(action.description, i18n.resolvedLanguage ?? i18n.language) } : {}),
         disabled: runtimeActionPending !== null || state?.status !== 'ready' || state.isStreaming,
         onClick: () => { void runRuntimeAction(action) },
-      })),
+      }))),
   ]
   // Runtime-advertised actions are never delivered to the language model as text.
   // Pi extension/template/skill commands without an action remain native SDK prompts.
@@ -919,7 +919,7 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
               ? <CopyableCodeBlock copyValue={mcpInventoryText}>{mcpInventoryText}</CopyableCodeBlock>
               : <p>{t('live.mcp.noRegisteredTools')}</p>}
           </section>}
-        </Dialog>
+        </Dialog>}
         {extensionWidgetItems.length > 0 && <div role="status" aria-label={t('live.extensionStatus')}>
           {extensionWidgetItems.map(item => <TaskEvent
             key={`${item.kind}:${item.key}`}

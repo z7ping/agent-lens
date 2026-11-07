@@ -2,7 +2,7 @@ import type { useTranslation } from 'react-i18next'
 import type { LiveEventDto } from '@agent-lens/protocol'
 import type { TaskLiveRuntimeLocation } from './task-live-runtime'
 import type { LiveTaskState } from './live-task-state'
-import { useCallback, useEffect, useLayoutEffect, useRef } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { liveApi } from '../client/live'
 import { emptyLiveQueue, firstUserEntryCursor } from './live-task-queue'
 import { enqueueLiveUiRequest, dismissLiveUiRequest } from './live-extension-request-queue'
@@ -11,7 +11,7 @@ import { LIVE_TASK_SNAPSHOT_PAGE_LIMIT, historyPageBlock, aggregateHistoryPage, 
 import { projectLiveInputHistory, projectLiveSnapshotEntries, liveEventChangesTaskTranscript, mergeLiveActiveProjectionItems, reconcileLiveSnapshotProjection, reconcileLiveSettledRecoveryActive, reduceLiveTaskEvent } from './live-task-projection'
 import { LiveFollowController, liveFollowTextRevision } from './live-follow-controller'
 import { settleReaderAtLatest } from './session-reader-positioning'
-import { shouldRecoverLiveOnVisible, sameLiveRuntimeState, runtimeStateFromEvent } from './task-live-runtime'
+import { shouldRecoverLiveOnVisible, sameLiveRuntimeState, runtimeStateFromEvent, liveOutputRate, LIVE_OUTPUT_RATE_WINDOW_MS, type LiveOutputRateSample } from './task-live-runtime'
 
 /** 会话初始化、SSE 对账与可见性恢复；不负责输入交互和页面渲染。 */
 export function useLiveTaskRuntime({
@@ -97,6 +97,42 @@ export function useLiveTaskRuntime({
     queueRevisionRef
   } = session
   const manualSyncRef = useRef<(() => Promise<void>) | null>(null)
+  // Source-attested token rate samples from streaming deltas; never estimated.
+  const outputRateSamplesRef = useRef<LiveOutputRateSample[]>([])
+  const outputRateTimerRef = useRef<number | null>(null)
+  const outputRateMessageRef = useRef('')
+  const estimatedOutputRef = useRef(0)
+  const [outputRate, setOutputRate] = useState<number | null>(null)
+  const lastOutputRateRef = useRef<number | null>(null)
+  // Freeze the latest rate onto the newest assistant message in the active
+  // projection; every message keeps its own rate after the stream settles.
+  const persistOutputRate = (rate: number | null) => {
+    if (!historyAtLatestRef.current) return
+    setProjection(previous => {
+      const active = previous.active
+      for (let index = active.length - 1; index >= 0; index -= 1) {
+        const item = active[index]!
+        if (item.kind !== 'message' || item.role !== 'assistant' || item.error) continue
+        if ((item.outputRate ?? null) === rate) return previous
+        const next = [...active]
+        next[index] = { ...item, outputRate: rate ?? undefined }
+        return { ...previous, active: next }
+      }
+      return previous
+    })
+  }
+  const scheduleOutputRate = () => {
+    if (outputRateTimerRef.current !== null) return
+    outputRateTimerRef.current = window.setTimeout(() => {
+      outputRateTimerRef.current = null
+      const rate = liveOutputRate(outputRateSamplesRef.current, Date.now())
+      if (rate !== null) lastOutputRateRef.current = rate
+      setOutputRate(rate)
+      if (outputRateMessageRef.current !== '') persistOutputRate(rate)
+      // Keep ticking until the window expires so a stalled stream fades to null.
+      if (rate !== null || outputRateSamplesRef.current.length > 0) scheduleOutputRate()
+    }, 300)
+  }
   const syncCurrentSession = useCallback(() => manualSyncRef.current?.()
     ?? Promise.reject(new Error('Live runtime is not ready for synchronization')), [])
   const entryScrollSessionRef = useRef('')
@@ -516,6 +552,24 @@ export function useLiveTaskRuntime({
         if (envelope.normalizedEvent?.type === 'command.record') {
           commandRecordCallbackRef.current?.(envelope.normalizedEvent)
         }
+        const contentEvent = envelope.normalizedEvent
+        if (contentEvent && (contentEvent.type === 'text.delta' || contentEvent.type === 'reasoning.delta')) {
+          const at = Date.now()
+          const samples = outputRateSamplesRef.current
+          // Many providers report zero usage mid-stream (verified on mimo), so
+          // estimate with Pi's own chars/4 heuristic, matching Pi Web's badge.
+          const messageId = contentEvent.messageId ?? ''
+          if (outputRateMessageRef.current !== messageId) {
+            outputRateMessageRef.current = messageId
+            estimatedOutputRef.current = 0
+            samples.length = 0
+            lastOutputRateRef.current = null
+          }
+          estimatedOutputRef.current += (contentEvent.delta ?? '').length / 4
+          samples.push({ at, output: estimatedOutputRef.current })
+          while (samples.length > 0 && at - samples[0]!.at > LIVE_OUTPUT_RATE_WINDOW_MS) samples.shift()
+          scheduleOutputRate()
+        }
         if (liveEventChangesTaskTranscript(envelope.normalizedEvent)) {
           liveTurnRevisionRef.current += 1
           lastProgressAtRef.current = Date.now()
@@ -658,6 +712,13 @@ export function useLiveTaskRuntime({
         if (envelope.normalizedEvent?.type === 'completed') {
           // Terminal turns cannot retain a stale native approval dialog.
           setExtensions([])
+          outputRateSamplesRef.current = []
+          setOutputRate(null)
+          // Freeze the final rate on the finished message, then stop the tick.
+          persistOutputRate(lastOutputRateRef.current)
+          lastOutputRateRef.current = null
+          outputRateMessageRef.current = ''
+          estimatedOutputRef.current = 0
           runtimeCompacting = false
           runtimeActive = false
           if (envelope.normalizedEvent.status === 'failed' && envelope.normalizedEvent.message
@@ -696,6 +757,13 @@ export function useLiveTaskRuntime({
     )
     return () => {
       manualSyncRef.current = null
+      if (outputRateTimerRef.current !== null) window.clearTimeout(outputRateTimerRef.current)
+      outputRateTimerRef.current = null
+      outputRateSamplesRef.current = []
+      outputRateMessageRef.current = ''
+      estimatedOutputRef.current = 0
+      lastOutputRateRef.current = null
+      setOutputRate(null)
       recoveryActive = false
       recoveryGeneration += 1
       reconcileEpoch += 1

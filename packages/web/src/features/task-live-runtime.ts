@@ -28,6 +28,33 @@ export function shouldRefreshRuntimeListOnVisible(
     || now - lastSuccessfulAt >= LIVE_VISIBILITY_RECONCILE_WINDOW_MS
 }
 
+export interface LiveOutputRateSample {
+  at: number
+  /** Cumulative output tokens for the rate window: source usage when the Agent
+   * reports growth mid-stream, otherwise Pi's chars/4 estimate (Pi Web parity). */
+  output: number
+}
+
+/** Sliding window for source-attested output token rate; never estimated from text. */
+export const LIVE_OUTPUT_RATE_WINDOW_MS = 4_000
+export const LIVE_OUTPUT_RATE_MIN_SPAN_MS = 800
+
+/** tokens/s from cumulative output samples in the window; null without real growth. */
+export function liveOutputRate(
+  samples: readonly LiveOutputRateSample[],
+  now: number,
+): number | null {
+  const window = samples.filter(sample => now - sample.at <= LIVE_OUTPUT_RATE_WINDOW_MS)
+  if (window.length < 2) return null
+  const first = window[0]!
+  const last = window[window.length - 1]!
+  const spanMs = last.at - first.at
+  if (spanMs < LIVE_OUTPUT_RATE_MIN_SPAN_MS) return null
+  const gained = last.output - first.output
+  if (gained <= 0) return null
+  return gained / (spanMs / 1000)
+}
+
 export function sameLiveRuntimeState(previous: LiveRuntimeStateDto | null, next: LiveRuntimeStateDto): boolean {
   if (!previous) return false
   return previous.runtimeSessionId === next.runtimeSessionId

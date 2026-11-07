@@ -82,6 +82,7 @@ function GenericLiveItem({
         ...(messageTime ? { time: messageTime } : {}),
       }}
       streaming={item.streaming}
+      outputRate={item.outputRate}
       error={item.error === true}
       terminalFailure={item.terminalFailure === true}
       errorScope={item.errorScope}

@@ -230,6 +230,7 @@ export const englishTaskMessages: LocaleMessagesDto = {
         cacheTokens: 'Cached input tokens / total input tokens',
         cacheNativeSource: 'Source: pi-cache-optimizer · {{adapter}}. Scope follows the extension’s session/process/total setting.',
         compatWarning: 'Needs fix',
+        rateAria: 'Estimated output rate {{rate}} tokens per second (estimated from streaming text)',
         compatOk: 'No alert',
         compatDisabled: 'Disabled',
         integrityWarning: 'Cache statistics integrity warning',
