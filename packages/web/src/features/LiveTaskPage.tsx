@@ -558,8 +558,10 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
       setError(t('live.commandUnavailable'))
       return
     }
-    setMcpInventory(null)
     setMcpManagerOpen(true)
+    // Reopening the manager while OAuth is in progress must not dispatch a
+    // second /mcp or hide the pending native command's result.
+    if (mcpPending) return
     void runMcpCommand('status')
   }
   const composerSessionActions = [
