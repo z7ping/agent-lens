@@ -167,7 +167,7 @@ export const englishTaskMessages: LocaleMessagesDto = {
         customHidden: 'Hidden extension context message',
         bashExecution: 'Pi shell execution',
         command: 'Pi native command',
-        commandHandled: 'Handled',
+        commandHandled: 'Command returned',
         commandFailed: 'Failed',
         commandNoOutput: 'Pi returned no text output',
       },
