@@ -910,7 +910,7 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
             ? <section aria-label={t('live.mcp.lastStatus')}>
                 <CopyableCodeBlock copyValue={mcpStatus}>{mcpStatus}</CopyableCodeBlock>
               </section>
-            : <p role="status">{t(mcpPending ? 'live.mcp.waitingForResult' : 'live.mcp.empty')}</p>}
+            : !mcpUnconfirmed && <p role="status">{t(mcpPending ? 'live.mcp.waitingForResult' : 'live.mcp.empty')}</p>}
           {!mcpPending && !mcpInventoryPending && mcpOutcome === 'handled' && mcpStatus
             && !mcpInventory && <p role="status">{t('live.mcp.toolsUnavailable')}</p>}
           {mcpInventory && <section aria-label={t('live.mcp.registeredTools')}>
