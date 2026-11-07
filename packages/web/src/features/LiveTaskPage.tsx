@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import type { LiveMessageDto, LiveRuntimeDisclosureContributionDto, LiveRuntimeStateDto, TaskFileChangesResponseDto } from '@agent-lens/protocol'
+import type { LiveEventDto, LiveMessageDto, LiveRuntimeDisclosureContributionDto, LiveRuntimeStateDto, TaskFileChangesResponseDto } from '@agent-lens/protocol'
 import { AgentLensApi } from '../client/api'
 import { liveApi } from '../client/live'
 import { LocalPathActions } from '../components/LocalPathActions'
@@ -63,8 +63,12 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
   const [mcpManagerOpen, setMcpManagerOpen] = useState(false)
   const [mcpPending, setMcpPending] = useState(false)
   const [mcpStatus, setMcpStatus] = useState('')
+  const [mcpOutcome, setMcpOutcome] = useState<'handled' | 'failed' | null>(null)
+  const [mcpUnconfirmed, setMcpUnconfirmed] = useState(false)
   const [mcpInventory, setMcpInventory] = useState<LiveRuntimeDisclosureContributionDto | null>(null)
+  const [mcpInventoryPending, setMcpInventoryPending] = useState(false)
   const mcpEpochRef = useRef(0)
+  const mcpExpectedRef = useRef<{ command: string; epoch: number; runtimeSessionId: string } | null>(null)
   const [queueExpanded, setQueueExpanded] = useState(false)
   const [queueMenuOpen, setQueueMenuOpen] = useState(false)
   const queueMenuAnchorRef = useRef<HTMLSpanElement>(null)
@@ -73,13 +77,31 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
     setQueueExpanded(false)
     setQueueMenuOpen(false)
     mcpEpochRef.current += 1
+    mcpExpectedRef.current = null
     setMcpManagerOpen(false)
     setMcpPending(false)
     setMcpStatus('')
+    setMcpOutcome(null)
+    setMcpUnconfirmed(false)
     setMcpInventory(null)
+    setMcpInventoryPending(false)
   }, [current?.liveId, current?.runtimeSessionId])
   // Keep the reader's disclosure intent through live snapshot reconciliation.
   const processExpansionStore = useMemo(() => new Map<string, boolean>(), [current?.liveId, current?.runtimeSessionId])
+  useEffect(() => {
+    if (!mcpPending) return
+    const expected = mcpExpectedRef.current
+    if (!expected) return
+    // Losing SSE must not leave the menu permanently locked. A timeout is
+    // unknown, never a fabricated failed or successful Pi command.
+    const timeout = window.setTimeout(() => {
+      if (mcpExpectedRef.current !== expected) return
+      mcpExpectedRef.current = null
+      setMcpPending(false)
+      setMcpUnconfirmed(true)
+    }, expected.command === '/mcp' ? 30_000 : 300_000)
+    return () => window.clearTimeout(timeout)
+  }, [mcpPending, current?.runtimeSessionId])
   const composerDraftKey = useMemo(
     () => current ? liveComposerDraftKey(current.liveId, current.runtimeSessionId) : '',
     [current?.liveId, current?.runtimeSessionId],
@@ -181,7 +203,33 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
     setComposerValue(composerDraftKey ? readLiveComposerDraft(composerDraftKey) : '')
   }, [composerDraftKey, setComposerValue])
 
-  const { syncCurrentSession } = useLiveTaskRuntime({ current, t, session, reconnectEpoch })
+  const onMcpCommandRecord = useCallback((event: Extract<LiveEventDto, { type: 'command.record' }>) => {
+    const expected = mcpExpectedRef.current
+    if (!expected || expected.command !== event.command
+      || expected.runtimeSessionId !== current?.runtimeSessionId) return
+    mcpExpectedRef.current = null
+    const messages = event.messages.map(item => item.message).filter(Boolean)
+    if (event.error && !messages.includes(event.error)) messages.push(event.error)
+    setMcpStatus(messages.join('\n\n'))
+    setMcpOutcome(event.outcome)
+    setMcpUnconfirmed(false)
+    setMcpPending(false)
+    if (event.command === '/mcp' && current) {
+      setMcpInventoryPending(true)
+      // Read inventory after the native command actually completed.
+      // Never race a stale 24-entry snapshot against a newly dispatched command.
+      void liveApi.runtimeDisclosures(current.liveId, current.runtimeSessionId).then(items => {
+        if (mcpEpochRef.current === expected.epoch) {
+          setMcpInventory(items.find(item => item.contributionId === 'pi.runtime.mcp-tools') ?? null)
+        }
+      }, () => undefined).finally(() => {
+        if (mcpEpochRef.current === expected.epoch) setMcpInventoryPending(false)
+      })
+    }
+  }, [current?.liveId, current?.runtimeSessionId])
+  const { syncCurrentSession } = useLiveTaskRuntime({
+    current, t, session, reconnectEpoch, onCommandRecord: onMcpCommandRecord,
+  })
   const synchronizeSession = useCallback(async () => {
     if (connectionBusy) return
     setConnectionBusy(true)
@@ -370,7 +418,10 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
   // Keep recent settled text mounted while the active turn grows; bounded (two rounds).
   const stableEagerTailCount = 2
   const turnRailItems = useMemo(() => {
+    // Native extension commands have independent reading blocks but are not
+    // user turns, so the native ordinal rail must not count or reorder them.
     const segments = [...roundSegments.stable, ...roundSegments.active]
+      .filter(round => !round.model.id.startsWith('live-command-round:'))
     const firstLoadedCursor = segments
       .map(round => round.model.semanticId ?? round.model.id)
       .find(semanticId => semanticId.startsWith('live-round:'))
@@ -473,43 +524,33 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
       return
     }
     if (action !== 'status') setMcpManagerOpen(false)
+    if (!current) return
+    setMcpStatus('')
+    setMcpOutcome(null)
+    setMcpUnconfirmed(false)
+    if (action === 'status') {
+      setMcpInventory(null)
+      setMcpInventoryPending(false)
+    }
     setMcpPending(true)
     const epoch = ++mcpEpochRef.current
+    const command = action === 'status' ? '/mcp' : `/mcp ${action}`
+    mcpExpectedRef.current = { command, epoch, runtimeSessionId: current.runtimeSessionId }
     try {
-      const command = action === 'status' ? '/mcp' : `/mcp ${action}`
       const accepted = await send({ parts: [{ type: 'text', text: command }] }, undefined, true)
-      if (accepted && action === 'status' && current) {
-        // A bounded, read-only native snapshot works even while the user reads older rounds.
-        const [latest, disclosures] = await Promise.all([
-          liveApi.snapshot(current.liveId, current.runtimeSessionId, undefined, { edge: 'latest', limit: 24 }),
-          liveApi.runtimeDisclosures(current.liveId, current.runtimeSessionId),
-        ])
-        const records = latest.entries
-        const statusEntry = [...records].reverse().find(value => {
-          if (!value || typeof value !== 'object' || Array.isArray(value)) return false
-          const entry = value as Record<string, unknown>
-          if (entry.type !== 'custom' || entry.customType !== 'agent-lens.command') return false
-          const data = entry.data
-          return data && typeof data === 'object' && !Array.isArray(data)
-            && (data as Record<string, unknown>).command === '/mcp'
-        }) as Record<string, unknown> | undefined
-        const data = statusEntry?.data as Record<string, unknown> | undefined
-        const rawMessages = data?.messages
-        const messages = Array.isArray(rawMessages) ? rawMessages : []
-        const output = messages.map(value => {
-          if (!value || typeof value !== 'object' || Array.isArray(value)) return ''
-          const message = (value as Record<string, unknown>).message
-          return typeof message === 'string' ? message : ''
-        }).filter(Boolean).join('\n\n')
-        if (epoch === mcpEpochRef.current) {
-          setMcpStatus(output || (typeof data?.error === 'string' ? data.error : ''))
-          setMcpInventory(disclosures.find(item => item.contributionId === 'pi.runtime.mcp-tools') ?? null)
-        }
+      // HTTP send acknowledges dispatch, not extension completion. The native
+      // command.record event is the only authority for this command's result.
+      if (!accepted && mcpExpectedRef.current?.epoch === epoch) {
+        mcpExpectedRef.current = null
+        setMcpPending(false)
       }
     } catch (reason) {
-      if (epoch === mcpEpochRef.current) setError(reason instanceof Error ? reason.message : String(reason))
-    } finally {
-      if (epoch === mcpEpochRef.current) setMcpPending(false)
+      if (mcpExpectedRef.current?.epoch === epoch) {
+        mcpExpectedRef.current = null
+        setMcpPending(false)
+        setMcpOutcome('failed')
+        setMcpStatus(reason instanceof Error ? reason.message : String(reason))
+      }
     }
   }
   const openMcpManager = () => {
@@ -517,8 +558,10 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
       setError(t('live.commandUnavailable'))
       return
     }
-    setMcpInventory(null)
     setMcpManagerOpen(true)
+    // Reopening the manager while OAuth is in progress must not dispatch a
+    // second /mcp or hide the pending native command's result.
+    if (mcpPending) return
     void runMcpCommand('status')
   }
   const composerSessionActions = [
@@ -861,12 +904,15 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
             <Button size="small" disabled={mcpPending} onClick={() => { void runMcpCommand('logout') }}>{t('live.mcp.logout')}</Button>
             <Button size="small" disabled={mcpPending} onClick={() => { void runMcpCommand('reconnect') }}>{t('live.mcp.reconnect')}</Button>
           </div>
+          {mcpOutcome === 'failed' && <p role="alert">{t('live.mcp.commandFailed')}</p>}
+          {mcpUnconfirmed && <p role="status">{t('live.mcp.resultUnconfirmed')}</p>}
           {mcpStatus
             ? <section aria-label={t('live.mcp.lastStatus')}>
                 <CopyableCodeBlock copyValue={mcpStatus}>{mcpStatus}</CopyableCodeBlock>
               </section>
-            : <p>{t('live.mcp.empty')}</p>}
-          {!mcpPending && mcpStatus && !mcpInventory && <p role="status">{t('live.mcp.toolsUnavailable')}</p>}
+            : !mcpUnconfirmed && <p role="status">{t(mcpPending ? 'live.mcp.waitingForResult' : 'live.mcp.empty')}</p>}
+          {!mcpPending && !mcpInventoryPending && mcpOutcome === 'handled' && mcpStatus
+            && !mcpInventory && <p role="status">{t('live.mcp.toolsUnavailable')}</p>}
           {mcpInventory && <section aria-label={t('live.mcp.registeredTools')}>
             <strong>{t('live.mcp.registeredTools')}</strong>
             {mcpInventoryText

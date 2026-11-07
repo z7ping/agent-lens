@@ -139,8 +139,9 @@ export function useLiveTaskActions({
       setError('')
       try {
         await liveApi.send(current.liveId, current.runtimeSessionId, message, 'normal')
-        // Pi SDK acknowledges command dispatch, but extension handlers may report failures asynchronously.
-        setRuntimeActionFeedback('handled')
+        // Dispatch acceptance is not command success. The native command.record
+        // event carries the terminal outcome; never show a premature success.
+        setRuntimeActionFeedback('idle')
         setInputHistory(previous => appendLiveInputHistory(previous, messageText(message)))
         if (messageText(composerRef.current?.getMessage() ?? { parts: [] }) === messageText(message)) {
           clearComposer()

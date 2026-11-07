@@ -1282,6 +1282,7 @@ function createExtensionUi() {
       input: (title, placeholder, options) => dialog('input', { title, placeholder }, options, undefined, response => response.cancelled ? undefined : response.value),
       notify: (message, notifyType) => {
         const active = commandScope.getStore()
+        let forwardedMessage = message
         if (active && typeof message === 'string') {
           const level = ['success', 'warning', 'error'].includes(notifyType) ? notifyType : 'info'
           // OAuth URLs can carry PKCE state or other short-lived secrets.
@@ -1290,9 +1291,15 @@ function createExtensionUi() {
             && /https?:\/\/\S+/.test(message)
             ? 'MCP OAuth authorization link provided in the Web prompt'
             : message
+          forwardedMessage = journalMessage
           active.messages.push({ level, message: journalMessage })
+          // Pi's command handler may report an operational failure through
+          // ctx.ui.notify('error') without throwing. Dispatch acceptance is
+          // not proof of success; preserve the native diagnostic outcome.
+          if (active.name === '/mcp' && level === 'error') active.outcome = 'failed'
         }
-        fire({ method: 'notify', message, notifyType, ...(active ? { commandRecordId: active.id } : {}) })
+        fire({ method: 'notify', message: forwardedMessage, notifyType,
+          ...(active ? { commandRecordId: active.id } : {}) })
       },
       onTerminalInput: () => () => {}, setStatus: (statusKey, statusText) => fire({ method: 'setStatus', statusKey, statusText }),
       setWorkingMessage: () => {}, setWorkingVisible: () => {}, setWorkingIndicator: () => {}, setHiddenThinkingLabel: () => {},

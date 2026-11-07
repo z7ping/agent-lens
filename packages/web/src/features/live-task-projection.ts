@@ -1334,10 +1334,13 @@ function buildRoundModel(
   const errorCount = items.filter(item => (item.kind === 'tool' && item.status === 'error')
     || (item.kind === 'message' && item.error === true)
     || (item.kind === 'event' && item.process.outcome === 'failed')).length
+  const command = items.length === 1 && items[0]?.kind === 'native'
+    ? liveNativeCommandDetail(items[0]) : null
   const warningCount = items.filter(item => (item.kind === 'tool' && item.status === 'error')
     || (item.kind === 'message' && item.error === true && !item.terminalFailure)
     || (item.kind === 'event' && (item.process.outcome === 'failed'
       || item.process.outcome === 'truncated'))).length
+    + (command?.outcome === 'failed' ? 1 : 0)
   const terminalFailure = items.some(item =>
     item.kind === 'message' && item.terminalFailure === true)
   const running = items.some(item =>
@@ -1348,11 +1351,12 @@ function buildRoundModel(
     id,
     semanticId: id,
     ...(ordinal !== undefined ? { ordinal } : {}),
-    label: background
+    label: command?.command ?? (background
       ? agentLensI18n.t('task:surface.backgroundActivity')
-      : agentLensI18n.t('task:surface.roundOrdinal', { count: ordinal ?? 1 }),
+      : agentLensI18n.t('task:surface.roundOrdinal', { count: ordinal ?? 1 })),
     state: running ? 'running' : 'settled',
-    ...(previewSource ? { preview: compactRoundPreview(previewSource.text) } : {}),
+    ...(command?.output ? { preview: compactRoundPreview(command.output) }
+      : previewSource ? { preview: compactRoundPreview(previewSource.text) } : {}),
     toolCount,
     errorCount,
     warningCount,
@@ -1407,8 +1411,15 @@ export function projectLiveTaskRounds(
   const raw: Array<{ id: string; ordinal?: number; background: boolean; items: LiveTaskProjectionItem[] }> = []
   let current: { id: string; ordinal?: number; background: boolean; items: LiveTaskProjectionItem[] } | undefined
   let ordinal = ordinalOffset
+  let backgroundCount = 0
 
   for (const item of items) {
+    // Native command entries are not synthetic user turns. Preserve native ordinals.
+    if (item.kind === 'native' && item.nativeType === 'command') {
+      raw.push({ id: `live-command-round:${item.id}`, background: true, items: [item] })
+      current = undefined
+      continue
+    }
     const startsRound = item.kind === 'message' && item.role === 'user'
     if (startsRound) {
       ordinal += 1
@@ -1421,7 +1432,7 @@ export function projectLiveTaskRounds(
       raw.push(current)
     } else if (!current) {
       current = {
-        id: 'live-round:background',
+        id: backgroundCount++ === 0 ? 'live-round:background' : `live-round:background:${item.id}`,
         background: true,
         items: [],
       }
@@ -1480,7 +1491,8 @@ export class LiveTaskRoundProjector {
         ? projectLiveTaskRounds(activeItems, this.stableOrdinal).map((round, index, rounds) =>
           // Active-tail ownership is authoritative until completion/recovery commits
           // the turn to stable history. Gaps between text/tool events are not completion.
-          index === rounds.length - 1 && round.model.state !== 'running'
+          index === rounds.length - 1 && !round.model.id.startsWith('live-command-round:')
+            && round.model.state !== 'running'
             ? { ...round, model: { ...round.model, state: 'running' as const } }
             : round)
         : [],

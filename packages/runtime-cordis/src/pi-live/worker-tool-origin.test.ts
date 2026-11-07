@@ -78,3 +78,45 @@ test('Pi Worker MCP tool inventory excludes third-party, hidden and unverified r
   }) as () => unknown[]
   assert.equal(untrusted().length, 0)
 })
+
+test('Pi MCP OAuth link stays transient while native error notifications report failure', async () => {
+  const source = worker.match(/function createExtensionUi\(\) \{[\s\S]*?\n\}\n\n\/\/ Match Pi/)?.[0]
+  assert.ok(source, 'Pi Worker extension UI factory source must exist')
+  const events: Array<Record<string, unknown>> = []
+  const url = 'https://auth.example/authorize?state=one-time-secret'
+  const active = {
+    id: 'cmd-id', name: '/mcp', command: '/mcp login docs',
+    outcome: 'handled', messages: [] as Array<{ level: string; message: string }>, oauthUrl: url,
+  }
+  let sequence = 0
+  const create = runInNewContext(`${source.replace(/\n\n\/\/ Match Pi$/, '')}\ncreateExtensionUi`, {
+    randomUUID: () => `request-${++sequence}`,
+    commandScope: { getStore: () => active },
+    send: (_kind: string, payload: Record<string, unknown>) => { events.push(payload) },
+    fallbackTheme: () => ({}),
+    record: (value: unknown) => value && typeof value === 'object' ? value : {},
+  }) as () => {
+    context: {
+      notify(message: string, level: string): void
+      input(title: string, placeholder: string): Promise<string | undefined>
+    }
+    respond(id: string, value: unknown): boolean
+    dispose(): void
+  }
+  const bridge = create()
+  bridge.context.notify(`Sign in to docs: ${url}`, 'info')
+  assert.equal(active.messages[0]?.message, 'MCP OAuth authorization link provided in the Web prompt')
+  assert.equal(events.some(item => JSON.stringify(item).includes(url)), false)
+
+  const waiting = bridge.context.input('Waiting for sign-in', 'Redirect URL')
+  const prompt = events.find(event => event.method === 'input')
+  assert.equal(prompt?.externalUrl, url)
+  assert.equal(active.oauthUrl, undefined)
+  assert.ok(prompt?.id)
+  assert.equal(bridge.respond(String(prompt.id), { value: 'http://callback' }), true)
+  assert.equal(await waiting, 'http://callback')
+  bridge.context.notify('Sign-in rejected', 'error')
+  assert.equal(active.outcome, 'failed')
+  assert.equal(active.messages.at(-1)?.message, 'Sign-in rejected')
+  bridge.dispose()
+})
