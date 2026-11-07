@@ -396,7 +396,10 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
   // Keep recent settled text mounted while the active turn grows; bounded (two rounds).
   const stableEagerTailCount = 2
   const turnRailItems = useMemo(() => {
+    // Native extension commands have independent reading blocks but are not
+    // user turns, so the native ordinal rail must not count or reorder them.
     const segments = [...roundSegments.stable, ...roundSegments.active]
+      .filter(round => !round.model.id.startsWith('live-command-round:'))
     const firstLoadedCursor = segments
       .map(round => round.model.semanticId ?? round.model.id)
       .find(semanticId => semanticId.startsWith('live-round:'))
