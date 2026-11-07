@@ -1705,3 +1705,37 @@ test('Pi command failures are displayed as native errors without duplicated outp
     output: 'Network rejected request\n\nRetry later',
   })
 })
+
+test('native /mcp output has its own reading block without inventing a user turn or shifting native ordinals', () => {
+  const records = projectLiveSnapshotEntries([
+    { type: 'message', id: 'user-1', message: { role: 'user', content: 'first request' } },
+    { type: 'message', id: 'assistant-1', message: { role: 'assistant', content: 'first answer' } },
+    { type: 'custom', id: 'command-1', customType: 'agent-lens.command',
+      data: { command: '/mcp', outcome: 'handled',
+        messages: [{ level: 'info', message: 'connected server-a' }] } },
+    { type: 'custom', id: 'command-2', customType: 'agent-lens.command',
+      data: { command: '/mcp login', outcome: 'failed',
+        messages: [{ level: 'error', message: 'No OAuth servers' }] } },
+    { type: 'message', id: 'user-2', message: { role: 'user', content: 'second request' } },
+  ])
+  const rounds = projectLiveTaskRounds(records)
+  assert.deepEqual(rounds.map(row => row.model.id), [
+    'live-round:user-1',
+    'live-command-round:native-command:command-1',
+    'live-command-round:native-command:command-2',
+    'live-round:user-2',
+  ])
+  assert.deepEqual(rounds.map(row => row.model.ordinal), [1, undefined, undefined, 2])
+  assert.deepEqual(rounds.map(row => row.model.label).slice(1, 3), ['/mcp', '/mcp login'])
+  assert.equal(rounds[1]?.model.preview, 'connected server-a')
+  assert.equal(rounds[2]?.model.warningCount, 1)
+  assert.equal(rounds[2]?.model.terminalFailure, false)
+  assert.equal(rounds[1]?.items.some(item => item.kind === 'message'), false)
+
+  const projector = new LiveTaskRoundProjector()
+  const segments = projector.projectSegmented(records.slice(0, 2), records.slice(2, 4))
+  assert.deepEqual(segments.active.map(row => row.model.state), ['settled', 'settled'])
+  assert.deepEqual(segments.active.map(row => row.model.ordinal), [undefined, undefined])
+  assert.deepEqual(projector.projectSegmented(records, []).stable.map(row => row.model.ordinal),
+    [1, undefined, undefined, 2])
+})
