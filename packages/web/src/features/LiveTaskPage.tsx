@@ -66,6 +66,7 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
   const [mcpOutcome, setMcpOutcome] = useState<'handled' | 'failed' | null>(null)
   const [mcpUnconfirmed, setMcpUnconfirmed] = useState(false)
   const [mcpInventory, setMcpInventory] = useState<LiveRuntimeDisclosureContributionDto | null>(null)
+  const [mcpInventoryPending, setMcpInventoryPending] = useState(false)
   const mcpEpochRef = useRef(0)
   const mcpExpectedRef = useRef<{ command: string; epoch: number; runtimeSessionId: string } | null>(null)
   const [queueExpanded, setQueueExpanded] = useState(false)
@@ -83,6 +84,7 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
     setMcpOutcome(null)
     setMcpUnconfirmed(false)
     setMcpInventory(null)
+    setMcpInventoryPending(false)
   }, [current?.liveId, current?.runtimeSessionId])
   // Keep the reader's disclosure intent through live snapshot reconciliation.
   const processExpansionStore = useMemo(() => new Map<string, boolean>(), [current?.liveId, current?.runtimeSessionId])
@@ -213,13 +215,16 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
     setMcpUnconfirmed(false)
     setMcpPending(false)
     if (event.command === '/mcp' && current) {
+      setMcpInventoryPending(true)
       // Read inventory after the native command actually completed.
       // Never race a stale 24-entry snapshot against a newly dispatched command.
       void liveApi.runtimeDisclosures(current.liveId, current.runtimeSessionId).then(items => {
         if (mcpEpochRef.current === expected.epoch) {
           setMcpInventory(items.find(item => item.contributionId === 'pi.runtime.mcp-tools') ?? null)
         }
-      }, () => undefined)
+      }, () => undefined).finally(() => {
+        if (mcpEpochRef.current === expected.epoch) setMcpInventoryPending(false)
+      })
     }
   }, [current?.liveId, current?.runtimeSessionId])
   const { syncCurrentSession } = useLiveTaskRuntime({
@@ -523,6 +528,10 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
     setMcpStatus('')
     setMcpOutcome(null)
     setMcpUnconfirmed(false)
+    if (action === 'status') {
+      setMcpInventory(null)
+      setMcpInventoryPending(false)
+    }
     setMcpPending(true)
     const epoch = ++mcpEpochRef.current
     const command = action === 'status' ? '/mcp' : `/mcp ${action}`
@@ -900,7 +909,8 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
                 <CopyableCodeBlock copyValue={mcpStatus}>{mcpStatus}</CopyableCodeBlock>
               </section>
             : <p role="status">{t(mcpPending ? 'live.mcp.waitingForResult' : 'live.mcp.empty')}</p>}
-          {!mcpPending && mcpStatus && !mcpInventory && <p role="status">{t('live.mcp.toolsUnavailable')}</p>}
+          {!mcpPending && !mcpInventoryPending && mcpOutcome === 'handled' && mcpStatus
+            && !mcpInventory && <p role="status">{t('live.mcp.toolsUnavailable')}</p>}
           {mcpInventory && <section aria-label={t('live.mcp.registeredTools')}>
             <strong>{t('live.mcp.registeredTools')}</strong>
             {mcpInventoryText
