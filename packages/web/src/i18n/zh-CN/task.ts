@@ -332,6 +332,8 @@ export const chineseTaskMessages: LocaleMessagesDto = {
         lastStatus: '最近一次原生状态',
         registeredTools: 'Pi SDK 已注册可达工具',
         noRegisteredTools: '当前未读取到可达 MCP 工具（不代表没有配置服务器）',
+        commandFailed: 'Pi MCP 命令执行失败',
+        waitingForResult: '等待 Pi MCP 返回结果…',
         toolsUnavailable: '当前无法从 Pi SDK 读取工具列表',
         close: '关闭',
       },
