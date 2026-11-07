@@ -334,6 +334,7 @@ export const chineseTaskMessages: LocaleMessagesDto = {
         noRegisteredTools: '当前未读取到可达 MCP 工具（不代表没有配置服务器）',
         commandFailed: 'Pi MCP 命令执行失败',
         waitingForResult: '等待 Pi MCP 返回结果…',
+        resultUnconfirmed: '未收到 Pi MCP 完成事件，结果尚未确认；可以重新刷新。',
         toolsUnavailable: '当前无法从 Pi SDK 读取工具列表',
         close: '关闭',
       },
