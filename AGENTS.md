@@ -210,7 +210,18 @@ Task Center / Review / Pi Live 的任务内容继续复用现有：
 
 ## 验证
 
-涉及 Web / UI 的修改至少执行或确保 CI 覆盖：
+涉及 Web / UI 的修改，**必须在 PR 合并前真实执行本地检查**，不得以“代码阅读、正则匹配、GitHub 文件对照、已添加测试、CI 可能覆盖”代替实际运行结果；不等待 CI/Actions 不等于跳过本地验证。
+
+**TSX/JSX 修改的双重代码门禁（至少两遍，均必须成功）：**
+
+```bash
+# 第一遍：TypeScript/JSX 语法、类型检查（包括缺失的 JSX 闭合标签）
+npm run typecheck --workspace @agent-lens/web
+# 第二遍：独立的 Vite/Web 打包检查
+npm run build:web
+```
+
+随后按改动范围执行：
 
 ```bash
 npm run check:web-presentation
@@ -218,6 +229,8 @@ npm run typecheck
 npm test
 npm run build:dist
 ```
+
+任意适用命令失败时，必须先修复并重新运行，不能合并 PR。**没有本地工作树、依赖或可执行环境时，明确标为“未验证”，不得宣称代码可编译，也不得以远程静态阅读替代门禁后合并。**需要先取得可运行的 checkout/环境；不得用新造的 JSX 文本匹配器替代 TS 编译器。
 
 Task Center / Pi Live 还必须保留对应契约、性能与真实 Smoke 门禁。CI 通过不能代替用户要求的真实 Pi / Windows / 长时间狗粮验收。
 
