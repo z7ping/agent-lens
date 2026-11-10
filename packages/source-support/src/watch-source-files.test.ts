@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { mkdir, mkdtemp, rm, unlink, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, rm, stat, unlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { basename, join } from 'node:path'
 import test from 'node:test'
@@ -48,8 +48,10 @@ test('watchSourceFiles is ready before returning and stops cleanly on dispose', 
   })
 
   const filePath = join(root, 'state.db')
-  if (process.platform === 'win32') await delay(1500)
+  const before = await stat(root)
   await writeFile(filePath, 'one', 'utf8')
+  const after = await stat(root)
+  console.log('诊断目录时间', before.mtimeMs, after.mtimeMs)
   try {
     await waitFor(
       () => seen.some(item => item.path === filePath && item.event === 'add'),

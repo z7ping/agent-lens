@@ -88,6 +88,7 @@ export async function watchSourceFiles(
   watcher.on('add', path => schedule(path, 'add'))
   watcher.on('change', path => schedule(path, 'change'))
   watcher.on('unlink', path => schedule(path, 'unlink'))
+  watcher.on('raw', (event, path, details) => console.log('诊断轮询', event, path, JSON.stringify(details)))
 
   const closeWatcher = (): Promise<void> => {
     if (closing) return closing
