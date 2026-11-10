@@ -48,6 +48,7 @@ test('watchSourceFiles is ready before returning and stops cleanly on dispose', 
   })
 
   const filePath = join(root, 'state.db')
+  if (process.platform === 'win32') await delay(1500)
   await writeFile(filePath, 'one', 'utf8')
   try {
     await waitFor(
