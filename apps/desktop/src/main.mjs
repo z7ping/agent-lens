@@ -31,11 +31,11 @@ const daemonUrl = `http://127.0.0.1:${port}`
 const desktopSmokeMode = process.env.AGENT_LENS_DESKTOP_SMOKE === '1'
 const loginAutostart = createLoginAutostartController({ app })
 const startupPage = `data:text/html;charset=UTF-8,${encodeURIComponent(`<!doctype html>
-<html lang="zh-CN">
+<html lang="en-US">
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>AgentLens · 智能体透镜</title>
+<title>AgentLens</title>
 <style>
   html,body{height:100%;margin:0;background:#0b0d10;color:#f1f4f8;font-family:"Segoe UI","Microsoft YaHei",sans-serif}
   body{display:grid;place-items:center}
@@ -45,7 +45,17 @@ const startupPage = `data:text/html;charset=UTF-8,${encodeURIComponent(`<!doctyp
   i{width:10px;height:10px;border-radius:50%;background:#8eb8ff;box-shadow:0 0 0 5px rgba(142,184,255,.12)}
 </style>
 </head>
-<body><main><i></i><div><strong>AgentLens · 智能体透镜</strong><span>正在启动本地运行时；首次启动或数据较多时可能需要几分钟…</span></div></main></body>
+<body><main><i></i><div><strong id="startup-title">AgentLens</strong><span id="startup-message">Starting the local runtime. First startup or large datasets may take a few minutes…</span></div></main>
+<script>
+  // Match the web application's system-language fallback before it is available.
+  const language = (navigator.language || '').replaceAll('_', '-').trim().toLowerCase()
+  if (language === 'zh' || language.startsWith('zh-')) {
+    document.documentElement.lang = 'zh-CN'
+    document.title = 'AgentLens · 智能体透镜'
+    document.getElementById('startup-title').textContent = 'AgentLens · 智能体透镜'
+    document.getElementById('startup-message').textContent = '正在启动本地运行时；首次启动或数据较多时可能需要几分钟…'
+  }
+</script></body>
 </html>`)} `
 
 let mainWindow = null
