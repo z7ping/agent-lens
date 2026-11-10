@@ -34,12 +34,14 @@ test('watchSourceFiles is ready before returning and stops cleanly on dispose', 
   })
 
   const seen: Array<{ path: string; event: string }> = []
+  const errors: string[] = []
 
   handle = await watchSourceFiles({
     paths: root,
     signal: controller.signal,
     debounceMs: 20,
     accept: filePath => basename(filePath) === 'state.db',
+    onError: error => errors.push(String(error)),
     onFile: async (filePath, event) => {
       seen.push({ path: filePath, event })
     },
@@ -47,10 +49,14 @@ test('watchSourceFiles is ready before returning and stops cleanly on dispose', 
 
   const filePath = join(root, 'state.db')
   await writeFile(filePath, 'one', 'utf8')
-  await waitFor(
-    () => seen.some(item => item.path === filePath && item.event === 'add'),
-    'watchSourceFiles did not observe a file created after readiness',
-  )
+  try {
+    await waitFor(
+      () => seen.some(item => item.path === filePath && item.event === 'add'),
+      'watchSourceFiles did not observe a file created after readiness',
+    )
+  } catch (error) {
+    throw new Error(`文件监听失败：目标=${filePath}，事件=${JSON.stringify(seen)}，错误=${JSON.stringify(errors)}`, { cause: error })
+  }
 
   assert.equal(seen.filter(item => item.path === filePath && item.event === 'add').length, 1)
 
