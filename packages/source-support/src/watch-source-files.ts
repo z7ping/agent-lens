@@ -34,6 +34,7 @@ export async function watchSourceFiles(
   let closing: Promise<void> | null = null
   let processing = Promise.resolve()
   let startupTimer: NodeJS.Timeout | undefined
+  let recoveredCleanupTimer: NodeJS.Timeout | undefined
   let startupAdds: Set<string> | undefined = process.platform === 'win32' ? new Set() : undefined
   const recoveredAdds = new Set<string>()
   const pending = new Map<string, { timer: NodeJS.Timeout; event: SourceFileWatchEvent }>()
@@ -138,6 +139,8 @@ export async function watchSourceFiles(
       }
     }
     startupAdds = undefined
+    recoveredCleanupTimer = setTimeout(() => recoveredAdds.clear(), POLLING_INTERVAL_MS * 2)
+    recoveredCleanupTimer.unref()
   }
   watcher.once('ready', () => {
     if (process.platform !== 'win32' || stopped || options.signal.aborted) return
@@ -159,6 +162,7 @@ export async function watchSourceFiles(
     if (stopped) return
     stopped = true
     if (startupTimer) clearTimeout(startupTimer)
+    if (recoveredCleanupTimer) clearTimeout(recoveredCleanupTimer)
     for (const { timer } of pending.values()) clearTimeout(timer)
     pending.clear()
     void closeWatcher()
@@ -210,6 +214,7 @@ export async function watchSourceFiles(
   return {
     async dispose(): Promise<void> {
       if (startupTimer) clearTimeout(startupTimer)
+      if (recoveredCleanupTimer) clearTimeout(recoveredCleanupTimer)
       if (!stopped) {
         stopped = true
         for (const { timer } of pending.values()) clearTimeout(timer)
