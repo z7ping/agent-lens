@@ -25,14 +25,17 @@ async function waitFor(
 
 test('watchSourceFiles is ready before returning and stops cleanly on dispose', async t => {
   const root = await mkdtemp(join(tmpdir(), 'agent-lens-watch-'))
+  const controller = new AbortController()
+  let handle: Awaited<ReturnType<typeof watchSourceFiles>> | undefined
   t.after(async () => {
+    controller.abort()
+    await handle?.dispose()
     await rm(root, { recursive: true, force: true })
   })
 
-  const controller = new AbortController()
   const seen: Array<{ path: string; event: string }> = []
 
-  const handle = await watchSourceFiles({
+  handle = await watchSourceFiles({
     paths: root,
     signal: controller.signal,
     debounceMs: 20,
@@ -60,16 +63,19 @@ test('watchSourceFiles is ready before returning and stops cleanly on dispose', 
 
 test('watchSourceFiles observes unlink and recreated files without duplicate storms', async t => {
   const root = await mkdtemp(join(tmpdir(), 'agent-lens-watch-rebuild-'))
+  const controller = new AbortController()
+  let handle: Awaited<ReturnType<typeof watchSourceFiles>> | undefined
   t.after(async () => {
+    controller.abort()
+    await handle?.dispose()
     await rm(root, { recursive: true, force: true })
   })
 
-  const controller = new AbortController()
   const filePath = join(root, 'state.db')
   await writeFile(filePath, 'initial', 'utf8')
 
   const seen: Array<{ path: string; event: string }> = []
-  const handle = await watchSourceFiles({
+  handle = await watchSourceFiles({
     paths: root,
     signal: controller.signal,
     debounceMs: 20,
