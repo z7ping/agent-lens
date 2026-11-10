@@ -1,5 +1,6 @@
 import { watch, type FSWatcher } from 'chokidar'
-import { resolve } from 'node:path'
+import { readdir } from 'node:fs/promises'
+import { isAbsolute, relative, resolve } from 'node:path'
 
 const POLLING_INTERVAL_MS = 1_000
 
@@ -32,6 +33,9 @@ export async function watchSourceFiles(
   let watcher: FSWatcher | null = null
   let closing: Promise<void> | null = null
   let processing = Promise.resolve()
+  let startupTimer: NodeJS.Timeout | undefined
+  let startupAdds: Set<string> | undefined = process.platform === 'win32' ? new Set() : undefined
+  const recoveredAdds = new Set<string>()
   const pending = new Map<string, { timer: NodeJS.Timeout; event: SourceFileWatchEvent }>()
 
   const reportError = (error: unknown) => {
@@ -85,9 +89,61 @@ export async function watchSourceFiles(
     // 连首次 ready 和前台历史读取也会被拖住。轮询统一控制在秒级。
     ...(process.platform === 'win32' ? { interval: POLLING_INTERVAL_MS, binaryInterval: POLLING_INTERVAL_MS } : {}),
   })
-  watcher.on('add', path => schedule(path, 'add'))
+  watcher.on('add', path => {
+    startupAdds?.add(resolve(path))
+    if (recoveredAdds.delete(resolve(path))) return
+    schedule(path, 'add')
+  })
   watcher.on('change', path => schedule(path, 'change'))
-  watcher.on('unlink', path => schedule(path, 'unlink'))
+  watcher.on('unlink', path => {
+    recoveredAdds.delete(resolve(path))
+    schedule(path, 'unlink')
+  })
+
+  // Windows 目录时间戳可能在创建目录与首个文件时相同，轮询因此不产生事件。
+  // 启动时仅核对一次 Chokidar 已监听的目录；已知文件继续由原监听器管理。
+  const reconcileStartup = async () => {
+    const active = watcher
+    if (!active || stopped || options.signal.aborted) return
+    const watched = active.getWatched()
+    const insideRoot = (path: string) => [...watchRoots].some(root => {
+      const subpath = relative(root, path)
+      return subpath === '' || (!subpath.startsWith('..') && !isAbsolute(subpath))
+    })
+    const directories = Object.keys(watched).filter(insideRoot)
+    for (const directory of directories) {
+      if (stopped || options.signal.aborted) return
+      let entries
+      try {
+        entries = await readdir(directory, { withFileTypes: true })
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== 'ENOENT') reportError(error)
+        continue
+      }
+      const known = new Set(watched[directory] ?? [])
+      for (const entry of entries) {
+        if (stopped || options.signal.aborted) return
+        const path = resolve(directory, entry.name)
+        if (known.has(entry.name) || startupAdds?.has(path)) continue
+        if (entry.isDirectory()) {
+          if (options.recursive !== false) {
+            active.add(path)
+            directories.push(path)
+          }
+        } else if (entry.isFile() && (!options.accept || options.accept(path, 'add'))) {
+          recoveredAdds.add(path)
+          active.add(path)
+          schedule(path, 'add')
+        }
+      }
+    }
+    startupAdds = undefined
+  }
+  watcher.once('ready', () => {
+    if (process.platform !== 'win32' || stopped || options.signal.aborted) return
+    startupTimer = setTimeout(() => { void reconcileStartup() }, POLLING_INTERVAL_MS + 100)
+    startupTimer.unref()
+  })
 
   const closeWatcher = (): Promise<void> => {
     if (closing) return closing
@@ -102,6 +158,7 @@ export async function watchSourceFiles(
   const abort = () => {
     if (stopped) return
     stopped = true
+    if (startupTimer) clearTimeout(startupTimer)
     for (const { timer } of pending.values()) clearTimeout(timer)
     pending.clear()
     void closeWatcher()
@@ -152,6 +209,7 @@ export async function watchSourceFiles(
 
   return {
     async dispose(): Promise<void> {
+      if (startupTimer) clearTimeout(startupTimer)
       if (!stopped) {
         stopped = true
         for (const { timer } of pending.values()) clearTimeout(timer)

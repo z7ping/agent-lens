@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { mkdir, mkdtemp, rm, unlink, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, rm, stat, unlink, utimes, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { basename, join } from 'node:path'
 import test from 'node:test'
@@ -144,6 +144,23 @@ test('watchSourceFiles accepts an already-aborted signal', async () => {
     },
   })
   await handle.dispose()
+})
+
+test('Windows 启动时目录时间戳未变化也能恢复新增文件', { skip: process.platform !== 'win32' }, async t => {
+  const root = await mkdtemp(join(tmpdir(), 'agent-lens-watch-same-time-'))
+  const controller = new AbortController()
+  let handle: Awaited<ReturnType<typeof watchSourceFiles>> | undefined
+  t.after(async () => { controller.abort(); await handle?.dispose(); await rm(root, { recursive: true, force: true }) })
+  const seen: string[] = []
+  handle = await watchSourceFiles({ paths: root, signal: controller.signal,
+    onFile: path => { seen.push(path) }, debounceMs: 20 })
+  const initial = await stat(root)
+  const file = join(root, 'state.db')
+  await writeFile(file, 'test')
+  await utimes(root, initial.atime, initial.mtime)
+  await waitFor(() => seen.includes(file), '启动核对没有恢复新文件')
+  await delay(1200)
+  assert.equal(seen.filter(path => path === file).length, 1)
 })
 
 test('数据库目录的非递归监听只观察当前目录，仍能观察数据库删除与重建', async t => {
