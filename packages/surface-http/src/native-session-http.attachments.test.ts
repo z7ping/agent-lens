@@ -16,7 +16,7 @@ test('a catalog-attested native image attachment receives an opaque on-demand me
     boundaryHash:'c'.repeat(64),recordFingerprint:'b'.repeat(64),
   }
   const candidate:ObservationCandidate={
-    kind:'message.user',sourceSequence:3000,
+    kind:'message.user', identityHints:{nativeSessionId:'session'},sourceSequence:3000,
     capturedAt:'2026-11-01T00:00:00Z',
     payload:{text:'hello',attachments:[{type:'image',mimeType:'image/png'}]},
   }
@@ -98,7 +98,7 @@ test('same-MIME native images use exact original indexes, never display order or
   const sourceCursor={offset:200,sequence:2,fileIdentity:'1:9',
     boundaryHash:'b'.repeat(64),recordFingerprint:'c'.repeat(64)}
   const candidate:ObservationCandidate={
-    kind:'message.user',sourceSequence:3000,capturedAt:'2026-11-01T00:00:00Z',
+    kind:'message.user', identityHints:{nativeSessionId:'session'},sourceSequence:3000,capturedAt:'2026-11-01T00:00:00Z',
     payload:{text:'two images',attachments:[
       {type:'image',mimeType:'image/png',nativeContentIndex:0},
       {type:'image',mimeType:'image/png',nativeContentIndex:2},

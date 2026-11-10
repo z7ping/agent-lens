@@ -46,7 +46,7 @@ test('Codex 原生目录复用标题索引，文件复制时间不覆盖原生�
       abortSignal:new AbortController().signal} as unknown as SourceHistoryExecutionContext
     const entries=[]
     for await(const entry of codexSourceDefinition.discoverNativeSessions!(context))entries.push(entry)
-    assert.equal(entries[0]?.title,'原生标题')
+    assert.equal(entries[0]?.title,undefined, '旧 JSON 索引标题不作为可信正文')
     assert.equal(entries[0]?.lastActivityAt,'2026-07-02T00:00:00.000Z')
     await rm(join(root,'session_index.jsonl'))
     for await(const entry of codexSourceDefinition.discoverNativeSessions!(context)){

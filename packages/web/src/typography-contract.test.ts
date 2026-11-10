@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import test from 'node:test'
 
-const typography = readFileSync(new URL('./typography.css', import.meta.url), 'utf8')
+const typography = readFileSync(new URL('./typography.css', import.meta.url), 'utf8').replace(/\r\n/g, '\n')
 
 test('字体响应式只跟随共享 lg 边界，不保留 900px 私有断点', () => {
   assert.doesNotMatch(typography, /@media\s*\(max-width:\s*900px\)/)
@@ -27,12 +27,12 @@ test('Live/Review 桌面和移动端正文 14px、过程/代码 13px、辅助不
 })
 
 test('Task Surface 紧凑密度由现有 Owner 管理，不缩共享命中区', () => {
-  assert.match(taskDetail, /\.task-surface \.task-message-assistant \.markdown \{ line-height: 1\.5; \}/)
+  assert.match(taskDetail, /\.task-surface \.task-message-assistant \.markdown \{ line-height: 1\.72; \}/)
   assert.match(taskDetail, /\.task-surface \.task-message-assistant \.markdown > :is\(h1, h2, h3, h4, h5, h6\) \{[\s\S]*?font-size: var\(--text-task-heading\);/)
   assert.match(taskDetail, /\.task-surface \.markdown :not\(pre\) > code \{[^}]*font-size: var\(--text-task-code\);/)
   assert.match(taskDetail, /\.task-tool-call > summary\.task-tool-row \{[\s\S]*?min-height: 26px;/)
   assert.match(taskSessionView, /\.task-session-composer \{ padding-inline: 36px; \}/)
-  assert.match(taskCenter, /padding: 7px 8px 7px 10px;/)
+  assert.match(taskCenter, /padding: 11px 8px 11px 10px;/)
   assert.match(taskComposer, /font-size: var\(--text-control\);\s*line-height: 1\.5;/)
   assert.match(taskComposer, /:not\(pre\) > code \{[^}]*font-size: var\(--text-caption\);/)
   assert.match(liveComposer, /\.live-markdown-placeholder \{[\s\S]*?font-size: var\(--text-control\);/)

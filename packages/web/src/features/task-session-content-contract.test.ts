@@ -77,8 +77,8 @@ test('用户气泡操作只在气泡下方通过悬浮图标展示，并保持�
   assert.match(css, /@media \(hover: none\)/)
 
   const live = read('./LiveTaskTimeline.tsx')
-  assert.match(live, /action\.actionId === 'pi\.edit-from-here' \? 'tool-edit'/)
-  assert.match(live, /action\.actionId === 'pi\.new-session-from-here' \? 'fork'/)
+  assert.match(live, /action\.icon === 'edit' \? 'tool-edit'/)
+  assert.match(live, /action\.icon === 'fork' \? 'fork'/)
   assert.match(live, /aria-label=\{pending \? t\('live\.messageActionPending'\) : label\}/)
   assert.doesNotMatch(live, /<Button\s+key=\{action\.actionId\}/)
 })
@@ -225,7 +225,7 @@ test('Live 和 Review 的消息辅助信息共用一套字段模型，不因缺�
     assert.match(read(source), /taskSessionMessageTime/)
   }
   const messageSource = read('./TaskMessage.tsx')
-  assert.match(messageSource, /\(modelLabel \|\| time \|\| meta \|\| error\)/)
+  assert.match(messageSource, /\(modelLabel \|\| time \|\| meta \|\| error \|\| outputRate != null\)/)
   assert.doesNotMatch(messageSource, /!user && modelLabel &&/)
   assert.match(read('../task-detail.css'), /\.task-surface \.task-message-context-evidence/)
   assert.doesNotMatch(read('../review.css'), /\.task-message-model-meta/)
@@ -312,21 +312,19 @@ test('Task Surface 字号只有 typography.css 一处语义源，Live/Review 不
   assert.doesNotMatch(read('../review.css'), /--text-task-[a-z-]+\s*:/)
 })
 
-test('Task reading typography has three viewport tiers and never enlarges navigation', () => {
+test('Task reading typography uses shared compact roles without enlarging navigation', () => {
   const typography = read('../typography.css')
   const owner = read('../task-detail.css')
   const surface = read('./TaskSurface.tsx')
   assert.match(surface, /sessionMode = mode === 'review' \|\| mode === 'live'/)
   assert.match(surface, /'task-surface', sessionMode \? 'task-session-view'/)
-
-  // Changes are scoped to the shared session surface, not the global :root scale.
-  assert.match(typography, /\.task-surface\.task-session-view \{\s*--text-task-body:15px;\s*--text-task-thinking-markdown:13px;\s*\}/)
-  assert.match(typography, /@media \(min-width: 768px\) \{\s*\.task-surface\.task-session-view \{\s*--text-task-process:var\(--font-size-md\);\s*--text-task-thinking-markdown:var\(--text-task-process\);\s*--text-task-code:var\(--font-size-sm\);\s*\}\s*\}/)
-  assert.match(typography, /@media \(min-width: 1400px\) \{\s*\.task-surface\.task-session-view \{\s*--text-task-body:var\(--font-size-lg\);\s*--text-task-tool:var\(--font-size-md\);\s*\}\s*\}/)
+  assert.match(typography, /\.task-surface\.task-session-view \{[\s\S]*?--text-task-body:var\(--font-size-md\);[\s\S]*?--text-task-thinking-markdown:var\(--font-size-sm\);/)
+  assert.match(typography, /--text-task-tool:var\(--font-size-sm\);/)
+  assert.doesNotMatch(typography, /@media \(min-width: 1400px\)[\s\S]*?--text-task-body:/)
 
   assert.match(owner, /\.task-message-content \.markdown \{ font-size: var\(--text-task-body\); \}/)
   assert.match(owner, /\.task-thinking-content \.markdown \{ font-size: var\(--text-task-thinking-markdown\); line-height: 1\.58; \}/)
-  assert.match(owner, /\.task-process-message \.markdown \{ font-size: var\(--text-task-process\); line-height: 1\.6; \}/)
+  assert.match(owner, /\.task-process-message \.markdown \{ font-size: var\(--text-task-process\); line-height: 1\.66; \}/)
   assert.match(owner, /\.task-tool-call > summary\.task-tool-row \{[^}]*font: var\(--text-task-tool\)/)
   assert.match(owner, /\.task-surface \.markdown pre,[\s\S]*?font: var\(--text-task-code\)/)
   // Metadata and fixed control typography must remain on their existing scale.
@@ -345,17 +343,17 @@ test('Task reading rhythm is shared by Live/Review while user bubbles and docume
   assert.match(shared, /return <TaskMessage/)
   assert.match(message, /roleClass = user \? 'task-message-user' : 'task-message-assistant'/)
   assert.match(detail, /\.task-message-assistant \.markdown \{ line-height: 1\.72; \}/)
-  assert.match(detail, /\.task-message-assistant \.markdown > p,\s*\.task-surface \.task-message-assistant \.markdown > \.markdown-streaming-tail \{ margin: \.56em 0; \}/)
-  assert.match(detail, /\.task-message-assistant \.markdown > :is\(h1, h2, h3, h4, h5, h6\) \{\s*margin: 1\.06em 0 \.4em;\s*line-height: 1\.4;/)
-  assert.match(detail, /\.task-message-assistant \.markdown > :is\(ul, ol\) \{ margin: \.62em 0; \}/)
-  assert.match(detail, /\.task-message-assistant \.markdown li \{ margin: \.2em 0; \}/)
-  assert.match(detail, /\.task-message-assistant \.markdown > :is\(\.copyable-code-block, \.markdown-table-scroll\) \{ margin: 11px 0; \}/)
+  assert.match(detail, /\.task-message-assistant \.markdown > p,\s*\.task-surface \.task-message-assistant \.markdown > \.markdown-streaming-tail \{ margin: \.35em 0; \}/)
+  assert.match(detail, /\.task-message-assistant \.markdown > :is\(h1, h2, h3, h4, h5, h6\) \{\s*margin: \.72em 0 \.25em;[\s\S]*?line-height: 1\.32;/)
+  assert.match(detail, /\.task-message-assistant \.markdown > :is\(ul, ol\) \{ margin: \.4em 0; \}/)
+  assert.match(detail, /\.task-message-assistant \.markdown li \{ margin: \.1em 0; \}/)
+  assert.match(detail, /\.task-message-assistant \.markdown > :is\(\.copyable-code-block, \.markdown-table-scroll\) \{ margin: 7px 0; \}/)
   assert.match(detail, /\.task-message-assistant \.markdown > :first-child \{ margin-top: 0; \}/)
   assert.match(detail, /\.task-message-assistant \.markdown > :last-child \{ margin-bottom: 0; \}/)
 
   // Thinking and in-round narrative stay subordinate; neither style creates a new per-agent renderer.
   assert.match(detail, /\.task-thinking-content \.markdown \{ font-size: var\(--text-task-thinking-markdown\); line-height: 1\.58; \}/)
-  assert.match(detail, /\.task-process-message \.markdown \{ font-size: var\(--text-task-process\); line-height: 1\.6; \}/)
+  assert.match(detail, /\.task-process-message \.markdown \{ font-size: var\(--text-task-process\); line-height: 1\.66; \}/)
   assert.doesNotMatch(detail, /\.task-message-bubble-user \.markdown > (?:p|:is\()/)
   assert.doesNotMatch(read('../live-task.css'), /\.task-message-assistant \.markdown >/)
   assert.doesNotMatch(read('../review.css'), /\.task-message-assistant \.markdown >/)

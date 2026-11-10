@@ -344,8 +344,7 @@ test('Slim-only HTTP reads native Catalog/facets and refuses all old Event APIs'
       examinedScopes:2,indexedSessions:14,failedScopes:0,deferredScopes:1,
     })
     assert.equal(progressBody.recent[0]?.sync,undefined)
-    const nextProgress=await (await fetch(base+'/api/v1/background-activity')).json()
-      as typeof progressBody
+    const nextProgress=await (await fetch(base+'/api/v1/background-activity')).json() as typeof progressBody
     assert.equal(nextProgress.recent[0]?.updatedAt,progressBody.recent[0]?.updatedAt)
     const streamController=new AbortController()
     const stream=await fetch(base+'/api/v1/events',{signal:streamController.signal})

@@ -20,7 +20,7 @@ test('Hermes workbench has a single toolbar and reuses shared inline navigation'
 
 test('single selected board shows its name, multi-board preserves native selection and pagination', () => {
   assert.match(work, /response\.boardsTotal>1 \|\| response\.boardsHasMore \|\| boardOffset>0 \|\| !response\.selectedBoard/)
-  assert.match(work, /selectedOption=\{response\.selectedBoard \?/)
+  assert.match(work, /response\.selectedBoard \? \{ selectedOption:/)
   assert.match(work, /item\.id==='default' && item\.name==='default'/)
   assert.match(work, /response\.boardsHasMore && <Button/)
   assert.doesNotMatch(work, /<span>\{response\.boardsTotal\}<\/span>/)

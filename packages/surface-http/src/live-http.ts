@@ -395,6 +395,7 @@ function normalizeMessageActions(value: unknown): LiveMessageActionContribution[
     result.push({
       actionId,
       label,
+      ...(row.icon === 'edit' || row.icon === 'fork' ? { icon: row.icon } : {}),
       ...(description ? { description } : {}),
       roles,
       ...(typeof row.requiresIdle === 'boolean' ? { requiresIdle: row.requiresIdle } : {}),
@@ -872,7 +873,7 @@ type LiveHistoryContext = {
   nativeSessions:NativeSessionListReader
   sources:SourceService
   policy:Pick<CapturePolicyService,'isSourceEnabled'>
-  turnIndex?:Pick<NativeReviewTurnIndex,'query'>
+  turnIndex?:Pick<NativeReviewTurnIndex,'query' | 'findByNativeEventId'>
 }
 
 async function listKnownRuntimes(service: LiveService, history?: LiveHistoryContext): Promise<JsonValue> {

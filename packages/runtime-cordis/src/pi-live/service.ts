@@ -1487,6 +1487,7 @@ export class DefaultPiLiveService implements PiLiveService {
     if (runtime.handle?.entry && runtime.handle.navigateTree && state.capabilities?.treeNavigation === true) {
       actions.push({
         actionId: 'pi.edit-from-here',
+        icon: 'edit' as const,
         label: {
           default: 'Edit from here',
           localizations: { 'zh-CN': '从这里编辑', 'en-US': 'Edit from here' },
@@ -1505,6 +1506,7 @@ export class DefaultPiLiveService implements PiLiveService {
     if (runtime.handle?.entry && state.sessionFile && state.capabilities?.messageFork === true) {
       actions.push({
         actionId: 'pi.new-session-from-here',
+        icon: 'fork' as const,
         label: {
           default: 'New session',
           localizations: { 'zh-CN': '从这里新建会话', 'en-US': 'New session' },

@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import { resolve } from 'node:path'
 import Database from 'better-sqlite3'
-import { NATIVE_SESSION_METRIC_PROJECTION_VERSION } from '@agent-lens/core'
+import { NATIVE_SESSION_METRIC_PROJECTION_VERSION, type NativeSessionMetricSnapshot } from '@agent-lens/core'
 import { SqliteExecutor } from './executor'
 import { initializeSlimSchema, assertSlimSchema } from './slim-schema'
 import { SqliteNativeSessionCatalog } from './native-session-catalog'
@@ -57,7 +57,7 @@ test('slim Catalog, numerical overview, profile and current assets use no Legacy
     assert.equal(context.runtime_profile_id,runtime.id)
 
     const metrics = new SqliteNativeSessionMetrics(executor)
-    assert.equal(await metrics.replace({
+    const snapshot: NativeSessionMetricSnapshot = {
       ...identity,
       fileIdentity:location.fileIdentity,fileSize:location.fileSize,
       fileMtimeMs:location.fileMtimeMs,parserVersion:'pi-v1',
@@ -67,7 +67,9 @@ test('slim Catalog, numerical overview, profile and current assets use no Legacy
       inputTokens:10,outputTokens:5,computedAt:at,
       tools:[{nativeToolName:'read',callCount:1,resultCount:1,
         errorCount:0,totalDurationMs:42}],
-    }),true)
+    }
+    assert.equal(await metrics.replace(snapshot),true)
+    assert.equal(await metrics.publishErrors(snapshot,'00000000-0000-4000-8000-000000000001'),true)
     const summary = await metrics.overview({
       sourceId:'pi',parserVersion:'pi-v1',coverageCertified:true,
     })

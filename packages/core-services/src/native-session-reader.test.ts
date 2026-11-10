@@ -461,7 +461,7 @@ test('large native record fragments require Source identity and parent CapturePo
   } as unknown as SourceDefinition
   let sanitized=0
   const policy={
-    isSourceEnabled:()=>true,
+    isSourceEnabled:()=>true,isEnabled:()=>true,
     capture(_scope:string, text:string){
       sanitized++
       assert.equal(_scope,'prompt')
@@ -515,7 +515,7 @@ test('large split scalar fragments are masked under redacted CapturePolicy',asyn
   for(const mode of ['redacted','full'] as const){
     let called=false
     const policy={
-      isSourceEnabled:()=>true,
+      isSourceEnabled:()=>true,isEnabled:()=>true,
       modeFor:()=>mode,
       capture(){called=true;return {value:'unexpected',mode,redactionApplied:false}},
     } as unknown as CapturePolicyService
@@ -604,7 +604,7 @@ test('native tool argument fragments use key-aware CapturePolicy and hide privat
   } as unknown as SourceDefinition
   const captures:unknown[]=[]
   const policy={
-    isSourceEnabled:()=>true,
+    isSourceEnabled:()=>true,isEnabled:()=>true,
     modeFor:()=> 'redacted' as const,
     capture(scope:string,input:unknown){
       assert.equal(scope,'tool')
@@ -666,7 +666,7 @@ test('tool result details use the same key-aware policy as tool call arguments',
   } as unknown as SourceDefinition
   const inputs:unknown[]=[]
   const policy={
-    isSourceEnabled:()=>true,
+    isSourceEnabled:()=>true,isEnabled:()=>true,
     capture(scope:string,value:unknown){
       assert.equal(scope,'tool')
       inputs.push(value)
@@ -805,8 +805,9 @@ test('native tool links enforce catalog identity and tool privacy before Source 
   if(available.state==='available')
     assert.equal(available.match?.recordSha256,'b'.repeat(64))
   assert.equal(calls,1)
+  const { fragmentOrdinal: _fragmentOrdinal, ...blockQuery } = query
   const block=await reader.findNativeToolResult({
-    ...query,fragmentOrdinal:undefined,contentIndex:0,
+    ...blockQuery,contentIndex:0,
   })
   assert.equal(block.state,'available')
   assert.deepEqual(await reader.findNativeToolResult({

@@ -60,7 +60,7 @@ test('Review 116 次工具按思考分为 58 个独立相邻组，不整轮折�
     items.push({ type: 'message', node: thinking(index) })
   }
   const html = renderToStaticMarkup(createElement(ReviewProcessGroup, {
-    id: 'process:116',
+    sessionId: 'native-session', id: 'process:116',
     items,
     inspect: () => undefined,
     state: 'settled',
@@ -87,7 +87,7 @@ test('Review preserves tool boundaries across different reasoning parents', () =
     { type: 'tool-group', parentReasoningId: 'parent-b', items: [tool(5), tool(6), tool(7), tool(8)] },
   ]
   const html = renderToStaticMarkup(createElement(ReviewProcessGroup, {
-    id: 'process:parents', items, inspect: () => undefined,
+    sessionId: 'native-session', id: 'process:parents', items, inspect: () => undefined,
     state: 'settled', showAllEvents: false,
     expansionStore: new Map([['process:parents', true]]),
   }))
@@ -103,7 +103,7 @@ test('Review separates adjacent tool batches even with the same reasoning parent
     { type: 'tool-group', items: [tool(5)] },
   ]
   const html = renderToStaticMarkup(createElement(ReviewProcessGroup, {
-    id: 'process:hidden-interruption', items, inspect: () => undefined,
+    sessionId: 'native-session', id: 'process:hidden-interruption', items, inspect: () => undefined,
     state: 'settled', showAllEvents: false,
     expansionStore: new Map([['process:hidden-interruption', true]]),
   }))

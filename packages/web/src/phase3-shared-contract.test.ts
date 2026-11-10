@@ -16,7 +16,7 @@ test('P1-04 / P1-05：Review 与 Pi Live 共用 820px Task Surface 阅读宽度'
   assert.match(taskSession, /max-width: var\(--al-content-task-reading\);/)
   assert.match(taskSession, /padding: 3px var\(--al-safe-composer-inline\) 10px;/)
   assert.match(taskSession, /@container task-surface \(max-width: 991\.98px\)/)
-  assert.match(taskSession, /task-session-document,[\s\S]*?task-session-composer \{ padding-inline: 96px; \}/)
+  assert.match(taskSession, /task-session-document,[\s\S]*?task-session-composer \{ padding-inline: 36px; \}/)
 })
 
 test('P1-07：关键前景/背景和来源色同时覆盖 Light / Dark', () => {

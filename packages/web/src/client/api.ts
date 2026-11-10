@@ -250,7 +250,7 @@ export class AgentLensApi {
     return requestJson<AgentWorkOutputResponseDto>('/api/v1/agents/'+encodeURIComponent(sourceId)+'/workspace/output?'+params.toString())
   }
 
-  agentWorkspace(sourceId: string, options: {installationId:string;board?:string;offset?:number;limit?:number;jobId?:string;profile?:string;executionOffset?:number;scheduleOffset?:number;taskId?:string;taskEventOffset?:number;runOffset?:number;commentOffset?:number;projectOffset?:number;boardOffset?:number} = {}): Promise<AgentWorkspaceResponseDto> {
+  agentWorkspace(sourceId: string, options: {installationId:string;board?:string | undefined;offset?:number;limit?:number;jobId?:string;profile?:string;executionOffset?:number;scheduleOffset?:number;taskId?:string;taskEventOffset?:number;runOffset?:number;commentOffset?:number;projectOffset?:number;boardOffset?:number}): Promise<AgentWorkspaceResponseDto> {
     const params = new URLSearchParams({installationId:options.installationId})
     if (options.board) params.set('board', options.board)
     if (options.offset) params.set('offset', String(options.offset))
@@ -456,7 +456,7 @@ export class AgentLensApi {
    * A partial coverage response is NOT a complete global usage count.
    */
   nativeMetricsOverview(options:{
-    sourceId?:string;projectId?:string;from?:string;to?:string;signal?:AbortSignal
+    sourceId?:string | undefined;projectId?:string | undefined;from?:string | undefined;to?:string | undefined;signal?:AbortSignal | undefined
   }={}):Promise<NativeMetricOverviewResponseDto>{
     const params=new URLSearchParams()
     if(options.sourceId)params.set('sourceId',options.sourceId)
@@ -471,8 +471,8 @@ export class AgentLensApi {
 
   /** SQL-only indexed error facts. Page all failures; full source payload stays in Review. */
   nativeErrors(options:{
-    sourceId:string;projectId?:string;toolName?:string;search?:string
-    from?:string;to?:string;fingerprint?:string;limit?:number;offset?:number;signal?:AbortSignal
+    sourceId:string;projectId?:string | undefined;toolName?:string | undefined;search?:string | undefined
+    from?:string | undefined;to?:string | undefined;fingerprint?:string | undefined;limit?:number;offset?:number;signal?:AbortSignal
   }):Promise<NativeErrorIndexResponseDto>{
     const params=new URLSearchParams({sourceId:options.sourceId})
     if(options.projectId)params.set('projectId',options.projectId)
@@ -940,7 +940,7 @@ export class AgentLensApi {
   }
 
   backupRestorePreview(id: string, signal?: AbortSignal): Promise<BackupRestorePreviewResponseDto> {
-    return requestJson(`/api/v1/backups/${encodeURIComponent(id)}/restore-preview`, { signal })
+    return requestJson(`/api/v1/backups/${encodeURIComponent(id)}/restore-preview`, signal ? { signal } : {})
   }
 
   backupRestoreFilePreview(id: string, archivePath: string, signal?: AbortSignal): Promise<BackupFilePreviewResponseDto> {

@@ -25,7 +25,7 @@ test('Pi Native Normalizer preserves assistant content block order, ids, indexes
     'tool-call',
     'message',
     'thinking',
-    'unknown',
+    'message',
     'usage',
   ])
   assert.deepEqual(facts.slice(0, 6).map(fact => fact.id), [

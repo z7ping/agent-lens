@@ -21,6 +21,20 @@ for (const directory of ['apps', 'packages']) {
   }
 }
 
+// Built-in Live adapters ship with their owning workspace, so their runtime
+// manifests must track the release version as well as package.json files.
+for (const relativePath of [
+  'packages/live-codex/src/index.ts',
+  'packages/live-hermes/src/index.ts',
+  'packages/runtime-cordis/src/pi-live/adapter.ts',
+]) {
+  const source = await readFile(file(relativePath), 'utf8')
+  const versions = [...source.matchAll(/\bpluginVersion:\s*['"]([^'"]+)['"]/g)]
+  if (versions.length !== 1 || versions[0][1] !== expected) {
+    failures.push(`${relativePath}: pluginVersion=${versions.map(match => match[1]).join(',') || '<missing>'}, expected=${expected}`)
+  }
+}
+
 const lock = await readJson(file('package-lock.json'))
 if (lock.version !== expected) failures.push(`package-lock.json: version=${lock.version}, expected=${expected}`)
 if (lock.packages?.['']?.version !== expected) failures.push(`package-lock.json packages[""]: version=${lock.packages?.['']?.version ?? '<missing>'}, expected=${expected}`)

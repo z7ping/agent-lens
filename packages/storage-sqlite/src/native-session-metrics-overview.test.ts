@@ -136,6 +136,8 @@ test('slim metrics are scoped by project context, never legacy SQL observations'
         ...metric(id),installationId:install.id,
       })
       assert.equal(saved,true)
+      assert.equal(await slim.nativeSessionMetrics.publishErrors(
+        {...metric(id),installationId:install.id},'00000000-0000-4000-8000-000000000001'),true)
     }
     const q={sourceId:source,parserVersion,coverageCertified:true}
     const all=await slim.nativeSessionMetrics.overview(q)

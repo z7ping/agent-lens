@@ -27,7 +27,7 @@ export function BackupRestorePreviewWorkbench({
 }: {
   api: AgentLensApi
   preview: BackupRestorePreviewResponseDto
-  snapshot?: BackupSnapshotSummaryDto
+  snapshot?: BackupSnapshotSummaryDto | undefined
   onBack(): void
   onOpenPath(path: string): Promise<unknown>
   onPathError(reason: unknown): void

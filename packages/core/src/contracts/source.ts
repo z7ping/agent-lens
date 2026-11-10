@@ -1,5 +1,5 @@
 import type { AgentInstallation, Host, RuntimeProfile } from '../domain/identity'
-import type { AgentProductId, Confidence, Disposable } from '../domain/common'
+import type { AgentProductId, Confidence, Disposable, JsonValue } from '../domain/common'
 import type {
   AssetDefinitionHint,
   AssetScope,
@@ -247,7 +247,7 @@ export type SourceNativeTextFragmentResult =
         fragmentCount:number;name?:string;callKey?:string
         /** Source-private metadata, removed by Core before HTTP. */
         nativeCallId?:string;emptyArguments?:boolean
-        verifiedArguments?:Record<string,string|number|boolean|null>
+        verifiedArguments?:Record<string,JsonValue>
         redactionApplied?:boolean;suppressed?:boolean
       }>
       contentBlocksTruncated?:boolean

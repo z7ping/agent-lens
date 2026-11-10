@@ -36,7 +36,7 @@ function FileBody({ side, name }: { side: PreviewSide; name: string }) {
         </CopyableCodeBlock>
   }
   return <div className="backup-preview-inspector-unavailable">
-    <UiIcon name="info" size={18}/>
+    <UiIcon name="info" size={20}/>
     <span>{previewReason(side, t)}</span>
   </div>
 }
@@ -119,7 +119,7 @@ export function BackupRestoreFileInspector({
 
   return <section className="backup-preview-inspector" aria-label={t('preview.inspectTitle')}>
     {!item ? <div className="backup-preview-inspector-empty">
-      <UiIcon name="file-code" size={24}/>
+      <UiIcon name="file-code" size={20}/>
       <strong>{t('preview.selectFile')}</strong>
     </div> : <>
       <header className="backup-preview-inspector-header">

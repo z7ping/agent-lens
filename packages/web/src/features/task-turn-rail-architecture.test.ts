@@ -152,7 +152,7 @@ test('Live 正文不再使用轮次 details，但导轨仍使用独立语义锚�
 
 test('Live 用单一处理详情容器管理过程，结论单独展示，思考不算工具', () => {
   const timeline = readFileSync(new URL('./LiveTaskTimeline.tsx', import.meta.url), 'utf8')
-  assert.match(timeline, /projectTaskReading\(projection\.items\.map/)
+  assert.match(timeline, /projectTaskReading\(projection\.items[\s\S]{0,200}\.map/)
   assert.match(timeline, /const processItems = reading\.process\.map/)
   assert.match(timeline, /item\.phase === 'commentary'/)
   assert.match(timeline, /<TaskSessionProcess/)

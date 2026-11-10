@@ -820,7 +820,7 @@ test('Pi native cache status is projected into a typed, agent-neutral runtime me
     assert.equal(normalized.cacheMetrics?.tokenHitRate, 50)
     assert.equal(normalized.cacheMetrics?.compatibility, 'warning')
   }
-  assert.equal(normalizePiLiveEvent({ ...raw, statusKey: 'other-extension' }), undefined)
+  assert.deepEqual(normalizePiLiveEvent({ ...raw, statusKey: 'other-extension' }), { type: 'ui.state', kind: 'status', key: 'other-extension', text: raw.statusText })
   assert.deepEqual(normalizePiLiveEvent({ ...raw, statusText: undefined }), { type: 'runtime.metrics.changed', cacheMetrics: null })
 })
 

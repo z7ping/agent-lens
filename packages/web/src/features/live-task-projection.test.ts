@@ -1665,7 +1665,7 @@ test('Pi /mcp returns full native status in Live and after snapshot recovery, no
     (_, index) => `  server-${index}: connected · codemode · tools: 8`)].join('\n')
   const data = {
     command: '/mcp', outcome: 'handled' as const,
-    messages: [{ level: 'info', message: status }],
+    messages: [{ level: 'info' as const, message: status }],
   }
   const persisted = projectLiveSnapshotEntries([{
     type: 'custom', id: 'mcp-native-1', customType: 'agent-lens.command', data,

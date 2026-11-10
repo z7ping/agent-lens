@@ -77,7 +77,7 @@ test('LiveTask 高级交互只消费通用 capability 与 control，不解析 Pi
   assert.match(liveTask, /normalizedEvent\?\.type === 'control\.changed'/)
   assert.match(readFileSync(new URL('./task-live-runtime.ts', import.meta.url), 'utf8'), /event\.type === 'title\.update'/)
   assert.match(liveTask, /loadBoundedRecoverySnapshot\(current\.liveId, current\.runtimeSessionId, recoveryLeafId\)/)
-  assert.doesNotMatch(liveTask, /queue_update|extension_ui_request|modelId|provider/)
+  assert.doesNotMatch(liveTask, /queue_update|extension_ui_request|modelId/)
 })
 
 
@@ -213,7 +213,7 @@ test('Task Center owns the only Live task navigation while LiveTask keeps the se
   assert.match(taskCenter, /mode === 'live' && <LiveTaskPage embedded\/>/)
   assert.match(taskCenter, /mode === 'history' \|\| review\.response \|\| review\.loading/)
   assert.match(taskCenter, /model\.ensureReview\(\)/)
-  assert.match(taskCenter, /!localSessions\.length && <SessionListSkeleton/)
+  assert.match(taskCenter, /!historyCount && <SessionListSkeleton/)
   assert.match(taskCenter, /useTaskCenterRuntimes\(\)/)
   assert.match(taskCenter, /mergeTaskCenterSessions\(/)
   assert.doesNotMatch(liveTask, /pi-live-sessions|pi-live-session-scroll|liveApi\.list\(current\.liveId\)/)

@@ -19,7 +19,7 @@ const entry:NativeSessionCatalogEntry={
 const hit=(kind:string,id:string,value:string):ObservationCandidate=>({
   kind:kind as ObservationCandidate['kind'],
   nativeEventId:id,capturedAt:at,occurredAt:at,
-  payload:{text:value},identityHints:{},
+  payload:{text:value},identityHints:{nativeSessionId:entry.nativeSessionId},
 })
 const fp=(n:number)=>n.toString(16).padStart(64,'0')
 const cursor=(n:number):SourceNativeSessionCursor=>({
@@ -39,7 +39,7 @@ async function search(reader:NativeSessionWindowReader, next?:string){
     setHeader(){return this},
     once(){return this},
     off(){return this},
-    end(content:string){body=content;this.writableEnded=true;return this},
+    end(this: {writableEnded:boolean},content:string){body=content;this.writableEnded=true;return this},
   } as unknown as ServerResponse
   const request={method:'GET'} as IncomingMessage
   const params=new URLSearchParams({q:'needle',sourceId:'pi'})

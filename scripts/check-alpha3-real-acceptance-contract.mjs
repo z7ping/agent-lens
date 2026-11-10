@@ -123,7 +123,7 @@ requireText(toolGroup, /index < TASK_TOOL_PREVIEW_LIMIT \|\| tool\.status === 'r
 if (/<details[\s\S]*data-task-tool-group="true"/.test(toolGroup)) failures.push('Tool Group 不得恢复独立 details 层')
 if (/errorsOnly|execution-group-toolbar/.test(toolGroup)) failures.push('Tool Group 不得恢复只看错误/汇总工具栏替代主执行轨')
 requireText(toolRow, /data-tool-fact="true"/, '每条 Tool Row 必须标记 Tool Call 事实')
-requireText(toolRow, /task-tool-kind task-tool-kind-\$\{visualKind\}/, 'Tool Row 必须使用语义类型')
+requireText(toolRow, /<ToolKindIcon kind=\{isSubagentTool \? .subagent. : visualKind\}/, 'Tool Row 必须使用语义类型')
 requireText(toolRow, /className="task-tool-summary-text"/, 'Tool 单行摘要必须保留操作/命令预览')
 requireText(toolRow, /className="task-tool-row-chevron"/, 'Tool 单行摘要必须有展开箭头')
 requireText(toolRow, /task-tool-status/, 'Tool Row 必须保留状态/耗时列')

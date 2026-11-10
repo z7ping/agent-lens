@@ -51,8 +51,8 @@ for (const required of [
   "aria-label={t('insightsRail.aria')}",
   "<h2>{t('insightsRail.diagnosticsTitle')}</h2>",
   "<h2>{t('insightsRail.coverageTitle')}</h2>",
-  "const hasIssue = failedStages > 0 || unknownCount > 0 || capacityState === 'approaching' || capacityState === 'exceeded'",
-  'data-state={hasIssue ?',
+  "const hasIssue = failedStages > 0 || unknownCount > 0",
+  "data-state={!agentDiagnosticsAvailable ? 'unknown' : hasIssue ?",
 ]) {
   if (!diagnostics.includes(required)) throw new Error(`智能体洞察缺少正式诊断/覆盖约束：${required}`)
 }

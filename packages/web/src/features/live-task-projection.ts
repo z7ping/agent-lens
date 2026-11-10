@@ -1311,7 +1311,7 @@ export function reduceLiveTaskEvent(
       inputPreview: current?.inputPreview,
       output: event.output ?? current?.output,
       status: event.status,
-      ...(event.parentToolCallId ? { parentToolCallId: event.parentToolCallId } : {}),
+      ...(event.parentToolCallId || current?.parentToolCallId ? { parentToolCallId: event.parentToolCallId || current?.parentToolCallId } : {}),
       durationMs: event.durationMs,
       at: current?.at ?? envelope.receivedAt,
     }))

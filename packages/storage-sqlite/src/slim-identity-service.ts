@@ -172,6 +172,14 @@ export class SqliteSlimIdentityService implements Pick<IdentityService,
         workspace.id,workspace.hostId,workspace.projectId??null,
         workspace.path,workspace.repositoryId??null,workspace.worktreeId??null)
       const key=workspace.projectId??'workspace:'+id
+      // Remove only this workspace's stale launchable association when a
+      // verified repository supersedes its local cwd identity.
+      db.prepare('DELETE FROM launchable_workspace_index WHERE workspace_id=? AND project_key<>?').run(id,key)
+      db.prepare(`DELETE FROM launchable_project_index
+        WHERE project_key=? AND repository_identity LIKE 'local-workspace:%'
+          AND NOT EXISTS(SELECT 1 FROM launchable_workspace_index w WHERE w.project_key=launchable_project_index.project_key)
+          AND NOT EXISTS(SELECT 1 FROM workspaces w WHERE w.project_id=launchable_project_index.project_id)
+          AND NOT EXISTS(SELECT 1 FROM native_session_context c WHERE c.project_id=launchable_project_index.project_id)`).run(old?.projectId??'')
       const at=now()
       const p=workspace.projectId
         ?db.prepare('SELECT name,repository_identity FROM projects WHERE id=?')

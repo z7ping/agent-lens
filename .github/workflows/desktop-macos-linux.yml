@@ -14,7 +14,7 @@ on:
       - 'scripts/smoke-desktop-runtime.mjs'
       - 'package.json'
       - 'package-lock.json'
-      - 'docs/design/brand/agentlens-icon-master.svg'
+      - 'docs/brand/logo/agentlens-icon-master.svg'
       - '.github/workflows/desktop-macos-linux.yml'
   pull_request:
     types: [opened, reopened, ready_for_review]
@@ -30,7 +30,7 @@ on:
       - 'scripts/smoke-desktop-runtime.mjs'
       - 'package.json'
       - 'package-lock.json'
-      - 'docs/design/brand/agentlens-icon-master.svg'
+      - 'docs/brand/logo/agentlens-icon-master.svg'
       - '.github/workflows/desktop-macos-linux.yml'
   release:
     types: [published]

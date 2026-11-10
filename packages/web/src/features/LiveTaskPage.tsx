@@ -13,7 +13,7 @@ import { ErrorStateBanner, OperationProgress } from '../components/StateViews'
 import { Button, Dialog, IconButton, Popover } from '../components/ui'
 import { LiveExtensionPrompt } from './LiveExtensionPrompt'
 import { TaskEvent } from './TaskEvent'
-import { TaskThinking } from './TaskThinking'
+import { TaskSessionDisclosure } from './TaskSessionContent'
 import { useLiveTaskState } from './live-task-state'
 import { extensionWidgetSummary } from './live-extension-state'
 import { useLiveTaskRuntime } from './use-live-task-runtime'
@@ -807,9 +807,8 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
             pendingAction={runtimeActionPending}
             onAction={action => { void runRuntimeAction(action) }}
           />
-          {extensionStatusItems.length > 0 && <TaskThinking
+          {extensionStatusItems.length > 0 && <TaskSessionDisclosure
             model={{ id: 'extension-runtime-status', label: t('live.extensionStatus'), text: '', state: 'settled' }}
-            kind="process"
             defaultExpanded={false}
             expansionStore={processExpansionStore}
             meta={<span className="task-process-summary"><span>{t('process.runtimeRecordCount', { count: extensionStatusItems.length })}</span></span>}
@@ -819,7 +818,7 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
               model={{ id: `extension:status:${item.key}`, category: 'lifecycle', label: item.key, summary: item.text ?? '' }}
               raw={item}
             />)}
-          </TaskThinking>}
+          </TaskSessionDisclosure>}
           {runtimeDisclosures.every(item => !item.lifecycle) && (!state || state.status === 'initializing') && !error && <div className="live-task-startup-spotlight">
             <OperationProgress
               statusLabel={runtimeStatus}

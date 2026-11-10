@@ -251,22 +251,22 @@ test('Task Center context owns search, controlled filters and task list', () => 
   assert.doesNotMatch(app, /ReviewTurnRail/)
 })
 
-test('Tools and Insights share view toolbar filters and keep the detail Drawer', () => {
+test('Tools and Insights share view toolbar filters and retain tool detail navigation', () => {
   assert.match(toolsPage, /import \{ SidebarFilterDisclosure \} from '\.\.\/components\/SidebarFilterDisclosure'/)
-  assert.match(toolsPage, /import \{ Button, Drawer, IconButton, SelectMenu, UiIcon \} from '\.\.\/components\/ui'/)
+  assert.match(toolsPage, /import \{ Button, IconButton, SelectMenu, StatusBadge, UiIcon \} from '\.\.\/components\/ui'/)
   assert.match(toolsPage, /createPortal\(toolbarFilters, toolbarHost\)/)
   assert.match(toolsPage, /<SidebarFilterDisclosure\s+summary=\{agentSelectionSummary\}/)
-  assert.match(toolsPage, /agentSelection=\{\{ mode: 'multiple', value: usage\.filters\.sourceIds/)
+  assert.match(toolsPage, /agentSelection=\{\{ mode: 'single', value: selectedSourceId/)
   assert.doesNotMatch(toolsPage, /<Toolbar\b/)
   assert.doesNotMatch(toolsPage, /<AgentScope\b/)
-  assert.match(toolsPage, /<Drawer[\s\S]*?className="tool-drill-overlay"/)
+  assert.match(toolsPage, /const closeToolDetail=\(\)=>navigate\('\/tools'\)/)
   assert.doesNotMatch(toolsPage, /tool-drawer-scrim|tool-drill-drawer|window\.addEventListener\('keydown'/)
 
   assert.match(insightsPage, /import \{ SidebarFilterDisclosure \} from '\.\.\/components\/SidebarFilterDisclosure'/)
   assert.match(insightsPage, /import \{[^}]*\bIconButton\b[^}]*\bSelectMenu\b[^}]*\bUiIcon\b[^}]*\} from '\.\.\/components\/ui'/)
   assert.match(insightsPage, /createPortal\(toolbarFilters, toolbarHost\)/)
   assert.match(insightsPage, /<SidebarFilterDisclosure\s+summary=\{agentSelectionSummary\}/)
-  assert.match(insightsPage, /agentSelection=\{\{ mode: 'multiple', value: insights\.filters\.sourceIds/)
+  assert.match(insightsPage, /agentSelection=\{\{ mode: 'single', value: selectedSourceId/)
   assert.doesNotMatch(insightsPage, /<Toolbar\b/)
   assert.doesNotMatch(insightsPage, /<AgentScope\b/)
 

@@ -46,9 +46,11 @@ export class NativeMetricsAutoRefresh {
   ) {}
 
   schedule():void {
-    if(this.abort.signal.aborted || this.active || this.queueTimer || !this.catalog
+    if(this.abort.signal.aborted || this.active || !this.catalog
       || !this.metrics?.findRebuildCandidates || !this.reader
       || !this.sources || !this.policy) return
+    // An explicit refresh may advance an already scheduled batch immediately.
+    if(this.queueTimer){clearTimeout(this.queueTimer);this.queueTimer=null}
     if(!this.batchesRemaining) {
       this.batchesRemaining=MAX_BATCHES_PER_REQUEST
       this.idleBatches=0
@@ -181,7 +183,8 @@ export class NativeMetricsAutoRefresh {
         // Failure stays missing/stale; no unverified totals are published.
       }
     }
-    return progressed
+    // A full page may have older candidates even if every entry failed.
+    return progressed || candidates.length===MAX_SESSIONS_PER_TRIGGER
   }
 
   dispose():void {

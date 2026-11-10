@@ -155,7 +155,7 @@ test('registered Pi extension commands bypass the optimistic chat/message pipeli
   assert.match(liveTask, /if \(result\.kind === 'native-command'\) \{\s*void send\(message, undefined, true\)/)
   assert.match(liveActions, /if \(nativeCommand\) \{/)
   assert.match(liveActions, /Never append an optimistic user bubble or claim that the model is streaming/)
-  assert.match(liveActions, /setRuntimeActionFeedback\('handled'\)/)
+  assert.match(liveActions, /Dispatch acceptance is not command success[\s\S]{0,250}setRuntimeActionFeedback\('idle'\)/)
   assert.match(liveTask, /if \(result\.kind === 'blocked'\)/)
 })
 
@@ -241,7 +241,7 @@ test('Live 单条队列操作经原生变更接口，不再在浏览器清空并
 })
 
 test('Live 等待响应与停止入口只有共享 Composer 渲染', () => {
-  assert.match(taskComposer, /\(responseActivity \|\| sendFeedback !== 'idle'\) && <div className="task-composer-response-hint"/)
+  assert.match(taskComposer, /\(responseActivity \|\| sendFeedback !== 'idle' \|\| runtimeActionFeedback !== 'idle'\) && <div className="task-composer-response-hint"/)
   assert.match(taskComposer, /interruptAvailable && <IconButton/)
   assert.match(taskComposer, /className="task-composer-stop"/)
   assert.match(taskComposer, /hasContent && editorProps.canSubmit/)

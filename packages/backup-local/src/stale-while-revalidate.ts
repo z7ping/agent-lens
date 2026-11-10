@@ -214,4 +214,5 @@ export class StaleWhileRevalidateBackupService implements BackupService {
   exportSnapshot(id: string): Promise<Uint8Array> { return this.base.exportSnapshot(id) }
   importSnapshot(bundle: Uint8Array): Promise<BackupSnapshotManifest> { return this.base.importSnapshot(bundle) }
   previewRestore(id: string): Promise<BackupRestorePreview> { return this.base.previewRestore(id) }
+  previewRestoreFile(id: string, archivePath: string) { return this.base.previewRestoreFile(id, archivePath) }
 }

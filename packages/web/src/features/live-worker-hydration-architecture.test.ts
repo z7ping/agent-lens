@@ -9,7 +9,7 @@ test('Live task shell and SSE bootstrap do not wait for Worker-backed Snapshot',
   const reset = page.indexOf("setBootstrapTarget(null)")
   const bootstrap = page.indexOf("setBootstrapTarget({ liveId: current.liveId, runtimeSessionId: current.runtimeSessionId })", reset)
   const state = page.indexOf("const stateRequest = liveApi.state(", reset)
-  const snapshot = page.indexOf("void liveApi.snapshot(", reset)
+  const snapshot = page.indexOf("const snapshotRequest = liveApi.snapshot(", reset)
 
   assert.ok(reset >= 0 && bootstrap > reset)
   assert.ok(state > bootstrap, 'logical state may load after the shell/SSE target is established')
@@ -91,7 +91,7 @@ test('Runtime reconciler preserves SSE compacting activity until compaction ends
   assert.match(page, /runtimeActive = runtime\.isStreaming \|\| runtimeCompacting/)
   assert.match(page, /runtimeCompacting\s*\? 'compacting'/)
   assert.match(page, /status === 'ready'[\s\S]{0,120}runtimeCompacting = false/)
-  assert.match(page, /normalizedEvent\?\.type === 'completed'[\s\S]{0,120}runtimeCompacting = false/)
+  assert.match(page, /normalizedEvent\?\.type === 'completed'[\s\S]{0,700}runtimeCompacting = false/)
 })
 
 

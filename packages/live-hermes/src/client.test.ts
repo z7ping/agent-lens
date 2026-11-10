@@ -68,7 +68,7 @@ test('Hermes history traverses newest, oldest and both directions using bounded 
       const offset = Number(request.searchParams.get('offset'))
       const limit = Number(request.searchParams.get('limit'))
       const rows = order === 'latest'
-        ? raw.toReversed().slice(offset, offset + limit).reverse()
+        ? raw.slice().reverse().slice(offset, offset + limit).reverse()
         : raw.slice(offset, offset + limit)
       return new Response(JSON.stringify({ data: rows }), { status: 200,
         headers: { 'Content-Type': 'application/json' } })

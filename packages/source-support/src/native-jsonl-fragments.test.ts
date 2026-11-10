@@ -54,7 +54,7 @@ test('a 3MiB single JSON string yields resumable UTF-8-safe pieces',async()=>{
     const record=JSON.stringify({id:'u-big',type:'message',
       message:{role:'user',content}})
     assert.ok(Buffer.byteLength(record)>2*1024*1024)
-    await writeFile(path,record+'\\n')
+    await writeFile(path,record+'\n')
     const first=await readNativeJsonlTextFragments({path,allowedRoots:[root],limit:2})
     assert.equal(first.state,'available')
     if(first.state!=='available')return
@@ -145,7 +145,7 @@ test('large media strings are ignored without materializing binary-as-text',asyn
         {type:'text',text:'visible text'},
       ]},
     })
-    await writeFile(path,record+'\\n')
+    await writeFile(path,record+'\n')
     const out=await readNativeJsonlTextFragments({path,allowedRoots:[root],limit:2})
     assert.equal(out.state,'available')
     if(out.state==='available'){

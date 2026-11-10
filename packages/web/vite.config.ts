@@ -17,13 +17,13 @@ export default defineConfig({
   // may split the pre-bundled code and Prism modules otherwise.
   optimizeDeps: {
     rolldownOptions: {
-      experimental: { strictExecutionOrder: true },
+      output: { strictExecutionOrder: true },
     },
   },
   build: {
     chunkSizeWarningLimit: 700,
     rolldownOptions: {
-      experimental: { strictExecutionOrder: true },
+      output: { strictExecutionOrder: true },
     },
   },
   server: {

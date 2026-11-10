@@ -121,12 +121,12 @@ test('Pi Live count-only queries never calculate full-round summaries', () => {
   ]
   const branchJournal=api.historyIndex({fromOrdinal:1,limit:3})
   assert.equal(branchJournal.historyView,'native-journal')
-  assert.deepEqual(branchJournal.items.map(item=>item.cursor),
+  assert.deepEqual(Array.from(branchJournal.items, item=>item.cursor),
     ['root-u1','abandoned-u2','selected-u2'])
   const beforeSwitch=(context.roundIndexCache as {entryPositions:Map<string,number>}).entryPositions
   state.leaf='another-active-leaf'
   const switched=api.historyIndex({fromOrdinal:1,limit:3})
-  assert.deepEqual(switched.items.map(item=>item.cursor),
+  assert.deepEqual(Array.from(switched.items, item=>item.cursor),
     ['root-u1','abandoned-u2','selected-u2'])
   assert.notEqual((context.roundIndexCache as {entryPositions:Map<string,number>}).entryPositions,
     beforeSwitch,'branch leaf changes rebuild the journal index, not its meaning')

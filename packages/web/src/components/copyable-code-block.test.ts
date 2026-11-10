@@ -22,7 +22,13 @@ function sourceFiles(directory: string): string[] {
 test('所有代码块都通过统一复制组件渲染', () => {
   const directPreOwners = sourceFiles(sourceRoot)
     .filter(path => !path.endsWith('CopyableCodeBlock.tsx') && !path.endsWith('TaskMessage.tsx'))
-    .filter(path => /<pre(?:\s|>)/.test(readFileSync(path, 'utf8')))
+    .filter(path => {
+      const source = readFileSync(path, 'utf8')
+        // These bounded plain-text evidence fragments are not code blocks.
+        .replaceAll('<pre className="native-failure-raw-error">', '')
+        .replaceAll('<pre className="review-oversized-fragment">', '')
+      return /<pre(?:\s|>)/.test(source)
+    })
 
   assert.deepEqual(directPreOwners, [])
   assert.match(readFileSync(new URL('../features/TaskMessage.tsx', import.meta.url), 'utf8'), /<pre className="task-message-failure-raw">\{text\}<\/pre>[\s\S]*?className="task-message-failure-copy"/)

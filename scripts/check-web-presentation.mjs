@@ -184,15 +184,15 @@ const surfaces = [
 ]
 const insightMetricPage = readFileSync(p('features/InsightsPage.tsx'), 'utf8')
 const integrationMetricPage = readFileSync(p('features/IntegrationManagementPage.tsx'), 'utf8')
-// Legacy、原生完整校验和原生部分观察各使用四个共享 Workspace KPI。
+// Legacy 与原生统计使用共享 Workspace KPI（含可交互指标）。
 // Integration Management is now
 // a compact three-counter navigator strip, not four full cards. Keep this
 // distinction intentional; neither feature may introduce private card styling.
 const integrationCounterStrip = integrationMetricPage.match(
   /<div className="integration-management-summary"[^>]*>([\s\S]*?)<\/div>/,
 )?.[1] ?? ''
-if ((insightMetricPage.match(/className="workspace-metric-card insight-kpi"/g) ?? []).length !== 12
-  || (integrationCounterStrip.match(/<span><strong>/g) ?? []).length !== 3
+if ((insightMetricPage.match(/className="workspace-metric-card insight-kpi(?: [^"]*)?"/g) ?? []).length !== 10
+  || (integrationCounterStrip.match(/<span(?:\s+[^>]*)?><strong>/g) ?? []).length !== 3
   || !integrationMetricPage.includes('className="integration-management-navigator"')
   || !integrationsCss.includes('.integration-management-summary {')
   || /\.insight-kpi\s*\{[^}]*border-radius\s*:/s.test(css.insights)
@@ -392,7 +392,7 @@ if (!css.backup.includes('AgentLens 1.0 资产备份正式样式')
   || !css.backup.includes('.backup-agent-group')
   || !css.backup.includes('.backup-snapshot-list')
   || !css.backup.includes('.snapshot-builder')
-  || !css.backup.includes('.preview-summary')) throw new Error('资产备份关键能力样式缺失')
+  || !css.backup.includes('.backup-preview-workbench-summary')) throw new Error('资产备份关键能力样式缺失')
 for (const breakpoint of ['991.98px', '767.98px', '575.98px']) {
   if (!css.backupResponsive.includes(breakpoint)) throw new Error(`资产备份响应式缺少正式断点：${breakpoint}`)
 }

@@ -75,6 +75,7 @@ function fakeService(options: {
     async exportSnapshot(): Promise<Uint8Array> { throw new Error('not used') },
     async importSnapshot(): Promise<BackupSnapshotManifest> { throw new Error('not used') },
     async previewRestore(): Promise<BackupRestorePreview> { throw new Error('not used') },
+    async previewRestoreFile() { throw new Error('not used') },
   }
 }
 

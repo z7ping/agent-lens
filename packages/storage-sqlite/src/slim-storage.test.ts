@@ -80,6 +80,6 @@ test('in-memory slim runtime bootstraps independently of v38',async()=>{
   try{
     assertSlimSchema(slim.db)
     assert.equal((slim.db.prepare('SELECT COUNT(*) AS n FROM schema_migrations')
-      .get() as {n:number}).n,1)
+      .get() as {n:number}).n,3)
   }finally{await slim.close()}
 })

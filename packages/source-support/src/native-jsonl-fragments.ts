@@ -311,7 +311,7 @@ export async function readNativeJsonlTextFragments(input:{
       else{
         if(frame.key===undefined)throw new Error('invalid-source-json-structure')
         result=[...frame.path,frame.key]
-        frame.key=undefined
+        delete frame.key
       }
       if(!permittedImageUserPath(result))strictImageUserShape=false
       if(!permittedAssistantPath(result))strictLargeAssistantShape=false
@@ -355,7 +355,7 @@ export async function readNativeJsonlTextFragments(input:{
         ||block.argNodeCount>MAX_TOOL_ARG_NODES
         ||block.argBytes>MAX_TOOL_ARG_BYTES){
         block.argsValid=false
-        block.verifiedArguments=undefined
+        delete block.verifiedArguments
         block.argumentContainers?.clear()
         return
       }

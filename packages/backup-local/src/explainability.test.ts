@@ -54,6 +54,7 @@ test('从现有备份索引汇总大小、目录树和时间分布，不把文�
       async exportSnapshot() { throw new Error('not used') },
       async importSnapshot() { throw new Error('not used') },
       async previewRestore() { throw new Error('not used') },
+      async previewRestoreFile() { throw new Error('not used') },
     } as BackupService
 
     const service = new ExplainableBackupService(base, inventoryPath)
@@ -123,6 +124,7 @@ test('相同索引 generation 复用解释性汇总，generation 变化后重新
       async exportSnapshot() { throw new Error('not used') },
       async importSnapshot() { throw new Error('not used') },
       async previewRestore() { throw new Error('not used') },
+      async previewRestoreFile() { throw new Error('not used') },
     } as BackupService
 
     const service = new ExplainableBackupService(base, inventoryPath)

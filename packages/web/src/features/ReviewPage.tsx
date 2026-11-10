@@ -33,7 +33,7 @@ type VerifiedNativeContentBlock = NonNullable<Extract<NativeRecordTextFragmentsR
   {state:'available'}>['contentBlocks']>[number]
 type OversizedFragmentState = {
   sessionId:string
-  searchCursor?:string
+  searchCursor?:string | undefined
   recordCursor?:string
   recordSha256?:string
   fragments:VerifiedRecordTextFragment[]
@@ -42,20 +42,20 @@ type OversizedFragmentState = {
   images:Array<{contentIndex:number;mimeType:string}>
   imagesTruncated?:boolean
   mediaIndex?:number
-  mediaDataUrl?:string
+  mediaDataUrl?:string | undefined
   totalTextFragments?:number
-  nextFragmentOffset?:number
+  nextFragmentOffset?:number | undefined
   toolLink?:{
     callKey:string;anchorOrdinal:number;anchorContentIndex?:number;loading:boolean
     scannedRecords:number;scanCursor?:string
     match?:{cursor:string;recordSha256:string
-      fragments:VerifiedRecordTextFragment[];nextFragmentOffset?:number
+      fragments:VerifiedRecordTextFragment[];nextFragmentOffset?:number | undefined
       totalTextFragments:number}
     error?:string
   }
   locating:boolean
   loading:boolean
-  error?:string
+  error?:string | undefined
 }
 
 export function ReviewPage({ model, embedded = false, latestRequest = 0 }: { model: AgentLensClientModel; embedded?: boolean; latestRequest?: number }) {
@@ -749,7 +749,7 @@ export function ReviewPage({ model, embedded = false, latestRequest = 0 }: { mod
                       disabled={Boolean(oversized.toolLink?.loading||oversized.loading)}
                       onClick={()=>void findLinkedToolResult({
                         kind:'tool-call',ordinal:-1,contentIndex:block.contentIndex,
-                        callKey:block.callKey,
+                        ...(block.callKey ? {callKey:block.callKey} : {}),
                       })}>
                       {oversized.toolLink?.loading
                         &&oversized.toolLink.anchorContentIndex===block.contentIndex

@@ -433,5 +433,5 @@
 }
 .task-center-rail .task-center-search-hit-actions {
   display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
-  font-size: 11px; color: var(--al-danger);
+  font-size: var(--text-caption); color: var(--al-danger);
 }

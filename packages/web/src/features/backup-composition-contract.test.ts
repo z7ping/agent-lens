@@ -225,7 +225,7 @@ test('大量文件预演有真实活动反馈，可返回且取消当前 HTTP �
   assert.match(workbench, /displayedRoots\.map\(root => renderNode\(root, 0\)\)/)
   assert.match(model, /function compactPreviewPaths/)
   assert.match(model, /\.map\(compactPreviewPaths\)/)
-  assert.doesNotMatch(backupPage, /statusLabel=\{t\('loading\.status'\)\}[\s\S]*?title=\{t\('preview\.loading'\)\}/)
+  assert.doesNotMatch(backupPage, /<OperationProgress[^>]*statusLabel=\{t\('loading\.status'\)\}[^>]*title=\{t\('preview\.loading'\)\}/)
 })
 
 

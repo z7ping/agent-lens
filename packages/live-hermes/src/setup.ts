@@ -92,7 +92,7 @@ async function initializeLocalHermesApiOnce(): Promise<HermesLocalApiSetup> {
   const existing = await regularFile(envPath)
   const original = existing ? await readFile(envPath, 'utf8') : ''
   if (Buffer.byteLength(original) > 256 * 1024) throw new Error('Hermes .env is too large to safely modify')
-  let values: Record<string, string>
+  let values: NodeJS.Dict<string>
   try { values = parseEnv(original) } catch { throw new Error('Hermes .env cannot be parsed; no changes made') }
 
   let yamlApi: Record<string, unknown> = {}

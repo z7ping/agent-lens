@@ -76,7 +76,8 @@ test('Hermes workspace reads multiple boards and profile-local scheduled work wi
     assert.equal(response.projects[0]?.profile,'coder')
     assert.equal(response.taskLinks[0]?.parentId,'t1')
     assert.equal(response.taskComments[0]?.author,'coder')
-    assert.equal(response.taskEvents[0]?.kind,'claimed')
+    assert.ok(response.taskEvents.some(event=>event.kind==='claimed'))
+    assert.ok(response.taskEvents.some(event=>event.kind==='owner_admitted'))
     assert.deepEqual(await readFile(join(root,'cron','jobs.json')),before)
   } finally {await rm(root,{recursive:true,force:true})}
 })
