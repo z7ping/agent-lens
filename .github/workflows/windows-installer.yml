@@ -47,10 +47,13 @@ jobs:
       - name: Verify desktop shell syntax
         run: npm run check:desktop-shell
 
-      - name: Verify source
-        run: |
-          npm run typecheck
-          npm test
+      - name: Typecheck
+        timeout-minutes: 15
+        run: npm run typecheck
+
+      - name: Test
+        timeout-minutes: 15
+        run: npm test
 
       - name: Build Windows installer
         run: npm run desktop:win
