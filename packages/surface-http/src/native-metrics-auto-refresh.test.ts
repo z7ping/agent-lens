@@ -550,7 +550,7 @@ test('one Usage trigger drains later batches and publishes native metric updates
   const metrics={
     findRebuildCandidates:async()=>next<ids.length?[{
       reviewSessionId:ids[next++]!,sourceId:'pi',installationId:'pi-local',
-      nativeSessionId:'session-1',lastActivityAt:at,
+      nativeSessionId:ids[next - 1]!,lastActivityAt:at,
     }]:[],
     replace:async()=>true,
   } as unknown as NativeSessionMetricsStore
@@ -563,7 +563,7 @@ test('one Usage trigger drains later batches and publishes native metric updates
     }),
   } as NativeSessionWindowReader
   const scopedCatalog={
-    getByReviewSessionId:async(id:string)=>ids.includes(id)?entry:null,
+    getByReviewSessionId:async(id:string)=>ids.includes(id)?{...entry,nativeSessionId:id}:null,
   } as unknown as NativeSessionCatalogStore
   let onUpdate:()=>void=()=>undefined
   const finished=new Promise<void>((resolve,reject)=>{

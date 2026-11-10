@@ -13,7 +13,7 @@ test('Assistant 模型输出操作栏固定在正文底部并支持复制', () =
   assert.match(taskMessageSource, /className="task-message-source-action"/)
   assert.match(taskMessageSource, /aria-label=\{sourceActionLabel\}/)
   assert.match(taskMessageSource, /name=\{view === 'rendered' \? 'file-code' : 'preview'\}/)
-  assert.match(taskMessageSource, /view === 'rendered' \? <MarkdownContent[\s\S]*: <CopyableCodeBlock/)
+  assert.match(taskMessageSource, /view === 'rendered'\s*\? <MarkdownContent[\s\S]*: <CopyableCodeBlock/)
 })
 
 test('TaskMessage 通过统一附件字段渲染历史图片而不识别具体 Agent', () => {
@@ -28,7 +28,7 @@ test('TaskMessage 通过统一附件字段渲染历史图片而不识别具体 A
 test('Native 消息操作不能因样式隐藏，扩展动作保留可见入口', () => {
   assert.match(taskDetailCss, /\.task-message-actions \{ display: inline-flex;/)
   assert.doesNotMatch(taskDetailCss, /\.task-message-actions \{ display: none;/)
-  assert.match(taskMessageSource, /\{actions && <span className="task-message-actions">\{actions\}<\/span>\}/)
+  assert.match(taskMessageSource, /\{!user && actions && <span className="task-message-actions">\{actions\}<\/span>\}/)
   assert.match(taskMessageSource, /actions && \(!text \|\| awaitingFirstContent\) && <div className="task-message-actions"/)
 })
 

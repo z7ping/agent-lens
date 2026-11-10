@@ -80,7 +80,7 @@ test('Pi Worker MCP tool inventory excludes third-party, hidden and unverified r
 })
 
 test('Pi MCP OAuth link stays transient while native error notifications report failure', async () => {
-  const source = worker.match(/function createExtensionUi\(\) \{[\s\S]*?\n\}\n\n\/\/ Match Pi/)?.[0]
+  const source = worker.match(/function createExtensionUi\(\) \{[\s\S]*?\r?\n\}\r?\n\r?\n(?=\/\/ Match Pi)/)?.[0]
   assert.ok(source, 'Pi Worker extension UI factory source must exist')
   const events: Array<Record<string, unknown>> = []
   const url = 'https://auth.example/authorize?state=one-time-secret'

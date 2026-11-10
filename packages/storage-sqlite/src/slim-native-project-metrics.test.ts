@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { resolve } from 'node:path'
-import { NATIVE_SESSION_METRIC_PROJECTION_VERSION } from '@agent-lens/core'
+import { NATIVE_SESSION_METRIC_PROJECTION_VERSION, type NativeSessionMetricSnapshot } from '@agent-lens/core'
 import { SqliteSlimStorage } from './slim-storage'
 
 const at='2026-10-26T00:00:00Z'
@@ -27,7 +27,7 @@ test('slim numeric Overview and repair queue filter project without legacy sessi
         projectId:project.id,
       })
     }
-    assert.equal(await slim.nativeSessionMetrics.replace({
+    const firstSnapshot: NativeSessionMetricSnapshot={
       sourceId:'pi',installationId:installation.id,nativeSessionId:'one',
       fileIdentity:'one',fileSize:100,fileMtimeMs:2,
       parserVersion:'pi-v1',projectionVersion:NATIVE_SESSION_METRIC_PROJECTION_VERSION,
@@ -36,7 +36,9 @@ test('slim numeric Overview and repair queue filter project without legacy sessi
       inputTokens:25,outputTokens:10,
       tools:[{nativeToolName:'shell',callCount:2,resultCount:2,errorCount:0,totalDurationMs:10}],
       computedAt:at,
-    }),true)
+    }
+    assert.equal(await slim.nativeSessionMetrics.replace(firstSnapshot),true)
+    assert.equal(await slim.nativeSessionMetrics.publishErrors(firstSnapshot,'00000000-0000-4000-8000-000000000001'),true)
     const query={sourceId:'pi',parserVersion:'pi-v1',coverageCertified:true}
     const one=await slim.nativeSessionMetrics.overview({...query,projectId:p1.id})
     assert.equal(one.eligibleSessions,1)
@@ -66,6 +68,7 @@ test('slim numeric Overview and repair queue filter project without legacy sessi
       inputTokens:null,outputTokens:null,tools:[],computedAt:at,
     }
     assert.equal(await slim.nativeSessionMetrics.replace(pendingSnapshot),true)
+    assert.equal(await slim.nativeSessionMetrics.publishErrors(pendingSnapshot,'00000000-0000-4000-8000-000000000002'),true)
     assert.deepEqual((await slim.nativeSessionMetrics.findRebuildCandidates({
       ...query,projectId:p2.id,coverageCertified:false,
     },4)).map(row=>row.nativeSessionId),[])

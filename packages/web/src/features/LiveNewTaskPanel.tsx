@@ -196,7 +196,7 @@ export function LiveNewTaskPanel({
   const missingIntegration = integrationManagement.find(item =>
     selectedProduct?.liveId === unregisteredLiveId(item))
   const missingIntegrationEntry = Boolean(missingIntegration)
-  const showHermesSetup = selectedProduct?.liveId === 'hermes' && !available && !missingIntegrationEntry
+  const showHermesSetup = selectedProduct?.startCapabilities.setup === 'hermes-gateway-initialize' && !available && !missingIntegrationEntry
 
   const refreshHermes = async () => {
     setProductsLoading(true)
@@ -204,7 +204,7 @@ export function LiveNewTaskPanel({
     try {
       const next = await liveApi.refreshProducts()
       setRegisteredProducts(createProducts(next))
-      if (next.find(item => item.liveId === 'hermes')?.availability.available) setHermesSetupResult(null)
+      if (next.find(item => item.liveId === selectedLiveId)?.availability.available) setHermesSetupResult(null)
     } catch (reason) {
       setProductsError(reason instanceof Error ? reason.message : String(reason))
     } finally {

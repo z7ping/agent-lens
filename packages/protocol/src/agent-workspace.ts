@@ -6,12 +6,12 @@ export type AgentWorkAvailability = 'available' | 'partial' | 'unknown' | 'error
 export interface AgentWorkFeatureDto {
   id: AgentWorkFeature
   availability: AgentWorkAvailability
-  reason?: string
+  reason?: string | undefined
 }
 export interface AgentWorkBoardDto {
   id: string
   name: string
-  projectId?: string
+  projectId?: string | undefined
   archived: boolean
   taskCount: number
 }
@@ -20,27 +20,27 @@ export interface AgentWorkTaskDto {
   boardId: string
   title: string
   status: string
-  assignee?: string
-  projectId?: string
+  assignee?: string | undefined
+  projectId?: string | undefined
   priority: number
-  createdAt?: string
-  lastError?: string
-  currentRunId?: number
-  sourceSessionNativeId?: string
+  createdAt?: string | undefined
+  lastError?: string | undefined
+  currentRunId?: number | undefined
+  sourceSessionNativeId?: string | undefined
 }
 export interface AgentWorkRunDto {
   id: number
   boardId: string
   taskId: string
-  profile?: string
+  profile?: string | undefined
   status: string
-  outcome?: string
+  outcome?: string | undefined
   /** Hermes owner_admitted event; this is the executed worker session, not the originating task session. */
-  workerSessionNativeId?: string
-  startedAt?: string
-  endedAt?: string
-  summary?: string
-  error?: string
+  workerSessionNativeId?: string | undefined
+  startedAt?: string | undefined
+  endedAt?: string | undefined
+  summary?: string | undefined
+  error?: string | undefined
 }
 export interface AgentWorkLinkDto {
   parentId: string
@@ -50,13 +50,13 @@ export interface AgentWorkCommentDto {
   id: number
   author: string
   body: string
-  createdAt?: string
+  createdAt?: string | undefined
 }
 export interface AgentWorkEventDto {
   id: number
   kind: string
-  runId?: number
-  createdAt?: string
+  runId?: number | undefined
+  createdAt?: string | undefined
 }
 export interface AgentWorkScheduleDto {
   id: string
@@ -65,12 +65,12 @@ export interface AgentWorkScheduleDto {
   state: string
   enabled: boolean
   schedule: string
-  nextRunAt?: string
-  lastRunAt?: string
-  lastStatus?: string
-  lastError?: string
+  nextRunAt?: string | undefined
+  lastRunAt?: string | undefined
+  lastStatus?: string | undefined
+  lastError?: string | undefined
   noAgent: boolean
-  workdir?: string
+  workdir?: string | undefined
 }
 export interface AgentWorkExecutionDto {
   id: string
@@ -78,10 +78,10 @@ export interface AgentWorkExecutionDto {
   profile: string
   status: string
   claimedAt: string
-  startedAt?: string
-  finishedAt?: string
-  error?: string
-  deliveryOutcome?: string
+  startedAt?: string | undefined
+  finishedAt?: string | undefined
+  error?: string | undefined
+  deliveryOutcome?: string | undefined
 }
 export interface AgentWorkProjectDto {
   id: string
@@ -89,30 +89,30 @@ export interface AgentWorkProjectDto {
   slug: string
   name: string
   archived: boolean
-  boardId?: string
-  primaryPath?: string
+  boardId?: string | undefined
+  primaryPath?: string | undefined
 }
 export interface AgentWorkspaceResponseDto {
   sourceId: string
   /** Server-selected registered Agent installation; native files are scoped to this identity. */
-  installationId?: string
+  installationId?: string | undefined
   features: AgentWorkFeatureDto[]
   /** Provider-issued allowed native actions, not inferred from Agent name. */
   availableActions?: AgentWorkMutationDto['kind'][]
   /** True only when this Source exposes native actions and AgentLens can manage installation-level write access. */
-  writeControlAvailable?: boolean
+  writeControlAvailable?: boolean | undefined
   projects: AgentWorkProjectDto[]
   projectsHasMore: boolean
   projectsTotal: number
   boards: AgentWorkBoardDto[]
   boardsTotal:number
   boardsHasMore:boolean
-  selectedBoard?: string
+  selectedBoard?: string | undefined
   tasks: AgentWorkTaskDto[]
   runs: AgentWorkRunDto[]
   runsHasMore: boolean
   taskCommentsHasMore: boolean
-  detailTaskId?: string
+  detailTaskId?: string | undefined
   taskLinks: AgentWorkLinkDto[]
   taskComments: AgentWorkCommentDto[]
   taskEvents: AgentWorkEventDto[]
@@ -136,7 +136,7 @@ export interface AgentWorkOutputFileDto {
 }
 export interface AgentWorkOutputResponseDto {
   sourceId: string
-  installationId?: string
+  installationId?: string | undefined
   profile: string
   jobId: string
   files: AgentWorkOutputFileDto[]
@@ -147,17 +147,17 @@ export interface AgentWorkOutputResponseDto {
 
 /** Explicit, bounded native mutations. Never transport arbitrary CLI arguments. */
 export type AgentWorkMutationDto =
-  | {kind:'board.create';slug:string;name?:string}
+  | {kind:'board.create';slug:string;name?:string | undefined}
   | {kind:'board.rename';slug:string;name:string}
   | {kind:'board.archive';slug:string}
-  | {kind:'task.create';boardId:string;title:string;body?:string;assignee?:string;priority?:number}
-  | {kind:'task.edit';boardId:string;taskId:string;title?:string;body?:string;priority?:number}
+  | {kind:'task.create';boardId:string;title:string;body?:string | undefined;assignee?:string | undefined;priority?:number | undefined}
+  | {kind:'task.edit';boardId:string;taskId:string;title?:string | undefined;body?:string | undefined;priority?:number | undefined}
   | {kind:'task.assign';boardId:string;taskId:string;profile:string}
   | {kind:'task.link'|'task.unlink';boardId:string;parentId:string;childId:string}
   | {kind:'task.archive';boardId:string;taskId:string}
-  | {kind:'task.block'|'task.unblock'|'task.complete'|'task.promote';boardId:string;taskId:string;reason?:string}
-  | {kind:'cron.create';profile:string;schedule:string;prompt:string;name?:string}
-  | {kind:'cron.edit';profile:string;jobId:string;schedule?:string;prompt?:string;name?:string}
+  | {kind:'task.block'|'task.unblock'|'task.complete'|'task.promote';boardId:string;taskId:string;reason?:string | undefined}
+  | {kind:'cron.create';profile:string;schedule:string;prompt:string;name?:string | undefined}
+  | {kind:'cron.edit';profile:string;jobId:string;schedule?:string | undefined;prompt?:string | undefined;name?:string | undefined}
   | {kind:'cron.pause'|'cron.resume'|'cron.remove'|'cron.cancel'|'cron.run';profile:string;jobId:string}
 
 export interface AgentWorkWriteAccessDto {
@@ -173,11 +173,11 @@ export interface AgentWorkMutationResultDto {
   /** The native CLI exited successfully. Read-back is required for persisted state. */
   accepted:boolean
   /** A background Hermes CLI is still running. This is not a successful native execution. */
-  pending?:boolean
-  receiptId?:string
+  pending?:boolean | undefined
+  receiptId?:string | undefined
   /** Only exact native read-back can mark an operation confirmed. */
   verification?:'confirmed'|'unconfirmed'|'not-verifiable'
-  verificationMessage?:string
+  verificationMessage?:string | undefined
   message:string
 }
 

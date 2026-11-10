@@ -17,7 +17,7 @@ test('Live 组件、异步生命周期、双向分页、动作、状态与输入
   const input = view('./live-task-input.ts')
 
   assert.match(page, /useLiveTaskState\(\)/)
-  assert.match(page, /useLiveTaskRuntime\(\{ current, t, session, reconnectEpoch \}\)/)
+  assert.match(page, /useLiveTaskRuntime\(\{\s*current, t, session, reconnectEpoch, onCommandRecord: onMcpCommandRecord,\s*\}\)/)
   assert.match(page, /useLiveTaskHistory\(\{ current, session \}\)/)
   assert.match(page, /useLiveTaskActions\(\{ current, t, navigate, setComposerValue, clearComposer, session, onSendAccepted, onSendDelivered \}\)/)
   assert.match(page, /<TaskSurface\s+mode="live"/)

@@ -85,7 +85,6 @@ async function inspectNativeMetadata(
         || (provenance.contentRole ?? 'user-request') !== 'user-request') continue
       firstUser = boundedTitle(payload.text)
     }
-    if (explicitTitle || (firstUser && workspacePath)) break
   }
   const title = explicitTitle ?? firstUser
   return {

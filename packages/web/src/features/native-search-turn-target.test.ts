@@ -20,7 +20,7 @@ const index: NativeReviewTurnIndexResponseDto = {
 
 test('Source-backed candidate navigates only after native sparse index agrees',()=>{
   assert.equal(verifiedNativeSearchHitTurn(hit,index),8)
-  const noCandidate={...hit,turn:undefined}
+  const {turn: _turn, ...noCandidate}=hit
   assert.equal(verifiedNativeSearchHitTurn(noCandidate,index),undefined)
   const wrongOrdinal={...index,items:[{ordinal:7,nativeEventId:'user-8',cursor:'cursor'}]}
   assert.equal(verifiedNativeSearchHitTurn(hit,wrongOrdinal),undefined)

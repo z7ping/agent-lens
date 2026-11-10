@@ -218,7 +218,7 @@ export class NativeReviewTurnIndex {
     if(!/^native:[a-f0-9]{32}$/.test(id)
       || !nativeEventId || nativeEventId.length>256
       || !liveFilePath || liveFilePath.length>4096)return undefined
-    const status=await this.query(id,{tail:1})
+    const status=await this.query(id,{limit:0})
     if(status.state!=='available')return undefined
     if(status.coverage!=='complete'){
       this.scheduleWarmup(id)

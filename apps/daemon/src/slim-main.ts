@@ -186,7 +186,7 @@ export async function startSlimNativeDaemon(options:SlimDaemonOptions){
       workspaceMutationRunners: {hermes: mutateHermesWorkspace},
       workspaceReceiptReaders: {hermes: readHermesCronRunReceipt},
       workspaceCapabilityReaders: {hermes: probeHermesWorkspaceActions},
-      workspaceWriteAccess,
+      ...(workspaceWriteAccess ? {workspaceWriteAccess} : {}),
       ...(policy.isSourceEnabled('pi')?{
         piEcosystem:options.piEcosystem??new NpmPiEcosystemProvider(),
       }:{}),

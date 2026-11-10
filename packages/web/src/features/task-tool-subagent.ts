@@ -17,7 +17,7 @@ export interface PiWorkflowChild {
   runId?: string
   agent?: string
   sessionName?: string
-  model?: string
+  model?: string | undefined
   thinking?: string
 }
 
@@ -45,11 +45,11 @@ export interface PiSubagentSummary {
 export interface PiSubagentResult {
   agent: string
   status: PiSubagentStatus
-  task?: string
-  model?: string
+  task?: string | undefined
+  model?: string | undefined
   step?: number
-  errorMessage?: string
-  usage?: { input?: number; output?: number; cacheRead?: number; cacheWrite?: number; cost?: number; turns?: number }
+  errorMessage?: string | undefined
+  usage?: { input?: number | undefined; output?: number | undefined; cacheRead?: number | undefined; cacheWrite?: number | undefined; cost?: number | undefined; turns?: number | undefined }
   messages: readonly unknown[]
 }
 

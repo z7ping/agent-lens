@@ -4,6 +4,7 @@ const main = readFileSync('packages/web/src/main.tsx', 'utf8')
 const app = readFileSync('packages/web/src/App.tsx', 'utf8')
 const page = readFileSync('packages/web/src/features/BackupPage.tsx', 'utf8')
 const tree = readFileSync('packages/web/src/components/BackupDirectoryTree.tsx', 'utf8')
+const preview = readFileSync('packages/web/src/features/BackupRestorePreviewWorkbench.tsx', 'utf8')
 const css = readFileSync('packages/web/src/backup-overlays.css', 'utf8')
 const pageCss = readFileSync('packages/web/src/backup.css', 'utf8')
 const responsiveCss = readFileSync('packages/web/src/backup-responsive.css', 'utf8')
@@ -63,11 +64,14 @@ if (page.includes('<Toolbar className="workspace-toolbar backup-toolbar"')) {
 for (const required of [
   'className="backup-create-drawer"',
   'className="backup-physical-path-drawer"',
-  'className="backup-preview-drawer"',
+  '<BackupRestorePreviewWorkbench',
   'className="backup-confirm-overlay"',
   '<BackupDataRootTree',
 ]) {
   if (!page.includes(required)) throw new Error(`资产备份缺少统一 Overlay / 目录树入口：${required}`)
+}
+if (!preview.includes('className="backup-preview-workbench"') || !preview.includes('role="tree"')) {
+  throw new Error('备份恢复预览必须使用工作台和目录树')
 }
 for (const forbidden of ['className="scrim show', 'className="drawer show', 'backup-confirm-scrim', 'backup-confirm-dialog']) {
   if (page.includes(forbidden)) throw new Error(`资产备份不得恢复页面自建 Overlay：${forbidden}`)

@@ -228,7 +228,7 @@ async function readPiVerifiedLargeImagePage(
         signal:ctx.abortSignal,
       })
       if(media.state!=='available'){
-        if(media.state==='drifted'||media.state==='unavailable')return media
+        if(media.state==='drifted'||media.state==='unavailable')return {state:media.state,reason:media.reason}
         return {state:'unsupported' as const,reason:'native-record-too-large'}
       }
       if(media.record.recordSha256!==scan.span.sha256)
@@ -287,7 +287,7 @@ async function readPiVerifiedLargeImagePage(
     id:`pi-record-${recordHash}`,sourceId:PI_SOURCE_ID,
     installationId:ctx.installation.id,
     sourceSessionNativeId:session.nativeSessionId,nativeType:'history/message',
-    nativeId:original.nativeEventId,sourceSequence:sequence*1000,
+    ...(original.nativeEventId ? {nativeId:original.nativeEventId} : {}),sourceSequence:sequence*1000,
     ...(timestamp?{occurredAt:timestamp}:{}),
     capturedAt:new Date().toISOString(),
     locator:{kind:'file',path:query.filePath,offset:start},

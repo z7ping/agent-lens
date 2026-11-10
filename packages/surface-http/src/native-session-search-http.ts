@@ -291,7 +291,7 @@ export async function handleNativeSessionBodySearchRequest(
       sessionId:string;sourceId:string;installationId:string;nativeSessionId:string;
       lastActivityAt:string;title?:string;
       observationId:string;kind:string;at:string;excerpt:string;
-      turn?:NativeSearchTurnMatch
+      turn?:NativeSearchTurnMatch | undefined
     }>=[]
     const located=scanned?nativeSearchTurnPage(
       scanned.observations,

@@ -805,7 +805,7 @@
 .backup-preview-inspector-header { display: flex; min-width: 0; flex-wrap: wrap; justify-content: space-between; align-items: start; gap: 12px; padding: 14px 16px; border-bottom: 1px solid var(--al-line); }
 .backup-preview-inspector-identity { display: flex; min-width: 0; flex: 1; flex-direction: column; gap: 5px; }
 .backup-preview-inspector-identity strong { overflow-wrap: anywhere; color: var(--al-ink); font-size: 14px; }
-.backup-preview-inspector-identity code { min-width: 0; color: var(--al-muted); font: 11px/1.5 var(--font-mono); overflow-wrap: anywhere; }
+.backup-preview-inspector-identity code { min-width: 0; color: var(--al-muted); font: var(--text-caption)/1.5 var(--font-mono); overflow-wrap: anywhere; }
 .backup-preview-inspector-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .backup-preview-inspector-toolbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; padding: 10px 16px; }
 .backup-preview-inspector-tabs { display: flex; flex-wrap: wrap; align-items: center; gap: 5px; }

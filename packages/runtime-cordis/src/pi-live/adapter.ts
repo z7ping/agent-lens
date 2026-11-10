@@ -65,7 +65,7 @@ const INPUT_CAPABILITIES = createLiveInputCapabilities({
 
 export const piLiveAdapterManifest: LiveAdapterManifest = {
   pluginId: '@agent-lens/runtime-cordis/pi-live',
-  pluginVersion: '1.0.0-alpha.5',
+  pluginVersion: '1.0.0-alpha.7',
   apiVersion: '1.0',
   pluginType: 'live',
   displayName: 'Pi Live',

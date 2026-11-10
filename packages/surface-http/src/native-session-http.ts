@@ -680,7 +680,7 @@ export async function handleNativeSessionAttachmentRequest(
     // Reattest this exact original record before granting a lazy media handle.
     // Only a unique Source image can be matched to a unique attachment.
     const unresolved=items.map((item,index)=>({item,index}))
-      .filter(({item})=>item.type==='image'&&!item.dataUrl)
+      .filter(({item})=>item.type==='image'&&!('dataUrl' in item && item.dataUrl))
     if(unresolved.length>0 && sourceCursor.recordFingerprint
       &&reader.readTextFragments){
       const verified=await reader.readTextFragments({

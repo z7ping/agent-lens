@@ -447,11 +447,11 @@ export function AgentWorkPage({model,sourceId,installationId,installations}: {
                 {(response.boardsTotal>1 || response.boardsHasMore || boardOffset>0 || !response.selectedBoard)
                   ? <SelectMenu ariaLabel={t('work.selectBoard')}
                       value={response.selectedBoard ?? ''} searchable
-                      selectedOption={response.selectedBoard ? {
+                      {...(response.selectedBoard ? { selectedOption: {
                         value:response.selectedBoard,
                         label:board?.name ?? (response.selectedBoard==='default'
                           ? t('work.defaultBoard') : response.selectedBoard),
-                      } : undefined}
+                      } } : {})}
                       options={response.boards.map(item => ({
                         value:item.id,
                         label:(item.id==='default' && item.name==='default' ? t('work.defaultBoard') : item.name)
@@ -796,7 +796,7 @@ function TaskRuns({task,runs,links,comments,events,hasMore,eventOffset,onEventPa
     <div className="section-heading-row"><h3>{t('work.runs')}</h3><span className="section-total">{runs.length}</span></div>
     {!runs.length && <div className="muted-empty compact">{t('work.noRuns')}</div>}
     {links.length>0 && <div className="runtime-config-row"><span>{t('work.links')}</span>{links.map(link=>
-      <span key={link.parentId+':'+link.childId}><code>{link.parentId} → {link.childId}</code>
+      <span key={link.parentId+':'+link.childId}><code className="agent-work-link-path"><span>{link.parentId}</span><UiIcon name="arrow-right" size={14}/><span>{link.childId}</span></code>
         {permitted('task.unlink') && <Button size="small" onClick={()=>onAction({
           kind:'task.unlink',boardId:task.boardId,parentId:link.parentId,childId:link.childId,
         })}>{t('work.actions.task_unlink')}</Button>}

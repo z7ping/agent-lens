@@ -1,5 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
+import { initializeI18n } from '../i18n/runtime'
+await (await initializeI18n()).changeLanguage('zh-CN')
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { GenericLiveRound, liveRoundOwnsAnswerActions } from './LiveTaskTimeline'
@@ -24,8 +26,9 @@ test('Live 已结束的空思考不显示且保持两侧工具分组边界', () 
     { id: 'empty-thinking', kind: 'thinking' as const, text: '', streaming: false },
     { id: 'after', kind: 'tool' as const, callId: 'after', name: 'read', status: 'success' as const },
   ]
+  const projection = projectLiveTaskRounds(items)[0]!
   const html = renderToStaticMarkup(createElement(GenericLiveRound, {
-    projection: projectLiveTaskRounds(items)[0]!, agentLabel: 'Agent', eager: true,
+    projection, processExpansionStore: new Map([[`process:${projection.model.id}`, true]]), agentLabel: 'Agent', eager: true,
     messageActions: [], actionPending: null, runtimeStreaming: false, onMessageAction: () => undefined,
   }))
   assert.equal((html.match(/data-tool-fact="true"/g) ?? []).length, 2)

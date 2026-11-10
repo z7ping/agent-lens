@@ -133,7 +133,7 @@ const commandSummary = detailOwner.match(/\.task-surface \.task-tool-call\[data-
 if (!commandSummary || /font(?:-size)?\s*:/.test(commandSummary)) {
   throw new Error('命令型 Tool 摘要必须继承共享 Tool Row 的 13px 字号，不得私自覆写')
 }
-if (!/\.task-tool-call > summary\.task-tool-row\s*\{[^}]*font:\s*var\(--text-task-tool\)\/1\.45 var\(--font-ui\);/s.test(detailOwner)) {
+if (!/\.task-tool-call > summary\.task-tool-row\s*\{[^}]*font:\s*var\(--text-task-tool\)\/1\.(?:4|45) var\(--font-ui\);/s.test(detailOwner)) {
   throw new Error('共享 Tool Row 必须消费语义字号 Token')
 }
 

@@ -129,7 +129,7 @@ test('oversized next physical record preserves verified same-turn prefix without
       if(offset===2)return {state:'unsupported',reason:'native-record-too-large'}
       if(offset!==0)return {state:'unsupported',reason:'unexpected-native-cursor'}
       const row:ObservationCandidate={
-        kind:'message.user',sourceSequence:0,capturedAt:timestamp,
+        kind:'message.user', identityHints:{nativeSessionId:'session'},sourceSequence:0,capturedAt:timestamp,
         payload:{text:'verified prompt'},
       }
       return {state:'available',observations:[row],
@@ -172,7 +172,8 @@ test('oversized next physical record preserves verified same-turn prefix without
     const follow=await (await fetch(`${base}&cursor=${encodeURIComponent(page.nextCursor)}`)).json()
     assert.deepEqual(follow,{state:'unsupported',reason:'native-record-too-large'},
       'an unverified record is never rendered as a completed turn')
-    assert.deepEqual(calls,[0,2,2])
+    assert.deepEqual(calls,[0,2,2,2,2],
+      'both the initial read and the follow-up retry the oversized record with a one-record window')
   }finally{
     await new Promise<void>(resolve=>server.close(()=>resolve()))
   }
@@ -184,8 +185,8 @@ test('oversized following turn does not discard an earlier complete turn in a ba
       if(query.cursor?.offset===1)
         return {state:'unsupported',reason:'native-record-too-large'}
       const obs:ObservationCandidate[]=[
-        {kind:'message.user',sourceSequence:0,capturedAt:timestamp,payload:{text:'first'}},
-        {kind:'message.user',sourceSequence:1000,capturedAt:timestamp,payload:{text:'second'}},
+        {kind:'message.user', identityHints:{nativeSessionId:'session'},sourceSequence:0,capturedAt:timestamp,payload:{text:'first'}},
+        {kind:'message.user', identityHints:{nativeSessionId:'session'},sourceSequence:1000,capturedAt:timestamp,payload:{text:'second'}},
       ]
       return {state:'available',observations:obs,
         observationRecordIds:['first','second'],
@@ -237,7 +238,7 @@ test('oversized record inside the first multi-record window retries one record a
       if(offset!==0)return {state:'unsupported',reason:'unexpected-cursor'}
       return {
         state:'available',observations:[{
-          kind:'message.user' as const,sourceSequence:0,capturedAt:timestamp,
+          kind:'message.user' as const,identityHints:{nativeSessionId:'session'},sourceSequence:0,capturedAt:timestamp,
           payload:{text:'verified prompt'},
         }],
         observationRecordIds:['verified-user-record'],
@@ -287,8 +288,8 @@ test('a giant record in a subsequent wide page narrows to one SourceRecord befor
       if(offset>=2 || (offset===1 && limit>1))
         return {state:'unsupported',reason:'native-record-too-large'}
       const obs:ObservationCandidate=offset===0
-        ?{kind:'message.user',capturedAt:timestamp,sourceSequence:0,payload:{text:'prompt'}}
-        :{kind:'message.assistant',capturedAt:timestamp,sourceSequence:1000,payload:{text:'reply'}}
+        ?{kind:'message.user', identityHints:{nativeSessionId:'session'},capturedAt:timestamp,sourceSequence:0,payload:{text:'prompt'}}
+        :{kind:'message.assistant', identityHints:{nativeSessionId:'session'},capturedAt:timestamp,sourceSequence:1000,payload:{text:'reply'}}
       return {state:'available',observations:[obs],
         observationRecordIds:['record-'+offset],
         observationCursors:[{offset,sequence:offset,fileIdentity,
@@ -327,8 +328,8 @@ test('a giant record in a subsequent wide page narrows to one SourceRecord befor
 for (const terminal of ['turn.completed', 'turn.aborted', undefined, 'turn.started']) {
   test(`跨页尾轮只有明确结算才能完成：${terminal ?? '没有结束事件'}`, async () => {
     const continuedRows: ObservationCandidate[] = [
-      { kind: 'message.assistant', capturedAt: timestamp, payload: { text: '最终答复' } },
-      ...(terminal ? [{ kind: 'session.lifecycle' as const, capturedAt: timestamp, payload: { event: terminal } }] : []),
+      { kind: 'message.assistant', identityHints:{nativeSessionId:'session'}, capturedAt: timestamp, payload: { text: '最终答复' } },
+      ...(terminal ? [{ kind: 'session.lifecycle' as const, identityHints:{nativeSessionId:'session'}, capturedAt: timestamp, payload: { event: terminal } }] : []),
     ]
     const reader: NativeSessionWindowReader = { async read() {
       return {

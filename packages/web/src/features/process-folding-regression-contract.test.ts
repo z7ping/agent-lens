@@ -25,9 +25,9 @@ test('Review 与 Live 均保留展开意图，Review 的 revision 更新可重�
   assert.match(live, /expansionStore=\{processExpansionStore\}/)
 })
 
-test('处理详情的 Thinking 摘要两行并将所有折叠箭头放在右侧', () => {
+test('处理详情的 Thinking 摘要单行并将所有折叠箭头放在右侧', () => {
   assert.match(thinking, /<span className="task-thinking-summary-meta">[\s\S]*?\{meta\}[\s\S]*?<DisclosureChevron\/>/)
-  assert.match(styles, /\.task-thinking-preview \{[^}]*-webkit-line-clamp: 2/)
+  assert.match(styles, /\.task-thinking-preview \{[^}]*-webkit-line-clamp: 1/)
   assert.match(review, /preview: item\.node\.text\.replace/)
 })
 

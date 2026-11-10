@@ -891,8 +891,7 @@
 .agent-work-section + .agent-work-section { border-top: 1px solid var(--al-line); }
 .agent-work-board-heading { margin-bottom: 12px; justify-content: space-between; }
 .agent-work-board-heading h3 { margin: 0; font-size: 13px; font-weight: 670; }
-.agent-work-board-identity { flex: 1 1 240px; }
-.agent-work-board-identity .select-menu-trigger { max-width: min(320px, 100%); }
+.agent-work-board-identity { flex: 1 1 240px; max-width: min(320px, 100%); }
 .agent-work-meta { color: var(--al-muted); font-size: 12px; font-variant-numeric: tabular-nums; }
 .agent-work-empty {
   display: flex;
@@ -953,3 +952,5 @@
   .agent-work-board-identity { flex-basis: 100%; }
   .agent-work-board-heading { align-items: flex-start; }
 }
+
+.agent-work-link-path { display: inline-flex; align-items: center; gap: 6px; }

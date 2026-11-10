@@ -233,7 +233,7 @@ export async function mutateHermesWorkspace(options:{
   catch(error){return {accepted:false,message:error instanceof Error?error.message:'Invalid Hermes action'}}
   // Hermes itself owns locking, migrations and native persistence.
   // Keep the inherited environment except for HOME routing and nested worker context.
-  const env={...process.env,HERMES_HOME:root}
+  const env: NodeJS.ProcessEnv={...process.env,HERMES_HOME:root}
   delete env.HERMES_KANBAN_TASK
   delete env.HERMES_KANBAN_RUN_ID
   delete env.HERMES_KANBAN_BOARD

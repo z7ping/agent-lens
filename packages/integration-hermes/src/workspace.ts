@@ -223,6 +223,7 @@ async function readProjects(root: string, offset=0): Promise<{
   projects:AgentWorkProjectDto[]
   projectsHasMore:boolean
   projectsTotal:number
+  failedProjects:number
 }> {
   const profiles = [{name:'default',home:root}, ...(await dirs(join(root,'profiles'))).map(name=>({name,home:join(root,'profiles',name)}))]
   const projects:AgentWorkProjectDto[]=[]

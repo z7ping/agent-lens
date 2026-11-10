@@ -493,7 +493,7 @@ export abstract class AgentLensModelBase {
 
   async refreshAgentWorkspace(
     sourceId: string,
-    options: {installationId:string;board?:string;offset?:number;limit?:number;jobId?:string;profile?:string;executionOffset?:number;scheduleOffset?:number;taskId?:string;taskEventOffset?:number;runOffset?:number;commentOffset?:number;projectOffset?:number;boardOffset?:number} = {},
+    options: {installationId:string;board?:string | undefined;offset?:number;limit?:number;jobId?:string;profile?:string;executionOffset?:number;scheduleOffset?:number;taskId?:string;taskEventOffset?:number;runOffset?:number;commentOffset?:number;projectOffset?:number;boardOffset?:number},
   ): Promise<void> {
     const generation = ++this.workspaceGeneration
     const installationId = options.installationId

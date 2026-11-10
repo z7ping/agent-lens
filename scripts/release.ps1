@@ -43,6 +43,7 @@ if ($status.Count -gt 0) {
 }
 if ($Preview) {
   node scripts/bump-version.mjs $Version --dry-run
+  if ($LASTEXITCODE -ne 0) { throw '版本预览失败。' }
   Write-Host "预览完成，未修改文件：$tag"
   exit 0
 }
@@ -57,15 +58,23 @@ if ($tagExists) {
 }
 
 node scripts/bump-version.mjs $Version
-if (-not $SkipChecks) { npm run release:check }
+if ($LASTEXITCODE -ne 0) { throw '版本同步失败。' }
+if (-not $SkipChecks) {
+  npm run release:check
+  if ($LASTEXITCODE -ne 0) { throw '发布检查失败。' }
+}
 git diff --check
+if ($LASTEXITCODE -ne 0) { throw 'Git 差异检查失败。' }
 $pending = @(git status --porcelain)
 if ($pending.Count -gt 0) {
   git add .github/workflows/npm-publish.yml package.json package-lock.json apps packages scripts CHANGELOG.md
+  if ($LASTEXITCODE -ne 0) { throw "Git 暂存失败。" }
   git commit -m "发布 AgentLens $Version"
+  if ($LASTEXITCODE -ne 0) { throw "Git 提交失败。" }
 }
 if (-not $tagExists) {
   git tag -a $tag -m "AgentLens $Version"
+  if ($LASTEXITCODE -ne 0) { throw "创建 Tag 失败。" }
 }
 
 if (-not $Publish) {
@@ -82,6 +91,8 @@ if ($remoteTag.Count -gt 0) {
   throw "远端 Tag 已存在，已停止发布：$tag"
 }
 git push --atomic origin HEAD "refs/tags/$tag"
+if ($LASTEXITCODE -ne 0) { throw "推送失败。" }
 $releaseArgs = @('release', 'create', $tag, '--title', "AgentLens $tag", '--generate-notes')
 if ($Version -match '-') { $releaseArgs += '--prerelease' }
 gh @releaseArgs
+if ($LASTEXITCODE -ne 0) { throw "创建 GitHub Release 失败。" }

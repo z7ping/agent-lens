@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react'
 import { MarkdownContent } from '../components/MarkdownContent'
 import { TaskMessage, type TaskMessageProps } from './TaskMessage'
-import { TaskThinking } from './TaskThinking'
+import { TaskThinking, type TaskThinkingProps } from './TaskThinking'
 import { TaskToolRow } from './TaskToolRow'
 import { TaskProcessGroup, type TaskProcessGroupProps } from './TaskProcessGroup'
 import type { TaskThinkingModel, TaskToolModel } from './task-detail-model'
@@ -55,6 +55,10 @@ export function TaskSessionProcessText({
       ? <TaskTextWindow text={text}/>
       : <MarkdownContent text={text} streaming={streaming}/>}</div>
   </div>
+}
+
+export function TaskSessionDisclosure(props: Omit<TaskThinkingProps, 'kind'>) {
+  return <TaskThinking {...props} kind="process"/>
 }
 
 export function TaskSessionThinking({

@@ -82,6 +82,8 @@ export interface LiveStartInputDto {
 }
 
 export interface LiveStartCapabilitiesDto {
+  /** Adapter-owned explicit gateway setup flow, when supported. */
+  setup?: 'hermes-gateway-initialize' | undefined
   workspace: LiveStartFieldSupportDto
   title: LiveStartFieldSupportDto
 }
@@ -475,6 +477,8 @@ export interface LiveContributionTextDto {
 }
 
 export interface LiveMessageActionContributionDto {
+  /** Semantic icon hint; unknown values fall back to the generic action icon. */
+  icon?: 'edit' | 'fork' | undefined
   actionId: string
   label: LiveContributionTextDto
   description?: LiveContributionTextDto | undefined

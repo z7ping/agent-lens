@@ -151,8 +151,7 @@ test('existing slim v1 upgrades atomically without losing historical tool counts
     old.close()
     const upgraded=SqliteSlimStorage.openExisting(path)
     try {
-      const data=upgraded.db.prepare('SELECT * FROM native_session_tool_metrics').get()
-        as {total_duration_ms:number;duration_sample_count:number;max_duration_ms:number|null}
+      const data=upgraded.db.prepare('SELECT * FROM native_session_tool_metrics').get() as {total_duration_ms:number;duration_sample_count:number;max_duration_ms:number|null}
       assert.equal(data.total_duration_ms,250)
       assert.equal(data.duration_sample_count,0)
       assert.equal(data.max_duration_ms,null)

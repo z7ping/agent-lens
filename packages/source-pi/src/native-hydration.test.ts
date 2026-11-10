@@ -320,7 +320,8 @@ test('Pi links oversized zero-argument native tool blocks by original content[] 
       reason:'native-tool-call-evidence-mismatch'})
     assert.deepEqual(await find({...query,fragmentOrdinal:0},ctx),{
       state:'unsupported',reason:'invalid-native-tool-link-query'})
-    assert.deepEqual(await find({...query,contentIndex:undefined},ctx),{
+    const {contentIndex: _contentIndex, ...queryWithoutContentIndex}=query
+    assert.deepEqual(await find(queryWithoutContentIndex,ctx),{
       state:'unsupported',reason:'invalid-native-tool-link-query'})
   }finally{await rm(root,{recursive:true,force:true})}
 })
@@ -387,8 +388,7 @@ test('oversized Pi image user message joins canonical native TaskSurface with co
     assert.equal(following.state,'available')
     if(following.state==='available')
       assert.equal(following.records[0]?.nativeId,'assistant-reply')
-    // An actual overlong user text is NOT promoted to a fabricated complete
-    // message; the original record stays eligible for fragment-only fallback.
+    // An overlong scalar is represented by a verified lazy native record.
     const longText=JSON.stringify({type:'message',id:'too-much-text',
       message:{role:'user',content:'T'.repeat(2_300_000)}})
     await writeFile(file,[header,longText].join('\n')+'\n')
@@ -396,8 +396,8 @@ test('oversized Pi image user message joins canonical native TaskSurface with co
       cursor:{offset:Buffer.byteLength(header+'\n'),sequence:1,
         fileIdentity:`${(await stat(file)).dev}:${(await stat(file)).ino}`},
       limit:1},ctx)
-    assert.deepEqual(ret,{state:'unsupported',
-      reason:'native-record-too-large'})
+    assert.equal(ret.state,'available')
+    if(ret.state==='available') assert.ok((ret.records[0]?.payload as {verifiedLargeTextRecord?:unknown}).verifiedLargeTextRecord)
     const extra=JSON.stringify({type:'message',id:'extra-fields',
       message:{role:'user',content:[
         {type:'text',text:'verified text'},
@@ -523,7 +523,7 @@ test('Pi oversized assistant text, thinking, empty tool call and image preserves
   }finally{await rm(root,{recursive:true,force:true})}
 })
 
-test('Pi oversized assistant refuses nonempty arguments, duplicate call IDs and unparsed fields',async()=>{
+test('Pi oversized assistant preserves verified arguments and rejects ambiguous facts',async()=>{
   const root=await mkdtemp(join(tmpdir(),'agent-lens-pi-large-assistant-reject-'))
   const file=join(root,'session.jsonl')
   const header=JSON.stringify({type:'session',id:'large-assistant-reject'})
@@ -560,7 +560,10 @@ test('Pi oversized assistant refuses nonempty arguments, duplicate call IDs and 
         filePath:file,nativeSessionId:'large-assistant-reject',
         cursor:first.nextCursor,limit:1,
       },ctx)
-      assert.deepEqual(second,{state:'unsupported',reason:'native-record-too-large'},
+      if(index===0){
+        assert.equal(second.state,'available')
+        if(second.state==='available') assert.match(JSON.stringify(second.records[0]?.payload), /danger/)
+      }else assert.deepEqual(second,{state:'unsupported',reason:'native-record-too-large'},
         'unsupported oversized assistant variant '+index+' must remain fragment-only')
     }
   }finally{await rm(root,{recursive:true,force:true})}

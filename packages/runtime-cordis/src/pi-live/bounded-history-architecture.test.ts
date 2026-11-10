@@ -21,7 +21,7 @@ test('Pi Live 轮次索引保留全量语义但单次查询有界', () => {
   assert.match(workerSource, /LIVE_HISTORY_INDEX_QUERY_MAX_LIMIT\s*=\s*120/)
   assert.match(workerSource, /function roundIndex\(/)
   assert.match(workerSource, /roundIndexCache/)
-  assert.match(workerSource, /if \(limit === 0\) return \{ total: rows\.length, items: \[\] \}/)
+  assert.match(workerSource, /if \(limit === 0\) return \{ historyView:'native-journal',total: rows\.length, items: \[\] \}/)
   assert.match(workerSource, /fromOrdinal/)
   assert.match(workerSource, /cursor/)
   assert.match(workerSource, /aroundIndex - Math\.floor\(limit \* \.3\)/)

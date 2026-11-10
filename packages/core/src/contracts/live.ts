@@ -42,6 +42,8 @@ export interface LiveStartInput {
 }
 
 export interface LiveStartCapabilities {
+  /** Adapter-owned explicit gateway setup flow, when supported. */
+  setup?: 'hermes-gateway-initialize' | undefined
   workspace: LiveStartFieldSupport
   title: LiveStartFieldSupport
 }
@@ -597,6 +599,8 @@ export interface LiveContributionText {
 }
 
 export interface LiveMessageActionContribution {
+  /** Semantic icon hint; unknown values fall back to the generic action icon. */
+  icon?: 'edit' | 'fork' | undefined
   /** Adapter-owned opaque action id. Product Surface must not interpret it. */
   actionId: string
   label: LiveContributionText

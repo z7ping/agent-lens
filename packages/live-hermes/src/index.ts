@@ -44,7 +44,7 @@ const INPUT_CAPABILITIES = createLiveInputCapabilities({
 
 export const hermesLiveManifest: LiveAdapterManifest = {
   pluginId: '@agent-lens/live-hermes',
-  pluginVersion: '1.0.0-alpha.5',
+  pluginVersion: '1.0.0-alpha.7',
   apiVersion: '1.0',
   pluginType: 'live',
   displayName: 'Hermes Live',
@@ -202,6 +202,7 @@ export class HermesLiveAdapter implements LiveAdapter {
   readonly capabilities: ReadonlySet<LiveCapabilityName> = createLiveCapabilitySet(CAPABILITIES)
   readonly inputCapabilities = INPUT_CAPABILITIES
   readonly startCapabilities = {
+    setup: 'hermes-gateway-initialize',
     workspace: 'unsupported',
     title: 'optional',
   } as const

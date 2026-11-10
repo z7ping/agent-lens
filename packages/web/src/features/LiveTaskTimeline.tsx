@@ -8,9 +8,8 @@ import { liveNativeCommandDetail, liveTaskRoundEstimate, liveLoadedToolRelations
 import { sameStableLiveTaskRoundProps } from './live-task-render-boundary'
 import { TaskReadingRound } from './TaskReadingRound'
 import { TaskEvent } from './TaskEvent'
-import { TaskThinking } from './TaskThinking'
 import { isRoutineLiveRuntimeNotice } from './task-runtime-notice'
-import { TaskSessionMessage, TaskSessionThinking, TaskSessionTool, TaskSessionProcessText, TaskSessionProcess, taskSessionMessageTime } from './TaskSessionContent'
+import { TaskSessionDisclosure, TaskSessionMessage, TaskSessionThinking, TaskSessionTool, TaskSessionProcessText, TaskSessionProcess, taskSessionMessageTime } from './TaskSessionContent'
 import { projectTaskReading, type TaskReadingFact } from './task-reading-semantics'
 import { TaskProcessSequence, type TaskToolGroupSequenceEntry } from './TaskToolGroup'
 import type { TaskToolModel } from './task-detail-model'
@@ -97,8 +96,8 @@ function GenericLiveItem({
             const description = action.description ? contributionText(action.description, i18n.language) : undefined
             const pending = actionPending === key
             const icon = pending ? 'loading'
-              : action.actionId === 'pi.edit-from-here' ? 'tool-edit'
-                : action.actionId === 'pi.new-session-from-here' ? 'fork' : 'menu'
+              : action.icon === 'edit' ? 'tool-edit'
+                : action.icon === 'fork' ? 'fork' : 'menu'
             const tooltip = description ? `${label} · ${description}` : label
             return <IconButton
               key={action.actionId}
@@ -140,7 +139,7 @@ function GenericLiveItem({
   if (item.kind === 'native') {
     const command = liveNativeCommandDetail(item)
     if (command) {
-      return <TaskThinking
+      return <TaskSessionDisclosure
         model={{
           id: item.id,
           label: `${command.command} · ${t(command.outcome === 'failed'
@@ -149,14 +148,13 @@ function GenericLiveItem({
           state: 'settled',
           ...(item.at ? { time: taskSessionMessageTime(item.at) } : {}),
         }}
-        kind="process"
         defaultExpanded
         expansionStore={processExpansionStore}
       >
         {command.output
           ? <CopyableCodeBlock copyValue={command.output}>{command.output}</CopyableCodeBlock>
           : <span>{t('live.nativeEntries.commandNoOutput')}</span>}
-      </TaskThinking>
+      </TaskSessionDisclosure>
     }
     const type = item.nativeType
     const label = type === 'command' ? t('live.nativeEntries.command')
@@ -358,13 +356,12 @@ export const GenericLiveRound = memo(function GenericLiveRound({
   const processState = projection.model.state
   const endedAtMs = processTimes.length && processState !== 'running'
     ? Math.max(...processTimes) : undefined
-  const runtimeRecords = runtimeNotices.length > 0 && <TaskThinking
+  const runtimeRecords = runtimeNotices.length > 0 && <TaskSessionDisclosure
     model={{ id: `runtime-records:${projection.model.id}`, label: t('process.runtimeRecords'), text: '', state: 'settled' }}
-    kind="process"
     defaultExpanded={false}
     expansionStore={processExpansionStore}
     meta={<span className="task-process-summary"><span>{t('process.runtimeRecordCount', { count: runtimeNotices.length })}</span></span>}
-  >{runtimeNotices.map(renderItem)}</TaskThinking>
+  >{runtimeNotices.map(renderItem)}</TaskSessionDisclosure>
   const process = normalProcessItems.length > 0 ? <TaskSessionProcess
     mode="live"
     key={`process:${projection.model.id}`}

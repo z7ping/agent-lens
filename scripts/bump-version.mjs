@@ -46,9 +46,9 @@ const sourceFiles = [
   'packages/source-hermes/src/index.ts',
   'packages/source-opencode/src/index.ts',
   'packages/source-pi/src/index.ts',
-  'packages/storage-sqlite/src/plugin.ts',
-  'packages/surface-http/src/plugin.ts',
-  'packages/web/src/plugin.ts',
+  'packages/live-codex/src/index.ts',
+  'packages/live-hermes/src/index.ts',
+  'packages/runtime-cordis/src/pi-live/adapter.ts',
   'scripts/smoke-distribution.mjs',
 ]
 
