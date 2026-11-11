@@ -127,6 +127,65 @@
   color: var(--al-danger);
 }
 
+.integration-onboarding-permission-state {
+  color: var(--al-text-secondary);
+}
+
+.integration-onboarding-access-option {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin: 14px 28px 0;
+  cursor: pointer;
+}
+
+.integration-onboarding-access-option input {
+  margin-top: 4px;
+}
+
+.integration-onboarding-access-option span {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.integration-onboarding-access-option b {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.integration-onboarding-access-option small,
+.integration-onboarding-consent-note {
+  color: var(--al-text-secondary);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.integration-onboarding-restart {
+  margin: 14px 28px 0;
+  color: var(--al-text-secondary);
+  line-height: 1.6;
+}
+
+.integration-onboarding-consent-list {
+  display: grid;
+  gap: 12px;
+}
+
+.integration-onboarding-consent-item {
+  display: grid;
+  gap: 4px;
+  padding: 12px 14px;
+  border: 1px solid var(--al-line);
+  border-radius: var(--radius-md);
+}
+
+.integration-onboarding-consent-item span {
+  font-size: 13px;
+  color: var(--al-text-secondary);
+}
+
+
 .integration-onboarding-footer {
   position: sticky;
   bottom: 0;
