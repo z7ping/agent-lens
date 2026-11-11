@@ -1,8 +1,8 @@
 import { spawn } from 'node:child_process'
-import { mkdtemp, mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises'
+import { copyFile, mkdtemp, mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises'
 import { createServer } from 'node:net'
 import { tmpdir } from 'node:os'
-import { dirname, isAbsolute, join, resolve } from 'node:path'
+import { basename, dirname, isAbsolute, join, resolve } from 'node:path'
 import { npmLocalTarballSpecifier } from './npm-local-tarball-specifier.mjs'
 import { fileURLToPath } from 'node:url'
 
@@ -55,9 +55,16 @@ async function freePort() {
 
 async function resolveTarball() {
   const requested = process.argv[2]
-  if (requested) return isAbsolute(requested) ? requested : resolve(root, requested)
-
   await mkdir(packDir, { recursive: true })
+  if (requested) {
+    const source = isAbsolute(requested) ? requested : resolve(root, requested)
+    const staged = join(packDir, basename(source))
+    // 将安装包和消费工程放在同一临时目录下，避免 macOS 的 /var →
+    // /private/var 符号链接使 npm 将外部相对路径解析到错误的位置。
+    await copyFile(source, staged)
+    return staged
+  }
+
   await run(npmCommand, ['pack', '--pack-destination', packDir], {
     shell: process.platform === 'win32',
   })
