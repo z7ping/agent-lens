@@ -17,6 +17,12 @@ function selectable(item: IntegrationManagementItemDto): boolean {
   return item.tool?.presence === 'present' || item.tool?.presence === 'data-only'
 }
 
+function hasProtectedCapabilities(item: IntegrationManagementItemDto): boolean {
+  return item.capabilities.some(capability =>
+    capability.capability === 'live' || capability.capability === 'hook' || capability.capability === 'runtime'
+  )
+}
+
 function acknowledgedAfterOnboarding(snapshot: ClientSnapshot): string[] {
   const current = snapshot.integrationManagement?.preferences.acknowledgedIntegrationIds ?? []
   const discovered = snapshot.integrationManagement?.items
@@ -49,15 +55,9 @@ export function IntegrationOnboarding({
   const [restartRequired, setRestartRequired] = useState(false)
   const [readyToFinish, setReadyToFinish] = useState(false)
   const chosen = detected.filter(item => selected.has(item.integrationId))
-  const hasProtectedCapabilities = chosen.some(item =>
-    item.capabilities.some(capability =>
-      capability.capability === 'live' || capability.capability === 'hook' || capability.capability === 'runtime'
-    )
-  )
+  const hasLiveOptions = chosen.some(hasProtectedCapabilities)
   const unknownAuthorization = grantLive && chosen.some(item =>
-    item.capabilities.some(capability =>
-      capability.capability === 'live' || capability.capability === 'hook' || capability.capability === 'runtime'
-    ) && integrationAuthorizationSummary(item.capabilities).phase === 'unknown'
+    hasProtectedCapabilities(item) && integrationAuthorizationSummary(item.capabilities).phase === 'unknown'
   )
 
   const scanning = management?.discovery.status === 'idle'
@@ -101,7 +101,7 @@ export function IntegrationOnboarding({
       }
 
       const authorization = integrationAuthorizationSummary(item.capabilities)
-      if (withLive && authorization.phase === 'unknown') {
+      if (withLive && hasProtectedCapabilities(item) && authorization.phase === 'unknown') {
         throw new Error(t('onboarding.permissionUnknown'))
       }
       needsRestart = needsRestart || (withLive && authorization.phase === 'restart-required')
@@ -284,7 +284,7 @@ export function IntegrationOnboarding({
         {t('onboarding.notFound', { agents: missing.map(item => item.displayName).join('、') })}
       </p>}
 
-      {hasProtectedCapabilities && <label className="integration-onboarding-access-option">
+      {hasLiveOptions && <label className="integration-onboarding-access-option">
         <input type="checkbox" checked={grantLive} disabled={running || finishing || readyToFinish}
           onChange={event => setGrantLive(event.target.checked)}/>
         <span><b>{t('onboarding.enableLive')}</b><small>{t('onboarding.enableLiveDescription')}</small></span>
