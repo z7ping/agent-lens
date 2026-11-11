@@ -115,7 +115,7 @@
     "accept:task-center-desktop": "npm run accept:task-center-desktop --workspace @agent-lens/desktop",
     "accept:task-center:1h": "npm run accept:task-center:1h --workspace @agent-lens/desktop",
     "accept:task-center:8h": "npm run accept:task-center:8h --workspace @agent-lens/desktop",
-    "release:check": "npm run check:web-presentation && npm run check:brand-assets && npm run check:desktop-shell && npm run typecheck && npm test && npm run build:dist && npm run smoke:dist && npm run smoke:npm-package",
+    "release:check": "npm run typecheck && npm test && npm run smoke:npm-package && npm run smoke:dist",
     "release:version": "node scripts/bump-version.mjs",
     "release:prepare": "pwsh -NoLogo -NoProfile -File scripts/release.ps1",
     "prepack": "npm run check:web-presentation && npm run check:brand-assets && npm run check:desktop-shell && npm run build:dist",
