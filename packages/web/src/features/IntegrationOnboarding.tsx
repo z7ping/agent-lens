@@ -81,6 +81,7 @@ export function IntegrationOnboarding({
 
   const runOne = async (item: IntegrationManagementItemDto, withLive: boolean) => {
     const id = item.integrationId
+    let needsRestart = item.enabled.restartRequired
     try {
       // The slim runtime may not expose a separately managed Integration package.
       if (item.packageState && !integrationPackageReady(item.packageState)) {
@@ -94,7 +95,6 @@ export function IntegrationOnboarding({
         }
       }
       setProgress(current => ({ ...current, [id]: { step: 'enabling' } }))
-      let needsRestart = item.enabled.restartRequired
       if (!item.enabled.configured) {
         const result = await model.setIntegrationEnabled(id, true)
         needsRestart = needsRestart || result.enabled.restartRequired
@@ -124,7 +124,7 @@ export function IntegrationOnboarding({
           message: cause instanceof Error ? cause.message : String(cause),
         },
       }))
-      return { succeeded: false, needsRestart: false }
+      return { succeeded: false, needsRestart }
     }
   }
 
@@ -160,14 +160,14 @@ export function IntegrationOnboarding({
     setRunning(true)
     const result = await runOne(item, confirmedGrantLive)
     setRunning(false)
+    const pendingRestart = restartRequired || result.needsRestart
+    setRestartRequired(pendingRestart)
     if (!result.succeeded) return
     const unresolved = [...selected].some(id => {
       if (id === item.integrationId) return false
       const step = progress[id]?.step
       return step === 'failed' || step === 'installing' || step === 'enabling' || step === 'authorizing' || step === 'idle' || !step
     })
-    const pendingRestart = restartRequired || result.needsRestart
-    setRestartRequired(pendingRestart)
     if (!unresolved) {
       if (pendingRestart) setReadyToFinish(true)
       else await finish()
