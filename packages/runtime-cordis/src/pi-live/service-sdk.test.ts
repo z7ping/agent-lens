@@ -250,8 +250,12 @@ test('Pi Live 通过官方 AgentSession SDK 驱动并保持现有事件/Extensio
 
   await service.steer(state.runtimeSessionId, 'change direction')
   await service.followUp(state.runtimeSessionId, 'afterwards')
+  await service.steer(state.runtimeSessionId, '/api/v1/example')
+  await service.followUp(state.runtimeSessionId, '/tmp/example.ts')
   assert.equal(calls.includes('steer:change direction'), true)
   assert.equal(calls.includes('follow:afterwards'), true)
+  assert.equal(calls.includes('steer:/api/v1/example'), true)
+  assert.equal(calls.includes('follow:/tmp/example.ts'), true)
 
   emit(agentListener, {
     type: 'queue_update',
@@ -277,6 +281,11 @@ test('Pi Live 通过官方 AgentSession SDK 驱动并保持现有事件/Extensio
   assert.ok(calls.includes('abort-bash'))
   assert.deepEqual(queue, { steering: ['queued-steer'], followUp: ['queued-follow'] })
   assert.deepEqual(await service.queueState(state.runtimeSessionId), { steering: [], followUp: [] })
+
+  // Unknown slash-prefixed routes belong to the SDK's ordinary prompt path.
+  const routePrompt = '/appletMenuManagement/applet，需要增加 menu_code 字段'
+  await service.prompt(state.runtimeSessionId, routePrompt)
+  assert.equal(calls.includes(`prompt:${routePrompt}:direct:rpc`), true)
 
   // 真实 SDK 的 assistant 消息没有 id，工具前后的 thinking 不能复用 content:0。
   const replyIds: string[] = []

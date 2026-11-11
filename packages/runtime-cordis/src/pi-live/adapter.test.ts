@@ -809,6 +809,25 @@ test('streaming native slash goes through Pi SDK prompt expansion rather than li
 })
 
 
+test('unregistered slash paths use native prompt/queue even if command discovery fails', async () => {
+  const calls: string[] = []
+  const service = {
+    commands: async () => { throw new Error('Command discovery unavailable') },
+    prompt: async (_id: string, text: string) => { calls.push('prompt:' + text) },
+    steer: async (_id: string, text: string) => { calls.push('steer:' + text) },
+    followUp: async (_id: string, text: string) => { calls.push('followUp:' + text) },
+  } as unknown as PiLiveService
+  const adapter = new PiLiveAdapter(service, attachmentService())
+  await adapter.send('runtime-1', { parts: [{ type: 'text', text: '/appletMenuManagement/applet' }] })
+  await adapter.send('runtime-1', { parts: [{ type: 'text', text: '/api/v1/example' }] }, { behavior: 'steer' })
+  await adapter.send('runtime-1', { parts: [{ type: 'text', text: '/tmp/example.ts' }] }, { behavior: 'follow-up' })
+  assert.deepEqual(calls, [
+    'prompt:/appletMenuManagement/applet',
+    'steer:/api/v1/example',
+    'followUp:/tmp/example.ts',
+  ])
+})
+
 test('Pi native cache status is projected into a typed, agent-neutral runtime metric event', () => {
   const raw = {
     type: 'extension_ui_request', method: 'setStatus',

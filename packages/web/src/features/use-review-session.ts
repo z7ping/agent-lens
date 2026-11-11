@@ -6,8 +6,8 @@ import type { HubReviewSessionSummaryDto, LiveMessageDto, NativeSessionSummaryDt
 import { fetchHubReviewSessions } from '../client/hub-review'
 import { liveApi, LiveRequestError, type LiveProductMetadata } from '../client/live'
 import { settleReaderAtLatest } from './session-reader-positioning'
-import { isSlashCommandInput } from './live-task-input'
-import { clearLiveComposerDraft, liveComposerDraftKey } from '../components/live-composer-session-state'
+import { isSlashCommandInput, messageText } from './live-task-input'
+import { clearLiveComposerDraft, liveComposerDraftKey, writeLiveComposerDraft } from '../components/live-composer-session-state'
 import { useClientSnapshot } from '../client/use-client-snapshot'
 import { agentLabel } from '../components/AgentScope'
 import { historyTaskPresentation } from './task-center'
@@ -879,16 +879,36 @@ export function useReviewSession(model: AgentLensClientModel, embedded: boolean)
 
   const sendReviewMessage = async (message: LiveMessageDto) => {
     if (!detail || !detailLiveInteraction?.canResume || !detailLiveInteraction.canSend || historyInteractionPending || historyInteractionBlocked) return
-    if (isSlashCommandInput(message)) {
-      setHistoryInteractionError(t('local.header.commandsRequireLive'))
-      return
-    }
     const liveId = detailLiveInteraction.liveId
     const historicalId = detail.id
     setHistoryInteractionPending('resume')
     setHistoryInteractionError('')
     try {
       const state = await liveApi.resume(liveId, historicalId)
+      // Review has no live command registry until the native session is resumed.
+      // Only a Runtime-declared command should require a second submission in Live.
+      // When discovery fails, keep slash-prefixed text as a Live draft rather than
+      // accidentally sending an unknown native command to the model.
+      if (messageText(message).startsWith('/')
+        && liveProducts.some(product => product.liveId === liveId && product.capabilities.includes('command-discovery'))) {
+        let requiresLive = false
+        try {
+          requiresLive = isSlashCommandInput(message, await liveApi.commands(liveId, state.runtimeSessionId))
+        } catch {
+          requiresLive = true
+        }
+        if (requiresLive) {
+          const liveDraftKey = liveComposerDraftKey(liveId, state.runtimeSessionId)
+          if (!message.parts.every(part => part.type === 'text')
+            || !writeLiveComposerDraft(liveDraftKey, messageText(message))) {
+            setHistoryInteractionError(t('local.header.commandsRequireLive'))
+            return
+          }
+          clearLiveComposerDraft(liveComposerDraftKey(liveId, `history:${historicalId}`))
+          navigate(taskLiveRuntimeHref({ liveId, state }))
+          return
+        }
+      }
       await liveApi.send(liveId, state.runtimeSessionId, message)
       clearLiveComposerDraft(liveComposerDraftKey(liveId, `history:${historicalId}`))
       navigate(taskLiveRuntimeHref({ liveId, state }))

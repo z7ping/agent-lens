@@ -40,30 +40,49 @@ test('UI actions and native extensions execute separately; prompt templates and 
   assert.equal(resolveLiveSlash(textMessage('please review /model'), commands).kind, 'prompt')
 })
 
-test('unsupported TUI-only commands and action arguments cannot become LLM prompts', () => {
-  assert.deepEqual(resolveLiveSlash(textMessage('/settings'), commands), { kind: 'blocked', name: '/settings' })
+test('unregistered slash text, API routes and file paths are normal native prompts', () => {
+  for (const input of [
+    '/appletMenuManagement/applet，需要增加菜单编码 menu_code 字段',
+    '/appletMenuManagement/applet',
+    '/api/v1/sessions',
+    '/tmp/example.ts',
+    '/future-extension',
+    '/settings',
+    '/unknown with arguments',
+    '/model/path',
+  ]) {
+    assert.equal(resolveLiveSlash(textMessage(input), commands).kind, 'prompt', input)
+  }
+  assert.deepEqual(resolveLiveSlash(textMessage('/model'), []), { kind: 'prompt' })
+  assert.deepEqual(resolveLiveSlash(textMessage('/reload'), []), { kind: 'prompt' })
+  assert.deepEqual(resolveLiveSlash(textMessage('/mcp'), []), { kind: 'prompt' })
+  assert.deepEqual(resolveLiveSlash(
+    textMessage('/mcp'), commands.filter(item => item.value !== '/mcp'),
+  ), { kind: 'prompt' })
+})
+
+test('registered UI commands reject unsupported arguments and attachments', () => {
   assert.deepEqual(resolveLiveSlash(textMessage('/compact custom instructions'), commands), { kind: 'blocked', name: '/compact' })
-  assert.deepEqual(resolveLiveSlash(textMessage('/model'), []), { kind: 'blocked', name: '/model' })
-  assert.deepEqual(resolveLiveSlash(textMessage('/reload'), []), { kind: 'blocked', name: '/reload' })
-  assert.deepEqual(resolveLiveSlash(textMessage('/mcp'), []), { kind: 'blocked', name: '/mcp' })
-  assert.deepEqual(resolveLiveSlash(textMessage('/mcp'), commands.filter(item => item.value !== '/mcp')), { kind: 'blocked', name: '/mcp' })
-  assert.deepEqual(resolveLiveSlash(textMessage('/future-extension'), commands), { kind: 'blocked', name: '/future-extension' })
-  assert.equal(resolveLiveSlash(textMessage('请查看 /mcp 的用法'), commands).kind, 'prompt')
+  assert.deepEqual(resolveLiveSlash(textMessage('/reload now'), commands), { kind: 'blocked', name: '/reload' })
   assert.deepEqual(resolveLiveSlash({ parts: [
     { type: 'text', text: '/mcp' },
     { type: 'image', attachmentId: 'image-1' },
   ] }, commands), { kind: 'blocked', name: '/mcp' })
-  assert.deepEqual(resolveLiveSlash(textMessage('/reload now'), commands), { kind: 'blocked', name: '/reload' })
   assert.equal(resolveLiveSlash({ parts: [
     { type: 'text', text: '/model' },
     { type: 'image', attachmentId: 'image-1' },
   ] }, commands).kind, 'blocked')
 })
 
-test('Review must not resume a historical session to send slash commands as ordinary messages', () => {
-  assert.equal(isSlashCommandInput(textMessage('/reload')), true)
-  assert.equal(isSlashCommandInput(textMessage('  /model')), true)
-  assert.equal(isSlashCommandInput(textMessage('please /reload')), false)
+test('Review recognizes only Runtime-declared slash commands, never arbitrary slash text', () => {
+  assert.equal(isSlashCommandInput(textMessage('/reload'), commands), true)
+  assert.equal(isSlashCommandInput(textMessage('  /model'), commands), true)
+  assert.equal(isSlashCommandInput(textMessage('/mcp login docs'), commands), true)
+  assert.equal(isSlashCommandInput(textMessage('/skill:audit'), commands), false)
+  assert.equal(isSlashCommandInput(textMessage('/appletMenuManagement/applet'), commands), false)
+  assert.equal(isSlashCommandInput(textMessage('/settings'), commands), false)
+  assert.equal(isSlashCommandInput(textMessage('/reload'), []), false)
+  assert.equal(isSlashCommandInput(textMessage('please /reload'), commands), false)
 })
 
 test('a native name collision cannot replace a Web action or reach the model', () => {
