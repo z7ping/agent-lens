@@ -74,9 +74,9 @@ export function unsupportedInput(
 }
 
 
-/** Review has no active Runtime to dispatch commands; never resume and send them as chat. */
-export function isSlashCommandInput(message: LiveMessageDto): boolean {
-  return messageText(message).trimStart().startsWith('/')
+/** Review recognizes only commands declared by its resumed native Runtime. */
+export function isSlashCommandInput(message: LiveMessageDto, commands: readonly LiveCommandDto[]): boolean {
+  return resolveLiveSlash(message, commands).kind !== 'prompt'
 }
 
 export type LiveSlashResolution =
@@ -85,15 +85,16 @@ export type LiveSlashResolution =
   | { kind: 'blocked'; name: string }
   | { kind: 'prompt' }
 
-/** Slash commands must be runtime-declared; unknown commands never fall through to the model.
- * Extension handlers execute natively, while Skill/prompt templates intentionally expand into prompts. */
+/** Only declared commands can be intercepted by the Web surface.
+ * Unknown slash-prefixed text follows the normal native prompt path, as in Pi Web.
+ * Extension handlers execute natively, while Skill/prompt templates expand into prompts. */
 export function resolveLiveSlash(message: LiveMessageDto, commands: readonly LiveCommandDto[]): LiveSlashResolution {
   const text = messageText(message)
   const name = text.split(/\s+/)[0] ?? ''
   if (!name.startsWith('/')) return { kind: 'prompt' }
   const command = commands.find(item => item.value === name && item.action)
     ?? commands.find(item => item.value === name)
-  if (!command) return { kind: 'blocked', name }
+  if (!command) return { kind: 'prompt' }
   if (command.action === 'open-mcp') {
     // /mcp itself returns real Pi RPC status. Never hijack typed commands
     // into a dialog that can discard or obscure their native output.
