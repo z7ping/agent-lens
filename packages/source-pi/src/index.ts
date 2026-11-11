@@ -56,7 +56,7 @@ export async function declarePiCapabilities(
 
 export const piManifest: SourcePluginManifest = {
   pluginId: '@agent-lens/source-pi',
-  pluginVersion: '1.0.0-alpha.7',
+  pluginVersion: '1.0.0',
   apiVersion: '1.0',
   pluginType: 'source',
   displayName: 'Pi Source',

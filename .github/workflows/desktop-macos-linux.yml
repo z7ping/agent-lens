@@ -12,6 +12,7 @@ on:
       - 'scripts/check-release-signing.mjs'
       - 'scripts/check-desktop-contract.mjs'
       - 'scripts/smoke-desktop-runtime.mjs'
+      - 'scripts/smoke-desktop-window.mjs'
       - 'package.json'
       - 'package-lock.json'
       - 'docs/brand/logo/agentlens-icon-master.svg'
@@ -28,6 +29,7 @@ on:
       - 'scripts/check-release-signing.mjs'
       - 'scripts/check-desktop-contract.mjs'
       - 'scripts/smoke-desktop-runtime.mjs'
+      - 'scripts/smoke-desktop-window.mjs'
       - 'package.json'
       - 'package-lock.json'
       - 'docs/brand/logo/agentlens-icon-master.svg'
@@ -268,6 +270,8 @@ jobs:
 
       - name: Smoke packaged AppImage window and startup themes
         shell: bash
+        env:
+          APPIMAGE_EXTRACT_AND_RUN: '1'
         run: |
           APPIMAGE="$(find release/linux -maxdepth 1 -type f -name 'AgentLens-*-Linux-x86_64.AppImage' | head -n 1)"
           if [ -z "$APPIMAGE" ]; then

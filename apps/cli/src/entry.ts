@@ -3,7 +3,7 @@ import { fileURLToPath } from 'node:url'
 import { isDirectInvocation } from '@agent-lens/runtime-cordis'
 import { maybePrintUpdateHint, runUpdateCommand } from './update'
 
-const VERSION = '1.0.0-alpha.7'
+const VERSION = '1.0.0'
 
 function isHelp(args: string[]): boolean {
   const command = args.find(arg => arg !== '--json')

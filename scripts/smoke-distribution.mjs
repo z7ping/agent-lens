@@ -109,7 +109,7 @@ try {
   // v38 schema to re-enter the installed runtime instead of Slim v1.
   await assertLegacyMigrationsNotDistributed()
   const version = await runCli(['--version'])
-  if (version.stdout.trim() !== '1.0.0-alpha.7') {
+  if (version.stdout.trim() !== '1.0.0') {
     throw new Error(`Unexpected CLI version output: ${version.stdout}`)
   }
   const help = await runCli(['--help'])

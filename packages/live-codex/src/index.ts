@@ -19,7 +19,7 @@ import { decodeCodexHistoryCursor, encodeCodexItemAnchor, encodeCodexPageCursor 
 const CAPABILITIES = ['create', 'send', 'stream', 'interrupt', 'extension-ui', 'model-switching', 'thinking-control', 'resume', 'recovery'] as const satisfies readonly LiveCapabilityName[]
 export const codexLiveManifest: LiveAdapterManifest = {
   pluginId: '@agent-lens/live-codex',
-  pluginVersion: '1.0.0-alpha.7',
+  pluginVersion: '1.0.0',
   apiVersion: '1.0',
   pluginType: 'live',
   displayName: 'Codex Live',
