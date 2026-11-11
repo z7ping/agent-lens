@@ -1,8 +1,7 @@
 name: macOS Desktop
 
 on:
-  release:
-    types: [published]
+  workflow_call:
   workflow_dispatch:
     inputs:
       release_tag:

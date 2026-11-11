@@ -9,6 +9,18 @@ permissions:
   id-token: write
 
 jobs:
+  windows:
+    uses: ./.github/workflows/desktop-windows.yml
+    secrets: inherit
+
+  macos:
+    uses: ./.github/workflows/desktop-macos.yml
+    secrets: inherit
+
+  linux:
+    uses: ./.github/workflows/desktop-linux.yml
+    secrets: inherit
+
   verify:
     strategy:
       fail-fast: false
@@ -57,7 +69,7 @@ jobs:
 
   publish:
     runs-on: ubuntu-latest
-    needs: verify
+    needs: [verify, windows, macos, linux]
     steps:
       - name: Checkout release tag
         uses: actions/checkout@v7

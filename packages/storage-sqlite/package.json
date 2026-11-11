@@ -1,6 +1,6 @@
 {
   "name": "@agent-lens/storage-sqlite",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "private": true,
   "type": "module",
   "exports": {
@@ -12,11 +12,11 @@
     "test": "tsx --test \"src/**/*.test.ts\""
   },
   "dependencies": {
-    "@agent-lens/core": "1.0.0",
+    "@agent-lens/core": "1.0.1",
     "better-sqlite3": "12.11.1"
   },
   "devDependencies": {
-    "@agent-lens/core-services": "1.0.0",
+    "@agent-lens/core-services": "1.0.1",
     "@types/better-sqlite3": "9.6.0"
   }
 }

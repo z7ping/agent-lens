@@ -878,7 +878,7 @@ export async function declareHermesCapabilities(_detected: DetectedSource): Prom
 
 export const hermesManifest: SourcePluginManifest = {
   pluginId: '@agent-lens/source-hermes',
-  pluginVersion: '1.0.0',
+  pluginVersion: '1.0.1',
   apiVersion: '1.0',
   pluginType: 'source',
   displayName: 'Hermes Source',

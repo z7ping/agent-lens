@@ -44,7 +44,7 @@ const INPUT_CAPABILITIES = createLiveInputCapabilities({
 
 export const hermesLiveManifest: LiveAdapterManifest = {
   pluginId: '@agent-lens/live-hermes',
-  pluginVersion: '1.0.0',
+  pluginVersion: '1.0.1',
   apiVersion: '1.0',
   pluginType: 'live',
   displayName: 'Hermes Live',
