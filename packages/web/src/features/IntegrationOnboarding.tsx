@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { AgentLogo } from '../components/AgentLogo'
-import type { IntegrationAuthorizationCapabilityDto, IntegrationManagementItemDto } from '@agent-lens/protocol'
+import type { IntegrationManagementItemDto } from '@agent-lens/protocol'
 import type { AgentLensClientModel, ClientSnapshot } from '../client/model'
 import { Button, Dialog, StatusBadge } from '../components/ui'
 import { integrationAuthorizationSummary, integrationPackageReady } from './integrations/integration-lifecycle'
@@ -55,7 +55,9 @@ export function IntegrationOnboarding({
     )
   )
   const unknownAuthorization = grantLive && chosen.some(item =>
-    integrationAuthorizationSummary(item.capabilities).phase === 'unknown'
+    item.capabilities.some(capability =>
+      capability.capability === 'live' || capability.capability === 'hook' || capability.capability === 'runtime'
+    ) && integrationAuthorizationSummary(item.capabilities).phase === 'unknown'
   )
 
   const scanning = management?.discovery.status === 'idle'
@@ -92,13 +94,17 @@ export function IntegrationOnboarding({
         }
       }
       setProgress(current => ({ ...current, [id]: { step: 'enabling' } }))
-      if (!item.enabled.configured) await model.setIntegrationEnabled(id, true)
+      let needsRestart = item.enabled.restartRequired
+      if (!item.enabled.configured) {
+        const result = await model.setIntegrationEnabled(id, true)
+        needsRestart = needsRestart || result.enabled.restartRequired
+      }
 
       const authorization = integrationAuthorizationSummary(item.capabilities)
       if (withLive && authorization.phase === 'unknown') {
         throw new Error(t('onboarding.permissionUnknown'))
       }
-      let needsRestart = withLive && authorization.phase === 'restart-required'
+      needsRestart = needsRestart || (withLive && authorization.phase === 'restart-required')
       if (withLive && authorization.pending.length) {
         setProgress(current => ({ ...current, [id]: { step: 'authorizing' } }))
         // Only the capabilities explicitly confirmed in the dialog may be granted.
@@ -296,7 +302,7 @@ export function IntegrationOnboarding({
           <Button
             variant="primary"
             loading={running || finishing}
-            disabled={scanning || selected.size === 0 || running || finishing}
+            disabled={scanning || selected.size === 0}
             onClick={() => readyToFinish ? void finish() : begin()}
           >{t(readyToFinish ? 'onboarding.finish' : 'onboarding.start')}</Button>
         </div>
@@ -322,7 +328,7 @@ export function IntegrationOnboarding({
             <span>{t('onboarding.historyAccess')}</span>
             {requested.length > 0 && <span>{t('onboarding.controlAccess', {
               capabilities: requested.map(capability =>
-                t(`integrationCapability.${capability as IntegrationAuthorizationCapabilityDto}`)
+                t(`integrationCapability.${capability}`)
               ).join(' / '),
             })}</span>}
             {authorization.phase === 'granted' && <span>{t('onboarding.permissionGranted')}</span>}
