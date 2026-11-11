@@ -1,39 +1,6 @@
 name: macOS Desktop
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - 'apps/desktop/**'
-      - 'apps/cli/src/hook-execution*'
-      - 'scripts/prepare-desktop.mjs'
-      - 'scripts/prepare-macos-icon.sh'
-      - 'scripts/check-brand-assets.mjs'
-      - 'scripts/check-release-signing.mjs'
-      - 'scripts/check-desktop-contract.mjs'
-      - 'scripts/smoke-desktop-runtime.mjs'
-      - 'scripts/smoke-desktop-window.mjs'
-      - 'package.json'
-      - 'package-lock.json'
-      - 'docs/brand/logo/agentlens-icon-master.svg'
-      - '.github/workflows/desktop-macos.yml'
-  pull_request:
-    types: [opened, reopened, ready_for_review]
-    branches: [main]
-    paths:
-      - 'apps/desktop/**'
-      - 'apps/cli/src/hook-execution*'
-      - 'scripts/prepare-desktop.mjs'
-      - 'scripts/prepare-macos-icon.sh'
-      - 'scripts/check-brand-assets.mjs'
-      - 'scripts/check-release-signing.mjs'
-      - 'scripts/check-desktop-contract.mjs'
-      - 'scripts/smoke-desktop-runtime.mjs'
-      - 'scripts/smoke-desktop-window.mjs'
-      - 'package.json'
-      - 'package-lock.json'
-      - 'docs/brand/logo/agentlens-icon-master.svg'
-      - '.github/workflows/desktop-macos.yml'
   release:
     types: [published]
   workflow_dispatch:

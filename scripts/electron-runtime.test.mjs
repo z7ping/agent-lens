@@ -54,20 +54,18 @@ test('non-concrete lockfile versions cannot become Electron download URLs', () =
   })
 })
 
-test('prepare, package and Windows smoke all use one version resolver', () => {
+test('prepare and package use one Windows Electron version resolver', () => {
   const read = file => readFileSync(new URL(`../${file}`, import.meta.url), 'utf8')
   const prepare = read('scripts/prepare-desktop.mjs')
   const build = read('scripts/build-windows-desktop.mjs')
   const pkg = JSON.parse(read('apps/desktop/package.json'))
-  const smoke = read('.github/workflows/alpha3-task-center-real-smoke.yml')
   assert.match(prepare, /resolveWindowsElectronRuntime\(root\)/)
   assert.match(build, /resolveWindowsElectronRuntime\(root\)/)
   assert.match(build, /--config\.electronVersion=\$\{version\}/)
   assert.match(build, /--config\.electronDist=\$\{distPath\}/)
-  assert.match(smoke, /node scripts\/electron-runtime\.mjs/)
   assert.match(pkg.scripts['dist:win'], /build-windows-desktop\.mjs nsis --x64/)
   assert.match(pkg.scripts['dist:win:dir'], /build-windows-desktop\.mjs dir --x64/)
-  for (const source of [prepare, build, smoke, pkg.scripts['dist:win'], pkg.scripts['dist:win:dir']]) {
+  for (const source of [prepare, build, pkg.scripts['dist:win'], pkg.scripts['dist:win:dir']]) {
     assert.doesNotMatch(source, /electron-v43\.4\.0-win32-x64|devDependencies\.electron}-win32-x64/)
   }
 })

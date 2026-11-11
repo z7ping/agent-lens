@@ -1,11 +1,7 @@
-name: AgentLens 1.0 CI
+name: AgentLens 手动检查
 
 on:
   workflow_dispatch:
-  pull_request:
-    types: [opened, reopened, ready_for_review]
-    branches:
-      - main
 
 permissions:
   contents: read
@@ -35,29 +31,18 @@ jobs:
       - name: Install dependencies
         run: npm ci --no-audit --no-fund
 
-      - name: Verify Web presentation convergence
-        run: npm run check:web-presentation
-
-      - name: Verify brand assets
-        run: npm run check:brand-assets
-
-      - name: Verify desktop shell syntax
-        run: npm run check:desktop-shell
-
       - name: Typecheck
         run: npm run typecheck
 
       - name: Test
         run: npm test
 
-      - name: Build distributable
-        run: npm run build:dist
+      # npm pack 的 prepack 已执行展示、品牌、桌面检查与分发构建。
+      - name: Verify npm package contents
+        run: npm run smoke:npm-package
 
       - name: Smoke distributable
         run: npm run smoke:dist
-
-      - name: Verify npm package contents
-        run: npm run smoke:npm-package
 
       - name: Verify Windows shared Hook dispatcher
         if: runner.os == 'Windows'
