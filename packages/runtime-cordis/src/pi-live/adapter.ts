@@ -768,7 +768,7 @@ export class PiLiveAdapter implements LiveAdapter {
     const resolved = await this.resolveMessage(message)
     const firstToken = resolved.text.trim().split(/\s+/)[0] ?? ''
     const isNativeSlash = firstToken.startsWith('/')
-      && (await this.service.commands(runtimeSessionId)).some(command => `/${command.name}` === firstToken)
+      && (await this.service.commands(runtimeSessionId).catch(() => [])).some(command => `/${command.name}` === firstToken)
     // AgentSession.prompt expands extension/skill/template commands; direct
     // steer()/followUp() would instead queue their literal text for the LLM.
     if (isNativeSlash || behavior === 'normal') {
