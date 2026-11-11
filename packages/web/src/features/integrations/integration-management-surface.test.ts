@@ -5,6 +5,7 @@ import test from 'node:test'
 const page = readFileSync(new URL('../IntegrationManagementPage.tsx', import.meta.url), 'utf8')
 const agentsPage = readFileSync(new URL('../AgentsPage.tsx', import.meta.url), 'utf8')
 const onboarding = readFileSync(new URL('../IntegrationOnboarding.tsx', import.meta.url), 'utf8')
+const integrationModel = readFileSync(new URL('../../client/model-integration.ts', import.meta.url), 'utf8')
 const app = readFileSync(new URL('../../App.tsx', import.meta.url), 'utf8')
 const sidebar = readFileSync(new URL('../../components/WorkspaceSidebar.tsx', import.meta.url), 'utf8')
 const zhAgents = readFileSync(new URL('../../i18n/zh-CN/agents.ts', import.meta.url), 'utf8')
@@ -278,3 +279,23 @@ test('全部智能体接入主行直接显示本机及线上版本，不再要�
   assert.doesNotMatch(page, /latestVersion\?\.status === 'ready' && methods\.length/)
 })
 
+
+test('首次接入只有一次明确权限确认，依实际授权状态增量申请并避免二次授权', () => {
+  assert.match(onboarding, /<Dialog[\s\S]*?open=\{confirmOpen\}/)
+  assert.match(onboarding, /grantLive \? authorization\.pending : \[\]/)
+  assert.match(onboarding, /const result = await model\.authorizeIntegration\(item\.productId, authorization\.pending\)/)
+  assert.match(onboarding, /if \(withLive && authorization\.pending\.length\)/)
+  assert.match(onboarding, /if \(withLive && hasProtectedCapabilities\(item\) && authorization\.phase === 'unknown'\)/)
+  assert.match(onboarding, /if \(!authorization\.pending\.every\(capability => result\.authorizedCapabilities\.includes\(capability\)\)\)/)
+  assert.match(onboarding, /const \[confirmedGrantLive, setConfirmedGrantLive\] = useState\(true\)/)
+  assert.match(onboarding, /const result = await runOne\(item, confirmedGrantLive\)/)
+  assert.match(integrationModel, /Promise\.allSettled\(\[this\.refreshAgents\(\), this\.refreshIntegrationManagement\(\)\]\)/)
+})
+
+test('精简运行时未暴露接入包管理时直接启用，不调用不存在的安装服务', () => {
+  assert.match(onboarding, /if \(item\.packageState && !integrationPackageReady\(item\.packageState\)\)/)
+  assert.match(onboarding, /if \(!item\.enabled\.configured\)/)
+  assert.match(onboarding, /result\.enabled\.restartRequired/)
+  assert.match(onboarding, /readyToFinish && restartRequired/)
+  assert.doesNotMatch(onboarding, /if \(!integrationPackageReady\(item\.packageState\)\)/)
+})
