@@ -9,6 +9,8 @@ class RuntimeContributionHost implements PiRuntimeHost {
   compactions = 0
   reloads = 0
   prompts = 0
+  steering: string[] = []
+  followUps: string[] = []
   generatedTitles = 0
   sessionName: string | undefined
   onEvent?: (event: Record<string, unknown>) => void
@@ -91,8 +93,8 @@ class RuntimeContributionHost implements PiRuntimeHost {
       setModel: async () => state(),
       setThinkingLevel: async () => state(),
       prompt: async () => { this.prompts += 1 },
-      steer: async () => {},
-      followUp: async () => {},
+      steer: async message => { this.steering.push(message) },
+      followUp: async message => { this.followUps.push(message) },
       clearQueue: async () => ({ steering: [], followUp: [] }),
       abort: async () => ({ steering: [], followUp: [] }),
       respondToExtension: async () => {},
@@ -144,23 +146,25 @@ test('MCP tools disclosure is source-backed, grouped by native server and absent
   } finally { await unavailable.dispose() }
 })
 
-test('未注册 /mcp 等斜杠指令在 Runtime 层被拒绝，原生扩展仍可执行', async () => {
+test('未注册的斜杠文本交给原生 Runtime，已注册扩展指令仍遵守队列规则', async () => {
   const host = new RuntimeContributionHost(true, true)
   const service = new DefaultPiLiveService(host)
   try {
     const started = await service.start({ cwd: '/workspace' })
     await waitForStatus(service, started.runtimeSessionId, 'ready')
     const id = started.runtimeSessionId
-    await assert.rejects(() => service.prompt(id, '/mcp'), /Unrecognized Pi slash command: \/mcp/)
-    await assert.rejects(() => service.prompt(id, '/some-unknown-command args'), /Unrecognized Pi slash command/)
-    await assert.rejects(() => service.steer(id, '/mcp'), /Unrecognized Pi slash command/)
-    await assert.rejects(() => service.followUp(id, '/mcp'), /Unrecognized Pi slash command/)
-    assert.equal(host.prompts, 0, 'unknown slash must never be forwarded to the worker')
+    await service.prompt(id, '/mcp')
+    await service.prompt(id, '/some-unknown-command args')
+    await service.steer(id, '/mcp')
+    await service.followUp(id, '/mcp')
+    assert.equal(host.prompts, 2, '未注册斜杠文本应发送至原生 Runtime')
+    assert.deepEqual(host.steering, ['/mcp'])
+    assert.deepEqual(host.followUps, ['/mcp'])
     await assert.rejects(() => service.steer(id, '/title'), /cannot be queued/)
     await service.prompt(id, '/title')
-    assert.equal(host.prompts, 1, 'registered native extension command remains available')
+    assert.equal(host.prompts, 3, 'registered native extension command remains available')
     await service.prompt(id, 'ordinary message')
-    assert.equal(host.prompts, 2)
+    assert.equal(host.prompts, 4)
   } finally {
     await service.dispose()
   }
