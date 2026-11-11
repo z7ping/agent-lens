@@ -302,7 +302,7 @@ export function IntegrationOnboarding({
           <Button
             variant="primary"
             loading={running || finishing}
-            disabled={scanning || selected.size === 0}
+            disabled={!readyToFinish && (scanning || selected.size === 0)}
             onClick={() => readyToFinish ? void finish() : begin()}
           >{t(readyToFinish ? 'onboarding.finish' : 'onboarding.start')}</Button>
         </div>
