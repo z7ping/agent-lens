@@ -177,7 +177,7 @@
   gap: 4px;
   padding: 12px 14px;
   border: 1px solid var(--al-line);
-  border-radius: var(--al-radius-md);
+  border-radius: var(--radius-md);
 }
 
 .integration-onboarding-consent-item span {
