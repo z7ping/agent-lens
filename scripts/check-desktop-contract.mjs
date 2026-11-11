@@ -38,7 +38,8 @@ for (const script of ['dist:mac:x64', 'dist:mac:x64:release', 'dist:mac:x64:dir'
 requireText(rootPackage.scripts?.['desktop:mac'] === 'npm run desktop:mac:arm64', 'desktop:mac 默认必须指向 Apple Silicon arm64')
 requireText(rootPackage.scripts?.['desktop:mac:release'] === 'npm run desktop:mac:arm64:release', 'desktop:mac:release 默认必须指向 Apple Silicon arm64')
 
-const desktopWorkflow = read('.github/workflows/desktop-macos-linux.yml')
+const desktopWorkflow = read('.github/workflows/desktop-macos.yml')
+const linuxWorkflow = read('.github/workflows/desktop-linux.yml')
 requireText(desktopWorkflow.includes('runner: macos-15'), 'macOS arm64 发行必须使用 Apple Silicon runner')
 requireText(desktopWorkflow.includes('runner: macos-15-intel'), 'macOS x64 发行必须使用 Intel runner')
 requireText(desktopWorkflow.includes('arch: arm64') && desktopWorkflow.includes('arch: x64'), 'macOS Workflow 必须同时构建 arm64 与 x64')
@@ -46,8 +47,8 @@ requireText(desktopWorkflow.includes('runs-on: ${{ matrix.runner }}'), 'macOS Wo
 requireText(desktopWorkflow.includes('desktop:mac:arm64') && desktopWorkflow.includes('desktop:mac:x64'), 'macOS Workflow 缺少双架构构建脚本')
 requireText(desktopWorkflow.includes('SHA256SUMS-macos-${{ matrix.arch }}.txt'), 'macOS 校验文件必须按架构分别生成')
 requireText(!desktopWorkflow.includes('universal'), 'macOS 暂不允许 Universal 包，避免放大原生依赖与签名复杂度')
-requireText(desktopWorkflow.includes('runs-on: ubuntu-latest'), 'Linux 桌面发行必须使用 x64 runner')
-requireText(desktopWorkflow.includes('SHA256SUMS-linux-x64.txt'), 'Linux 校验文件必须明确为 x64')
+requireText(linuxWorkflow.includes('runs-on: ubuntu-latest'), 'Linux 桌面发行必须使用 x64 runner')
+requireText(linuxWorkflow.includes('SHA256SUMS-linux-x64.txt'), 'Linux 校验文件必须明确为 x64')
 
 const bootstrap = read('apps/desktop/src/bootstrap.mjs')
 requireText(bootstrap.includes("app.setName('AgentLens')"), 'Electron bootstrap 未固定产品名 AgentLens')

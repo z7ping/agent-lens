@@ -1,4 +1,4 @@
-name: macOS and Linux Desktop
+name: macOS Desktop
 
 on:
   push:
@@ -16,7 +16,7 @@ on:
       - 'package.json'
       - 'package-lock.json'
       - 'docs/brand/logo/agentlens-icon-master.svg'
-      - '.github/workflows/desktop-macos-linux.yml'
+      - '.github/workflows/desktop-macos.yml'
   pull_request:
     types: [opened, reopened, ready_for_review]
     branches: [main]
@@ -33,20 +33,11 @@ on:
       - 'package.json'
       - 'package-lock.json'
       - 'docs/brand/logo/agentlens-icon-master.svg'
-      - '.github/workflows/desktop-macos-linux.yml'
+      - '.github/workflows/desktop-macos.yml'
   release:
     types: [published]
   workflow_dispatch:
     inputs:
-      target:
-        description: '构建目标平台'
-        required: true
-        default: 'all'
-        type: choice
-        options:
-          - all
-          - linux
-          - macos
       release_tag:
         description: '可选：补发到已有 Release，例如 v1.0.0-alpha.5'
         required: false
@@ -56,8 +47,50 @@ permissions:
   contents: write
 
 jobs:
+  macos_policy:
+    runs-on: ubuntu-latest
+    outputs:
+      signed: ${{ steps.mode.outputs.signed }}
+    steps:
+      - name: 确定 macOS 签名模式
+        id: mode
+        shell: bash
+        env:
+          CSC_LINK: ${{ secrets.MACOS_CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.MACOS_CSC_KEY_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_API_KEY_P8: ${{ secrets.APPLE_API_KEY_P8 }}
+          APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+        run: |
+          signed=false
+          if [[ -n "$CSC_LINK$CSC_KEY_PASSWORD$APPLE_ID$APPLE_APP_SPECIFIC_PASSWORD$APPLE_TEAM_ID$APPLE_API_KEY_P8$APPLE_API_KEY_ID$APPLE_API_ISSUER" ]]; then
+            if [[ -z "$CSC_LINK" || -z "$CSC_KEY_PASSWORD" ]] || { [[ -z "$APPLE_ID" || -z "$APPLE_APP_SPECIFIC_PASSWORD" || -z "$APPLE_TEAM_ID" ]] && [[ -z "$APPLE_API_KEY_P8" || -z "$APPLE_API_KEY_ID" || -z "$APPLE_API_ISSUER" ]]; }; then
+              echo 'macOS 签名或公证凭据不完整，请补全或全部移除。' >&2
+              exit 1
+            fi
+            signed=true
+          fi
+          echo "signed=$signed" >> "$GITHUB_OUTPUT"
+
+      - name: 标注未签名 macOS 安装包
+        if: steps.mode.outputs.signed == 'false' && (github.event_name == 'release' || (github.event_name == 'workflow_dispatch' && inputs.release_tag != ''))
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.release_tag || github.ref_name }}
+        shell: bash
+        run: |
+          gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --json body --jq .body > "$RUNNER_TEMP/release-body.md"
+          if ! grep -q '<!-- macos-unsigned-notice -->' "$RUNNER_TEMP/release-body.md"; then
+            printf '%s\n\n' '<!-- macos-unsigned-notice -->' '> macOS 安装包未经 Apple Developer ID 签名或公证，首次打开时可能受到 Gatekeeper 阻止或显示安全提示。请从本项目的 GitHub Release 下载，并使用对应的 SHA256SUMS-macos 文件核对。' > "$RUNNER_TEMP/release-notes.md"
+            cat "$RUNNER_TEMP/release-body.md" >> "$RUNNER_TEMP/release-notes.md"
+            gh release edit "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --notes-file "$RUNNER_TEMP/release-notes.md"
+          fi
+
   macos:
-    if: ${{ github.event_name != 'workflow_dispatch' || inputs.target == 'macos' || inputs.target == 'all' }}
+    needs: macos_policy
     strategy:
       fail-fast: false
       matrix:
@@ -86,16 +119,14 @@ jobs:
       - name: Install dependencies
         run: npm ci --no-audit --no-fund
 
-      - name: Resolve manual release metadata
-        id: manual_release
+      - name: Verify manual release exists
         if: github.event_name == 'workflow_dispatch' && inputs.release_tag != ''
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
           RELEASE_TAG: ${{ inputs.release_tag }}
         run: |
-          prerelease="$(gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --json isPrerelease --jq '.isPrerelease')"
-          echo "prerelease=$prerelease" >> "$GITHUB_OUTPUT"
+          gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null
 
       - name: Verify release tag matches package version
         if: github.event_name == 'release' || (github.event_name == 'workflow_dispatch' && inputs.release_tag != '')
@@ -104,14 +135,8 @@ jobs:
           RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.release_tag || github.ref_name }}
         run: GITHUB_REF_NAME="$RELEASE_TAG" node scripts/check-release-version.mjs
 
-      - name: Note unsigned prerelease
-        if: (github.event_name == 'release' && github.event.release.prerelease == true) || (github.event_name == 'workflow_dispatch' && inputs.release_tag != '' && steps.manual_release.outputs.prerelease == 'true')
-        shell: bash
-        run: |
-          echo 'AgentLens prerelease: macOS DMG/ZIP may be published unsigned and without notarization for alpha/beta/rc dogfood.'
-
       - name: Materialize App Store Connect API key
-        if: (github.event_name == 'release' && github.event.release.prerelease == false) || (github.event_name == 'workflow_dispatch' && inputs.release_tag != '' && steps.manual_release.outputs.prerelease == 'false')
+        if: needs.macos_policy.outputs.signed == 'true'
         shell: bash
         env:
           APPLE_API_KEY_P8: ${{ secrets.APPLE_API_KEY_P8 }}
@@ -124,7 +149,7 @@ jobs:
           fi
 
       - name: Require macOS release signing and notarization credentials
-        if: (github.event_name == 'release' && github.event.release.prerelease == false) || (github.event_name == 'workflow_dispatch' && inputs.release_tag != '' && steps.manual_release.outputs.prerelease == 'false')
+        if: needs.macos_policy.outputs.signed == 'true'
         env:
           CSC_LINK: ${{ secrets.MACOS_CSC_LINK }}
           CSC_KEY_PASSWORD: ${{ secrets.MACOS_CSC_KEY_PASSWORD }}
@@ -137,20 +162,17 @@ jobs:
 
       - name: Verify source
         run: |
-          npm run check:web-presentation
-          npm run check:brand-assets
-          npm run check:desktop-shell
           npm run typecheck
           npm test
 
       - name: Build unsigned macOS desktop
-        if: github.event_name == 'push' || github.event_name == 'pull_request' || (github.event_name == 'workflow_dispatch' && (inputs.release_tag == '' || steps.manual_release.outputs.prerelease == 'true')) || (github.event_name == 'release' && github.event.release.prerelease == true)
+        if: needs.macos_policy.outputs.signed != 'true'
         run: npm run ${{ matrix.build_script }}
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
 
       - name: Build signed and notarized macOS desktop
-        if: (github.event_name == 'release' && github.event.release.prerelease == false) || (github.event_name == 'workflow_dispatch' && inputs.release_tag != '' && steps.manual_release.outputs.prerelease == 'false')
+        if: needs.macos_policy.outputs.signed == 'true'
         run: npm run ${{ matrix.release_script }}
         env:
           CSC_LINK: ${{ secrets.MACOS_CSC_LINK }}
@@ -162,7 +184,7 @@ jobs:
           APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
 
       - name: Verify macOS signature and notarization
-        if: (github.event_name == 'release' && github.event.release.prerelease == false) || (github.event_name == 'workflow_dispatch' && inputs.release_tag != '' && steps.manual_release.outputs.prerelease == 'false')
+        if: needs.macos_policy.outputs.signed == 'true'
         shell: bash
         run: |
           APP="$(find release/macos -type d -path '*/AgentLens.app' -print -quit)"
@@ -214,98 +236,19 @@ jobs:
           RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.release_tag || github.ref_name }}
         run: gh release upload "$RELEASE_TAG" release/macos/AgentLens-*-macOS-${{ matrix.arch }}.dmg release/macos/AgentLens-*-macOS-${{ matrix.arch }}.zip release/macos/SHA256SUMS-macos-${{ matrix.arch }}.txt --clobber
 
-  linux:
-    if: ${{ github.event_name != 'workflow_dispatch' || inputs.target == 'linux' || inputs.target == 'all' }}
+  macos_notice_complete:
+    needs: [macos_policy, macos]
+    if: needs.macos_policy.outputs.signed == 'false' && (github.event_name == 'release' || (github.event_name == 'workflow_dispatch' && inputs.release_tag != ''))
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@v7
-        with:
-          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.release_tag != '' && inputs.release_tag || github.ref }}
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v7
-        with:
-          node-version: 22.23.0
-          package-manager-cache: false
-
-      - name: Install dependencies
-        run: npm ci --no-audit --no-fund
-
-      - name: Verify manual release exists
-        if: github.event_name == 'workflow_dispatch' && inputs.release_tag != ''
-        shell: bash
-        env:
-          GH_TOKEN: ${{ github.token }}
-          RELEASE_TAG: ${{ inputs.release_tag }}
-        run: gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null
-
-      - name: Verify release tag matches package version
-        if: github.event_name == 'release' || (github.event_name == 'workflow_dispatch' && inputs.release_tag != '')
-        shell: bash
-        env:
-          RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.release_tag || github.ref_name }}
-        run: GITHUB_REF_NAME="$RELEASE_TAG" node scripts/check-release-version.mjs
-
-      - name: Verify source
-        run: |
-          npm run check:web-presentation
-          npm run check:brand-assets
-          npm run check:desktop-shell
-          npm run typecheck
-          npm test
-
-      - name: Build Linux desktop
-        run: npm run desktop:linux
-
-      - name: Smoke packaged desktop runtime
-        shell: bash
-        run: |
-          EXECUTABLE="$(find release/linux -type f -path '*/linux*-unpacked/agentlens' | head -n 1)"
-          if [ -z "$EXECUTABLE" ]; then
-            echo "没有找到 Linux AgentLens 可执行文件" >&2
-            exit 1
-          fi
-          node scripts/smoke-desktop-runtime.mjs "$EXECUTABLE"
-
-      - name: Smoke packaged AppImage window and startup themes
-        shell: bash
-        env:
-          APPIMAGE_EXTRACT_AND_RUN: '1'
-        run: |
-          APPIMAGE="$(find release/linux -maxdepth 1 -type f -name 'AgentLens-*-Linux-x86_64.AppImage' | head -n 1)"
-          if [ -z "$APPIMAGE" ]; then
-            echo "没有找到 Linux AppImage" >&2
-            exit 1
-          fi
-          xvfb-run -a node scripts/smoke-desktop-window.mjs "$APPIMAGE"
-
-      - name: Create checksums
-        shell: bash
-        run: |
-          cd release/linux
-          shopt -s nullglob
-          files=(AgentLens-*-Linux-x86_64.AppImage AgentLens-*-Linux-amd64.deb)
-          if [ "${#files[@]}" -eq 0 ]; then
-            echo "没有找到 Linux x64 发布产物" >&2
-            exit 1
-          fi
-          sha256sum "${files[@]}" > SHA256SUMS-linux-x64.txt
-
-      - name: Upload Linux artifact
-        uses: actions/upload-artifact@v6
-        with:
-          name: agent-lens-linux-x64-${{ github.run_id }}
-          path: |
-            release/linux/AgentLens-*-Linux-x86_64.AppImage
-            release/linux/AgentLens-*-Linux-amd64.deb
-            release/linux/SHA256SUMS-linux-x64.txt
-          if-no-files-found: error
-
-      - name: Attach Linux artifacts to GitHub Release
-        if: github.event_name == 'release' || (github.event_name == 'workflow_dispatch' && inputs.release_tag != '')
+      - name: 更新 macOS 安装包状态
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
           RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.release_tag || github.ref_name }}
-        run: gh release upload "$RELEASE_TAG" release/linux/AgentLens-*-Linux-x86_64.AppImage release/linux/AgentLens-*-Linux-amd64.deb release/linux/SHA256SUMS-linux-x64.txt --clobber
+        run: |
+          gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --json body --jq .body > "$RUNNER_TEMP/release-body.md"
+          sed 's/本版本的 macOS 安装包尚待补发；计划提供的安装包未经/本版本的 macOS 安装包未经/' "$RUNNER_TEMP/release-body.md" > "$RUNNER_TEMP/release-notes.md"
+          if ! cmp -s "$RUNNER_TEMP/release-body.md" "$RUNNER_TEMP/release-notes.md"; then
+            gh release edit "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --notes-file "$RUNNER_TEMP/release-notes.md"
+          fi

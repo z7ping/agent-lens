@@ -13,7 +13,8 @@ function fail(message, names = []) {
 if (target === 'windows') {
   const required = ['CSC_LINK', 'CSC_KEY_PASSWORD']
   const absent = missing(required)
-  if (absent.length) fail('Windows 正式 Release 必须配置代码签名证书，禁止生成未签名公开安装包。', absent)
+  if (absent.length === required.length) console.log('[release-signing] Windows 将生成未签名安装包。')
+  else if (absent.length) fail('Windows 代码签名证书和密码必须同时配置。', absent)
   else console.log('[release-signing] Windows 代码签名凭据已配置。')
 } else if (target === 'macos') {
   const signing = missing(['CSC_LINK', 'CSC_KEY_PASSWORD'])

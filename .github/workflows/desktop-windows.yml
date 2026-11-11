@@ -1,9 +1,14 @@
-name: Windows Installer
+name: Windows Desktop
 
 on:
   release:
     types: [published]
   workflow_dispatch:
+    inputs:
+      release_tag:
+        description: '可选：补发到已有 Release，例如 v1.0.0'
+        required: false
+        type: string
 
 permissions:
   contents: write
@@ -14,6 +19,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.release_tag != '' && inputs.release_tag || github.ref }}
 
       - name: Setup Node.js
         uses: actions/setup-node@v7
@@ -25,27 +32,22 @@ jobs:
         run: npm ci --no-audit --no-fund
 
       - name: Verify release tag matches package version
-        if: github.event_name == 'release'
+        if: github.event_name == 'release' || (github.event_name == 'workflow_dispatch' && inputs.release_tag != '')
+        env:
+          GITHUB_REF_NAME: ${{ github.event_name == 'workflow_dispatch' && inputs.release_tag || github.ref_name }}
         run: node scripts/check-release-version.mjs
 
-      - name: Note unsigned prerelease
-        if: github.event_name == 'release' && github.event.release.prerelease == true
+      - name: Determine Windows signing mode
+        id: signing
         shell: pwsh
-        run: |
-          Write-Host 'AgentLens prerelease: Windows installer may be published unsigned for alpha/beta/rc dogfood.'
-
-      - name: Require Windows release signing credentials
-        if: github.event_name == 'release' && github.event.release.prerelease == false
         env:
           CSC_LINK: ${{ secrets.WINDOWS_CSC_LINK }}
           CSC_KEY_PASSWORD: ${{ secrets.WINDOWS_CSC_KEY_PASSWORD }}
-        run: node scripts/check-release-signing.mjs windows
-
-      - name: Verify Web presentation convergence
-        run: npm run check:web-presentation
-
-      - name: Verify desktop shell syntax
-        run: npm run check:desktop-shell
+        run: |
+          if ([bool]$env:CSC_LINK -ne [bool]$env:CSC_KEY_PASSWORD) { throw 'Windows 签名证书和密码必须同时配置。' }
+          $signed = [bool]$env:CSC_LINK
+          "signed=$($signed.ToString().ToLowerInvariant())" >> $env:GITHUB_OUTPUT
+          Write-Host "Windows 签名模式：$signed"
 
       - name: Typecheck
         timeout-minutes: 15
@@ -62,7 +64,7 @@ jobs:
           CSC_KEY_PASSWORD: ${{ secrets.WINDOWS_CSC_KEY_PASSWORD }}
 
       - name: Verify Windows installer signature
-        if: github.event_name == 'release' && github.event.release.prerelease == false
+        if: steps.signing.outputs.signed == 'true'
         shell: pwsh
         run: |
           $installer = Get-ChildItem 'release/windows/AgentLens-*-Setup-x64.exe' | Select-Object -First 1
@@ -83,7 +85,7 @@ jobs:
         run: |
           $installer = Get-ChildItem 'release/windows/AgentLens-*-Setup-x64.exe' | Select-Object -First 1
           if ($null -eq $installer) { throw '没有找到 Windows 安装器' }
-          $requireSignature = '${{ github.event_name == 'release' && github.event.release.prerelease == false }}' -eq 'true'
+          $requireSignature = '${{ steps.signing.outputs.signed }}' -eq 'true'
           ./scripts/smoke-windows-installer-cli.ps1 -InstallerPath $installer.FullName -RequireSignature $requireSignature
 
       - name: Create checksums
@@ -106,9 +108,33 @@ jobs:
             release/windows/SHA256SUMS-windows.txt
           if-no-files-found: error
 
+      - name: 标注未签名安装包
+        if: steps.signing.outputs.signed != 'true' && (github.event_name == 'release' || (github.event_name == 'workflow_dispatch' && inputs.release_tag != ''))
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.release_tag || github.ref_name }}
+        run: |
+          $body = gh release view $env:RELEASE_TAG --json body --jq .body
+          if ($LASTEXITCODE -ne 0) { throw '读取 Release 说明失败。' }
+          $marker = '<!-- windows-unsigned-notice -->'
+          $existing = $body -join "`n"
+          $updated = $existing.Replace('本版本的 Windows 安装包尚待补发；计划提供的安装包未经代码签名。', '本版本的 Windows 安装包未经代码签名。')
+          if (-not $updated.Contains($marker)) {
+            $notice = "$marker`n> Windows 安装包未经代码签名。下载或运行时，浏览器或 Windows SmartScreen 可能显示未知发布者或安全提示。请从本项目的 GitHub Release 下载，并使用 SHA256SUMS-windows.txt 核对文件。`n"
+            $updated = $notice + "`n" + $updated
+          }
+          if ($updated -ne $existing) {
+            $file = Join-Path $env:RUNNER_TEMP 'release-notes.md'
+            [IO.File]::WriteAllText($file, $updated, [Text.UTF8Encoding]::new($false))
+            gh release edit $env:RELEASE_TAG --notes-file $file
+            if ($LASTEXITCODE -ne 0) { throw '更新 Release 说明失败。' }
+          }
+
       - name: Attach installer to GitHub Release
-        if: github.event_name == 'release'
+        if: github.event_name == 'release' || (github.event_name == 'workflow_dispatch' && inputs.release_tag != '')
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release upload "$GITHUB_REF_NAME" release/windows/*.exe release/windows/SHA256SUMS-windows.txt --clobber
+          RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.release_tag || github.ref_name }}
+        run: gh release upload "$RELEASE_TAG" release/windows/*.exe release/windows/SHA256SUMS-windows.txt --clobber

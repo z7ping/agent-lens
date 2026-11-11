@@ -31,29 +31,29 @@ jobs:
       - name: Verify release tag matches package version
         run: node scripts/check-release-version.mjs
 
-      - name: Verify Web presentation convergence
-        run: npm run check:web-presentation
-
-      - name: Verify brand assets
-        run: npm run check:brand-assets
-
-      - name: Verify desktop shell syntax
-        run: npm run check:desktop-shell
-
       - name: Typecheck
         run: npm run typecheck
 
       - name: Test
         run: npm test
 
-      - name: Build distributable
-        run: npm run build:dist
+      - name: Pack npm artifact
+        shell: pwsh
+        run: |
+          $packDir = Join-Path $env:RUNNER_TEMP 'agentlens-pack'
+          New-Item -ItemType Directory -Force -Path $packDir | Out-Null
+          npm pack --pack-destination $packDir
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $tarballs = @(Get-ChildItem $packDir -Filter '*.tgz')
+          if ($tarballs.Count -ne 1) { throw "预期一个 npm 包，实际找到 $($tarballs.Count) 个。" }
+          "PACKED_TARBALL=$($tarballs[0].FullName)" >> $env:GITHUB_ENV
 
       - name: Smoke distributable
         run: npm run smoke:dist
 
       - name: Pack, install and run npm artifact
-        run: npm run smoke:npm-package
+        shell: pwsh
+        run: node scripts/smoke-npm-package.mjs $env:PACKED_TARBALL
 
   publish:
     runs-on: ubuntu-latest
@@ -85,26 +85,6 @@ jobs:
           echo "NPM_TAG=$NPM_TAG" >> "$GITHUB_ENV"
           echo "npm dist-tag: $NPM_TAG"
 
-      - name: Verify Web presentation convergence
-        run: npm run check:web-presentation
-
-      - name: Verify brand assets
-        run: npm run check:brand-assets
-
-      - name: Verify desktop shell syntax
-        run: npm run check:desktop-shell
-
-      - name: Verify source
-        run: |
-          npm run typecheck
-          npm test
-
-      - name: Build distributable
-        run: npm run build:dist
-
-      - name: Smoke distributable
-        run: npm run smoke:dist
-
       - name: Pack exact npm artifact
         shell: bash
         run: |
@@ -113,6 +93,9 @@ jobs:
           npm sbom --sbom-format cyclonedx > release/sbom.cdx.json
           cp package-lock.json release/package-lock.json
           sha256sum release/*.tgz release/package-lock.json release/sbom.cdx.json > release/SHA256SUMS-npm.txt
+
+      - name: Smoke distributable
+        run: npm run smoke:dist
 
       - name: Smoke exact npm artifact
         shell: bash

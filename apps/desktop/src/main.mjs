@@ -431,14 +431,23 @@ async function verifyPackagedStartupForSmoke() {
     if (!mainWindow || mainWindow.isDestroyed()) throw new Error('桌面冒烟：主窗口已关闭')
     if (mainWindow.webContents.getURL().startsWith(daemonUrl)) {
       rendered = await mainWindow.webContents.executeJavaScript(
-        "Boolean(document.querySelector('#root .app-shell') && document.querySelector('#root .app-main'))",
+        "Boolean((document.querySelector('#root .app-shell') && document.querySelector('#root .app-main')) || document.querySelector('#root .integration-onboarding-panel #integration-onboarding-title'))",
         true,
       ).catch(() => false)
       if (rendered) break
     }
     await sleep(250)
   }
-  if (!rendered) throw new Error('桌面冒烟：Daemon 已就绪，但主界面 .app-shell 未在 45 秒内渲染')
+  if (!rendered) {
+    const details = await mainWindow.webContents.executeJavaScript(`JSON.stringify({
+      url: location.href,
+      readyState: document.readyState,
+      title: document.title,
+      root: document.querySelector('#root')?.innerText?.slice(0, 1000) ?? null,
+      scripts: [...document.scripts].map(script => script.src).filter(Boolean),
+    })`, true).catch(error => `无法读取页面：${error.message}`)
+    throw new Error(`桌面冒烟：Daemon 已就绪，但工作区或首次接入页面未在 45 秒内渲染；页面状态：${details}`)
+  }
   bootStage('main-window-rendered')
 
   const previousTheme = nativeTheme.themeSource

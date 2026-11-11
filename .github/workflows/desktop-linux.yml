@@ -1,0 +1,140 @@
+name: Linux Desktop
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'apps/desktop/**'
+      - 'apps/cli/src/hook-execution*'
+      - 'scripts/prepare-desktop.mjs'
+      - 'scripts/prepare-macos-icon.sh'
+      - 'scripts/check-brand-assets.mjs'
+      - 'scripts/check-release-signing.mjs'
+      - 'scripts/check-desktop-contract.mjs'
+      - 'scripts/smoke-desktop-runtime.mjs'
+      - 'scripts/smoke-desktop-window.mjs'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'docs/brand/logo/agentlens-icon-master.svg'
+      - '.github/workflows/desktop-linux.yml'
+  pull_request:
+    types: [opened, reopened, ready_for_review]
+    branches: [main]
+    paths:
+      - 'apps/desktop/**'
+      - 'apps/cli/src/hook-execution*'
+      - 'scripts/prepare-desktop.mjs'
+      - 'scripts/prepare-macos-icon.sh'
+      - 'scripts/check-brand-assets.mjs'
+      - 'scripts/check-release-signing.mjs'
+      - 'scripts/check-desktop-contract.mjs'
+      - 'scripts/smoke-desktop-runtime.mjs'
+      - 'scripts/smoke-desktop-window.mjs'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'docs/brand/logo/agentlens-icon-master.svg'
+      - '.github/workflows/desktop-linux.yml'
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: '可选：补发到已有 Release，例如 v1.0.0-alpha.5'
+        required: false
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  linux:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.release_tag != '' && inputs.release_tag || github.ref }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22.23.0
+          package-manager-cache: false
+
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Verify manual release exists
+        if: github.event_name == 'workflow_dispatch' && inputs.release_tag != ''
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ inputs.release_tag }}
+        run: gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null
+
+      - name: Verify release tag matches package version
+        if: github.event_name == 'release' || (github.event_name == 'workflow_dispatch' && inputs.release_tag != '')
+        shell: bash
+        env:
+          RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.release_tag || github.ref_name }}
+        run: GITHUB_REF_NAME="$RELEASE_TAG" node scripts/check-release-version.mjs
+
+      - name: Verify source
+        run: |
+          npm run typecheck
+          npm test
+
+      - name: Build Linux desktop
+        run: npm run desktop:linux
+
+      - name: Smoke packaged desktop runtime
+        shell: bash
+        run: |
+          EXECUTABLE="$(find release/linux -type f -path '*/linux*-unpacked/agentlens' | head -n 1)"
+          if [ -z "$EXECUTABLE" ]; then
+            echo "没有找到 Linux AgentLens 可执行文件" >&2
+            exit 1
+          fi
+          node scripts/smoke-desktop-runtime.mjs "$EXECUTABLE"
+
+      - name: Smoke packaged AppImage window and startup themes
+        shell: bash
+        env:
+          APPIMAGE_EXTRACT_AND_RUN: '1'
+        run: |
+          APPIMAGE="$(find release/linux -maxdepth 1 -type f -name 'AgentLens-*-Linux-x86_64.AppImage' | head -n 1)"
+          if [ -z "$APPIMAGE" ]; then
+            echo "没有找到 Linux AppImage" >&2
+            exit 1
+          fi
+          xvfb-run -a node scripts/smoke-desktop-window.mjs "$APPIMAGE"
+
+      - name: Create checksums
+        shell: bash
+        run: |
+          cd release/linux
+          shopt -s nullglob
+          files=(AgentLens-*-Linux-x86_64.AppImage AgentLens-*-Linux-amd64.deb)
+          if [ "${#files[@]}" -eq 0 ]; then
+            echo "没有找到 Linux x64 发布产物" >&2
+            exit 1
+          fi
+          sha256sum "${files[@]}" > SHA256SUMS-linux-x64.txt
+
+      - name: Upload Linux artifact
+        uses: actions/upload-artifact@v6
+        with:
+          name: agent-lens-linux-x64-${{ github.run_id }}
+          path: |
+            release/linux/AgentLens-*-Linux-x86_64.AppImage
+            release/linux/AgentLens-*-Linux-amd64.deb
+            release/linux/SHA256SUMS-linux-x64.txt
+          if-no-files-found: error
+
+      - name: Attach Linux artifacts to GitHub Release
+        if: github.event_name == 'release' || (github.event_name == 'workflow_dispatch' && inputs.release_tag != '')
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.release_tag || github.ref_name }}
+        run: gh release upload "$RELEASE_TAG" release/linux/AgentLens-*-Linux-x86_64.AppImage release/linux/AgentLens-*-Linux-amd64.deb release/linux/SHA256SUMS-linux-x64.txt --clobber
