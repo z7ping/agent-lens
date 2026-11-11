@@ -193,7 +193,7 @@ test('当前概览和接入管理具有实际重新扫描入口', () => {
 test('首次向导自动扫描但不默认选择或自动安装', () => {
   assert.match(onboarding, /useState<Set<string>>\(\(\) => new Set\(\)\)/)
   assert.match(onboarding, /const chosen = detected\.filter\(item => selected\.has\(item\.integrationId\)\)/)
-  assert.match(onboarding, /disabled=\{scanning \|\| selected\.size === 0\}/)
+  assert.match(onboarding, /disabled=\{!readyToFinish && \(scanning \|\| selected\.size === 0\)\}/)
   assert.match(onboarding, /onClick=\{\(\) => void finish\(\)\}/)
 })
 
