@@ -10,11 +10,13 @@ import {
   Menu,
   Tray,
   dialog,
+  nativeTheme,
   shell,
 } from 'electron'
 import { createLoginAutostartController } from './login-autostart.mjs'
 import { migrateLegacyWindowsRuntime } from './legacy-windows-migration.mjs'
 import { createRotatingLogWriter } from './rotating-log.mjs'
+import { startupPage, startupBackgroundColor } from './startup-page.mjs'
 
 const DEFAULT_PORT = 56789
 const EXPECTED_PROTOCOL_VERSION = '1.0'
@@ -30,34 +32,6 @@ const port = process.env.AGENT_LENS_PORT ? Number(process.env.AGENT_LENS_PORT) :
 const daemonUrl = `http://127.0.0.1:${port}`
 const desktopSmokeMode = process.env.AGENT_LENS_DESKTOP_SMOKE === '1'
 const loginAutostart = createLoginAutostartController({ app })
-const startupPage = `data:text/html;charset=UTF-8,${encodeURIComponent(`<!doctype html>
-<html lang="en-US">
-<head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>AgentLens</title>
-<style>
-  html,body{height:100%;margin:0;background:#0b0d10;color:#f1f4f8;font-family:"Segoe UI","Microsoft YaHei",sans-serif}
-  body{display:grid;place-items:center}
-  main{display:flex;align-items:center;gap:14px;padding:24px 28px;border:1px solid #252b34;border-radius:14px;background:#11151b}
-  strong{display:block;font-size:18px;letter-spacing:.01em}
-  span{display:block;margin-top:4px;color:#9da8b7;font-size:13px}
-  i{width:10px;height:10px;border-radius:50%;background:#8eb8ff;box-shadow:0 0 0 5px rgba(142,184,255,.12)}
-</style>
-</head>
-<body><main><i></i><div><strong id="startup-title">AgentLens</strong><span id="startup-message">Starting the local runtime. First startup or large datasets may take a few minutes…</span></div></main>
-<script>
-  // Match the web application's system-language fallback before it is available.
-  const language = (navigator.language || '').replaceAll('_', '-').trim().toLowerCase()
-  if (language === 'zh' || language.startsWith('zh-')) {
-    document.documentElement.lang = 'zh-CN'
-    document.title = 'AgentLens · 智能体透镜'
-    document.getElementById('startup-title').textContent = 'AgentLens · 智能体透镜'
-    document.getElementById('startup-message').textContent = '正在启动本地运行时；首次启动或数据较多时可能需要几分钟…'
-  }
-</script></body>
-</html>`)} `
-
 let mainWindow = null
 let tray = null
 let daemon = null
@@ -422,7 +396,7 @@ function createWindow() {
     // 普通双击和安装完成后的首次启动必须立刻显示启动反馈；只有明确
     // 带 --hidden 的登录自启才从托盘静默启动。
     show: !startHidden,
-    backgroundColor: '#0b0d10',
+    backgroundColor: startupBackgroundColor(nativeTheme.shouldUseDarkColors),
     icon: desktopIconPath(),
     webPreferences: {
       nodeIntegration: false,
@@ -445,6 +419,63 @@ function createWindow() {
     writeDaemonLog(`--- startup page failed: ${error instanceof Error ? error.message : String(error)} ---`)
   })
 }
+
+// Smoke-only checks run inside the packaged Electron process, where the real
+// BrowserWindow and system-theme media query can be inspected.
+async function verifyPackagedStartupForSmoke() {
+  if (!desktopSmokeMode) return
+
+  const deadline = Date.now() + 45_000
+  let rendered = false
+  while (Date.now() < deadline) {
+    if (!mainWindow || mainWindow.isDestroyed()) throw new Error('桌面冒烟：主窗口已关闭')
+    if (mainWindow.webContents.getURL().startsWith(daemonUrl)) {
+      rendered = await mainWindow.webContents.executeJavaScript(
+        "Boolean(document.querySelector('#root .app-shell') && document.querySelector('#root .app-main'))",
+        true,
+      ).catch(() => false)
+      if (rendered) break
+    }
+    await sleep(250)
+  }
+  if (!rendered) throw new Error('桌面冒烟：Daemon 已就绪，但主界面 .app-shell 未在 45 秒内渲染')
+  bootStage('main-window-rendered')
+
+  const previousTheme = nativeTheme.themeSource
+  const probe = new BrowserWindow({
+    show: false,
+    backgroundColor: startupBackgroundColor(false),
+    webPreferences: { nodeIntegration: false, contextIsolation: true, sandbox: true },
+  })
+  try {
+    await probe.loadURL(startupPage)
+    for (const [theme, background] of [
+      ['light', 'rgb(246, 247, 249)'],
+      ['dark', 'rgb(16, 18, 22)'],
+    ]) {
+      nativeTheme.themeSource = theme
+      await sleep(150)
+      const actual = await probe.webContents.executeJavaScript(
+        "({ dark: matchMedia('(prefers-color-scheme: dark)').matches, background: getComputedStyle(document.body).backgroundColor })",
+        true,
+      )
+      if (actual.dark !== (theme === 'dark') || actual.background !== background) {
+        throw new Error(`桌面冒烟：${theme} 启动页主题错误：${JSON.stringify(actual)}`)
+      }
+    }
+    bootStage('startup-themes-validated')
+  } finally {
+    nativeTheme.themeSource = previousTheme
+    probe.destroy()
+  }
+}
+
+nativeTheme.on('updated', () => {
+  if (mainWindow && !mainWindow.isDestroyed()
+    && mainWindow.webContents.getURL().startsWith('data:text/html')) {
+    mainWindow.setBackgroundColor(startupBackgroundColor(nativeTheme.shouldUseDarkColors))
+  }
+})
 
 async function createTray() {
   tray = new Tray(await trayIcon())
@@ -565,6 +596,7 @@ if (!singleInstance) {
       }
       markDaemonStable()
       await mainWindow.loadURL(daemonUrl)
+      await verifyPackagedStartupForSmoke()
     } catch (error) {
       const diagnostic = error instanceof Error ? error.stack ?? error.message : String(error)
       const detail = error instanceof Error ? error.message : String(error)
