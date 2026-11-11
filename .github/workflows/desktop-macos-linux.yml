@@ -266,6 +266,16 @@ jobs:
           fi
           node scripts/smoke-desktop-runtime.mjs "$EXECUTABLE"
 
+      - name: Smoke packaged AppImage window and startup themes
+        shell: bash
+        run: |
+          APPIMAGE="$(find release/linux -maxdepth 1 -type f -name 'AgentLens-*-Linux-x86_64.AppImage' | head -n 1)"
+          if [ -z "$APPIMAGE" ]; then
+            echo "没有找到 Linux AppImage" >&2
+            exit 1
+          fi
+          xvfb-run -a node scripts/smoke-desktop-window.mjs "$APPIMAGE"
+
       - name: Create checksums
         shell: bash
         run: |
