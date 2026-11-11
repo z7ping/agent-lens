@@ -285,7 +285,9 @@ export abstract class AgentLensIntegrationModel extends AgentLensModelBase {
     capabilities: readonly IntegrationAuthorizationCapabilityDto[],
   ): Promise<IntegrationAuthorizationResponseDto> {
     const result = await this.api.authorizeIntegration(productId, capabilities)
-    await this.refreshAgents()
+    // Authorization is already persisted. A failed status refresh must not
+    // make the UI retry the grant, and management must not keep stale "required".
+    await Promise.allSettled([this.refreshAgents(), this.refreshIntegrationManagement()])
     return result
   }
 
