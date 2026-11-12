@@ -273,6 +273,27 @@ test('Codex availability verifies the real App Server instead of only resolving 
   await adapter.dispose()
 })
 
+test('Failed Codex availability probes share one request and throttle automatic retries', async () => {
+  class FailingRpc extends FakeRpc {
+    attempts = 0
+    override async request(method: string, params: Record<string, unknown>) {
+      if (method === 'thread/list') {
+        this.attempts += 1
+        throw new Error('App Server unavailable')
+      }
+      return super.request(method, params)
+    }
+  }
+  const rpc = new FailingRpc()
+  const adapter = new CodexLiveAdapter(rpc as unknown as CodexRpc)
+  const [first, second] = await Promise.all([adapter.availability(), adapter.availability()])
+  assert.deepEqual(first, { available: false, reason: 'Codex CLI was found, but its App Server thread/list check failed' })
+  assert.deepEqual(second, first)
+  assert.deepEqual(await adapter.availability(), first)
+  assert.equal(rpc.attempts, 1, 'repeated page visits must not restart a failed Codex CLI')
+  await adapter.dispose()
+})
+
 test('Codex snapshot falls back to full turn pages when item paging is unsupported', async () => {
   const rpc = new FakeRpc()
   rpc.itemPaginationUnsupported = true
