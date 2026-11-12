@@ -98,6 +98,8 @@ jobs:
                   if f.read(4) != b'\x7fELF':
                       continue
               result = subprocess.run(['objdump', '-T', str(path)], capture_output=True, text=True)
+              if result.returncode != 0 and 'not a dynamic object' in result.stderr:
+                  continue  # Statically linked ELF files have no undefined GLIBC symbols.
               if result.returncode != 0:
                   raise SystemExit(f'Cannot inspect ELF symbols: {path}: {result.stderr}')
               for major, minor in re.findall(r'\*UND\*[^\n]*?GLIBC_(\d+)\.(\d+)', result.stdout):
