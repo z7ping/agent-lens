@@ -60,8 +60,15 @@ function assetPriority(name, platform, arch) {
   }
 
   if (platform === 'linux') {
-    if (new RegExp(`^AgentLens-.*-Linux-${escapedArch}\\.AppImage$`, 'i').test(name)) return 30
-    if (new RegExp(`^AgentLens-.*-Linux-${escapedArch}\\.deb$`, 'i').test(name)) return 20
+    // electron-builder emits x86_64 AppImages and amd64 DEBs; Electron reports x64.
+    // Accept the old Linux-prefixed names so existing users can update normally.
+    const appImageArch = arch === 'x64' ? 'x86_64' : escapedArch
+    const debArch = arch === 'x64' ? 'amd64' : escapedArch
+    if (!/-Linux-/i.test(name) && new RegExp(`^AgentLens-.*-${appImageArch}\\.AppImage$`, 'i').test(name)) return 40
+    if (new RegExp(`^AgentLens-.*-Linux-${appImageArch}\\.AppImage$`, 'i').test(name)) return 30
+    if (new RegExp(`^AgentLens-.*-Linux-${escapedArch}\\.AppImage$`, 'i').test(name)) return 25
+    if (new RegExp(`^AgentLens-.*-Linux-${debArch}\\.deb$`, 'i').test(name)) return 20
+    if (new RegExp(`^AgentLens-.*-Linux-${escapedArch}\\.deb$`, 'i').test(name)) return 15
     return 0
   }
 
