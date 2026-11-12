@@ -78,6 +78,39 @@ test('platform-specific x64 desktop assets are preferred', () => {
   )
 })
 
+test('Linux release updates prefer the renamed AppImage over legacy assets', () => {
+  const release = {
+    tag_name: 'v1.0.2', prerelease: false, draft: false,
+    html_url: 'https://example.test/v1.0.2',
+    assets: [
+      { name: 'AgentLens-1.0.2-Linux-amd64.deb', browser_download_url: 'https://example.test/new.deb' },
+      { name: 'AgentLens-1.0.2-Linux-x86_64.AppImage', browser_download_url: 'https://example.test/legacy.AppImage' },
+      { name: 'AgentLens-1.0.2-x86_64.AppImage', browser_download_url: 'https://example.test/current.AppImage' },
+      { name: 'AgentLens-1.0.2-arm64.AppImage', browser_download_url: 'https://example.test/arm64.AppImage' },
+    ],
+  }
+  assert.equal(
+    selectUpdateRelease([release], '1.0.1', { platform: 'linux', arch: 'x64' })?.downloadUrl,
+    'https://example.test/current.AppImage',
+  )
+})
+
+test('Linux release updates retain pre-rename AppImage and DEB fallbacks', () => {
+  for (const fileName of [
+    'AgentLens-1.0.2-Linux-x86_64.AppImage',
+    'AgentLens-1.0.2-Linux-x64.AppImage',
+    'AgentLens-1.0.2-Linux-amd64.deb',
+    'AgentLens-1.0.2-Linux-x64.deb',
+  ]) {
+    const url = 'https://example.test/' + fileName
+    const release = {
+      tag_name: 'v1.0.2', prerelease: false, draft: false,
+      assets: [{ name: fileName, browser_download_url: url }],
+    }
+    assert.equal(selectUpdateRelease([release], '1.0.1', { platform: 'linux', arch: 'x64' })?.downloadUrl, url)
+  }
+})
+
 test('ARM64 desktop builds do not receive release updates', () => {
   const release = {
     tag_name: 'v1.0.0-alpha.1',

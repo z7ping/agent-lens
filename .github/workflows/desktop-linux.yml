@@ -14,7 +14,7 @@ permissions:
 
 jobs:
   linux:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -70,6 +70,47 @@ jobs:
           META="squashfs-root/usr/share/metainfo/dev.z7ping.agentlens.metainfo.xml"
           test -s "$META"
           grep -Fq '<launchable type="desktop-id">agentlens.desktop</launchable>' "$META"
+
+      # Pin the build image to glibc 2.35 and inspect the actual runtime and payload.
+      # The host OS alone cannot guarantee that prebuilt native libraries are compatible.
+      - name: Verify AppImage glibc ABI baseline
+        shell: bash
+        run: |
+          APPIMAGE="$(find release/linux -maxdepth 1 -type f -name 'AgentLens-*-x86_64.AppImage' | head -n 1)"
+          test -f "$APPIMAGE"
+          APPIMAGE="$(realpath "$APPIMAGE")"
+          WORK_DIR="$(mktemp -d)"
+          trap 'rm -rf "$WORK_DIR"' EXIT
+          cd "$WORK_DIR"
+          "$APPIMAGE" --appimage-extract >/dev/null
+          python3 - "$APPIMAGE" squashfs-root <<'PY'
+          from pathlib import Path
+          import re
+          import subprocess
+          import sys
+
+          required = (0, 0)
+          offender = None
+          for path in [Path(sys.argv[1]), *Path(sys.argv[2]).rglob('*')]:
+              if path.is_symlink() or not path.is_file():
+                  continue
+              with path.open('rb') as f:
+                  if f.read(4) != b'\x7fELF':
+                      continue
+              result = subprocess.run(['objdump', '-T', str(path)], capture_output=True, text=True)
+              if result.returncode != 0 and 'not a dynamic object' in result.stderr:
+                  continue  # Statically linked ELF files have no undefined GLIBC symbols.
+              if result.returncode != 0:
+                  raise SystemExit(f'Cannot inspect ELF symbols: {path}: {result.stderr}')
+              for major, minor in re.findall(r'\*UND\*[^\n]*?GLIBC_(\d+)\.(\d+)', result.stdout):
+                  version = (int(major), int(minor))
+                  if version > required:
+                      required, offender = version, path
+
+          print(f'Highest required glibc ABI: {required[0]}.{required[1]} (from {offender})')
+          if required > (2, 35):
+              raise SystemExit('AppImage requires glibc newer than Ubuntu 22.04 (2.35)')
+          PY
 
       - name: Smoke packaged desktop runtime
         shell: bash

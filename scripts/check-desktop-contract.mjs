@@ -47,8 +47,9 @@ requireText(desktopWorkflow.includes('runs-on: ${{ matrix.runner }}'), 'macOS Wo
 requireText(desktopWorkflow.includes('desktop:mac:arm64') && desktopWorkflow.includes('desktop:mac:x64'), 'macOS Workflow 缺少双架构构建脚本')
 requireText(desktopWorkflow.includes('SHA256SUMS-macos-${{ matrix.arch }}.txt'), 'macOS 校验文件必须按架构分别生成')
 requireText(!desktopWorkflow.includes('universal'), 'macOS 暂不允许 Universal 包，避免放大原生依赖与签名复杂度')
-requireText(linuxWorkflow.includes('runs-on: ubuntu-latest'), 'Linux 桌面发行必须使用 x64 runner')
+requireText(linuxWorkflow.includes('runs-on: ubuntu-22.04'), 'Linux 桌面发行必须固定较旧的 glibc 构建环境')
 requireText(linuxWorkflow.includes('SHA256SUMS-linux-x64.txt'), 'Linux 校验文件必须明确为 x64')
+requireText(linuxWorkflow.includes('Verify AppImage glibc ABI baseline'), 'Linux 发行必须检测完整 AppImage 的真实 glibc ABI')
 requireText(desktopPackage.build?.appImage?.artifactName === 'AgentLens-${version}-${arch}.${ext}', 'AppImage 文件名不得带冗余 Linux 标记')
 requireText(
   desktopPackage.build?.linux?.extraFiles?.some(file => file.from === 'build/dev.z7ping.agentlens.metainfo.xml'
