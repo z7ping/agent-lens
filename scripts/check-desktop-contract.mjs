@@ -49,6 +49,19 @@ requireText(desktopWorkflow.includes('SHA256SUMS-macos-${{ matrix.arch }}.txt'),
 requireText(!desktopWorkflow.includes('universal'), 'macOS 暂不允许 Universal 包，避免放大原生依赖与签名复杂度')
 requireText(linuxWorkflow.includes('runs-on: ubuntu-latest'), 'Linux 桌面发行必须使用 x64 runner')
 requireText(linuxWorkflow.includes('SHA256SUMS-linux-x64.txt'), 'Linux 校验文件必须明确为 x64')
+requireText(desktopPackage.build?.appImage?.artifactName === 'AgentLens-${version}-${arch}.${ext}', 'AppImage 文件名不得带冗余 Linux 标记')
+requireText(
+  desktopPackage.build?.linux?.extraFiles?.some(file => file.from === 'build/dev.z7ping.agentlens.metainfo.xml'
+    && file.to === 'usr/share/metainfo/dev.z7ping.agentlens.metainfo.xml'),
+  'AppImage 未打包 AppStream 元数据',
+)
+const appStream = read('apps/desktop/build/dev.z7ping.agentlens.metainfo.xml')
+requireText(appStream.includes('<id>dev.z7ping.agentlens</id>'), 'AppStream 应使用正式应用 ID')
+requireText(appStream.includes('<launchable type="desktop-id">agentlens.desktop</launchable>'), 'AppStream 启动器必须匹配打包的 desktop 文件')
+requireText(appStream.includes('/agent-lens-latest.png</image>'), 'AppStream 缺少正式产品截图')
+requireText(linuxWorkflow.includes('AgentLens-*-x86_64.AppImage'), 'Linux 发行工作流没有匹配新的 AppImage 文件名')
+requireText(!linuxWorkflow.includes('AgentLens-*-Linux-x86_64.AppImage'), 'Linux 发行工作流仍使用过时 AppImage 文件名')
+requireText(linuxWorkflow.includes('Verify AppImage catalog metadata'), 'Linux 发行工作流未验证 AppStream 文件真实进入 AppImage')
 
 const bootstrap = read('apps/desktop/src/bootstrap.mjs')
 requireText(bootstrap.includes("app.setName('AgentLens')"), 'Electron bootstrap 未固定产品名 AgentLens')

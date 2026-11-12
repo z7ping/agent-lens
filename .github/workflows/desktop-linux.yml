@@ -53,6 +53,24 @@ jobs:
       - name: Build Linux desktop
         run: npm run desktop:linux
 
+      # AppImageHub uses AppStream for the catalog screenshot, independent of the startup snapshot.
+      - name: Verify AppImage catalog metadata
+        shell: bash
+        run: |
+          APPIMAGE="$(find release/linux -maxdepth 1 -type f -name 'AgentLens-*-x86_64.AppImage' | head -n 1)"
+          if [ -z "$APPIMAGE" ]; then
+            echo "没有找到 Linux AppImage" >&2
+            exit 1
+          fi
+          APPIMAGE="$(realpath "$APPIMAGE")"
+          TEMP_DIR="$(mktemp -d)"
+          trap 'rm -rf "$TEMP_DIR"' EXIT
+          cd "$TEMP_DIR"
+          "$APPIMAGE" --appimage-extract usr/share/metainfo/dev.z7ping.agentlens.metainfo.xml >/dev/null
+          META="squashfs-root/usr/share/metainfo/dev.z7ping.agentlens.metainfo.xml"
+          test -s "$META"
+          grep -Fq '<launchable type="desktop-id">agentlens.desktop</launchable>' "$META"
+
       - name: Smoke packaged desktop runtime
         shell: bash
         run: |
@@ -68,7 +86,7 @@ jobs:
         env:
           APPIMAGE_EXTRACT_AND_RUN: '1'
         run: |
-          APPIMAGE="$(find release/linux -maxdepth 1 -type f -name 'AgentLens-*-Linux-x86_64.AppImage' | head -n 1)"
+          APPIMAGE="$(find release/linux -maxdepth 1 -type f -name 'AgentLens-*-x86_64.AppImage' | head -n 1)"
           if [ -z "$APPIMAGE" ]; then
             echo "没有找到 Linux AppImage" >&2
             exit 1
@@ -80,7 +98,7 @@ jobs:
         run: |
           cd release/linux
           shopt -s nullglob
-          files=(AgentLens-*-Linux-x86_64.AppImage AgentLens-*-Linux-amd64.deb)
+          files=(AgentLens-*-x86_64.AppImage AgentLens-*-Linux-amd64.deb)
           if [ "${#files[@]}" -eq 0 ]; then
             echo "没有找到 Linux x64 发布产物" >&2
             exit 1
@@ -92,7 +110,7 @@ jobs:
         with:
           name: agent-lens-linux-x64-${{ github.run_id }}
           path: |
-            release/linux/AgentLens-*-Linux-x86_64.AppImage
+            release/linux/AgentLens-*-x86_64.AppImage
             release/linux/AgentLens-*-Linux-amd64.deb
             release/linux/SHA256SUMS-linux-x64.txt
           if-no-files-found: error
@@ -103,4 +121,4 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.release_tag || github.ref_name }}
-        run: gh release upload "$RELEASE_TAG" release/linux/AgentLens-*-Linux-x86_64.AppImage release/linux/AgentLens-*-Linux-amd64.deb release/linux/SHA256SUMS-linux-x64.txt --clobber
+        run: gh release upload "$RELEASE_TAG" release/linux/AgentLens-*-x86_64.AppImage release/linux/AgentLens-*-Linux-amd64.deb release/linux/SHA256SUMS-linux-x64.txt --clobber

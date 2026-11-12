@@ -109,7 +109,13 @@
       "icon": "build/icon.svg",
       "category": "Development",
       "executableName": "agentlens",
-      "artifactName": "AgentLens-${version}-Linux-${arch}.${ext}"
+      "artifactName": "AgentLens-${version}-Linux-${arch}.${ext}",
+      "extraFiles": [
+        {
+          "from": "build/dev.z7ping.agentlens.metainfo.xml",
+          "to": "usr/share/metainfo/dev.z7ping.agentlens.metainfo.xml"
+        }
+      ]
     },
     "nsis": {
       "oneClick": false,
@@ -120,6 +126,9 @@
       "runAfterFinish": true,
       "deleteAppDataOnUninstall": false,
       "include": "build/installer.nsh"
+    },
+    "appImage": {
+      "artifactName": "AgentLens-${version}-${arch}.${ext}"
     }
   },
   "homepage": "https://github.com/z7ping/agent-lens",

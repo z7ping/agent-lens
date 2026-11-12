@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>dev.z7ping.agentlens</id>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>MIT</project_license>
+  <name>AgentLens</name>
+  <summary>Trace and review local AI coding agent activity</summary>
+  <description>
+    <p>AgentLens is a local-first observability and review tool for AI coding agents. Inspect native sessions, tool calls, errors, and evidence without copying session history into a separate event store.</p>
+  </description>
+  <launchable type="desktop-id">agentlens.desktop</launchable>
+  <url type="homepage">https://github.com/z7ping/agent-lens</url>
+  <screenshots>
+    <screenshot type="default">
+      <caption>AgentLens workspace</caption>
+      <image>https://raw.githubusercontent.com/z7ping/agent-lens/main/agent-lens-latest.png</image>
+    </screenshot>
+  </screenshots>
+</component>
