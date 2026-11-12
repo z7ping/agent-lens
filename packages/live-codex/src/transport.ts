@@ -1,5 +1,5 @@
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process'
-import { resolveExecutable, resolveWindowsNpmShimTarget } from '@agent-lens/runtime-cordis'
+import { resolveDirectExecutableCommand, resolveExecutable } from '@agent-lens/runtime-cordis'
 import { formatLiveError } from '@agent-lens/live-support'
 
 export interface RpcMessage {
@@ -63,16 +63,11 @@ export class CodexRpc {
   private async open(): Promise<void> {
     const exe = await resolveExecutable('codex', { envVar: 'CODEX_BIN' })
     if (!exe) throw new Error('Codex executable not found')
-    // Reuse the existing npm shim resolver. Node entrypoints run without cmd.exe.
-    const windowsShim = process.platform === 'win32' && /\.(cmd|bat)$/i.test(exe)
-    const shimTarget = windowsShim ? await resolveWindowsNpmShimTarget(exe) : undefined
-    const target = shimTarget ?? exe
-    const nodeScript = /\.(?:mjs|cjs|js)$/i.test(target)
-    const program = nodeScript ? process.execPath : target
-    const args = nodeScript ? [target, 'app-server'] : ['app-server']
-    const child = spawn(program, args, {
+    // Never launch an unresolved Windows shim through cmd.exe.
+    const launch = await resolveDirectExecutableCommand('codex', exe, ['app-server'])
+    if (!launch) throw new Error('Codex Windows launcher cannot be resolved to a shell-free executable')
+    const child = spawn(launch.command, launch.args, {
       windowsHide: true,
-      shell: windowsShim && !shimTarget,
       stdio: ['pipe', 'pipe', 'pipe'],
     })
     this.child = child

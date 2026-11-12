@@ -3,7 +3,7 @@ import { chmod, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import test from 'node:test'
-import { resolveExecutable, resolveManagedExecutableTarget, resolveWindowsNpmShimTarget } from './executable-discovery'
+import { resolveDirectExecutableCommand, resolveExecutable, resolveManagedExecutableTarget, resolveWindowsNpmShimTarget } from './executable-discovery'
 
 test('Windows npm 启动脚本支持原生入口，并优先识别 JavaScript 入口而不是 Node 解释器', async () => {
   const root = await mkdtemp(join(tmpdir(), 'agent-lens-npm-target-'))
@@ -98,6 +98,34 @@ test('单次 shim 目标解析共享登录 Shell PATH，不为每个管理器重
 
     assert.equal(resolved, await realpath(executable))
     assert.equal(shellCalls, 1)
+  } finally {
+    await rm(root, { recursive: true, force: true })
+  }
+})
+
+test('Windows CLI 启动不会退回 cmd.exe；npm shim 与原生 exe 均直接执行', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'agent-lens-direct-cli-'))
+  try {
+    const script = join(root, 'codex.js')
+    const native = join(root, 'codex.exe')
+    const shim = join(root, 'codex.cmd')
+    await writeFile(script, '')
+    await writeFile(native, '')
+    await writeFile(shim, '@ECHO off\r\n"%~dp0node.exe" "%~dp0codex.js" %*\r\n')
+    assert.deepEqual(
+      await resolveDirectExecutableCommand('codex', shim, ['app-server'], { platform: 'win32', pathValue: root }),
+      { command: process.execPath, args: [script, 'app-server'] },
+    )
+    assert.deepEqual(
+      await resolveDirectExecutableCommand('codex', native, ['app-server'], { platform: 'win32', pathValue: root }),
+      { command: native, args: ['app-server'] },
+    )
+    await writeFile(shim, '@ECHO off\r\nunsupported-wrapper %*\r\n')
+    assert.equal(
+      await resolveDirectExecutableCommand('codex', shim, ['app-server'], { platform: 'win32', pathValue: root }),
+      undefined,
+      'an unknown cmd shim must never be passed to spawn with shell:true',
+    )
   } finally {
     await rm(root, { recursive: true, force: true })
   }

@@ -277,3 +277,27 @@ export async function resolveManagedExecutableTarget(
 
   return canonicalPath(executable)
 }
+
+/**
+ * Plan a direct, shell-free CLI invocation. On Windows an unresolved .cmd/.bat
+ * shim must not fall back to cmd.exe: GUI hosts would expose console windows.
+ */
+export async function resolveDirectExecutableCommand(
+  name: string,
+  executable: string,
+  args: readonly string[],
+  options: Pick<ExecutableDiscoveryOptions, 'platform' | 'pathValue' | 'shellPathResolver'> = {},
+): Promise<{ command: string; args: string[] } | undefined> {
+  const platform = options.platform ?? process.platform
+  let target = executable
+  if (platform === 'win32' && /\.(?:cmd|bat)$/i.test(executable)) {
+    target = (await resolveWindowsNpmShimTarget(executable))
+      ?? (await resolveManagedExecutableTarget(name, executable, options))
+    if (/\.(?:cmd|bat)$/i.test(target)) return undefined
+  }
+  const nodeScript = /\.(?:mjs|cjs|js)$/i.test(target)
+  return {
+    command: nodeScript ? process.execPath : target,
+    args: nodeScript ? [target, ...args] : [...args],
+  }
+}

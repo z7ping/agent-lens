@@ -1,5 +1,5 @@
 import type {
-  LiveAdapter, LiveAdapterManifest, LiveCapabilityName, LiveMessageInput,
+  LiveAdapter, LiveAdapterManifest, LiveAvailability, LiveCapabilityName, LiveMessageInput,
   LiveRuntimeState, LiveRuntimeEvent, LiveSendOptions, LiveSnapshotWindow,
   LiveModelControl, LiveThinkingControl, StorageService,
 } from '@agent-lens/core'
@@ -69,6 +69,8 @@ function explainCodexResumeError(error: unknown): Error {
   return error instanceof Error ? error : new Error(String(error))
 }
 
+const CODEX_AVAILABILITY_RETRY_MS = 30_000
+
 const APPROVAL_METHODS = new Set([
   'item/commandExecution/requestApproval',
   'item/fileChange/requestApproval',
@@ -84,6 +86,8 @@ export class CodexLiveAdapter implements LiveAdapter {
   readonly startCapabilities = { workspace: 'required', title: 'optional' } as const
   private sessions = new Map<string, Session>()
   private restored: Promise<void> | undefined
+  private availabilityProbe: Promise<LiveAvailability> | undefined
+  private unavailableProbe: { result: LiveAvailability; retryAt: number } | undefined
   private itemPaginationUnavailable = false
   private unsubscribe: () => void
 
@@ -165,18 +169,37 @@ export class CodexLiveAdapter implements LiveAdapter {
     await session.attaching
   }
 
-  async availability() {
-    if (!await this.rpc.available()) {
-      return { available: false, reason: 'Codex CLI is not installed or discoverable' }
-    }
+  private async checkAvailability(): Promise<LiveAvailability> {
     try {
-      // Resolve the actual executable, launch App Server and verify a read-only native API.
-      // Item pagination may still be unavailable for legacy thread stores (handled by snapshot).
+      if (!await this.rpc.available()) {
+        return { available: false, reason: 'Codex CLI is not installed or discoverable' }
+      }
+      // Verify the read-only App Server API; unsupported item pagination is unrelated.
       const result = await this.rpc.request('thread/list', { limit: 1 })
       if (!Array.isArray(result.data)) throw new Error('Invalid thread/list response')
       return { available: true }
     } catch {
       return { available: false, reason: 'Codex CLI was found, but its App Server thread/list check failed' }
+    }
+  }
+
+  async availability(): Promise<LiveAvailability> {
+    if (this.availabilityProbe) return this.availabilityProbe
+    // A broken CLI must not be spawned again every time the user visits New Task.
+    if (this.unavailableProbe && Date.now() < this.unavailableProbe.retryAt) {
+      return this.unavailableProbe.result
+    }
+    const pending = this.checkAvailability().then(result => {
+      this.unavailableProbe = result.available ? undefined : {
+        result, retryAt: Date.now() + CODEX_AVAILABILITY_RETRY_MS,
+      }
+      return result
+    })
+    this.availabilityProbe = pending
+    try {
+      return await pending
+    } finally {
+      if (this.availabilityProbe === pending) this.availabilityProbe = undefined
     }
   }
 
