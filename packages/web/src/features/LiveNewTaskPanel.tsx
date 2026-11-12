@@ -188,7 +188,7 @@ export function LiveNewTaskPanel({
     label: product.displayName,
     leading: <AgentLogo sourceId={product.productId} size="compact"/>,
     description: product.availability.available
-      ? t('center.newTask.ready')
+      ? t('center.newTask.selectable')
       : t('center.newTask.agentUnavailableShort'),
   })), [products, t])
 
@@ -196,15 +196,23 @@ export function LiveNewTaskPanel({
   const missingIntegration = integrationManagement.find(item =>
     selectedProduct?.liveId === unregisteredLiveId(item))
   const missingIntegrationEntry = Boolean(missingIntegration)
-  const showHermesSetup = selectedProduct?.startCapabilities.setup === 'hermes-gateway-initialize' && !available && !missingIntegrationEntry
+  const showHermesSetup = selectedProduct?.startCapabilities.setup === 'hermes-gateway-initialize'
+    && (!available || hermesSetupResult?.status === 'needs-gateway') && !missingIntegrationEntry
 
-  const refreshHermes = async () => {
+  const refreshHermes = async (checkGateway = false) => {
     setProductsLoading(true)
     setProductsError('')
     try {
       const next = await liveApi.refreshProducts()
       setRegisteredProducts(createProducts(next))
-      if (next.find(item => item.liveId === selectedLiveId)?.availability.available) setHermesSetupResult(null)
+      if (checkGateway && next.find(item => item.liveId === selectedLiveId)?.availability.available) {
+        const health = await liveApi.availability(selectedLiveId)
+        if (health.available) {
+          setHermesSetupResult(null)
+        } else {
+          setProductsError(health.reason ?? t('center.newTask.agentUnavailableShort'))
+        }
+      }
     } catch (reason) {
       setProductsError(reason instanceof Error ? reason.message : String(reason))
     } finally {
@@ -227,10 +235,10 @@ export function LiveNewTaskPanel({
       setHermesSettingUp(false)
     }
   }
-  const readiness = productsLoading
-    ? { state: 'checking', label: t('center.newTask.checkingAgents') }
+  const readiness = starting || productsLoading
+    ? { state: 'checking', label: t(starting ? 'center.newTask.openingAgent' : 'center.newTask.checkingAgents') }
     : available
-      ? { state: 'ready', label: t('center.newTask.agentReady', { agent: selectedProduct?.displayName ?? '' }) }
+      ? { state: 'selectable', label: t('center.newTask.connectOnOpen') }
       : missingIntegrationEntry
         ? { state: 'unavailable', label: t('center.newTask.agentUnavailable', { agent: selectedProduct?.displayName ?? '' }) }
         : { state: 'unavailable', label: selectedProduct?.availability.reason
@@ -306,7 +314,7 @@ export function LiveNewTaskPanel({
           <h1>{t('center.newTask.title')}</h1>
           <StatusBadge
             className="task-center-new-readiness"
-            tone={readiness.state === 'unavailable' ? 'danger' : readiness.state === 'ready' ? 'success' : 'neutral'}
+            tone={readiness.state === 'unavailable' ? 'danger' : 'neutral'}
             dot
           >
             {readiness.label}
@@ -323,7 +331,7 @@ export function LiveNewTaskPanel({
             ariaLabel={t('center.newTask.selectAgentAria')}
             placeholder={productsLoading ? t('center.newTask.checkingAgents') : t('center.newTask.selectAgent')}
             options={agentOptions}
-            disabled={productsLoading || products.length === 0}
+            disabled={starting || productsLoading || products.length === 0}
           />
         </label>
 
@@ -338,10 +346,10 @@ export function LiveNewTaskPanel({
           <span>{hermesSetupResult?.status === 'needs-gateway'
             ? t('center.newTask.hermesSetup.needsGateway')
             : t('center.newTask.hermesSetup.hint')}</span>
-          <Button size="small" disabled={hermesSettingUp || productsLoading} onClick={() => {setHermesSetupError('');setHermesSetupOpen(true)}}>
+          <Button size="small" disabled={starting || hermesSettingUp || productsLoading} onClick={() => {setHermesSetupError('');setHermesSetupOpen(true)}}>
             {t('center.newTask.hermesSetup.open')}
           </Button>
-          <Button size="small" disabled={hermesSettingUp || productsLoading} onClick={() => void refreshHermes()}>
+          <Button size="small" disabled={starting || hermesSettingUp || productsLoading} onClick={() => void refreshHermes(true)}>
             {t('center.newTask.hermesSetup.check')}
           </Button>
         </div>}

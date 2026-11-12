@@ -67,6 +67,7 @@ export class CodexRpc {
     const launch = await resolveDirectExecutableCommand('codex', exe, ['app-server'])
     if (!launch) throw new Error('Codex Windows launcher cannot be resolved to a shell-free executable')
     const child = spawn(launch.command, launch.args, {
+      env: launch.env,
       windowsHide: true,
       stdio: ['pipe', 'pipe', 'pipe'],
     })

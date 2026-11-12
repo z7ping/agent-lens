@@ -1,6 +1,7 @@
 import { constants } from 'node:fs'
-import { access, open, realpath } from 'node:fs/promises'
+import { access, open, readFile, realpath, stat } from 'node:fs/promises'
 import { execFile } from 'node:child_process'
+import { createRequire } from 'node:module'
 import { dirname, extname, join, resolve } from 'node:path'
 import { promisify } from 'node:util'
 
@@ -109,6 +110,45 @@ export async function resolveWindowsNpmShimTarget(executable: string): Promise<s
   }
   for (const candidate of candidates.filter(path => /\.exe$/i.test(path) && !/[\\/]node\.exe$/i.test(path))) {
     if (await pathExists(candidate)) return candidate
+  }
+  return undefined
+}
+
+/** Resolve known npm launchers that would otherwise spawn a second console process. */
+export async function resolveWindowsNodeCliTarget(
+  entry: string,
+  env: NodeJS.ProcessEnv = process.env,
+): Promise<{ target: string; env?: NodeJS.ProcessEnv } | undefined> {
+  if (!/\.js$/i.test(entry)) return { target: entry }
+  const script = await canonicalPath(resolve(entry))
+  const root = dirname(dirname(script))
+  const manifest = await readFile(join(root, 'package.json'), 'utf8')
+    .then(raw => JSON.parse(raw) as { name?: string; bin?: { codex?: string } } | null)
+    .catch(() => undefined)
+  if (manifest?.name !== '@openai/codex' || typeof manifest.bin?.codex !== 'string'
+    || !await sameCanonicalPath(resolve(root, manifest.bin.codex), script, 'win32')) return { target: entry }
+
+  const arch = process.arch
+  if (arch !== 'x64' && arch !== 'arm64') return undefined
+  const triple = arch === 'arm64' ? 'aarch64-pc-windows-msvc' : 'x86_64-pc-windows-msvc'
+  // Resolve relative to the launcher as upstream does, including hoisted and linked installs.
+  let platformRoot = root
+  try {
+    platformRoot = dirname(createRequire(script).resolve(`@openai/codex-win32-${arch}/package.json`))
+  } catch {
+    // Older or locally assembled packages can carry the executable themselves.
+  }
+  const vendor = join(platformRoot, 'vendor', triple)
+  for (const binDir of ['bin', 'codex']) {
+    const target = join(vendor, binDir, 'codex.exe')
+    if (!await stat(target).then(info => info.isFile(), () => false)) continue
+    const launchEnv = { ...env, CODEX_MANAGED_PACKAGE_ROOT: root }
+    const legacyPath = join(vendor, 'path')
+    if (binDir === 'codex' && await stat(legacyPath).then(info => info.isDirectory(), () => false)) {
+      const pathKey = Object.keys(launchEnv).find(key => key.toUpperCase() === 'PATH') ?? 'PATH'
+      Object.assign(launchEnv, { [pathKey]: [legacyPath, env[pathKey]].filter(Boolean).join(';') })
+    }
+    return { target, env: launchEnv }
   }
   return undefined
 }
@@ -287,7 +327,7 @@ export async function resolveDirectExecutableCommand(
   executable: string,
   args: readonly string[],
   options: Pick<ExecutableDiscoveryOptions, 'platform' | 'pathValue' | 'shellPathResolver'> = {},
-): Promise<{ command: string; args: string[] } | undefined> {
+): Promise<{ command: string; args: string[]; env?: NodeJS.ProcessEnv } | undefined> {
   const platform = options.platform ?? process.platform
   let target = executable
   if (platform === 'win32' && /\.(?:cmd|bat)$/i.test(executable)) {
@@ -295,9 +335,13 @@ export async function resolveDirectExecutableCommand(
       ?? (await resolveManagedExecutableTarget(name, executable, options))
     if (/\.(?:cmd|bat)$/i.test(target)) return undefined
   }
+  const launch = platform === 'win32' ? await resolveWindowsNodeCliTarget(target) : { target }
+  if (!launch) return undefined
+  target = launch.target
   const nodeScript = /\.(?:mjs|cjs|js)$/i.test(target)
   return {
     command: nodeScript ? process.execPath : target,
     args: nodeScript ? [target, ...args] : [...args],
+    ...(launch.env ? { env: launch.env } : {}),
   }
 }

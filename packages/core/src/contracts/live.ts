@@ -763,6 +763,8 @@ export interface LiveAdapter {
   /** Optional during migration; omitted means no structured Product-Surface start fields are advertised. */
   readonly startCapabilities?: Readonly<LiveStartCapabilities>
 
+  /** Check local launch prerequisites without starting or contacting a Live runtime. */
+  discoverAvailability?(): Promise<LiveAvailability>
   availability(): Promise<LiveAvailability>
   list(): Promise<LiveRuntimeState[]>
   start(input: unknown): Promise<LiveRuntimeState>

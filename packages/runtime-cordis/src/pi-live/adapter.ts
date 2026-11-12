@@ -568,8 +568,12 @@ export class PiLiveAdapter implements LiveAdapter {
     this.capabilities = createLiveCapabilitySet(features)
   }
 
-  availability() {
+  discoverAvailability() {
     return this.service.availability()
+  }
+
+  availability() {
+    return this.discoverAvailability()
   }
 
   list(): Promise<PiLiveRuntimeState[]> {

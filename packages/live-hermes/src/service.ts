@@ -58,7 +58,7 @@ export class DefaultHermesLiveService {
 
   constructor(readonly client: HermesApiClient, private readonly refreshConfiguration?: () => Promise<void>) {}
 
-  async availability(): Promise<LiveAvailability> {
+  async discoverAvailability(): Promise<LiveAvailability> {
     try {
       await this.refreshConfiguration?.()
     } catch (error) {
@@ -70,6 +70,12 @@ export class DefaultHermesLiveService {
         reason: 'Hermes API_SERVER_KEY is not configured for AgentLens',
       }
     }
+    return { available: true }
+  }
+
+  async availability(): Promise<LiveAvailability> {
+    const discovery = await this.discoverAvailability()
+    if (!discovery.available) return discovery
     try {
       await this.client.capabilities()
       return { available: true }
@@ -88,6 +94,8 @@ export class DefaultHermesLiveService {
   async start(input: unknown): Promise<LiveRuntimeState> {
     if (this.disposed) throw new Error('Hermes Live service is disposed')
     const parsed = parseStartInput(input)
+    await this.refreshConfiguration?.()
+    if (this.disposed) throw new Error('Hermes Live service is disposed')
     const id = randomUUID()
     const runtime: OwnedRuntime = {
       id,

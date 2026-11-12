@@ -852,21 +852,16 @@ async function describeAdapter(adapter: LiveAdapter): Promise<JsonValue> {
 }
 
 async function describeProduct(adapter: LiveAdapter): Promise<JsonValue> {
-  const availabilityResult = await Promise.resolve(
-    shareAdapterRead(adapter, 'availability', () => adapter.availability()),
-  ).then(
-    value => ({ ok: true as const, value }),
-    reason => ({ ok: false as const, reason }),
-  )
-  const availability = availabilityResult.ok
-    ? availabilityResult.value
-    : {
-        available: false,
-        reason: availabilityResult.reason instanceof Error
-          ? availabilityResult.reason.message
-          : String(availabilityResult.reason),
-      }
-  return liveDescriptor(adapter, availability, [])
+  try {
+    const availability = await shareAdapterRead(adapter, 'discovery', async () =>
+      await adapter.discoverAvailability?.() ?? { available: true })
+    return liveDescriptor(adapter, availability, [])
+  } catch (error) {
+    return liveDescriptor(adapter, {
+      available: false,
+      reason: error instanceof Error ? error.message : String(error),
+    }, [])
+  }
 }
 
 type LiveHistoryContext = {
