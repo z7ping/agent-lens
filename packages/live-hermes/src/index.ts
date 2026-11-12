@@ -209,6 +209,10 @@ export class HermesLiveAdapter implements LiveAdapter {
 
   constructor(readonly service: DefaultHermesLiveService) {}
 
+  discoverAvailability() {
+    return this.service.discoverAvailability()
+  }
+
   availability() {
     return this.service.availability()
   }

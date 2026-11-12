@@ -32,6 +32,8 @@ test('Hermes Live shares the unified text message contract without claiming atta
 
 test('Hermes Live preserves the generic task title in Runtime state', async () => {
   const client = {
+    configured: true,
+    capabilities: async () => { throw new Error('Gateway must not be contacted during product discovery') },
     createSession: async (input: { title?: string }) => {
       assert.equal(input.title, 'Hermes task')
       return 'session-1'
@@ -39,6 +41,7 @@ test('Hermes Live preserves the generic task title in Runtime state', async () =
   } as unknown as HermesApiClient
   const service = new DefaultHermesLiveService(client)
 
+  assert.deepEqual(await service.discoverAvailability(), { available: true })
   const state = await service.start({ title: 'Hermes task' })
   assert.equal(state.title, 'Hermes task')
   assert.equal((await service.state(state.runtimeSessionId)).title, 'Hermes task')

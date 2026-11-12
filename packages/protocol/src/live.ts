@@ -297,6 +297,7 @@ export interface LiveProductDto {
 }
 
 export interface LiveProductsResponseDto {
+  /** Availability here describes launch prerequisites, without a runtime health probe. */
   items: LiveProductDto[]
 }
 

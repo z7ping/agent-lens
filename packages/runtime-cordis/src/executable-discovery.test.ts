@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { chmod, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises'
+import { chmod, mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import test from 'node:test'
@@ -126,6 +126,41 @@ test('Windows CLI 启动不会退回 cmd.exe；npm shim 与原生 exe 均直接�
       undefined,
       'an unknown cmd shim must never be passed to spawn with shell:true',
     )
+  } finally {
+    await rm(root, { recursive: true, force: true })
+  }
+})
+
+test('Windows Codex npm shim 直接启动同一安装的原生二进制', {
+  skip: process.arch !== 'x64' && process.arch !== 'arm64',
+}, async () => {
+  const root = await mkdtemp(join(tmpdir(), 'agent-lens-codex-npm-'))
+  try {
+    const npmScope = join(root, 'node_modules', '@openai')
+    const launcher = join(npmScope, 'codex', 'bin', 'codex.js')
+    const shim = join(root, 'codex.cmd')
+    const platformPackage = join(npmScope, `codex-win32-${process.arch}`)
+    const triple = process.arch === 'arm64' ? 'aarch64-pc-windows-msvc' : 'x86_64-pc-windows-msvc'
+    const binaryDirectory = join(platformPackage, 'vendor', triple, 'bin')
+    await mkdir(join(npmScope, 'codex', 'bin'), { recursive: true })
+    await mkdir(binaryDirectory, { recursive: true })
+    await writeFile(launcher, 'throw new Error("launcher must not run")')
+    await writeFile(join(npmScope, 'codex', 'package.json'), JSON.stringify({
+      name: '@openai/codex', bin: { codex: 'bin/codex.js' },
+    }))
+    await writeFile(join(platformPackage, 'package.json'), '{}')
+    await writeFile(shim, '@ECHO off\r\n"%~dp0node.exe" "%~dp0node_modules\\@openai\\codex\\bin\\codex.js" %*\r\n')
+
+    const options = { platform: 'win32' as const, pathValue: root }
+    const native = join(binaryDirectory, 'codex.exe')
+    assert.equal(await resolveDirectExecutableCommand('codex', shim, ['app-server'], options), undefined)
+    await writeFile(native, '')
+    const launch = await resolveDirectExecutableCommand('codex', shim, ['app-server'], options)
+    assert.equal(launch?.command, await realpath(native))
+    assert.deepEqual(launch?.args, ['app-server'])
+    assert.equal(launch?.env?.CODEX_MANAGED_PACKAGE_ROOT, await realpath(join(npmScope, 'codex')))
+    const explicit = await resolveDirectExecutableCommand('codex', launcher, ['app-server'], options)
+    assert.equal(explicit?.command, launch?.command)
   } finally {
     await rm(root, { recursive: true, force: true })
   }

@@ -169,11 +169,16 @@ export class CodexLiveAdapter implements LiveAdapter {
     await session.attaching
   }
 
+  async discoverAvailability(): Promise<LiveAvailability> {
+    return await this.rpc.available()
+      ? { available: true }
+      : { available: false, reason: 'Codex CLI is not installed or discoverable' }
+  }
+
   private async checkAvailability(): Promise<LiveAvailability> {
     try {
-      if (!await this.rpc.available()) {
-        return { available: false, reason: 'Codex CLI is not installed or discoverable' }
-      }
+      const discovery = await this.discoverAvailability()
+      if (!discovery.available) return discovery
       // Verify the read-only App Server API; unsupported item pagination is unrelated.
       const result = await this.rpc.request('thread/list', { limit: 1 })
       if (!Array.isArray(result.data)) throw new Error('Invalid thread/list response')
@@ -185,7 +190,7 @@ export class CodexLiveAdapter implements LiveAdapter {
 
   async availability(): Promise<LiveAvailability> {
     if (this.availabilityProbe) return this.availabilityProbe
-    // A broken CLI must not be spawned again every time the user visits New Task.
+    // Throttle repeated explicit health probes of a broken CLI.
     if (this.unavailableProbe && Date.now() < this.unavailableProbe.retryAt) {
       return this.unavailableProbe.result
     }

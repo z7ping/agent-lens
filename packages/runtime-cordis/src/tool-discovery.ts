@@ -11,6 +11,7 @@ import {
 import {
   resolveExecutable,
   resolveLoginShellPath,
+  resolveWindowsNodeCliTarget,
   resolveWindowsNpmShimTarget,
   type ExecutableDiscoveryOptions,
 } from './executable-discovery'
@@ -26,18 +27,22 @@ export async function probeAgentCliVersion(
   const timeoutMs = Math.min(options.timeoutMs ?? 10_000, 15_000)
   let command = executable
   let args = ['--version']
+  let env = options.env ? { ...process.env, ...options.env } : process.env
   if (platform === 'win32' && /\.(?:cmd|bat)$/i.test(executable)) {
     // Do not use shell:true for paths that could contain cmd metacharacters.
     // An npm shim resolves to a JS entry and can run safely using Node directly.
     const entry = await resolveWindowsNpmShimTarget(executable)
     if (!entry) return undefined
-    if (/\.exe$/i.test(entry)) {
-      command = entry
+    const launch = await resolveWindowsNodeCliTarget(entry, env)
+    if (!launch) return undefined
+    env = launch.env ?? env
+    if (/\.exe$/i.test(launch.target)) {
+      command = launch.target
     } else {
       const node = await resolveExecutable('node', { platform, pathValue: options.env?.PATH })
       if (!node) return undefined
       command = node
-      args = [entry, '--version']
+      args = [launch.target, '--version']
     }
   }
   try {
@@ -46,7 +51,7 @@ export async function probeAgentCliVersion(
       timeout: timeoutMs,
       maxBuffer: 16 * 1024,
       encoding: 'utf8',
-      env: options.env ? { ...process.env, ...options.env } : process.env,
+      env,
     })
     // Ignore diagnostics and arbitrary numbers; only a semantic CLI version is evidence.
     const text = `${result.stdout}\n${result.stderr}`
